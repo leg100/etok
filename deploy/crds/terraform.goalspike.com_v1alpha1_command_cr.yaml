@@ -1,0 +1,7 @@
+apiVersion: terraform.goalspike.com/v1alpha1
+kind: Command
+metadata:
+  name: example-command
+spec:
+  # Add fields here
+  size: 3
