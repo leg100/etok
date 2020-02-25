@@ -145,9 +145,10 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 				{
 					Name:    "busybox",
 					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
+					Command: []string{cr.Spec.Command},
 				},
 			},
+			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
 }

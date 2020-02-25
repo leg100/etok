@@ -3,5 +3,5 @@ kind: Command
 metadata:
   name: example-command
 spec:
-  # Add fields here
-  size: 3
+  command: date
+  args: []
