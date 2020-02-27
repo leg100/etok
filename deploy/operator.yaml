@@ -16,10 +16,10 @@ spec:
       containers:
         - name: terraform-operator
           # Replace this with the built image name
-          image: REPLACE_IMAGE
+          image: terraform-operator:latest
           command:
           - terraform-operator
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

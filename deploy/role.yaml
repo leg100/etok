@@ -70,6 +70,7 @@ rules:
   - terraform.goalspike.com
   resources:
   - '*'
+  - workspaces
   verbs:
   - create
   - delete

@@ -143,9 +143,27 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{cr.Spec.Command},
+					Name:    "terraform",
+					Image:   "terraform:0.12.21",
+					Command: cr.Spec.Command,
+					Args:    cr.Spec.Args,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "workspace",
+							MountPath: "/workspace",
+						},
+					},
+					WorkingDir: "/workspace",
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "workspace",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: "example-workspace-pvc",
+						},
+					},
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyNever,

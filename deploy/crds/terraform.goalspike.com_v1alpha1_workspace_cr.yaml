@@ -1,0 +1,4 @@
+apiVersion: terraform.goalspike.com/v1alpha1
+kind: Workspace
+metadata:
+  name: example-workspace
