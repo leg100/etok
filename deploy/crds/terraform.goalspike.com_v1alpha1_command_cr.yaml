@@ -3,5 +3,5 @@ kind: Command
 metadata:
   name: example-command
 spec:
-  command: date
-  args: []
+  command: ["/bin/bash"]
+  args: ["-c", "ls -la"]
