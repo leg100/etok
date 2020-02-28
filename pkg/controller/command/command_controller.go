@@ -144,7 +144,7 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 			Containers: []corev1.Container{
 				{
 					Name:    "terraform",
-					Image:   "terraform:0.12.21",
+					Image:   "hashicorp/terraform:0.12.21",
 					Command: cr.Spec.Command,
 					Args:    cr.Spec.Args,
 					VolumeMounts: []corev1.VolumeMount{
