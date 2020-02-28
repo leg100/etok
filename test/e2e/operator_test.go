@@ -80,4 +80,38 @@ func CreateWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// create command custom resource
+	exampleCommand := &cachev1alpha1.Command{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example-command",
+			Namespace: namespace,
+		},
+		Spec: cachev1alpha1.CommandSpec{
+			Args: []string{"version"},
+		},
+	}
+	err = f.Client.Create(goctx.TODO(), exampleCommand, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := &corev1.Pod{}
+	// wait for command pod to be created
+	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: "example-command-pod"}, found)
+
+		if err != nil {
+			return false, err
+		}
+
+		if found.Status.Phase == corev1.PodSucceeded {
+			return true, nil
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
