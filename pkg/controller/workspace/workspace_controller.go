@@ -61,6 +61,24 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to resource Command and requeue the associated Workspace
+	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Command{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			command := a.Object.(*terraformv1alpha1.Command)
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      command.Spec.Workspace,
+						Namespace: a.Meta.GetNamespace(),
+					},
+				},
+			}
+		}),
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -119,6 +137,20 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
+	}
+
+	cmdList := &terraformv1alpha1.CommandList{}
+	err = r.client.List(context.TODO(), cmdList, &client.ListOptions{Namespace: request.Namespace})
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	reqLogger.Info("Found this many command items", "cmdList.Items", len(cmdList.Items))
+	if len(cmdList.Items) > 0 {
+		instance.Status.Queue = []string{}
+		for i := 0; i < len(cmdList.Items); i++ {
+			instance.Status.Queue = append(instance.Status.Queue, cmdList.Items[i].Name)
+		}
+		r.client.Status().Update(context.TODO(), instance)
 	}
 
 	// PVC already exists - don't requeue
