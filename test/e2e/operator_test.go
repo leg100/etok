@@ -31,6 +31,12 @@ func TestWorkspace(t *testing.T) {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
 
+	commandList := &cachev1alpha1.CommandList{}
+	err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
+	if err != nil {
+		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
+	}
+
 	t.Run("Workspace1", CreateWorkspace)
 }
 
@@ -88,7 +94,8 @@ func CreateWorkspace(t *testing.T) {
 			Namespace: namespace,
 		},
 		Spec: cachev1alpha1.CommandSpec{
-			Args: []string{"version"},
+			Workspace: "example-workspace",
+			Args:      []string{"version"},
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), exampleCommand, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})

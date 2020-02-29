@@ -3,5 +3,6 @@ kind: Command
 metadata:
   name: example-command
 spec:
+  workspace: example-workspace
   command: ["/bin/bash"]
   args: ["-c", "ls -la"]

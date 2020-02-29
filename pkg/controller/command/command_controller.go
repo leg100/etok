@@ -161,7 +161,7 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 					Name: "workspace",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: "example-workspace-pvc",
+							ClaimName: cr.Spec.Workspace + "-pvc",
 						},
 					},
 				},
