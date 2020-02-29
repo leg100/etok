@@ -9,8 +9,8 @@ clean:
 	@echo ....... Deleting Operator .......
 	- kubectl delete -f deploy/operator.yaml -n ${NAMESPACE}
 	@echo ....... Deleting test CRs .......
-	- kubectl delete commands.terraform.goalspike.com example-command
-	- kubcetl delete workspaces.terraform.goalspike.com example-workspace
+	- kubectl delete commands.terraform.goalspike.com example-command -n ${NAMESPACE}
+	- kubcetl delete workspaces.terraform.goalspike.com example-workspace -n ${NAMESPACE}
 
 .PHONY: e2e
 e2e:
@@ -18,4 +18,4 @@ e2e:
 	kubectl apply -f deploy/crds/terraform.goalspike.com_commands_crd.yaml -n ${NAMESPACE}
 	operator-sdk build terraform-operator
 	kind load docker-image terraform-operator:latest
-	operator-sdk test local --namespace operator-test --verbose ./test/e2e/
+	operator-sdk test local --namespace ${NAMESPACE} --verbose ./test/e2e/
