@@ -63,25 +63,24 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "No commands",
 			workspace: &workspace,
 			commands:  []*terraformv1alpha1.Command{},
-			wantQueue: []string{},
 		},
 		{
 			name:      "Single command",
 			workspace: &workspace,
 			commands:  []*terraformv1alpha1.Command{&command1},
-			wantQueue: []string{"command1"},
+			wantQueue: []string{"command-1"},
 		},
 		{
 			name:      "Two commands",
 			workspace: &workspace,
 			commands:  []*terraformv1alpha1.Command{&command1, &command2},
-			wantQueue: []string{"command1", "command2"},
+			wantQueue: []string{"command-1", "command-2"},
 		},
 		{
 			name:      "Three commands",
 			workspace: &workspace,
 			commands:  []*terraformv1alpha1.Command{&command1, &command2, &command3},
-			wantQueue: []string{"command1", "command2", "command3"},
+			wantQueue: []string{"command-1", "command-2", "command-3"},
 		},
 	}
 	s := scheme.Scheme
@@ -128,7 +127,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			}
 
 			queue := workspace.Status.Queue
-			if reflect.DeepEqual(tt.wantQueue, queue) {
+			if !reflect.DeepEqual(tt.wantQueue, queue) {
 				t.Fatalf("workspace queue expected to be %+v, but got %+v", tt.wantQueue, queue)
 			}
 		})
