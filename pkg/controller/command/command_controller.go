@@ -136,7 +136,7 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
+			Name:      cr.Name,
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
@@ -147,6 +147,8 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 					Image:   "hashicorp/terraform:0.12.21",
 					Command: cr.Spec.Command,
 					Args:    cr.Spec.Args,
+					Stdin:   true,
+					TTY:     true,
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "workspace",
@@ -161,7 +163,7 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 					Name: "workspace",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: cr.Spec.Workspace + "-pvc",
+							ClaimName: cr.Labels["workspace"],
 						},
 					},
 				},

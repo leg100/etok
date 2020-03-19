@@ -63,19 +63,19 @@ func CreateWorkspace(t *testing.T) {
 	}
 
 	// create workspace custom resource
-	exampleWorkspace := &cachev1alpha1.Workspace{
+	workspace := &cachev1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "example-workspace",
+			Name:      "workspace-1",
 			Namespace: namespace,
 		},
 	}
-	err = f.Client.Create(goctx.TODO(), exampleWorkspace, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	err = f.Client.Create(goctx.TODO(), workspace, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: "example-workspace-pvc"}, &corev1.PersistentVolumeClaim{})
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: "workspace-1"}, &corev1.PersistentVolumeClaim{})
 
 		if err != nil {
 			return false, err
@@ -87,18 +87,17 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// create command custom resource
-	exampleCommand := &cachev1alpha1.Command{
+	command := &cachev1alpha1.Command{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "example-command",
+			Name:      "command-1",
 			Namespace: namespace,
 		},
 		Spec: cachev1alpha1.CommandSpec{
-			Workspace: "example-workspace",
+			Workspace: "workspace-1",
 			Args:      []string{"version"},
 		},
 	}
-	err = f.Client.Create(goctx.TODO(), exampleCommand, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	err = f.Client.Create(goctx.TODO(), command, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +105,7 @@ func CreateWorkspace(t *testing.T) {
 	found := &corev1.Pod{}
 	// wait for command pod to be created
 	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: "example-command-pod"}, found)
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: command.GetName()}, found)
 
 		if err != nil {
 			return false, err

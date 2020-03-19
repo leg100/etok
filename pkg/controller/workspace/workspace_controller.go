@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +22,7 @@ import (
 )
 
 var log = logf.Log.WithName("controller_workspace")
+var someIndexer client.FieldIndexer
 
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
@@ -42,6 +44,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("workspace-controller", mgr, controller.Options{Reconciler: r})
+	if err != nil {
+		return err
+	}
+
+	//_ = mgr.GetFieldIndexer().IndexField(&terraformv1alpha1.Command{}, "Spec.Workspace", func(o runtime.Object) []string {
+	//	workspace := o.(*terraformv1alpha1.Command).Spec.Workspace
+	//	if workspace == "" {
+	//		return nil
+	//	}
+	//	return []string{workspace}
+	//})
+
+	// Watch for changes to primary resource Workspace
+	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -78,7 +94,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -132,30 +147,48 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-
-		// PVC created successfully - don't requeue
-		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
+	//TODO: are we really sure that the pvc exists yet?
 
 	cmdList := &terraformv1alpha1.CommandList{}
-	err = r.client.List(context.TODO(), cmdList, &client.ListOptions{Namespace: request.Namespace})
+	err = r.client.List(context.TODO(), cmdList, client.InNamespace(request.Namespace), client.MatchingLabels{
+		"workspace": request.Name,
+	})
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	reqLogger.Info("Found this many command items", "cmdList.Items", len(cmdList.Items))
-	if len(cmdList.Items) > 0 {
-		instance.Status.Queue = []string{}
-		for i := 0; i < len(cmdList.Items); i++ {
-			instance.Status.Queue = append(instance.Status.Queue, cmdList.Items[i].Name)
+
+	fmt.Printf("cmdList: %+v", cmdList.Items)
+
+	changed := false
+	for _, cmd := range cmdList.Items {
+		if !cmdIsQueued(&cmd, instance.Status.Queue) {
+			instance.Status.Queue = append(instance.Status.Queue, cmd.GetName())
+			changed = true
 		}
-		r.client.Status().Update(context.TODO(), instance)
+	}
+	if changed {
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Workspace status")
+			return reconcile.Result{}, err
+		}
 	}
 
 	// PVC already exists - don't requeue
 	reqLogger.Info("Skip reconcile: PVC already exists", "PVC.Namespace", found.Namespace, "PVC.Name", found.Name)
 	return reconcile.Result{}, nil
+}
+
+func cmdIsQueued(cmd *terraformv1alpha1.Command, queue []string) bool {
+	for _, qCmd := range queue {
+		if qCmd == cmd.GetName() {
+			return true
+		}
+	}
+	return false
 }
 
 func newPVCForCR(cr *terraformv1alpha1.Workspace) *corev1.PersistentVolumeClaim {
@@ -164,7 +197,7 @@ func newPVCForCR(cr *terraformv1alpha1.Workspace) *corev1.PersistentVolumeClaim 
 	}
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pvc",
+			Name:      cr.Name,
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},

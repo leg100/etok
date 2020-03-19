@@ -2,7 +2,7 @@ apiVersion: terraform.goalspike.com/v1alpha1
 kind: Command
 metadata:
   name: example-command
+  labels:
+    workspace: example-workspace
 spec:
-  workspace: example-workspace
-  command: ["/bin/bash"]
-  args: ["-c", "ls -la"]
+  args: ["version"]

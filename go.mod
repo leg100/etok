@@ -4,17 +4,28 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.50.0 // indirect
+	github.com/cosiner/argv v0.0.1 // indirect
+	github.com/go-delve/delve v1.4.0 // indirect
 	github.com/golang/groupcache v0.0.0-20191227052852-215e87163ea7 // indirect
 	github.com/google/go-cmp v0.4.0 // indirect
+	github.com/mattn/go-colorable v0.1.6 // indirect
+	github.com/mattn/go-runewidth v0.0.8 // indirect
 	github.com/operator-framework/operator-sdk v0.15.2
+	github.com/peterh/liner v1.2.0 // indirect
+	github.com/pkg/errors v0.8.1
+	github.com/spf13/cobra v0.0.6 // indirect
 	github.com/spf13/pflag v1.0.5
+	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
+	golang.org/x/arch v0.0.0-20191126211547-368ea8f32fff // indirect
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553 // indirect
 	golang.org/x/oauth2 v0.0.0-20191202225959-858c2ad4c8b6 // indirect
-	golang.org/x/sys v0.0.0-20191228213918-04cbcbbfeed8 // indirect
+	golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527 // indirect
 	golang.org/x/tools v0.0.0-20191227053925-7b8e75db28f4 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/kubectl v0.0.0
 	sigs.k8s.io/controller-runtime v0.4.0
 )
 
