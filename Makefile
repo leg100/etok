@@ -19,6 +19,10 @@ e2e:
 	kind load docker-image terraform-operator:latest
 	operator-sdk test local --namespace operator-test --verbose ./test/e2e/
 
+.PHONY: unit
+unit:
+	go test ./pkg/...
+
 .PHONY: crds
 crds:
 	kubectl apply -f deploy/crds/terraform.goalspike.com_workspaces_crd.yaml

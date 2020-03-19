@@ -91,10 +91,10 @@ func CreateWorkspace(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "command-1",
 			Namespace: namespace,
+			Labels:    map[string]string{"workspace": "workspace-1"},
 		},
 		Spec: cachev1alpha1.CommandSpec{
-			Workspace: "workspace-1",
-			Args:      []string{"version"},
+			Args: []string{"version"},
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), command, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
