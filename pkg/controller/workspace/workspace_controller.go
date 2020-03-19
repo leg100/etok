@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"fmt"
 
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -84,7 +83,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 			return []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
-						Name:      command.Spec.Workspace,
+						Name:      command.Labels["workspace"],
 						Namespace: a.Meta.GetNamespace(),
 					},
 				},
@@ -159,8 +158,6 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-
-	fmt.Printf("cmdList: %+v", cmdList.Items)
 
 	changed := false
 	for _, cmd := range cmdList.Items {
