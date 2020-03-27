@@ -2,8 +2,10 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,33 +102,120 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
+	// Fetch its Workspace object
+	workspace := &terraformv1alpha1.Workspace{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.updateCondition(instance, "Ready", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace %s not found", workspace.Name))
+			if err != nil {
+				return reconcile.Result{}, err
+			} else {
+				// Don't requeue; wait until workspace obj triggers a request
+				return reconcile.Result{}, nil
+			}
+		}
+		return reconcile.Result{}, err
+	}
+
+	err = r.updateCondition(instance, "Ready", corev1.ConditionTrue, "WorkspaceFound", fmt.Sprintf("Workspace %s found", workspace.Name))
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
+		err = r.managePod(request, instance)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else {
+		err = r.updateCondition(instance, "Active", corev1.ConditionFalse, "Enqueued", "TODO: Provide queue position")
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileCommand) updateCondition(command *terraformv1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) error {
+	condition := status.Condition{
+		Type:    status.ConditionType(conditionType),
+		Status:  conditionStatus,
+		Reason:  status.ConditionReason(reason),
+		Message: msg,
+	}
+	_ = command.Status.Conditions.SetCondition(condition)
+	return r.client.Status().Update(context.TODO(), command)
+}
+
+func isFirstInQueue(queue []string, name string) bool {
+	if len(queue) > 0 && queue[0] == name {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (r *ReconcileCommand) managePod(request reconcile.Request, command *terraformv1alpha1.Command) error {
+	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+
 	// Define a new Pod object
-	pod := newPodForCR(instance)
+	pod := newPodForCR(command)
 
 	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		return reconcile.Result{}, err
+	if err := controllerutil.SetControllerReference(command, pod, r.scheme); err != nil {
+		return err
 	}
 
 	// Check if this Pod already exists
 	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
 		err = r.client.Create(context.TODO(), pod)
 		if err != nil {
-			return reconcile.Result{}, err
+			return err
 		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
+		err = r.updateCondition(command, "Active", corev1.ConditionTrue, "PodCreated", "")
+		if err != nil {
+			return err
+		}
 	} else if err != nil {
-		return reconcile.Result{}, err
+		return err
+	} else {
+		switch found.Status.Phase {
+		case corev1.PodFailed:
+			err = r.updateCondition(command, "Active", corev1.ConditionFalse, "PodFailed", "")
+			if err != nil {
+				return err
+			}
+			err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
+			if err != nil {
+				return err
+			}
+		case corev1.PodSucceeded:
+			err = r.updateCondition(command, "Active", corev1.ConditionFalse, "PodSucceeded", "")
+			if err != nil {
+				return err
+			}
+			err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
+			if err != nil {
+				return err
+			}
+		default:
+			// PodPending PodPhase = "Pending"
+			// PodRunning PodPhase = "Running"
+			// PodUnknown PodPhase = "Unknown"
+			err = r.updateCondition(command, "Active", corev1.ConditionTrue, string(found.Status.Phase), "")
+			if err != nil {
+				return err
+			}
+		}
+		// Pod already exists - don't requeue
+		reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
 	}
-
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
-	return reconcile.Result{}, nil
+	return nil
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr

@@ -10,7 +10,7 @@ require (
 	github.com/google/go-cmp v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-runewidth v0.0.8 // indirect
-	github.com/operator-framework/operator-sdk v0.15.2
+	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v0.0.6 // indirect
