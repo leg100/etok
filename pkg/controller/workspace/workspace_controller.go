@@ -2,8 +2,10 @@ package workspace
 
 import (
 	"context"
+	"reflect"
 
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -151,6 +153,27 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 	//TODO: are we really sure that the pvc exists yet?
 
+	// process existing command queue
+	var newQueue []string
+	for _, cmdName := range instance.Status.Queue {
+		cmd := &terraformv1alpha1.Command{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: cmdName, Namespace: request.Namespace}, cmd)
+		if err != nil && errors.IsNotFound(err) {
+			reqLogger.Info("Command not found; removing from queue", "Command.Name", cmdName)
+			continue
+		} else if err != nil {
+			return reconcile.Result{}, err
+		} else {
+			if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+				reqLogger.Info("Command completed; removing from queue", "Command.Name", cmdName)
+				continue
+			} else {
+				newQueue = append(newQueue, cmdName)
+			}
+		}
+	}
+
+	// process command resources
 	cmdList := &terraformv1alpha1.CommandList{}
 	err = r.client.List(context.TODO(), cmdList, client.InNamespace(request.Namespace), client.MatchingLabels{
 		"workspace": request.Name,
@@ -158,15 +181,21 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-
-	changed := false
 	for _, cmd := range cmdList.Items {
-		if !cmdIsQueued(&cmd, instance.Status.Queue) {
-			instance.Status.Queue = append(instance.Status.Queue, cmd.GetName())
-			changed = true
+		if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+			reqLogger.Info("Command completed; not adding to queue", "Command.Name", cmd.GetName())
+			continue
 		}
+		if cmdIsQueued(&cmd, instance.Status.Queue) {
+			reqLogger.Info("Command already in queue; skipping", "Command.Name", cmd.GetName())
+			continue
+		}
+		newQueue = append(newQueue, cmd.GetName())
 	}
-	if changed {
+
+	// update status if queue has changed
+	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
+		instance.Status.Queue = newQueue
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update Workspace status")

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/operator-framework/operator-sdk/pkg/status"
+
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,12 +44,20 @@ var command2 = terraformv1alpha1.Command{
 	},
 }
 
-var command3 = terraformv1alpha1.Command{
+var completedCommand = terraformv1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-3",
 		Namespace: "operator-test",
 		Labels: map[string]string{
 			"workspace": "workspace-1",
+		},
+	},
+	Status: terraformv1alpha1.CommandStatus{
+		Conditions: status.Conditions{
+			"Completed": status.Condition{
+				Type:   status.ConditionType("Completed"),
+				Status: corev1.ConditionTrue,
+			},
 		},
 	},
 }
@@ -86,14 +96,14 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantRequeue: false,
 		},
 		{
-			name: "Three commands",
+			name: "Completed command",
 			objs: []runtime.Object{
 				runtime.Object(&workspace),
+				runtime.Object(&completedCommand),
 				runtime.Object(&command1),
 				runtime.Object(&command2),
-				runtime.Object(&command3),
 			},
-			wantQueue:   []string{"command-1", "command-2", "command-3"},
+			wantQueue:   []string{"command-1", "command-2"},
 			wantRequeue: false,
 		},
 	}
