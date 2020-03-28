@@ -64,6 +64,7 @@ func newTrue() *bool {
 func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
 		name                   string
+		command                *terraformv1alpha1.Command
 		objs                   []runtime.Object
 		wantPod                bool
 		wantReadyCondition     corev1.ConditionStatus
@@ -72,9 +73,9 @@ func TestReconcileCommand(t *testing.T) {
 		wantRequeue            bool
 	}{
 		{
-			name: "Unqueued command",
+			name:    "Unqueued command",
+			command: &command,
 			objs: []runtime.Object{
-				runtime.Object(&command),
 				runtime.Object(&workspaceEmptyQueue),
 			},
 			wantPod:                false,
@@ -84,9 +85,9 @@ func TestReconcileCommand(t *testing.T) {
 			wantRequeue:            false,
 		},
 		{
-			name: "Command at front of queue",
+			name:    "Command at front of queue",
+			command: &command,
 			objs: []runtime.Object{
-				runtime.Object(&command),
 				runtime.Object(&workspaceQueueOfOne),
 			},
 			wantPod:                true,
@@ -96,9 +97,9 @@ func TestReconcileCommand(t *testing.T) {
 			wantRequeue:            false,
 		},
 		{
-			name: "Successfully completed command",
+			name:    "Successfully completed command",
+			command: &command,
 			objs: []runtime.Object{
-				runtime.Object(&command),
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&successfullyCompletedPod),
 			},
@@ -113,13 +114,14 @@ func TestReconcileCommand(t *testing.T) {
 	s.AddKnownTypes(terraformv1alpha1.SchemeGroupVersion, &terraformv1alpha1.Workspace{}, &terraformv1alpha1.CommandList{}, &terraformv1alpha1.Command{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl := fake.NewFakeClientWithScheme(s, tt.objs...)
+			objs := append(tt.objs, runtime.Object(tt.command))
+			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			r := &ReconcileCommand{client: cl, scheme: s}
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      command.GetName(),
-					Namespace: command.GetNamespace(),
+					Name:      tt.command.GetName(),
+					Namespace: tt.command.GetNamespace(),
 				},
 			}
 			res, err := r.Reconcile(req)
@@ -143,15 +145,14 @@ func TestReconcileCommand(t *testing.T) {
 				t.Errorf("did not want pod but pod found")
 			}
 
-			command := &terraformv1alpha1.Command{}
-			err = r.client.Get(context.TODO(), req.NamespacedName, command)
+			err = r.client.Get(context.TODO(), req.NamespacedName, tt.command)
 			if err != nil {
 				t.Fatalf("get command: (%v)", err)
 			}
 
-			assertCondition(t, command, "Completed", tt.wantCompletedCondition)
-			assertCondition(t, command, "Ready", tt.wantReadyCondition)
-			assertCondition(t, command, "Active", tt.wantActiveCondition)
+			assertCondition(t, tt.command, "Completed", tt.wantCompletedCondition)
+			assertCondition(t, tt.command, "Ready", tt.wantReadyCondition)
+			assertCondition(t, tt.command, "Active", tt.wantActiveCondition)
 		})
 	}
 }

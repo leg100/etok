@@ -17,10 +17,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var workspace = terraformv1alpha1.Workspace{
+var workspaceEmptyQueue = terraformv1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
+	},
+}
+
+var workspaceWithQueue = terraformv1alpha1.Workspace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "workspace-1",
+		Namespace: "operator-test",
+	},
+	Status: terraformv1alpha1.WorkspaceStatus{
+		Queue: []string{
+			"command-1",
+		},
 	},
 }
 
@@ -62,33 +74,45 @@ var completedCommand = terraformv1alpha1.Command{
 	},
 }
 
+var commandWithNonExistantWorkspace = terraformv1alpha1.Command{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "command-with-nonexistant-workspace",
+		Namespace: "operator-test",
+		Labels: map[string]string{
+			"workspace": "workspace-does-not-exist",
+		},
+	},
+}
+
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
 		name        string
+		workspace   *terraformv1alpha1.Workspace
 		objs        []runtime.Object
 		wantQueue   []string
 		wantRequeue bool
 	}{
 		{
-			name: "No commands",
+			name:      "No commands",
+			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&workspace),
+				runtime.Object(&commandWithNonExistantWorkspace),
 			},
 			wantRequeue: false,
 		},
 		{
-			name: "Single command",
+			name:      "Single command",
+			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&workspace),
 				runtime.Object(&command1),
 			},
 			wantQueue:   []string{"command-1"},
 			wantRequeue: false,
 		},
 		{
-			name: "Two commands",
+			name:      "Two commands",
+			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&workspace),
 				runtime.Object(&command1),
 				runtime.Object(&command2),
 			},
@@ -96,9 +120,19 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantRequeue: false,
 		},
 		{
-			name: "Completed command",
+			name:      "Existing queue",
+			workspace: &workspaceWithQueue,
 			objs: []runtime.Object{
-				runtime.Object(&workspace),
+				runtime.Object(&command1),
+				runtime.Object(&command2),
+			},
+			wantQueue:   []string{"command-1", "command-2"},
+			wantRequeue: false,
+		},
+		{
+			name:      "Completed command",
+			workspace: &workspaceEmptyQueue,
+			objs: []runtime.Object{
 				runtime.Object(&completedCommand),
 				runtime.Object(&command1),
 				runtime.Object(&command2),
@@ -111,13 +145,14 @@ func TestReconcileWorkspace(t *testing.T) {
 	s.AddKnownTypes(terraformv1alpha1.SchemeGroupVersion, &terraformv1alpha1.Workspace{}, &terraformv1alpha1.CommandList{}, &terraformv1alpha1.Command{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl := fake.NewFakeClientWithScheme(s, tt.objs...)
+			objs := append(tt.objs, runtime.Object(tt.workspace))
+			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			r := &ReconcileWorkspace{client: cl, scheme: s}
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      workspace.GetName(),
-					Namespace: workspace.GetNamespace(),
+					Name:      tt.workspace.GetName(),
+					Namespace: tt.workspace.GetNamespace(),
 				},
 			}
 			res, err := r.Reconcile(req)
@@ -135,13 +170,12 @@ func TestReconcileWorkspace(t *testing.T) {
 				t.Errorf("get pvc: (%v)", err)
 			}
 
-			workspace := terraformv1alpha1.Workspace{}
-			err = r.client.Get(context.TODO(), req.NamespacedName, &workspace)
+			err = r.client.Get(context.TODO(), req.NamespacedName, tt.workspace)
 			if err != nil {
 				t.Fatalf("get ws: (%v)", err)
 			}
 
-			queue := workspace.Status.Queue
+			queue := tt.workspace.Status.Queue
 			if !reflect.DeepEqual(tt.wantQueue, queue) {
 				t.Fatalf("workspace queue expected to be %+v, but got %+v", tt.wantQueue, queue)
 			}
