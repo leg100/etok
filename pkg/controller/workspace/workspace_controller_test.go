@@ -54,46 +54,54 @@ var command3 = terraformv1alpha1.Command{
 
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
-		name      string
-		workspace *terraformv1alpha1.Workspace
-		commands  []*terraformv1alpha1.Command
-		wantQueue []string
+		name        string
+		objs        []runtime.Object
+		wantQueue   []string
+		wantRequeue bool
 	}{
 		{
-			name:      "No commands",
-			workspace: &workspace,
-			commands:  []*terraformv1alpha1.Command{},
+			name: "No commands",
+			objs: []runtime.Object{
+				runtime.Object(&workspace),
+			},
+			wantRequeue: false,
 		},
 		{
-			name:      "Single command",
-			workspace: &workspace,
-			commands:  []*terraformv1alpha1.Command{&command1},
-			wantQueue: []string{"command-1"},
+			name: "Single command",
+			objs: []runtime.Object{
+				runtime.Object(&workspace),
+				runtime.Object(&command1),
+			},
+			wantQueue:   []string{"command-1"},
+			wantRequeue: false,
 		},
 		{
-			name:      "Two commands",
-			workspace: &workspace,
-			commands:  []*terraformv1alpha1.Command{&command1, &command2},
-			wantQueue: []string{"command-1", "command-2"},
+			name: "Two commands",
+			objs: []runtime.Object{
+				runtime.Object(&workspace),
+				runtime.Object(&command1),
+				runtime.Object(&command2),
+			},
+			wantQueue:   []string{"command-1", "command-2"},
+			wantRequeue: false,
 		},
 		{
-			name:      "Three commands",
-			workspace: &workspace,
-			commands:  []*terraformv1alpha1.Command{&command1, &command2, &command3},
-			wantQueue: []string{"command-1", "command-2", "command-3"},
+			name: "Three commands",
+			objs: []runtime.Object{
+				runtime.Object(&workspace),
+				runtime.Object(&command1),
+				runtime.Object(&command2),
+				runtime.Object(&command3),
+			},
+			wantQueue:   []string{"command-1", "command-2", "command-3"},
+			wantRequeue: false,
 		},
 	}
 	s := scheme.Scheme
 	s.AddKnownTypes(terraformv1alpha1.SchemeGroupVersion, &terraformv1alpha1.Workspace{}, &terraformv1alpha1.CommandList{}, &terraformv1alpha1.Command{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			workspace := tt.workspace.DeepCopy()
-			objs := []runtime.Object{workspace}
-			for _, c := range tt.commands {
-				objs = append(objs, c.DeepCopy())
-			}
-
-			cl := fake.NewFakeClientWithScheme(s, objs...)
+			cl := fake.NewFakeClientWithScheme(s, tt.objs...)
 
 			r := &ReconcileWorkspace{client: cl, scheme: s}
 			req := reconcile.Request{
@@ -106,22 +114,19 @@ func TestReconcileWorkspace(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reconcile: (%v)", err)
 			}
-			if res.Requeue {
-				t.Error("didn't expect reconcile to requeue")
+
+			if tt.wantRequeue && !res.Requeue {
+				t.Error("expected reconcile to requeue")
 			}
 
 			pvc := &corev1.PersistentVolumeClaim{}
-			// I'm not sure if pvc will have been created just yet...
 			err = r.client.Get(context.TODO(), req.NamespacedName, pvc)
 			if err != nil {
-				t.Fatalf("get pvc: (%v)", err)
+				t.Errorf("get pvc: (%v)", err)
 			}
 
-			if res.Requeue {
-				t.Error("didn't expect reconcile to requeue")
-			}
-
-			err = r.client.Get(context.TODO(), req.NamespacedName, workspace)
+			workspace := terraformv1alpha1.Workspace{}
+			err = r.client.Get(context.TODO(), req.NamespacedName, &workspace)
 			if err != nil {
 				t.Fatalf("get ws: (%v)", err)
 			}
