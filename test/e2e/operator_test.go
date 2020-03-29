@@ -97,7 +97,7 @@ func CreateWorkspace(t *testing.T) {
 		},
 		Spec: cachev1alpha1.CommandSpec{
 			Command: []string{"sh"},
-			Args:    []string{"-c", "for i in $(seq 1 20); do echo $i; sleep 1; done"},
+			Args:    []string{"-c", "[[ ! -f test.file ]] && touch test.file"},
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), command1, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
@@ -113,10 +113,26 @@ func CreateWorkspace(t *testing.T) {
 		},
 		Spec: cachev1alpha1.CommandSpec{
 			Command: []string{"sh"},
-			Args:    []string{"-c", "for i in $(seq 1 3); do echo $i; sleep 1; done"},
+			Args:    []string{"-c", "test -f test.file"},
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), command2, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	command3 := &cachev1alpha1.Command{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "command-3",
+			Namespace: namespace,
+			Labels:    map[string]string{"workspace": "workspace-1"},
+		},
+		Spec: cachev1alpha1.CommandSpec{
+			Command: []string{"sh"},
+			Args:    []string{"-c", "test -f doesnotexist.file"},
+		},
+	}
+	err = f.Client.Create(goctx.TODO(), command3, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +147,12 @@ func CreateWorkspace(t *testing.T) {
 
 		if command1.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
 			fmt.Println("command1 completed")
-			return true, nil
+			reason := command1.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
+			if string(reason) == "PodSucceeded" {
+				return true, nil
+			} else {
+				return true, fmt.Errorf("expected PodSucceeded, got %v", reason)
+			}
 		}
 
 		return false, nil
@@ -150,7 +171,36 @@ func CreateWorkspace(t *testing.T) {
 
 		if command2.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
 			fmt.Println("command2 completed")
-			return true, nil
+			reason := command2.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
+			if string(reason) == "PodSucceeded" {
+				return true, nil
+			} else {
+				return true, fmt.Errorf("expected PodSucceeded, got %v", reason)
+			}
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for command3 completed condition to have status true and reason PodFailed
+	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: command3.GetName()}, command3)
+
+		if err != nil {
+			return false, err
+		}
+
+		if command3.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+			fmt.Println("command3 completed")
+			reason := command3.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
+			if string(reason) == "PodFailed" {
+				return true, nil
+			} else {
+				return true, fmt.Errorf("expected PodFailed, got %v", reason)
+			}
 		}
 
 		return false, nil
