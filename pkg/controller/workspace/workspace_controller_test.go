@@ -98,6 +98,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&commandWithNonExistantWorkspace),
 			},
+			wantQueue:   []string{},
 			wantRequeue: false,
 		},
 		{

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 )
@@ -87,31 +89,67 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	command := &cachev1alpha1.Command{
+	command1 := &cachev1alpha1.Command{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "command-1",
 			Namespace: namespace,
 			Labels:    map[string]string{"workspace": "workspace-1"},
 		},
 		Spec: cachev1alpha1.CommandSpec{
-			Args: []string{"version"},
+			Command: []string{"sh"},
+			Args:    []string{"-c", "for i in $(seq 1 20); do echo $i; sleep 1; done"},
 		},
 	}
-	err = f.Client.Create(goctx.TODO(), command, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	err = f.Client.Create(goctx.TODO(), command1, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	found := &corev1.Pod{}
-	// wait for command pod to be created
+	command2 := &cachev1alpha1.Command{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "command-2",
+			Namespace: namespace,
+			Labels:    map[string]string{"workspace": "workspace-1"},
+		},
+		Spec: cachev1alpha1.CommandSpec{
+			Command: []string{"sh"},
+			Args:    []string{"-c", "for i in $(seq 1 3); do echo $i; sleep 1; done"},
+		},
+	}
+	err = f.Client.Create(goctx.TODO(), command2, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for command1 completed condition to have status true
 	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: command.GetName()}, found)
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: command1.GetName()}, command1)
 
 		if err != nil {
 			return false, err
 		}
 
-		if found.Status.Phase == corev1.PodSucceeded {
+		if command1.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+			fmt.Println("command1 completed")
+			return true, nil
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for command2 completed condition to have status true
+	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: command2.GetName()}, command2)
+
+		if err != nil {
+			return false, err
+		}
+
+		if command2.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+			fmt.Println("command2 completed")
 			return true, nil
 		}
 

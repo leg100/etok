@@ -151,10 +151,9 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
-	//TODO: are we really sure that the pvc exists yet?
 
 	// process existing command queue
-	var newQueue []string
+	newQueue := []string{}
 	for _, cmdName := range instance.Status.Queue {
 		cmd := &terraformv1alpha1.Command{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: cmdName, Namespace: request.Namespace}, cmd)
@@ -203,8 +202,6 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		}
 	}
 
-	// PVC already exists - don't requeue
-	reqLogger.Info("Skip reconcile: PVC already exists", "PVC.Namespace", found.Namespace, "PVC.Name", found.Name)
 	return reconcile.Result{}, nil
 }
 

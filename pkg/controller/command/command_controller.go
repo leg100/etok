@@ -63,6 +63,33 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to resource Workspace and requeue the associated Commands
+	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			rc := r.(*ReconcileCommand)
+			cmdList := &terraformv1alpha1.CommandList{}
+			err = rc.client.List(context.TODO(), cmdList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingLabels{
+				"workspace": a.Meta.GetName(),
+			})
+			if err != nil {
+				return []reconcile.Request{}
+			}
+
+			rr := []reconcile.Request{}
+			for _, cmd := range cmdList.Items {
+				rr = append(rr, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      cmd.GetName(),
+						Namespace: cmd.GetNamespace(),
+					},
+				})
+			}
+			return rr
+		}),
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
