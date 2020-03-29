@@ -8,7 +8,7 @@ import (
 	goctx "context"
 
 	"github.com/leg100/terraform-operator/pkg/apis"
-	cachev1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
+	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,13 +27,13 @@ var (
 )
 
 func TestWorkspace(t *testing.T) {
-	workspaceList := &cachev1alpha1.WorkspaceList{}
+	workspaceList := &terraformv1alpha1.WorkspaceList{}
 	err := framework.AddToFrameworkScheme(apis.AddToScheme, workspaceList)
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
 
-	commandList := &cachev1alpha1.CommandList{}
+	commandList := &terraformv1alpha1.CommandList{}
 	err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
@@ -65,7 +65,7 @@ func CreateWorkspace(t *testing.T) {
 	}
 
 	// create workspace custom resource
-	workspace := &cachev1alpha1.Workspace{
+	workspace := &terraformv1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "workspace-1",
 			Namespace: namespace,
@@ -113,13 +113,13 @@ func CreateWorkspace(t *testing.T) {
 
 	// create command resources
 	for _, c := range commands {
-		instance := &cachev1alpha1.Command{
+		instance := &terraformv1alpha1.Command{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      c.name,
 				Namespace: namespace,
 				Labels:    map[string]string{"workspace": "workspace-1"},
 			},
-			Spec: cachev1alpha1.CommandSpec{
+			Spec: terraformv1alpha1.CommandSpec{
 				Command: []string{"sh"},
 				Args:    c.args,
 			},
@@ -133,7 +133,7 @@ func CreateWorkspace(t *testing.T) {
 	// wait for commands' completed condition to have status true and expected reason
 	for _, c := range commands {
 		err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-			instance := &cachev1alpha1.Command{}
+			instance := &terraformv1alpha1.Command{}
 			err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: c.name}, instance)
 
 			if err != nil {
