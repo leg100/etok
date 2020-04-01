@@ -43,6 +43,13 @@ spec:
               items:
                 type: string
               type: array
+            configmap:
+              type: string
+            configmapkey:
+              type: string
+          required:
+          - configmap
+          - configmapkey
           type: object
         status:
           description: CommandStatus defines the observed state of Command

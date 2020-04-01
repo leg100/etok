@@ -15,7 +15,9 @@ type CommandSpec struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	Command []string `json:"command,omitempty"`
 
-	Args []string `json:"args,omitempty"`
+	Args         []string `json:"args,omitempty"`
+	ConfigMap    string   `json:"configmap"`
+	ConfigMapKey string   `json:"configmapkey"`
 }
 
 // CommandStatus defines the observed state of Command

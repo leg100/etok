@@ -9,6 +9,7 @@ import (
 
 	"github.com/leg100/terraform-operator/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/terraform-operator/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -70,6 +71,9 @@ func CreateWorkspace(t *testing.T) {
 			Name:      "workspace-1",
 			Namespace: namespace,
 		},
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Workspace",
+		},
 	}
 	err = f.Client.Create(goctx.TODO(), workspace, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
 	if err != nil {
@@ -89,25 +93,76 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	configMaps := []struct {
+		name  string
+		path  string
+		files []string
+	}{
+		{
+			name:  "tarball1",
+			path:  "./test/e2e/tarball1",
+			files: []string{"test1.tf", "test2.tf"},
+		},
+		{
+			name:  "tarball2",
+			path:  "./test/e2e/tarball2",
+			files: []string{"test1.tf", "test2.tf", "test3.tf"},
+		},
+		{
+			name:  "tarball3",
+			path:  "./test/e2e/tarball3",
+			files: []string{},
+		},
+	}
+	for _, cm := range configMaps {
+		// create tar
+		tar, err := utils.Create(cm.path, cm.files)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		configMap := corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cm.name,
+				Namespace: "operator-test",
+			},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
+			BinaryData: map[string][]byte{
+				"tarball.tar.gz": tar.Bytes(),
+			},
+		}
+		err = f.Client.Create(goctx.TODO(), &configMap, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	commands := []struct {
 		name            string
 		args            []string
 		completedReason string
+		configMap       string
 	}{
 		{
 			name:            "command-1",
-			args:            []string{"-c", "[[ ! -f test.file ]] && touch test.file"},
+			args:            []string{"-c", "test -f test1.tf; touch .terraform/persist_this"},
 			completedReason: "PodSucceeded",
+			configMap:       "tarball1",
 		},
 		{
 			name:            "command-2",
-			args:            []string{"-c", "test -f test.file"},
+			args:            []string{"-c", "test -f test3.tf; test -f .terraform/persist_this"},
 			completedReason: "PodSucceeded",
+			configMap:       "tarball2",
 		},
 		{
 			name:            "command-3",
-			args:            []string{"-c", "test -f doesnotexist.file"},
+			args:            []string{"-c", "test -f test1.tf"},
 			completedReason: "PodFailed",
+			configMap:       "tarball3",
 		},
 	}
 
@@ -119,9 +174,14 @@ func CreateWorkspace(t *testing.T) {
 				Namespace: namespace,
 				Labels:    map[string]string{"workspace": "workspace-1"},
 			},
+			TypeMeta: metav1.TypeMeta{
+				Kind: "Command",
+			},
 			Spec: terraformv1alpha1.CommandSpec{
-				Command: []string{"sh"},
-				Args:    c.args,
+				Command:      []string{"sh"},
+				Args:         c.args,
+				ConfigMap:    c.configMap,
+				ConfigMapKey: "tarball.tar.gz",
 			},
 		}
 		err = f.Client.Create(goctx.TODO(), instance, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
@@ -247,6 +248,7 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
 func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
+	script := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
 	labels := map[string]string{
 		"app": cr.Name,
 	}
@@ -257,15 +259,20 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
+			InitContainers: []corev1.Container{
 				{
-					Name:    "terraform",
-					Image:   "hashicorp/terraform:0.12.21",
-					Command: cr.Spec.Command,
-					Args:    cr.Spec.Args,
-					Stdin:   true,
-					TTY:     true,
+					Name:                     "get-tarball",
+					Image:                    "busybox",
+					ImagePullPolicy:          corev1.PullIfNotPresent,
+					Command:                  []string{"sh"},
+					Args:                     []string{"-c", script},
+					TerminationMessagePolicy: "FallbackToLogsOnError",
 					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "tarball",
+							MountPath: filepath.Join("/tarball", cr.Spec.ConfigMapKey),
+							SubPath:   cr.Spec.ConfigMapKey,
+						},
 						{
 							Name:      "workspace",
 							MountPath: "/workspace",
@@ -274,12 +281,50 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 					WorkingDir: "/workspace",
 				},
 			},
+			Containers: []corev1.Container{
+				{
+					Name:                     "terraform",
+					Image:                    "hashicorp/terraform:0.12.21",
+					Command:                  cr.Spec.Command,
+					Args:                     cr.Spec.Args,
+					Stdin:                    true,
+					TTY:                      true,
+					TerminationMessagePolicy: "FallbackToLogsOnError",
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "workspace",
+							MountPath: "/workspace",
+						},
+						{
+							Name:      "cache",
+							MountPath: "/workspace/.terraform",
+						},
+					},
+					WorkingDir: "/workspace",
+				},
+			},
 			Volumes: []corev1.Volume{
 				{
-					Name: "workspace",
+					Name: "cache",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 							ClaimName: cr.Labels["workspace"],
+						},
+					},
+				},
+				{
+					Name: "workspace",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "tarball",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cr.Spec.ConfigMap,
+							},
 						},
 					},
 				},
