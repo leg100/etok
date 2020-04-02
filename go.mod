@@ -1,4 +1,4 @@
-module github.com/leg100/terraform-operator
+module github.com/leg100/stok
 
 go 1.13
 

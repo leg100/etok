@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/leg100/terraform-operator/pkg/controller/command"
+	"github.com/leg100/stok/operator/pkg/controller/command"
 )
 
 func init() {

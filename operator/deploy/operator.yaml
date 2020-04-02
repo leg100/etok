@@ -1,24 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: terraform-operator
+  name: stok-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: terraform-operator
+      name: stok-operator
   template:
     metadata:
       labels:
-        name: terraform-operator
+        name: stok-operator
     spec:
-      serviceAccountName: terraform-operator
+      serviceAccountName: stok-operator
       containers:
-        - name: terraform-operator
-          # Replace this with the built image name
-          image: terraform-operator:latest
+        - name: stok-operator
+          image: leg100/stok-operator:latest
           command:
-          - terraform-operator
+          - stok-operator
           imagePullPolicy: Never
           env:
             - name: WATCH_NAMESPACE
@@ -30,4 +29,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "terraform-operator"
+              value: "stok-operator"

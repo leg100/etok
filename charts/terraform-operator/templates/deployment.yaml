@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "terraform-operator.fullname" . }}
+  name: {{ include "stok-operator.fullname" . }}
   labels:
-    {{- include "terraform-operator.labels" . | nindent 4 }}
+    {{- include "stok-operator.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "terraform-operator.selectorLabels" . | nindent 6 }}
+      {{- include "stok-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "terraform-operator.selectorLabels" . | nindent 8 }}
+        {{- include "stok-operator.selectorLabels" . | nindent 8 }}
     spec:
     {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ include "terraform-operator.serviceAccountName" . }}
+      serviceAccountName: {{ include "stok-operator.serviceAccountName" . }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}{{- include "terraform-operator.tag" . -}}"
+          image: "{{ .Values.image.repository }}{{- include "stok-operator.tag" . -}}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-          - terraform-operator
+          - stok-operator
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
@@ -35,4 +35,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "terraform-operator"
+              value: "stok-operator"

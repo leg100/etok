@@ -7,9 +7,9 @@ import (
 
 	goctx "context"
 
-	"github.com/leg100/terraform-operator/pkg/apis"
-	terraformv1alpha1 "github.com/leg100/terraform-operator/pkg/apis/terraform/v1alpha1"
-	"github.com/leg100/terraform-operator/utils"
+	"github.com/leg100/stok/operator/pkg/apis"
+	terraformv1alpha1 "github.com/leg100/stok/operator/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -60,7 +60,7 @@ func CreateWorkspace(t *testing.T) {
 	// get global framework variables
 	f := framework.Global
 	// wait for workspace-operator to be ready
-	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "terraform-operator", 1, time.Second*5, time.Second*30)
+	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "stok-operator", 1, time.Second*5, time.Second*30)
 	if err != nil {
 		t.Fatal(err)
 	}

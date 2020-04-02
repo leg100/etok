@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/leg100/terraform-operator/pkg/controller/workspace"
+	"github.com/leg100/stok/operator/pkg/controller/workspace"
 )
 
 func init() {

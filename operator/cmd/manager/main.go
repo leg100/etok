@@ -12,9 +12,9 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 
-	"github.com/leg100/terraform-operator/pkg/apis"
-	"github.com/leg100/terraform-operator/pkg/controller"
-	"github.com/leg100/terraform-operator/version"
+	"github.com/leg100/stok/operator/pkg/apis"
+	"github.com/leg100/stok/operator/pkg/controller"
+	"github.com/leg100/stok/operator/version"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -84,7 +84,7 @@ func main() {
 
 	ctx := context.TODO()
 	// Become the leader before proceeding
-	err = leader.Become(ctx, "terraform-operator-lock")
+	err = leader.Become(ctx, "stok-operator-lock")
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
