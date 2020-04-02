@@ -9,7 +9,7 @@ import (
 
 	"github.com/leg100/stok/operator/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/operator/pkg/apis/terraform/v1alpha1"
-	"github.com/leg100/stok/utils"
+	"github.com/leg100/stok/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -116,7 +116,7 @@ func CreateWorkspace(t *testing.T) {
 	}
 	for _, cm := range configMaps {
 		// create tar
-		tar, err := utils.Create(cm.path, cm.files)
+		tar, err := util.Create(cm.path, cm.files)
 		if err != nil {
 			t.Fatal(err)
 		}
