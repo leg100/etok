@@ -7,7 +7,7 @@ import (
 
 	"github.com/operator-framework/operator-sdk/pkg/status"
 
-	terraformv1alpha1 "github.com/leg100/stok/operator/pkg/apis/terraform/v1alpha1"
+	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	terraformv1alpha1 "github.com/leg100/stok/operator/pkg/apis/terraform/v1alpha1"
+	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

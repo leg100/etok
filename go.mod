@@ -4,20 +4,27 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
+	github.com/fatih/color v1.9.0 // indirect
+	github.com/gobuffalo/flect v0.2.1 // indirect
+	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.5.0 // indirect
 	github.com/spf13/cobra v0.0.7 // indirect
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/net v0.0.0-20200222125558-5a598a2470a0 // indirect
-	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
-	golang.org/x/tools v0.0.0-20200224181240-023911ca70b2 // indirect
-	gopkg.in/yaml.v2 v2.2.8 // indirect
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
+	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
+	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	k8s.io/api v0.18.0
+	k8s.io/apiextensions-apiserver v0.18.0 // indirect
+	k8s.io/apimachinery v0.18.0
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubectl v0.0.0
+	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect
 	sigs.k8s.io/controller-runtime v0.4.0
+	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
 // Pinned to kubernetes-1.16.2

@@ -7,8 +7,8 @@ import (
 
 	goctx "context"
 
-	"github.com/leg100/stok/operator/pkg/apis"
-	terraformv1alpha1 "github.com/leg100/stok/operator/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis"
+	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	"github.com/leg100/stok/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
