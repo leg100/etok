@@ -11,7 +11,7 @@ clean:
 	- kubcetl delete workspaces.terraform.goalspike.com example-workspace -n operator-test
 
 .PHONY: e2e
-e2e: image
+e2e: operator-image
 	kubectl get ns operator-test || kubectl create ns operator-test
 	kubectl apply -f operator/deploy/crds/terraform.goalspike.com_workspaces_crd.yaml -n operator-test
 	kubectl apply -f operator/deploy/crds/terraform.goalspike.com_commands_crd.yaml -n operator-test
@@ -35,10 +35,9 @@ deploy: crds
 		kind load docker-image stok-operator:$${TAG} && \
 		helm upgrade -i --wait --set-string image.tag=$$TAG stok-operator ./charts/stok-operator
 
-build:
+operator-build:
 	go build -o operator/build/_output/bin/stok-operator \
 		github.com/leg100/stok/operator/cmd/manager
 
-image: build
+operator-image: operator-build
 	docker build -f operator/build/Dockerfile -t leg100/stok-operator:latest operator/
-
