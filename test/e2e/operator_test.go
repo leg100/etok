@@ -65,6 +65,24 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// create secret resource
+	var secret = corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret-1",
+			Namespace: "operator-test",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Secret",
+		},
+		StringData: map[string]string{
+			"google_application_credentials.json": "abc",
+		},
+	}
+	err = f.Client.Create(goctx.TODO(), &secret, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// create workspace custom resource
 	workspace := &terraformv1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -73,6 +91,9 @@ func CreateWorkspace(t *testing.T) {
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind: "Workspace",
+		},
+		Spec: terraformv1alpha1.WorkspaceSpec{
+			SecretName: "secret-1",
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), workspace, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
@@ -148,20 +169,26 @@ func CreateWorkspace(t *testing.T) {
 	}{
 		{
 			name:            "command-1",
-			args:            []string{"-c", "test -f test1.tf; touch .terraform/persist_this"},
+			args:            []string{"-c", "test -f test1.tf"},
 			completedReason: "PodSucceeded",
 			configMap:       "tarball1",
 		},
 		{
 			name:            "command-2",
-			args:            []string{"-c", "test -f test3.tf; test -f .terraform/persist_this"},
+			args:            []string{"-c", "touch .terraform/persist_this"},
+			completedReason: "PodSucceeded",
+			configMap:       "tarball1",
+		},
+		{
+			name:            "command-3",
+			args:            []string{"-c", "test -f .terraform/persist_this"},
 			completedReason: "PodSucceeded",
 			configMap:       "tarball2",
 		},
 		{
-			name:            "command-3",
-			args:            []string{"-c", "test -f test1.tf"},
-			completedReason: "PodFailed",
+			name:            "command-4",
+			args:            []string{"-c", "[[ $(cat /credentials/google_application_credentials.json) = 'abc' ]]"},
+			completedReason: "PodSucceeded",
 			configMap:       "tarball3",
 		},
 	}

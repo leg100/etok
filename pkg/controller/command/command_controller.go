@@ -146,13 +146,20 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
+	// Get workspace's secret resource
+	secret := &corev1.Secret{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: workspace.Spec.SecretName, Namespace: request.Namespace}, secret)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	err = r.updateCondition(instance, "Ready", corev1.ConditionTrue, "WorkspaceFound", fmt.Sprintf("Workspace %s found", workspace.Name))
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
 	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
-		err = r.managePod(request, instance)
+		err = r.managePod(request, instance, secret)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -185,11 +192,11 @@ func isFirstInQueue(queue []string, name string) bool {
 	}
 }
 
-func (r *ReconcileCommand) managePod(request reconcile.Request, command *terraformv1alpha1.Command) error {
+func (r *ReconcileCommand) managePod(request reconcile.Request, command *terraformv1alpha1.Command, secret *corev1.Secret) error {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// Define a new Pod object
-	pod := newPodForCR(command)
+	pod := newPodForCR(command, secret)
 
 	// Set Command instance as the owner and controller
 	if err := controllerutil.SetControllerReference(command, pod, r.scheme); err != nil {
@@ -247,7 +254,7 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
+func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.Pod {
 	script := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
 	labels := map[string]string{
 		"app": cr.Name,
@@ -283,11 +290,17 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 			},
 			Containers: []corev1.Container{
 				{
-					Name:                     "terraform",
-					Image:                    "hashicorp/terraform:0.12.21",
-					Command:                  cr.Spec.Command,
-					Args:                     cr.Spec.Args,
-					Stdin:                    true,
+					Name:    "terraform",
+					Image:   "hashicorp/terraform:0.12.21",
+					Command: cr.Spec.Command,
+					Args:    cr.Spec.Args,
+					Stdin:   true,
+					Env: []corev1.EnvVar{
+						{
+							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+							Value: "/credentials/google_application_credentials.json",
+						},
+					},
 					TTY:                      true,
 					TerminationMessagePolicy: "FallbackToLogsOnError",
 					VolumeMounts: []corev1.VolumeMount{
@@ -298,6 +311,10 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 						{
 							Name:      "cache",
 							MountPath: "/workspace/.terraform",
+						},
+						{
+							Name:      "credentials",
+							MountPath: "/credentials",
 						},
 					},
 					WorkingDir: "/workspace",
@@ -325,6 +342,14 @@ func newPodForCR(cr *terraformv1alpha1.Command) *corev1.Pod {
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: cr.Spec.ConfigMap,
 							},
+						},
+					},
+				},
+				{
+					Name: "credentials",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: secret.Name,
 						},
 					},
 				},

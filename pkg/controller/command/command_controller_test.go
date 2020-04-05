@@ -16,6 +16,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+var secret = corev1.Secret{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "secret-1",
+		Namespace: "operator-test",
+	},
+	StringData: map[string]string{
+		"google_application_credentials.json": "abc",
+	},
+}
+
 var command = terraformv1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
@@ -34,12 +44,18 @@ var workspaceEmptyQueue = terraformv1alpha1.Workspace{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
+	Spec: terraformv1alpha1.WorkspaceSpec{
+		SecretName: "secret-1",
+	},
 }
 
 var workspaceQueueOfOne = terraformv1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
+	},
+	Spec: terraformv1alpha1.WorkspaceSpec{
+		SecretName: "secret-1",
 	},
 	Status: terraformv1alpha1.WorkspaceStatus{
 		Queue: []string{"command-1"},
@@ -77,6 +93,7 @@ func TestReconcileCommand(t *testing.T) {
 			command: &command,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
+				runtime.Object(&secret),
 			},
 			wantPod:                false,
 			wantReadyCondition:     corev1.ConditionTrue,
@@ -89,6 +106,7 @@ func TestReconcileCommand(t *testing.T) {
 			command: &command,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
 			},
 			wantPod:                true,
 			wantReadyCondition:     corev1.ConditionTrue,
@@ -101,6 +119,7 @@ func TestReconcileCommand(t *testing.T) {
 			command: &command,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
 				runtime.Object(&successfullyCompletedPod),
 			},
 			wantPod:                true,
