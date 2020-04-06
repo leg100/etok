@@ -6,16 +6,22 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 
-	crdapi "github.com/leg100/stok/pkg/apis"
+	"github.com/leg100/stok/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -23,6 +29,9 @@ import (
 /*
 TODO:
 
+Namespace:
+ How to select?
+ (a) env var (STOK_NAMESPACE)
 Workspaces:
  How are they selected?
  (a) env var (STOK_WORKSPACE)
@@ -59,6 +68,11 @@ var TERRAFORM_COMMANDS_THAT_USE_STATE = []string{
 	"state",
 }
 
+const (
+	exitCodeErr       = 1
+	exitCodeInterrupt = 2
+)
+
 func main() {
 	err := parseArgs(os.Args[1:])
 	if err != nil {
@@ -89,33 +103,113 @@ func handleError(err error) {
 		// terraform exited with non-zero exit code
 		os.Exit(exiterr.ExitCode())
 	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, err.Error())
+		os.Exit(exitCodeErr)
+	}
+}
+
+type App struct {
+	Resources []runtime.Object
+	Client    client.Client
+}
+
+func (app *App) AddToCleanup(resource runtime.Object) {
+	app.Resources = append(app.Resources, resource)
+}
+
+func (app *App) Cleanup() {
+	for _, r := range app.Resources {
+		app.Client.Delete(context.TODO(), r)
+	}
 }
 
 func runRemote(args []string) error {
-	namespace := "default"
+	app := App{}
+	defer app.Cleanup()
 
-	// create Command CRD (and defer deletion)
-	scheme := runtime.NewScheme()
-	crdapi.AddToScheme(scheme)
+	// adds core GVKs
+	s := scheme.Scheme
+	// adds CRD GVKs
+	apis.AddToScheme(s)
 
-	var cl client.Client
 	config := runtimeconfig.GetConfigOrDie()
-	cl, err := client.New(config, client.Options{Scheme: scheme})
+	cl, err := client.New(config, client.Options{Scheme: s})
+	if err != nil {
+		return err
+	}
+	app.Client = cl
+
+	stopChan := make(chan os.Signal, 1)
+	// Stop on SIGINTs and SIGTERMs.
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-stopChan
+		app.Cleanup()
+		os.Exit(exitCodeInterrupt)
+	}()
+
+	// create tar
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	filenames, err := filepath.Glob("*.tf")
+	if err != nil {
+		return err
+	}
+	tar, err := util.Create(wd, filenames)
 	if err != nil {
 		return err
 	}
 
-	command := &terraformv1alpha1.Command{
+	// get k8s namespace or set default
+	namespace := os.Getenv("STOK_NAMESPACE")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "command-",
+			GenerateName: "stok-",
 			Namespace:    namespace,
 			Labels: map[string]string{
-				"workspace": "example-workspace",
+				"app": "stok",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		BinaryData: map[string][]byte{
+			"tarball.tar.gz": tar.Bytes(),
+		},
+	}
+
+	err = cl.Create(context.Background(), configMap)
+	if err != nil {
+		return err
+	}
+
+	// AddToResources(configMap)
+	// addToCleanupFunc(configMap)
+	app.AddToCleanup(configMap)
+
+	command := &terraformv1alpha1.Command{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMap.GetName(),
+			Namespace: namespace,
+			Labels: map[string]string{
+				// TODO: parameterize
+				"workspace": "workspace-1",
 			},
 		},
 		Spec: terraformv1alpha1.CommandSpec{
-			Command: []string{"terraform"},
-			Args:    args,
+			Command:      []string{"terraform"},
+			Args:         args,
+			ConfigMap:    configMap.GetName(),
+			ConfigMapKey: "tarball.tar.gz",
 		},
 	}
 
@@ -123,14 +217,14 @@ func runRemote(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer cl.Delete(context.Background(), command, &client.DeleteOptions{})
+	app.AddToCleanup(command)
 
 	clientset, err := kubernetes.NewForConfig(config)
-	name, err := waitForPod(clientset, command.GetName())
+	name, err := waitForPod(clientset, command.GetName(), namespace)
 	if err != nil {
 		return err
 	}
-	req := clientset.CoreV1().Pods("default").GetLogs(name, &v1.PodLogOptions{Follow: true})
+	req := clientset.CoreV1().Pods(namespace).GetLogs(name, &v1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
 		return err
@@ -144,10 +238,10 @@ func runRemote(args []string) error {
 	return nil
 }
 
-func waitForPod(client *kubernetes.Clientset, podName string) (string, error) {
+func waitForPod(client *kubernetes.Clientset, podName string, namespace string) (string, error) {
 	// TODO: add timeout
 	fieldSelector := fmt.Sprintf("metadata.name=%v", podName)
-	watcher, err := client.CoreV1().Pods("default").Watch(metav1.ListOptions{FieldSelector: fieldSelector})
+	watcher, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{FieldSelector: fieldSelector})
 	if err != nil {
 		return "", errors.Wrap(err, "cannot create pod event watcher")
 	}
@@ -163,7 +257,7 @@ func waitForPod(client *kubernetes.Clientset, podName string) (string, error) {
 			return "", errors.New("Received obj that is not a pod")
 		}
 
-		fmt.Printf("%s - %s\n", e.Type, pod.Name)
+		//fmt.Printf("%s - %s\n", e.Type, pod.Name)
 
 		switch e.Type {
 		case watch.Added:

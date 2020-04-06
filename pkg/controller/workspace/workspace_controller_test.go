@@ -7,6 +7,7 @@ import (
 
 	"github.com/operator-framework/operator-sdk/pkg/status"
 
+	"github.com/leg100/stok/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -143,7 +144,7 @@ func TestReconcileWorkspace(t *testing.T) {
 		},
 	}
 	s := scheme.Scheme
-	s.AddKnownTypes(terraformv1alpha1.SchemeGroupVersion, &terraformv1alpha1.Workspace{}, &terraformv1alpha1.CommandList{}, &terraformv1alpha1.Command{})
+	apis.AddToScheme(s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := append(tt.objs, runtime.Object(tt.workspace))

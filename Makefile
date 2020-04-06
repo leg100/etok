@@ -12,6 +12,7 @@ clean:
 
 .PHONY: e2e
 e2e: operator-image
+	go install # install stok cli binary
 	kubectl get ns operator-test || kubectl create ns operator-test
 	kubectl apply -f deploy/crds/terraform.goalspike.com_workspaces_crd.yaml -n operator-test
 	kubectl apply -f deploy/crds/terraform.goalspike.com_commands_crd.yaml -n operator-test
@@ -45,3 +46,6 @@ operator-image: operator-build
 operator-generate-crds:
 	operator-sdk generate k8s && \
 	operator-sdk generate crds
+
+cli-build:
+	go build -o build/_output/bin/stok github.com/leg100/stok

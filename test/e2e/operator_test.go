@@ -2,14 +2,18 @@ package e2e
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	goctx "context"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/leg100/stok/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
-	"github.com/leg100/stok/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,7 +31,7 @@ var (
 	cleanupTimeout       = time.Second * 5
 )
 
-func TestWorkspace(t *testing.T) {
+func TestStok(t *testing.T) {
 	workspaceList := &terraformv1alpha1.WorkspaceList{}
 	err := framework.AddToFrameworkScheme(apis.AddToScheme, workspaceList)
 	if err != nil {
@@ -40,14 +44,10 @@ func TestWorkspace(t *testing.T) {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
 
-	t.Run("Workspace1", CreateWorkspace)
-}
-
-func CreateWorkspace(t *testing.T) {
 	ctx := framework.NewTestCtx(t)
 	defer ctx.Cleanup()
 
-	err := ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	err = ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
@@ -65,6 +65,12 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// get credentials
+	creds, err := getGoogleCredentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// create secret resource
 	var secret = corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -75,7 +81,7 @@ func CreateWorkspace(t *testing.T) {
 			Kind: "Secret",
 		},
 		StringData: map[string]string{
-			"google_application_credentials.json": "abc",
+			"google_application_credentials.json": creds,
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), &secret, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
@@ -114,133 +120,139 @@ func CreateWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	configMaps := []struct {
-		name  string
-		path  string
-		files []string
+	tests := []struct {
+		name                string
+		args                []string
+		path                string
+		wantExitCode        int
+		wantCommandResource bool
+		wantConfigMap       bool
+		wantCompletedReason string
 	}{
 		{
-			name:  "tarball1",
-			path:  "./test/e2e/tarball1",
-			files: []string{"test1.tf", "test2.tf"},
+			name:                "no args",
+			args:                []string{},
+			wantExitCode:        127,
+			wantCommandResource: false,
+			wantConfigMap:       false,
+			wantCompletedReason: "PodSucceeded",
 		},
 		{
-			name:  "tarball2",
-			path:  "./test/e2e/tarball2",
-			files: []string{"test1.tf", "test2.tf", "test3.tf"},
+			name:                "local tf command",
+			args:                []string{"version"},
+			wantExitCode:        0,
+			wantCommandResource: false,
+			wantConfigMap:       false,
+			wantCompletedReason: "PodSucceeded",
 		},
 		{
-			name:  "tarball3",
-			path:  "./test/e2e/tarball3",
-			files: []string{},
-		},
-	}
-	for _, cm := range configMaps {
-		// create tar
-		tar, err := util.Create(cm.path, cm.files)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		configMap := corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cm.name,
-				Namespace: "operator-test",
-			},
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: "v1",
-			},
-			BinaryData: map[string][]byte{
-				"tarball.tar.gz": tar.Bytes(),
-			},
-		}
-		err = f.Client.Create(goctx.TODO(), &configMap, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	commands := []struct {
-		name            string
-		args            []string
-		completedReason string
-		configMap       string
-	}{
-		{
-			name:            "command-1",
-			args:            []string{"-c", "test -f test1.tf"},
-			completedReason: "PodSucceeded",
-			configMap:       "tarball1",
-		},
-		{
-			name:            "command-2",
-			args:            []string{"-c", "touch .terraform/persist_this"},
-			completedReason: "PodSucceeded",
-			configMap:       "tarball1",
-		},
-		{
-			name:            "command-3",
-			args:            []string{"-c", "test -f .terraform/persist_this"},
-			completedReason: "PodSucceeded",
-			configMap:       "tarball2",
-		},
-		{
-			name:            "command-4",
-			args:            []string{"-c", "[[ $(cat /credentials/google_application_credentials.json) = 'abc' ]]"},
-			completedReason: "PodSucceeded",
-			configMap:       "tarball3",
+			name:                "remote tf command",
+			args:                []string{"init", "-no-color", "-input=false"},
+			wantExitCode:        0,
+			wantCommandResource: true,
+			wantConfigMap:       true,
+			wantCompletedReason: "PodSucceeded",
 		},
 	}
 
 	// create command resources
-	for _, c := range commands {
-		instance := &terraformv1alpha1.Command{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      c.name,
-				Namespace: namespace,
-				Labels:    map[string]string{"workspace": "workspace-1"},
-			},
-			TypeMeta: metav1.TypeMeta{
-				Kind: "Command",
-			},
-			Spec: terraformv1alpha1.CommandSpec{
-				Command:      []string{"sh"},
-				Args:         c.args,
-				ConfigMap:    c.configMap,
-				ConfigMapKey: "tarball.tar.gz",
-			},
-		}
-		err = f.Client.Create(goctx.TODO(), instance, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command("stok", tt.args...)
+			cmd.Dir = "./test/e2e/workspace"
+			cmd.Env = []string{"STOK_NAMESPACE=operator-test"}
 
-	// wait for commands' completed condition to have status true and expected reason
-	for _, c := range commands {
-		err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-			instance := &terraformv1alpha1.Command{}
-			err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: c.name}, instance)
-
+			err = cmd.Start()
 			if err != nil {
-				return false, err
+				t.Fatal(err)
 			}
 
-			if instance.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-				fmt.Printf("Command %s completed\n", c.name)
-				reason := instance.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
-				if string(reason) == c.completedReason {
-					return true, nil
-				} else {
-					return true, fmt.Errorf("expected %s, got %v", c.completedReason, reason)
+			if tt.wantConfigMap {
+				// wait for configmap
+				err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+					configMapList := &corev1.ConfigMapList{}
+					err = f.Client.List(goctx.TODO(), configMapList, client.MatchingLabels{"app": "stok"})
+
+					if err != nil {
+						return false, err
+					}
+
+					if len(configMapList.Items) != 1 {
+						return false, err
+					} else {
+						return true, nil
+					}
+					//instance := configMapList.Items[0]
+				})
+				if err != nil {
+					t.Error(err)
 				}
 			}
 
-			return false, nil
+			if tt.wantCommandResource {
+				// wait for commands' completed condition to have status true and expected reason
+				err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+					cmdList := &terraformv1alpha1.CommandList{}
+					err = f.Client.List(goctx.TODO(), cmdList)
+
+					if err != nil {
+						return false, err
+					}
+
+					if len(cmdList.Items) != 1 {
+						return false, err
+					}
+
+					instance := cmdList.Items[0]
+
+					if instance.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
+						fmt.Printf("Command %s completed\n", instance.GetName())
+						gotCompletedReason := instance.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
+						if string(gotCompletedReason) == tt.wantCompletedReason {
+							return true, nil
+						} else {
+							return true, fmt.Errorf("expected %s, got %v", tt.wantCompletedReason, gotCompletedReason)
+						}
+					}
+
+					return false, nil
+				})
+				if err != nil {
+					t.Error(err)
+				}
+			}
+
+			err = cmd.Wait()
+			if exiterr, ok := err.(*exec.ExitError); ok {
+				if tt.wantExitCode != exiterr.ExitCode() {
+					t.Errorf("expected exit code %d, got %d\n", tt.wantExitCode, exiterr.ExitCode())
+					t.Error(err)
+				}
+			} else if err != nil {
+				t.Error(err)
+			} else {
+				gotExitCode := 0
+				if tt.wantExitCode != gotExitCode {
+					t.Errorf("expected exit code %d, got %d\n", tt.wantExitCode, gotExitCode)
+				}
+			}
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
+}
+
+func getGoogleCredentials() (string, error) {
+	path := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if path == "" {
+		return "", fmt.Errorf("Could not find env var GOOGLE_APPLICATION_CREDENTIALS")
+	}
+
+	bytes, err := ioutil.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("Env var GOOGLE_APPLICATION_CREDENTIALS resolves to %s but %s does not exist\n", path, path)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytes), nil
 }

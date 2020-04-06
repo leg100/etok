@@ -10,7 +10,7 @@ require (
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/pkg/errors v0.8.1
-	github.com/sirupsen/logrus v1.5.0 // indirect
+	github.com/sirupsen/logrus v1.5.0
 	github.com/spf13/cobra v0.0.7 // indirect
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
@@ -22,6 +22,7 @@ require (
 	k8s.io/apimachinery v0.18.0
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubectl v0.0.0
+	k8s.io/kubernetes v1.16.2
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect
 	sigs.k8s.io/controller-runtime v0.4.0
 	sigs.k8s.io/yaml v1.2.0 // indirect
