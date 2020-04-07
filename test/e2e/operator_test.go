@@ -238,9 +238,9 @@ func TestStok(t *testing.T) {
 				t.Error(err)
 				t.Error(stderr)
 			} else {
-				gotExitCode := 0
-				if tt.wantExitCode != gotExitCode {
-					t.Errorf("expected exit code %d, got %d\n", tt.wantExitCode, gotExitCode)
+				// got exit code 0
+				if tt.wantExitCode != 0 {
+					t.Errorf("expected exit code %d, got 0\n", tt.wantExitCode)
 				}
 			}
 		})
