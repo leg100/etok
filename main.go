@@ -74,8 +74,7 @@ const (
 )
 
 func main() {
-	err := parseArgs(os.Args[1:])
-	if err != nil {
+	if err := parseArgs(os.Args[1:]); err != nil {
 		handleError(err)
 	}
 }
@@ -88,25 +87,24 @@ func parseArgs(args []string) error {
 	return runLocal(args)
 }
 
-func runLocal(args []string) error {
-	cmd := exec.Command("terraform", args...)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	return err
-}
-
 func handleError(err error) {
 	if exiterr, ok := err.(*exec.ExitError); ok {
 		// terraform exited with non-zero exit code
 		os.Exit(exiterr.ExitCode())
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(exitCodeErr)
 	}
+}
+
+func runLocal(args []string) error {
+	cmd := exec.Command("terraform", args...)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
 
 type App struct {
@@ -191,9 +189,6 @@ func runRemote(args []string) error {
 	if err != nil {
 		return err
 	}
-
-	// AddToResources(configMap)
-	// addToCleanupFunc(configMap)
 	app.AddToCleanup(configMap)
 
 	command := &terraformv1alpha1.Command{

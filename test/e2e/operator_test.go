@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -160,7 +161,12 @@ func TestStok(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command("stok", tt.args...)
 			cmd.Dir = "./test/e2e/workspace"
-			cmd.Env = []string{"STOK_NAMESPACE=operator-test"}
+			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test")
+
+			stdout := new(bytes.Buffer)
+			cmd.Stdout = stdout
+			stderr := new(bytes.Buffer)
+			cmd.Stderr = stderr
 
 			err = cmd.Start()
 			if err != nil {
@@ -226,10 +232,11 @@ func TestStok(t *testing.T) {
 			if exiterr, ok := err.(*exec.ExitError); ok {
 				if tt.wantExitCode != exiterr.ExitCode() {
 					t.Errorf("expected exit code %d, got %d\n", tt.wantExitCode, exiterr.ExitCode())
-					t.Error(err)
+					t.Error(stderr)
 				}
 			} else if err != nil {
 				t.Error(err)
+				t.Error(stderr)
 			} else {
 				gotExitCode := 0
 				if tt.wantExitCode != gotExitCode {
