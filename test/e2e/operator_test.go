@@ -155,7 +155,7 @@ func TestStok(t *testing.T) {
 	// invoke stok with each test case
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("stok", tt.args...)
+			cmd := exec.Command("../../../build/_output/bin/stok", tt.args...)
 			cmd.Dir = "./test/e2e/workspace"
 			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test", "STOK_WORKSPACE=workspace-1")
 
