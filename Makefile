@@ -54,8 +54,8 @@ operator-build:
 operator-image: operator-build
 	docker build -f build/Dockerfile -t leg100/stok-operator:latest .
 
-.PHONY: operator-generate-crds
-operator-generate-crds:
+.PHONY: generate-crds
+generate-crds:
 	operator-sdk generate k8s && \
 	operator-sdk generate crds
 
