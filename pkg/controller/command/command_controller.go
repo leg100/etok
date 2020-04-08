@@ -257,7 +257,8 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.Pod {
 	script := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
 	labels := map[string]string{
-		"app": cr.Name,
+		"app":       cr.Name,
+		"workspace": cr.Labels["workspace"],
 	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
