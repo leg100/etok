@@ -6,12 +6,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"testing"
 	"time"
 
 	goctx "context"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/leg100/stok/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
@@ -20,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 )
@@ -122,41 +120,39 @@ func TestStok(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                string
-		args                []string
-		path                string
-		wantExitCode        int
-		wantCommandResource bool
-		wantConfigMap       bool
-		wantCompletedReason string
+		name            string
+		args            []string
+		path            string
+		wantExitCode    int
+		wantStdoutRegex *regexp.Regexp
 	}{
 		{
-			name:                "no args",
-			args:                []string{},
-			wantExitCode:        127,
-			wantCommandResource: false,
-			wantConfigMap:       false,
-			wantCompletedReason: "PodSucceeded",
+			name:            "stok",
+			args:            []string{},
+			wantExitCode:    127,
+			wantStdoutRegex: regexp.MustCompile(`^Usage: terraform`),
 		},
 		{
-			name:                "local tf command",
-			args:                []string{"version"},
-			wantExitCode:        0,
-			wantCommandResource: false,
-			wantConfigMap:       false,
-			wantCompletedReason: "PodSucceeded",
+			name:            "stok version",
+			args:            []string{"version"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`^Terraform v0\.1`),
 		},
 		{
-			name:                "remote tf command",
-			args:                []string{"init", "-no-color", "-input=false"},
-			wantExitCode:        0,
-			wantCommandResource: true,
-			wantConfigMap:       true,
-			wantCompletedReason: "PodSucceeded",
+			name:            "stok init",
+			args:            []string{"init", "-no-color", "-input=false"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`^\nInitializing the backend`),
+		},
+		{
+			name:            "stok plan",
+			args:            []string{"plan", "-no-color", "-input=false"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`^Refreshing Terraform state in-memory prior to plan`),
 		},
 	}
 
-	// create command resources
+	// invoke stok with each test case
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command("stok", tt.args...)
@@ -164,86 +160,32 @@ func TestStok(t *testing.T) {
 			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test")
 
 			stdout := new(bytes.Buffer)
-			cmd.Stdout = stdout
 			stderr := new(bytes.Buffer)
+			cmd.Stdout = stdout
 			cmd.Stderr = stderr
 
-			err = cmd.Start()
-			if err != nil {
-				t.Fatal(err)
-			}
+			err := cmd.Run()
+			exitCodeTest(t, err, tt.wantExitCode)
 
-			if tt.wantConfigMap {
-				// wait for configmap
-				err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-					configMapList := &corev1.ConfigMapList{}
-					err = f.Client.List(goctx.TODO(), configMapList, client.MatchingLabels{"app": "stok"})
-
-					if err != nil {
-						return false, err
-					}
-
-					if len(configMapList.Items) != 1 {
-						return false, err
-					} else {
-						return true, nil
-					}
-					//instance := configMapList.Items[0]
-				})
-				if err != nil {
-					t.Error(err)
-				}
-			}
-
-			if tt.wantCommandResource {
-				// wait for commands' completed condition to have status true and expected reason
-				err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-					cmdList := &terraformv1alpha1.CommandList{}
-					err = f.Client.List(goctx.TODO(), cmdList)
-
-					if err != nil {
-						return false, err
-					}
-
-					if len(cmdList.Items) != 1 {
-						return false, err
-					}
-
-					instance := cmdList.Items[0]
-
-					if instance.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-						fmt.Printf("Command %s completed\n", instance.GetName())
-						gotCompletedReason := instance.Status.Conditions.GetCondition(status.ConditionType("Completed")).Reason
-						if string(gotCompletedReason) == tt.wantCompletedReason {
-							return true, nil
-						} else {
-							return true, fmt.Errorf("expected %s, got %v", tt.wantCompletedReason, gotCompletedReason)
-						}
-					}
-
-					return false, nil
-				})
-				if err != nil {
-					t.Error(err)
-				}
-			}
-
-			err = cmd.Wait()
-			if exiterr, ok := err.(*exec.ExitError); ok {
-				if tt.wantExitCode != exiterr.ExitCode() {
-					t.Errorf("expected exit code %d, got %d\n", tt.wantExitCode, exiterr.ExitCode())
-					t.Error(stderr)
-				}
-			} else if err != nil {
-				t.Error(err)
-				t.Error(stderr)
-			} else {
-				// got exit code 0 and no error
-				if tt.wantExitCode != 0 {
-					t.Errorf("expected exit code %d, got 0\n", tt.wantExitCode)
-				}
+			if !tt.wantStdoutRegex.Match(stdout.Bytes()) {
+				t.Errorf("expected stdout to match %s but got %s\n", tt.wantStdoutRegex, cmd.Stdout)
 			}
 		})
+	}
+}
+
+func exitCodeTest(t *testing.T, err error, wantExitCode int) {
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		if wantExitCode != exiterr.ExitCode() {
+			t.Errorf("expected exit code %d, got %d\n", wantExitCode, exiterr.ExitCode())
+		}
+	} else if err != nil {
+		t.Error(err)
+	} else {
+		// got exit code 0 and no error
+		if wantExitCode != 0 {
+			t.Errorf("expected exit code %d, got 0\n", wantExitCode)
+		}
 	}
 }
 
