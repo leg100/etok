@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: stok-operator
+  repository: leg100/stok-operator
   pullPolicy: IfNotPresent
   tag: latest
 
