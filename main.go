@@ -168,6 +168,12 @@ func runRemote(args []string) error {
 		namespace = "default"
 	}
 
+	// get workspace or set default
+	workspace := os.Getenv("STOK_WORKSPACE")
+	if workspace == "" {
+		workspace = "default"
+	}
+
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "stok-",
@@ -196,8 +202,7 @@ func runRemote(args []string) error {
 			Name:      configMap.GetName(),
 			Namespace: namespace,
 			Labels: map[string]string{
-				// TODO: parameterize
-				"workspace": "workspace-1",
+				"workspace": workspace,
 			},
 		},
 		Spec: terraformv1alpha1.CommandSpec{

@@ -157,7 +157,7 @@ func TestStok(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command("stok", tt.args...)
 			cmd.Dir = "./test/e2e/workspace"
-			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test")
+			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test", "STOK_WORKSPACE=workspace-1")
 
 			stdout := new(bytes.Buffer)
 			stderr := new(bytes.Buffer)
