@@ -1,9 +1,12 @@
-name: goreleaser
+name: go build and test
 
 on:
   push:
-    tags:
-      - v*.*.*
+    branches:
+      - master
+  pull_request:
+    branches:
+      - *
 
 jobs:
   goreleaser:
@@ -24,6 +27,4 @@ jobs:
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v1
         with:
-          args: release --skip-sign
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          args: release --rm-dist --snapshot --skip-sign
