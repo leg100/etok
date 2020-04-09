@@ -1,0 +1,6 @@
+apiVersion: terraform.goalspike.com/v1alpha1
+kind: Workspace
+metadata:
+  name: {{ include "stok.fullname" . }}
+spec:
+  secretName: {{ .Values.secretName }}

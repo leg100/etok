@@ -1,4 +1,4 @@
-# Default values for stok-operator.
+# Default values for stok.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -10,6 +10,8 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+secretName: stok
 
 serviceAccount:
   # Specifies whether a service account should be created
