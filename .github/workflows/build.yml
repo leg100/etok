@@ -25,6 +25,6 @@ jobs:
           go-version: 1.13.x
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v1
+        uses: goreleaser/goreleaser-action@v1.4.0
         with:
           args: release --rm-dist --snapshot --skip-sign
