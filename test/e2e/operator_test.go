@@ -80,7 +80,7 @@ func TestStok(t *testing.T) {
 			Kind: "Secret",
 		},
 		StringData: map[string]string{
-			"google_application_credentials.json": creds,
+			"google-credentials.json": creds,
 		},
 	}
 	err = f.Client.Create(goctx.TODO(), &secret, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})

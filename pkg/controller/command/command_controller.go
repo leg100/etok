@@ -299,7 +299,7 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 					Env: []corev1.EnvVar{
 						{
 							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-							Value: "/credentials/google_application_credentials.json",
+							Value: "/credentials/google-credentials.json",
 						},
 					},
 					TTY:                      true,
