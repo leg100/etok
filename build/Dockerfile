@@ -5,7 +5,7 @@ ENV OPERATOR=/usr/local/bin/stok-operator \
     USER_NAME=stok-operator
 
 # install operator binary
-COPY build/_output/bin/stok-operator ${OPERATOR}
+COPY stok-operator ${OPERATOR}
 
 COPY build/bin /usr/local/bin
 RUN  /usr/local/bin/user_setup
