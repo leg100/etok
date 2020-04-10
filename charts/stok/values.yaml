@@ -5,7 +5,6 @@
 image:
   repository: leg100/stok-operator
   pullPolicy: IfNotPresent
-  tag: latest
 
 imagePullSecrets: []
 nameOverride: ""
