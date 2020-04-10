@@ -41,7 +41,14 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+        with:
+          version: '270.0.0'
+          service_account_email: ${{ secrets.GSA_EMAIL }}
+          service_account_key: ${{ secrets.GSA_KEY }}
+
       - name: Run chart-releaser
-        uses: ./.github/actions/chart-releaser-action
-        env:
-          CR_TOKEN: "${{ secrets.CR_TOKEN }}"
+        uses: ./.github/actions/gcs-helm-charts-action
+        with:
+          path: charts/stok
+          bucket: goalspike-charts
