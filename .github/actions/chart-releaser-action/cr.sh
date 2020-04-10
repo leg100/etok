@@ -66,7 +66,7 @@ main() {
     rm -rf .cr-index
     mkdir -p .cr-index
 
-    for chart in $(ls -ld $charts_dir/*); do
+    for chart in $(ls -d $charts_dir/*); do
         package_chart "$chart" "$latest_tag"
     done
     
