@@ -33,6 +33,11 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - uses: azure/docker-login@v1
+        with:
+          username: leg100
+          password: "{{ secrets.DOCKERHUB_TOKEN }}"
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.0.0-rc.1
         env:
