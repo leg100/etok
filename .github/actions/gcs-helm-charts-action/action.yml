@@ -9,8 +9,8 @@ inputs:
     description: 'The GCS bucket hosting helm charts'
     required: true
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: 'node12'
+  main: 'main.js'
   args:
     - ${{ inputs.path }}
     - ${{ inputs.bucket }}
