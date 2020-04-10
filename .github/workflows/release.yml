@@ -21,10 +21,8 @@ jobs:
         with:
           go-version: 1.13.x
 
-      - uses: azure/docker-login@v1
-        with:
-          username: leg100
-          password: "{{ secrets.DOCKERHUB_TOKEN }}"
+      - name: login to docker hub
+        run: echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u leg100 --password-stdin
 
       -
         name: Run GoReleaser
