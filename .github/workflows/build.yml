@@ -1,0 +1,40 @@
+name: go build and test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Unshallow
+        run: git fetch --prune --unshallow
+      -
+        name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13.x
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v1.4.0
+        with:
+          args: release --rm-dist --snapshot --skip-sign
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.0.0-rc.1
+        env:
+          CR_TOKEN: "${{ secrets.CR_TOKEN }}"

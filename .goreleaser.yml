@@ -1,14 +1,19 @@
-# This is an example goreleaser.yaml file with some sane defaults.
-# Make sure to check the documentation at http://goreleaser.com
 before:
   hooks:
-    # You may remove this if you don't use go modules.
-    - go mod download
-    # you may remove this if you don't need go generate
-    - go generate ./...
+    - go test ./pkg/...
 builds:
-- env:
-  - CGO_ENABLED=0
+  - id: stok
+    env:
+    - CGO_ENABLED=0
+  - id: stok-operator
+    binary: stok-operator
+    env:
+    - CGO_ENABLED=0
+    ldflags:
+    - '-X "github.com/leg100/stok/version.Version={{ .Version }}"'
+    main: ./cmd/manager/main.go
+    targets:
+    - linux_amd64
 archives:
 - replacements:
     darwin: Darwin
@@ -16,6 +21,21 @@ archives:
     windows: Windows
     386: i386
     amd64: x86_64
+dockers:
+- builds:
+  - stok-operator
+  binaries:
+  - stok-operator
+  goos: linux
+  goarch: amd64
+  image_templates:
+  - "leg100/stok-operator:latest"
+  - "leg100/stok-operator:{{ .Tag }}"
+  - "leg100/stok-operator:v{{ .Major }}"
+  skip_push: auto
+  dockerfile: build/Dockerfile
+  extra_files:
+    - build/bin
 checksum:
   name_template: 'checksums.txt'
 snapshot:
