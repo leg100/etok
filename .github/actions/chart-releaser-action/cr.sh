@@ -52,6 +52,7 @@ main() {
     echo 'Looking up latest tag...'
     local latest_tag
     latest_tag=$(lookup_latest_tag)
+    echo "Found tag $latest_tag"
 
     #echo "Discovering changed charts since '$latest_tag'..."
     #local changed_charts=()
