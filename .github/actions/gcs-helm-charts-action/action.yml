@@ -11,6 +11,3 @@ inputs:
 runs:
   using: 'node12'
   main: 'main.js'
-  args:
-    - ${{ inputs.path }}
-    - ${{ inputs.bucket }}
