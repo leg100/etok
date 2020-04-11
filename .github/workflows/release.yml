@@ -33,7 +33,7 @@ jobs:
 
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v1.4.0
+        uses: goreleaser/goreleaser-action@v1.3.1
         with:
           args: release --skip-sign
         env:
