@@ -9,18 +9,6 @@ on:
       - '*'
 
 jobs:
-  hello_world_job:
-    runs-on: ubuntu-latest
-    name: A job to say hello
-    steps:
-    - name: Hello world action step
-      id: hello
-      uses: leg100/hello-world-docker-action@v1
-      with:
-        who-to-greet: 'Mona the Octocat'
-    # Use the output from the `hello` step
-    - name: Get the output time
-      run: echo "The time was ${{ steps.hello.outputs.time }}"
   goreleaser:
     runs-on: ubuntu-latest
     steps:
@@ -35,18 +23,15 @@ jobs:
         uses: actions/setup-go@v1
         with:
           go-version: 1.13.x
+
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v1.4.0
+        uses: goreleaser/goreleaser-action@v1.3.1
         with:
           args: release --rm-dist --snapshot --skip-sign
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.0.0-rc.1
-        env:
-          CR_TOKEN: "${{ secrets.CR_TOKEN }}"
