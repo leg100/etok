@@ -5,6 +5,8 @@
 image:
   repository: leg100/stok-operator
   pullPolicy: IfNotPresent
+  # Set explicit docker image tag rather than chart appVersion (default)
+  # tag:
 
 imagePullSecrets: []
 nameOverride: ""

@@ -9,5 +9,6 @@ kubectl create secret generic stok --from-file=google-credentials.json=[path to 
 ```
 
 ```
-helm upgrade -i stok stok/charts
+helm repo add goalspike https://goalspike-charts.storage.googleapis.com
+helm install stok goalspike/stok
 ```

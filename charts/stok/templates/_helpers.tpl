@@ -28,7 +28,11 @@ If release name contains chart name it will be used as a full name.
 {{- if .Values.image.digest -}}
 {{- printf "@%s" .Values.image.digest -}}
 {{- else -}}
+{{- if .Values.image.tag -}}
 {{- printf ":%s" .Values.image.tag -}}
+{{- else -}}
+{{- printf ":%s" .Chart.AppVersion -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

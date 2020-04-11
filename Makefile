@@ -47,8 +47,7 @@ deploy: crds
 
 .PHONY: operator-build
 operator-build:
-	go build -o build/_output/bin/stok-operator \
-		github.com/leg100/stok/cmd/manager
+	go build -o stok-operator github.com/leg100/stok/cmd/manager
 
 .PHONY: operator-image
 operator-image: operator-build
