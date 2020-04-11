@@ -26,29 +26,6 @@ import (
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-/*
-TODO:
-
-Namespace:
- How to select?
- (a) env var (STOK_NAMESPACE)
-Workspaces:
- How are they selected?
- (a) env var (STOK_WORKSPACE)
- How do these get created?
-Tarball:
- Respect .terraformignore
- Ignore .terraform
-CRDs:
- Settle on APIVersion domain
- (a) goalspike.com
- (b) automatize.co.uk
- (c) automatize.co.uk
-GCP:
- Settle on account to use (for e2e etc)
- (a) automatize.co.uk
-*/
-
 var TERRAFORM_COMMANDS_THAT_USE_STATE = []string{
 	"init",
 	"apply",
