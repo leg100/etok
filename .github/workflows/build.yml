@@ -30,10 +30,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-
-      - name: Run Unit tests
-        run: go test ./pkg/...
-
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v1.3.1
