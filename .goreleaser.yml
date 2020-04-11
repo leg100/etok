@@ -1,6 +1,3 @@
-before:
-  hooks:
-    - go test ./pkg/...
 builds:
   - id: stok
     env:
