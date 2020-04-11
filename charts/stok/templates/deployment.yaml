@@ -21,7 +21,7 @@ spec:
       serviceAccountName: {{ include "stok.serviceAccountName" . }}
       containers:
         - name: stok-operator
-          image: "{{ .Values.image.repository }}:{{ .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}{{ include "stok.tag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
           - stok-operator
