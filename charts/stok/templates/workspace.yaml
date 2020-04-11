@@ -1,4 +1,4 @@
-apiVersion: terraform.goalspike.com/v1alpha1
+apiVersion: stok.goalspike.com/v1alpha1
 kind: Workspace
 metadata:
   name: {{ include "stok.fullname" . }}

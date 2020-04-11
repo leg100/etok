@@ -2,7 +2,7 @@
 
 // Package v1alpha1 contains API Schema definitions for the terraform v1alpha1 API group
 // +k8s:deepcopy-gen=package,register
-// +groupName=terraform.goalspike.com
+// +groupName=stok.goalspike.com
 package v1alpha1
 
 import (
@@ -12,7 +12,7 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "terraform.goalspike.com", Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "stok.goalspike.com", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
