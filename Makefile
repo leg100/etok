@@ -7,21 +7,21 @@ clean:
 	@echo ....... Deleting Operator .......
 	- kubectl delete -f deploy/operator.yaml -n operator-test
 	@echo ....... Deleting test CRs .......
-	- kubectl delete commands.terraform.goalspike.com example-command -n operator-test
-	- kubcetl delete workspaces.terraform.goalspike.com example-workspace -n operator-test
+	- kubectl delete commands.stok.goalspike.com example-command -n operator-test
+	- kubcetl delete workspaces.stok.goalspike.com example-workspace -n operator-test
 
 .PHONY: e2e
 e2e: cli-build operator-image kind-load-image
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/terraform.goalspike.com_workspaces_crd.yaml -n operator-test
-	kubectl apply -f deploy/crds/terraform.goalspike.com_commands_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
 	operator-sdk test local --namespace operator-test --verbose ./test/e2e/
 
 .PHONY: e2e-local
 e2e-local: cli-build
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/terraform.goalspike.com_workspaces_crd.yaml -n operator-test
-	kubectl apply -f deploy/crds/terraform.goalspike.com_commands_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
 	operator-sdk test local --up-local --namespace operator-test --verbose ./test/e2e/
 
 .PHONY: kind-load-image
@@ -34,8 +34,8 @@ unit:
 
 .PHONY: crds
 crds:
-	kubectl apply -f deploy/crds/terraform.goalspike.com_workspaces_crd.yaml
-	kubectl apply -f deploy/crds/terraform.goalspike.com_commands_crd.yaml
+	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml
+	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml
 
 .PHONY: deploy
 deploy: crds

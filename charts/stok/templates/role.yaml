@@ -67,7 +67,7 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - terraform.goalspike.com
+  - stok.goalspike.com
   resources:
   - '*'
   - workspaces
