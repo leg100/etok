@@ -29,8 +29,15 @@ kind-load-image:
 	kind load docker-image leg100/stok-operator:latest
 
 .PHONY: unit
-unit:
-	go test ./pkg/...
+unit: operator-unit cli-unit
+
+.PHONY: operator-unit
+operator-unit:
+	go test -v ./pkg/...
+
+.PHONY: cli-unit
+cli-unit:
+	go test -v . ./app
 
 .PHONY: crds
 crds:
