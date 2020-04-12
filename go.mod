@@ -4,6 +4,8 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
+	github.com/docker/cli v0.0.0-20190506213505-d88565df0c2d
+	github.com/docker/compose-on-kubernetes v0.4.24 // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/gobuffalo/flect v0.2.1 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
