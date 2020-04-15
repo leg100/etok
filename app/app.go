@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,9 +22,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/kubectl/pkg/cmd/attach"
+	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/kubectl/pkg/util/interrupt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -102,22 +106,16 @@ func (app *App) Run() error {
 	}
 
 	// TODO: make timeout configurable
-	_, err = app.WaitForPod(name, podRunningAndReady, 10*time.Second)
+	pod, err := app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
 		return err
 	}
 
-	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
-	logs, err := req.Stream()
+	app.handleAttachPod(pod)
 	if err != nil {
 		return err
 	}
-	defer logs.Close()
 
-	_, err = io.Copy(os.Stdout, logs)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -182,6 +180,9 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (string, error) {
 }
 
 func (app *App) CreateCommand(name string) error {
+	script := "read -t 10 -n 1 && terraform " + strings.Join(app.Args, " ")
+	args := []string{"-c", script}
+
 	command := &v1alpha1.Command{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -191,8 +192,8 @@ func (app *App) CreateCommand(name string) error {
 			},
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command:   []string{"terraform"},
-			Args:      app.Args,
+			Command:   []string{"sh"},
+			Args:      args,
 			ConfigMap: name,
 			// TODO: use constant
 			ConfigMapKey: "tarball.tar.gz",
@@ -237,6 +238,42 @@ func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, 
 	})
 
 	return result, err
+}
+
+func (app *App) handleAttachPod(pod *corev1.Pod) error {
+	config := runtimeconfig.GetConfigOrDie()
+	config.ContentConfig = rest.ContentConfig{
+		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
+		GroupVersion:         &schema.GroupVersion{Version: "v1"},
+	}
+	config.APIPath = "/api"
+
+	opts := &attach.AttachOptions{
+		StreamOptions: exec.StreamOptions{
+			Namespace: "default",
+			PodName:   pod.GetName(),
+			Stdin:     true,
+			TTY:       true,
+			Quiet:     true,
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
+			},
+		},
+		Attach:        &attach.DefaultRemoteAttach{},
+		AttachFunc:    attach.DefaultAttachFunc,
+		GetPodTimeout: time.Second * 10,
+	}
+
+	opts.Config = config
+	opts.Pod = pod
+
+	if err := opts.Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ErrPodCompleted is returned by PodRunning or PodContainerRunning to indicate that
