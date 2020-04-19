@@ -5,12 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
@@ -32,6 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
+
+func init() {
+	if os.Getenv("STOK_DEBUG") != "" {
+		log.SetLevel(log.DebugLevel)
+	}
+}
 
 func InitClient() (*client.Client, *kubernetes.Clientset, error) {
 	// adds core GVKs
@@ -93,44 +100,44 @@ func (app *App) Run() error {
 		return err
 	}
 
-	log.Println("Creating configmap...")
+	log.Debugln("Creating configmap...")
 	name, err := app.CreateConfigMap(tarball)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Creating service account...")
+	log.Debugln("Creating service account...")
 	_, err = app.CreateServiceAccount(name)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Creating role...")
+	log.Debugln("Creating role...")
 	_, err = app.CreateRole(name)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Creating role binding...")
+	log.Debugln("Creating role binding...")
 	_, err = app.CreateRoleBinding(name)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Creating command...")
+	log.Debugln("Creating command...")
 	command, err := app.CreateCommand(name)
 	if err != nil {
 		return err
 	}
 
 	// TODO: make timeout configurable
-	log.Println("Waiting for pod to be running and ready...")
+	log.Debugln("Waiting for pod to be running and ready...")
 	_, err = app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Retrieving log stream...")
+	log.Debugln("Retrieving log stream...")
 	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
@@ -139,9 +146,9 @@ func (app *App) Run() error {
 	defer logs.Close()
 
 	// let operator know we're now streaming logs
-	log.Println("Telling the operator I'm ready to receive logs...")
+	log.Debugln("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		log.Println("Attempt to update command resource...")
+		log.Debugln("Attempt to update command resource...")
 		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
 		if err = app.Client.Get(context.Background(), key, command); err != nil {
 			panic(err.Error())
@@ -157,7 +164,7 @@ func (app *App) Run() error {
 		return app.Client.Update(context.Background(), command)
 	})
 
-	log.Println("Copying logs to stdout...")
+	log.Debugln("Copying logs to stdout...")
 	_, err = io.Copy(os.Stdout, logs)
 	if err != nil {
 		return err
