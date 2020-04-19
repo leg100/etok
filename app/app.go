@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/kubectl/pkg/util/interrupt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -91,22 +93,44 @@ func (app *App) Run() error {
 		return err
 	}
 
+	log.Println("Creating configmap...")
 	name, err := app.CreateConfigMap(tarball)
 	if err != nil {
 		return err
 	}
 
-	err = app.CreateCommand(name)
+	log.Println("Creating service account...")
+	_, err = app.CreateServiceAccount(name)
+	if err != nil {
+		return err
+	}
+
+	log.Println("Creating role...")
+	_, err = app.CreateRole(name)
+	if err != nil {
+		return err
+	}
+
+	log.Println("Creating role binding...")
+	_, err = app.CreateRoleBinding(name)
+	if err != nil {
+		return err
+	}
+
+	log.Println("Creating command...")
+	command, err := app.CreateCommand(name)
 	if err != nil {
 		return err
 	}
 
 	// TODO: make timeout configurable
+	log.Println("Waiting for pod to be running and ready...")
 	_, err = app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
 		return err
 	}
 
+	log.Println("Retrieving log stream...")
 	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
@@ -114,6 +138,26 @@ func (app *App) Run() error {
 	}
 	defer logs.Close()
 
+	// let operator know we're now streaming logs
+	log.Println("Telling the operator I'm ready to receive logs...")
+	retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		log.Println("Attempt to update command resource...")
+		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
+		if err = app.Client.Get(context.Background(), key, command); err != nil {
+			panic(err.Error())
+		}
+
+		annotations := command.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations["stok.goalspike.com/client"] = "Ready"
+		command.SetAnnotations(annotations)
+
+		return app.Client.Update(context.Background(), command)
+	})
+
+	log.Println("Copying logs to stdout...")
 	_, err = io.Copy(os.Stdout, logs)
 	if err != nil {
 		return err
@@ -151,60 +195,6 @@ func CreateTar() (*bytes.Buffer, error) {
 		return nil, err
 	}
 	return tar, nil
-}
-
-func (app *App) CreateConfigMap(tarball *bytes.Buffer) (string, error) {
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "stok-",
-			Namespace:    app.Namespace,
-			Labels: map[string]string{
-				"app": "stok",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
-		BinaryData: map[string][]byte{
-			// TODO: use constant
-			"tarball.tar.gz": tarball.Bytes(),
-		},
-	}
-
-	configMap, err := app.KubeClient.CoreV1().ConfigMaps(app.Namespace).Create(configMap)
-	if err != nil {
-		return "", err
-	}
-	app.AddToCleanup(configMap)
-
-	return configMap.GetName(), nil
-}
-
-func (app *App) CreateCommand(name string) error {
-	command := &v1alpha1.Command{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: app.Namespace,
-			Labels: map[string]string{
-				"workspace": app.Workspace,
-			},
-		},
-		Spec: v1alpha1.CommandSpec{
-			Command:   []string{"terraform"},
-			Args:      app.Args,
-			ConfigMap: name,
-			// TODO: use constant
-			ConfigMapKey: "tarball.tar.gz",
-		},
-	}
-
-	if err := app.Client.Create(context.Background(), command); err != nil {
-		return err
-	}
-	app.AddToCleanup(command)
-
-	return nil
 }
 
 // waitForPod watches the given pod until the exitCondition is true
@@ -254,8 +244,10 @@ func podRunningAndReady(event watch.Event) (bool, error) {
 	switch t := event.Object.(type) {
 	case *corev1.Pod:
 		switch t.Status.Phase {
-		case corev1.PodFailed, corev1.PodSucceeded:
+		case corev1.PodSucceeded:
 			return false, ErrPodCompleted
+		case corev1.PodFailed:
+			return false, fmt.Errorf(t.Status.ContainerStatuses[0].State.Terminated.Message)
 		case corev1.PodRunning:
 			conditions := t.Status.Conditions
 			if conditions == nil {

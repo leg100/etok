@@ -40,6 +40,22 @@ var command = terraformv1alpha1.Command{
 	},
 }
 
+var commandClientReady = terraformv1alpha1.Command{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "command-1",
+		Namespace: "operator-test",
+		Labels: map[string]string{
+			"workspace": "workspace-1",
+		},
+		Annotations: map[string]string{
+			"stok.goalspike.com/client": "Ready",
+		},
+	},
+	Spec: terraformv1alpha1.CommandSpec{
+		Args: []string{"version"},
+	},
+}
+
 var workspaceEmptyQueue = terraformv1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
@@ -80,14 +96,15 @@ func newTrue() *bool {
 
 func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
-		name                   string
-		command                *terraformv1alpha1.Command
-		objs                   []runtime.Object
-		wantPod                bool
-		wantReadyCondition     corev1.ConditionStatus
-		wantActiveCondition    corev1.ConditionStatus
-		wantCompletedCondition corev1.ConditionStatus
-		wantRequeue            bool
+		name                     string
+		command                  *terraformv1alpha1.Command
+		objs                     []runtime.Object
+		wantPod                  bool
+		wantClientReadyCondition corev1.ConditionStatus
+		wantReadyCondition       corev1.ConditionStatus
+		wantActiveCondition      corev1.ConditionStatus
+		wantCompletedCondition   corev1.ConditionStatus
+		wantRequeue              bool
 	}{
 		{
 			name:    "Unqueued command",
@@ -96,11 +113,12 @@ func TestReconcileCommand(t *testing.T) {
 				runtime.Object(&workspaceEmptyQueue),
 				runtime.Object(&secret),
 			},
-			wantPod:                false,
-			wantReadyCondition:     corev1.ConditionTrue,
-			wantActiveCondition:    corev1.ConditionFalse,
-			wantCompletedCondition: corev1.ConditionUnknown,
-			wantRequeue:            false,
+			wantPod:                  false,
+			wantClientReadyCondition: corev1.ConditionUnknown,
+			wantReadyCondition:       corev1.ConditionTrue,
+			wantActiveCondition:      corev1.ConditionFalse,
+			wantCompletedCondition:   corev1.ConditionUnknown,
+			wantRequeue:              false,
 		},
 		{
 			name:    "Command at front of queue",
@@ -109,25 +127,41 @@ func TestReconcileCommand(t *testing.T) {
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 			},
-			wantPod:                true,
-			wantReadyCondition:     corev1.ConditionTrue,
-			wantActiveCondition:    corev1.ConditionTrue,
-			wantCompletedCondition: corev1.ConditionUnknown,
-			wantRequeue:            false,
+			wantPod:                  true,
+			wantClientReadyCondition: corev1.ConditionUnknown,
+			wantReadyCondition:       corev1.ConditionTrue,
+			wantActiveCondition:      corev1.ConditionTrue,
+			wantCompletedCondition:   corev1.ConditionUnknown,
+			wantRequeue:              false,
+		},
+		{
+			name:    "Command at front of queue and client is ready",
+			command: &commandClientReady,
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
+			},
+			wantPod:                  true,
+			wantClientReadyCondition: corev1.ConditionTrue,
+			wantReadyCondition:       corev1.ConditionTrue,
+			wantActiveCondition:      corev1.ConditionTrue,
+			wantCompletedCondition:   corev1.ConditionUnknown,
+			wantRequeue:              false,
 		},
 		{
 			name:    "Successfully completed command",
-			command: &command,
+			command: &commandClientReady,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 				runtime.Object(&successfullyCompletedPod),
 			},
-			wantPod:                true,
-			wantReadyCondition:     corev1.ConditionTrue,
-			wantActiveCondition:    corev1.ConditionFalse,
-			wantCompletedCondition: corev1.ConditionTrue,
-			wantRequeue:            false,
+			wantPod:                  true,
+			wantClientReadyCondition: corev1.ConditionTrue,
+			wantReadyCondition:       corev1.ConditionTrue,
+			wantActiveCondition:      corev1.ConditionFalse,
+			wantCompletedCondition:   corev1.ConditionTrue,
+			wantRequeue:              false,
 		},
 	}
 	s := scheme.Scheme
