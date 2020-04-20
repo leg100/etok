@@ -18,6 +18,7 @@ require (
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0 // indirect
 	k8s.io/apimachinery v0.18.0
+	k8s.io/cli-runtime v0.0.0
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubectl v0.0.0
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect

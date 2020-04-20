@@ -24,10 +24,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/kubectl/pkg/cmd/attach"
+	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/kubectl/pkg/util/interrupt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -132,7 +136,7 @@ func (app *App) Run() error {
 
 	// TODO: make timeout configurable
 	log.Debugln("Waiting for pod to be running and ready...")
-	_, err = app.WaitForPod(name, podRunningAndReady, 10*time.Second)
+	pod, err := app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -145,31 +149,40 @@ func (app *App) Run() error {
 	}
 	defer logs.Close()
 
+	done := make(chan error)
+	go func() {
+		log.Debugln("Attach to pod TTY...")
+		err := app.handleAttachPod(pod)
+		if err != nil {
+			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
+			_, err = io.Copy(os.Stdout, logs)
+			done <- err
+		} else {
+			done <- nil
+		}
+	}()
+
 	// let operator know we're now streaming logs
 	log.Debugln("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		log.Debugln("Attempt to update command resource...")
 		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
 		if err = app.Client.Get(context.Background(), key, command); err != nil {
-			panic(err.Error())
-		}
+			done <- err
+		} else {
+			annotations := command.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string)
+			}
+			annotations["stok.goalspike.com/client"] = "Ready"
+			command.SetAnnotations(annotations)
 
-		annotations := command.GetAnnotations()
-		if annotations == nil {
-			annotations = make(map[string]string)
+			return app.Client.Update(context.Background(), command)
 		}
-		annotations["stok.goalspike.com/client"] = "Ready"
-		command.SetAnnotations(annotations)
-
-		return app.Client.Update(context.Background(), command)
+		return nil
 	})
 
-	log.Debugln("Copying logs to stdout...")
-	_, err = io.Copy(os.Stdout, logs)
-	if err != nil {
-		return err
-	}
-	return nil
+	return <-done
 }
 
 func (app *App) CheckWorkspaceExists() (bool, error) {
@@ -234,6 +247,42 @@ func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, 
 	})
 
 	return result, err
+}
+
+func (app *App) handleAttachPod(pod *corev1.Pod) error {
+	config := runtimeconfig.GetConfigOrDie()
+	config.ContentConfig = rest.ContentConfig{
+		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
+		GroupVersion:         &schema.GroupVersion{Version: "v1"},
+	}
+	config.APIPath = "/api"
+
+	opts := &attach.AttachOptions{
+		StreamOptions: exec.StreamOptions{
+			Namespace: "default",
+			PodName:   pod.GetName(),
+			Stdin:     true,
+			TTY:       true,
+			Quiet:     true,
+			IOStreams: genericclioptions.IOStreams{
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: log.New().WriterLevel(log.WarnLevel),
+			},
+		},
+		Attach:        &attach.DefaultRemoteAttach{},
+		AttachFunc:    attach.DefaultAttachFunc,
+		GetPodTimeout: time.Second * 10,
+	}
+
+	opts.Config = config
+	opts.Pod = pod
+
+	if err := opts.Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ErrPodCompleted is returned by PodRunning or PodContainerRunning to indicate that
