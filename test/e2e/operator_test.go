@@ -129,8 +129,8 @@ func TestStok(t *testing.T) {
 		{
 			name:            "stok",
 			args:            []string{},
-			wantExitCode:    127,
-			wantStdoutRegex: regexp.MustCompile(`^Usage: terraform`),
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`^Supercharge terraform on kubernetes`),
 		},
 		{
 			name:            "stok version",
@@ -140,13 +140,13 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok init",
-			args:            []string{"init", "-no-color", "-input=false"},
+			args:            []string{"init", "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^\nInitializing the backend`),
 		},
 		{
 			name:            "stok plan",
-			args:            []string{"plan", "-no-color", "-input=false"},
+			args:            []string{"plan", "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^Refreshing Terraform state in-memory prior to plan`),
 		},
