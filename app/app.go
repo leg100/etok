@@ -180,9 +180,6 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (string, error) {
 }
 
 func (app *App) CreateCommand(name string) error {
-	script := "read -t 10 -n 1 && terraform " + strings.Join(app.Args, " ")
-	args := []string{"-c", script}
-
 	command := &v1alpha1.Command{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -192,8 +189,8 @@ func (app *App) CreateCommand(name string) error {
 			},
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command:   []string{"sh"},
-			Args:      args,
+			Command:   []string{"terraform"},
+			Args:      app.Args,
 			ConfigMap: name,
 			// TODO: use constant
 			ConfigMapKey: "tarball.tar.gz",
