@@ -106,16 +106,22 @@ func (app *App) Run() error {
 	}
 
 	// TODO: make timeout configurable
-	pod, err := app.WaitForPod(name, podRunningAndReady, 10*time.Second)
+	_, err = app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
 		return err
 	}
 
-	app.handleAttachPod(pod)
+	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
+	logs, err := req.Stream()
 	if err != nil {
 		return err
 	}
+	defer logs.Close()
 
+	_, err = io.Copy(os.Stdout, logs)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
