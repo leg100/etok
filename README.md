@@ -17,6 +17,8 @@ helm repo add goalspike https://goalspike-charts.storage.googleapis.com
 helm install stok goalspike/stok
 ```
 
+Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
+
 ## usage
 
 Usage is similar to the terraform CLI:
