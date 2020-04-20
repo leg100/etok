@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
@@ -163,6 +164,19 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		if err != nil {
 			return reconcile.Result{}, err
 		}
+		reqLogger.Info("Looking up ClientReady Annotation", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
+		val, ok := instance.Annotations["stok.goalspike.com/client"]
+		if ok {
+			reqLogger.Info("ClientReady Annotation is not set")
+			if val == "Ready" {
+				reqLogger.Info("Setting ClientReady", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
+				// logs are being streamed to the client, we can let terraform begin
+				err = r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
 	} else {
 		err = r.updateCondition(instance, "Active", corev1.ConditionFalse, "Enqueued", "TODO: Provide queue position")
 		if err != nil {
@@ -255,7 +269,13 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
 func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.Pod {
-	script := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
+	tarScript := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
+
+	wait := fmt.Sprintf("/kubectl/kubectl wait --for=condition=ClientReady command/%s > /dev/null", cr.Name)
+	cmd := strings.Join(cr.Spec.Command, " ")
+	args := strings.Join(cr.Spec.Args, " ")
+	tfScript := fmt.Sprintf("%s; %s %s", wait, cmd, args)
+
 	labels := map[string]string{
 		"app":       cr.Name,
 		"workspace": cr.Labels["workspace"],
@@ -267,13 +287,14 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
+			ServiceAccountName: cr.Name,
 			InitContainers: []corev1.Container{
 				{
 					Name:                     "get-tarball",
 					Image:                    "busybox",
 					ImagePullPolicy:          corev1.PullIfNotPresent,
 					Command:                  []string{"sh"},
-					Args:                     []string{"-c", script},
+					Args:                     []string{"-ec", tarScript},
 					TerminationMessagePolicy: "FallbackToLogsOnError",
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -288,13 +309,27 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 					},
 					WorkingDir: "/workspace",
 				},
+				{
+					Name:                     "kubectl",
+					Image:                    "bitnami/kubectl:1.17",
+					ImagePullPolicy:          corev1.PullIfNotPresent,
+					Command:                  []string{"sh"},
+					Args:                     []string{"-ec", "cp /opt/bitnami/kubectl/bin/kubectl /kubectl"},
+					TerminationMessagePolicy: "FallbackToLogsOnError",
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "kubectl",
+							MountPath: "/kubectl",
+						},
+					},
+				},
 			},
 			Containers: []corev1.Container{
 				{
 					Name:    "terraform",
 					Image:   "hashicorp/terraform:0.12.21",
-					Command: cr.Spec.Command,
-					Args:    cr.Spec.Args,
+					Command: []string{"sh"},
+					Args:    []string{"-ec", tfScript},
 					Stdin:   true,
 					Env: []corev1.EnvVar{
 						{
@@ -317,11 +352,21 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 							Name:      "credentials",
 							MountPath: "/credentials",
 						},
+						{
+							Name:      "kubectl",
+							MountPath: "/kubectl",
+						},
 					},
 					WorkingDir: "/workspace",
 				},
 			},
 			Volumes: []corev1.Volume{
+				{
+					Name: "kubectl",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
 				{
 					Name: "cache",
 					VolumeSource: corev1.VolumeSource{

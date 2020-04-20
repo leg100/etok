@@ -159,6 +159,15 @@ func TestWaitForPodFailed(t *testing.T) {
 
 	pod.Status = v1.PodStatus{
 		Phase: v1.PodFailed,
+		ContainerStatuses: []v1.ContainerStatus{
+			{
+				State: v1.ContainerState{
+					Terminated: &v1.ContainerStateTerminated{
+						Message: "Message regarding last termination of container",
+					},
+				},
+			},
+		},
 	}
 
 	_, err := app.KubeClient.CoreV1().Pods(app.Namespace).Create(&pod)
@@ -167,7 +176,7 @@ func TestWaitForPodFailed(t *testing.T) {
 	}
 
 	_, err = app.WaitForPod("stok-xxxx", podRunningAndReady, 1*time.Second)
-	if err != ErrPodCompleted {
+	if err.Error() != "Message regarding last termination of container" {
 		t.Error(err)
 	}
 }
