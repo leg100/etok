@@ -3,14 +3,20 @@ package e2e
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	goctx "context"
+
+	"github.com/kr/logfmt"
+	"github.com/kr/pty"
+	"golang.org/x/sys/unix"
 
 	"github.com/leg100/stok/pkg/apis"
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
@@ -125,30 +131,48 @@ func TestStok(t *testing.T) {
 		path            string
 		wantExitCode    int
 		wantStdoutRegex *regexp.Regexp
+		pty             bool
+		wantWarnings    []string
+		stdin           []byte
 	}{
 		{
 			name:            "stok",
 			args:            []string{},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^Supercharge terraform on kubernetes`),
+			pty:             false,
 		},
 		{
 			name:            "stok version",
 			args:            []string{"version"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^Terraform v0\.1`),
+			pty:             false,
+			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
 			name:            "stok init",
 			args:            []string{"init", "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^\nInitializing the backend`),
+			pty:             false,
+			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
 			name:            "stok plan",
-			args:            []string{"plan", "--", "-no-color", "-input=false"},
+			args:            []string{"plan", "--", "-no-color", "-input=false", "-var 'suffix=foo'"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`^Refreshing Terraform state in-memory prior to plan`),
+			pty:             false,
+			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
+		},
+		{
+			name:            "stok plan with pty",
+			args:            []string{"plan", "--", "-no-color", "-input=true"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`(?s)var\.suffix.*Enter a value:.*Refreshing Terraform state in-memory prior to plan`),
+			pty:             true,
+			stdin:           []byte("foo\n"),
 		},
 	}
 
@@ -159,18 +183,89 @@ func TestStok(t *testing.T) {
 			cmd.Dir = "./test/e2e/workspace"
 			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test", "STOK_WORKSPACE=workspace-1")
 
-			stdout := new(bytes.Buffer)
 			stderr := new(bytes.Buffer)
-			cmd.Stdout = stdout
-			cmd.Stderr = stderr
+			stdbuf := new(bytes.Buffer)
+			out := io.MultiWriter(stdbuf, os.Stdout)
 
-			err := cmd.Run()
+			if tt.pty {
+				terminal, err := pty.Start(cmd)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer terminal.Close()
+
+				// https://github.com/creack/pty/issues/82#issuecomment-502785533
+				echoOff(terminal)
+				stdinR, stdinW := io.Pipe()
+				go io.Copy(terminal, stdinR)
+				stdinW.Write(tt.stdin)
+
+				// ... and the pty to stdout.
+				_, _ = io.Copy(out, terminal)
+			} else {
+				// without pty, so just use a buffer, and skip stdin
+				cmd.Stdout = out
+
+				cmd.Stderr = stderr
+
+				if err = cmd.Start(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err = cmd.Wait()
 			exitCodeTest(t, err, tt.wantExitCode)
 
-			if !tt.wantStdoutRegex.Match(stdout.Bytes()) {
-				t.Errorf("expected stdout to match %s but got %s\n", tt.wantStdoutRegex, cmd.Stdout)
+			// Without a pty we expect a warning log msg telling us as much.
+			// (We can use stderr without pty but not with pty)
+			if !tt.pty {
+				for idx, warning := range tt.wantWarnings {
+					data := strings.Split(stderr.String(), "\n")[idx]
+
+					got := &LogMsg{}
+					if err = logfmt.Unmarshal([]byte(data), got); err != nil {
+						t.Fatal(err)
+					}
+					if got.Level != "warning" {
+						t.Errorf("want level=warning, got level=%s\n", got.Level)
+					}
+					if got.Msg != warning {
+						t.Errorf("want message='%s', got message=%s\n", warning, got.Msg)
+					}
+				}
+			}
+
+			if !tt.wantStdoutRegex.MatchReader(stdbuf) {
+				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, stdbuf.String())
 			}
 		})
+	}
+}
+
+type LogMsg struct {
+	Time  string
+	Level string
+	Msg   string
+}
+
+func echoOff(f *os.File) {
+	fd := int(f.Fd())
+	//      const ioctlReadTermios = unix.TIOCGETA // OSX.
+	const ioctlReadTermios = unix.TCGETS // Linux
+	//      const ioctlWriterTermios =  unix.TIOCSETA // OSX.
+	const ioctlWriteTermios = unix.TCSETS // Linux
+
+	termios, err := unix.IoctlGetTermios(fd, ioctlReadTermios)
+	if err != nil {
+		panic(err)
+	}
+
+	newState := *termios
+	newState.Lflag &^= unix.ECHO
+	newState.Lflag |= unix.ICANON | unix.ISIG
+	newState.Iflag |= unix.ICRNL
+	if err := unix.IoctlSetTermios(fd, ioctlWriteTermios, &newState); err != nil {
+		panic(err)
 	}
 }
 

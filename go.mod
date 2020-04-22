@@ -5,6 +5,8 @@ go 1.13
 require (
 	cloud.google.com/go v0.53.0 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
+	github.com/kr/pty v1.1.5
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/pkg/errors v0.8.1
@@ -13,7 +15,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
-	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
+	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
 	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0 // indirect
