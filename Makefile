@@ -17,6 +17,16 @@ e2e: cli-build operator-image kind-load-image
 	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
 	operator-sdk test local --namespace operator-test --verbose ./test/e2e/
 
+.PHONY: e2e
+e2e-cleanup:
+	kubectl delete -n operator-test --all deploy
+	kubectl delete -n operator-test --all command
+	kubectl delete -n operator-test --all workspace
+	kubectl delete -n operator-test secret secret-1 || true
+	kubectl delete -n operator-test serviceaccounts stok-operator || true
+	kubectl delete -n operator-test --all roles.rbac.authorization.k8s.io
+	kubectl delete -n operator-test --all rolebindings.rbac.authorization.k8s.io
+
 .PHONY: e2e-local
 e2e-local: cli-build
 	kubectl get ns operator-test || kubectl create ns operator-test
