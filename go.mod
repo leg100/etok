@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
+	github.com/fatih/structs v1.1.0
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
 	github.com/kr/pty v1.1.5
