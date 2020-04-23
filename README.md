@@ -1,6 +1,6 @@
 # stok
 
-**s**upercharged **t**erraform **o**n **k**ubernetes
+**s**upercharge **t**erraform **o**n **k**ubernetes
 
 ## install
 
