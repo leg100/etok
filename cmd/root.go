@@ -35,6 +35,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
 	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "default", "terraform workspace")
+
+	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
+	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
 }
 
 // initConfig reads in config file and ENV variables if set.
