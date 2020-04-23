@@ -164,17 +164,13 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		reqLogger.Info("Looking up ClientReady Annotation", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
 		val, ok := instance.Annotations["stok.goalspike.com/client"]
-		if ok {
-			reqLogger.Info("ClientReady Annotation is not set")
-			if val == "Ready" {
-				reqLogger.Info("Setting ClientReady", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
-				// logs are being streamed to the client, we can let terraform begin
-				err = r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
-				if err != nil {
-					return reconcile.Result{}, err
-				}
+		if ok && val == "Ready" {
+			reqLogger.Info("Client is ready to receive logs", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
+			// logs are being streamed to the client, we can let terraform begin
+			err = r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
+			if err != nil {
+				return reconcile.Result{}, err
 			}
 		}
 	} else {
@@ -262,7 +258,6 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 			}
 		}
 		// Pod already exists - don't requeue
-		reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
 	}
 	return nil
 }

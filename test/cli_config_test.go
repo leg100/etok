@@ -19,6 +19,16 @@ func TestStok(t *testing.T) {
 		want map[string]string
 	}{
 		{
+			name: "stok with defaults",
+			args: []string{"debug"},
+			env:  []string{},
+			want: map[string]string{
+				"Workspace":  "default",
+				"Namespace":  "default",
+				"ConfigFile": "",
+			},
+		},
+		{
 			name: "stok with env vars",
 			args: []string{"debug"},
 			env:  []string{"STOK_NAMESPACE=foo", "STOK_WORKSPACE=foo"},

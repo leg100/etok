@@ -182,13 +182,14 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 	for _, cmd := range cmdList.Items {
 		if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-			reqLogger.Info("Command completed; not adding to queue", "Command.Name", cmd.GetName())
+			// command completed, don't add to queue
 			continue
 		}
 		if cmdIsQueued(&cmd, instance.Status.Queue) {
-			reqLogger.Info("Command already in queue; skipping", "Command.Name", cmd.GetName())
+			// command already queued
 			continue
 		}
+		reqLogger.Info("Adding command to queue", "Command.Name", cmd.GetName())
 		newQueue = append(newQueue, cmd.GetName())
 	}
 
