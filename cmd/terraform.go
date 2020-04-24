@@ -42,35 +42,45 @@ func init() {
 			Use:   fmt.Sprintf("%s [flags] -- [%s args]", c, c),
 			Short: fmt.Sprintf("Run terraform %s", c),
 			Run: func(cmd *cobra.Command, args []string) {
-				// extract terraform arguments after '--' (if provided)
+				dashArgs := append([]string{cmd.Name()}, getArgsAfterDash(cmd, args)...)
+
 				// TODO: handle [DIR] positional argument
-				tfArgs := []string{cmd.Name()}
-				if cmd.ArgsLenAtDash() > -1 {
-					tfArgs = append(tfArgs, args[cmd.ArgsLenAtDash():]...)
-				}
-
-				// initialise both controller-runtime client and client-go client
-				client, kubeClient, err := app.InitClient()
-				if err != nil {
-					fmt.Fprint(os.Stderr, err)
-					os.Exit(1)
-				}
-
-				app := &app.App{
-					Namespace:  viper.GetString("namespace"),
-					Workspace:  viper.GetString("workspace"),
-					Args:       tfArgs,
-					Client:     *client,
-					KubeClient: kubeClient,
-				}
-				err = app.Run()
-				if err != nil {
-					fmt.Fprint(os.Stderr, err)
-					os.Exit(1)
-				}
+				runApp("terraform", dashArgs)
 			},
 		}
 
 		rootCmd.AddCommand(cc)
+	}
+}
+
+func runApp(cmd string, args []string) {
+	// initialise both controller-runtime client and client-go client
+	client, kubeClient, err := app.InitClient()
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	app := &app.App{
+		Namespace:  viper.GetString("namespace"),
+		Workspace:  viper.GetString("workspace"),
+		Command:    []string{cmd},
+		Args:       args,
+		Client:     *client,
+		KubeClient: kubeClient,
+	}
+	err = app.Run()
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// extract args after '--' (if provided)
+func getArgsAfterDash(cmd *cobra.Command, args []string) []string {
+	if cmd.ArgsLenAtDash() > -1 {
+		return args[cmd.ArgsLenAtDash():]
+	} else {
+		return []string{}
 	}
 }

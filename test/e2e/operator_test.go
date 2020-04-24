@@ -174,6 +174,14 @@ func TestStok(t *testing.T) {
 			pty:             true,
 			stdin:           []byte("foo\n"),
 		},
+		{
+			name:            "stok shell",
+			args:            []string{"shell"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`Linux`),
+			pty:             true,
+			stdin:           []byte("uname; sleep 1; exit\n"),
+		},
 	}
 
 	// invoke stok with each test case

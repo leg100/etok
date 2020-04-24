@@ -123,7 +123,7 @@ func (app *App) CreateCommand(name string) (*v1alpha1.Command, error) {
 			},
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command:   []string{"terraform"},
+			Command:   app.Command,
 			Args:      app.Args,
 			ConfigMap: name,
 			// TODO: use constant
