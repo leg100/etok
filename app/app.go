@@ -68,6 +68,7 @@ type App struct {
 	Workspace string
 	Namespace string
 	Tarball   *bytes.Buffer
+	Command   []string
 	Args      []string
 	Resources []runtime.Object
 	// embed?
