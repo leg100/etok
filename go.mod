@@ -4,28 +4,38 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
+	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
+	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
+	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/fatih/structs v1.1.0
+	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/gregjones/httpcache v0.0.0-20190203031600-7a902570cb17 // indirect
+	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
 	github.com/kr/pty v1.1.5
+	github.com/magiconair/properties v1.8.1 // indirect
+	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/operator-framework/operator-sdk v0.16.0
-	github.com/pkg/errors v0.8.1
+	github.com/operator-framework/operator-sdk v0.17.0
+	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.5.0
 	github.com/spf13/cobra v0.0.7
+	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
+	golang.org/x/crypto v0.0.0-20200422194213-44a606286825 // indirect
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
-	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
+	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
 	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0 // indirect
 	k8s.io/apimachinery v0.18.0
-	k8s.io/cli-runtime v0.0.0
+	k8s.io/cli-runtime v0.17.4
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubectl v0.0.0
+	k8s.io/kubectl v0.17.4
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect
-	sigs.k8s.io/controller-runtime v0.4.0
+	sigs.k8s.io/controller-runtime v0.5.2
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
@@ -57,3 +67,5 @@ replace (
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
 
 replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
+
+replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible // https://github.com/kubernetes/client-go/issues/628

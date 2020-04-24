@@ -58,7 +58,7 @@ func TestStok(t *testing.T) {
 	}
 
 	// get namespace
-	namespace, err := ctx.GetNamespace()
+	namespace, err := ctx.GetOperatorNamespace()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestStok(t *testing.T) {
 	var secret = corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "secret-1",
-			Namespace: "operator-test",
+			Namespace: namespace,
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind: "Secret",
@@ -181,11 +181,13 @@ func TestStok(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := exec.Command("../../../build/_output/bin/stok", tt.args...)
 			cmd.Dir = "./test/e2e/workspace"
-			cmd.Env = append(os.Environ(), "STOK_NAMESPACE=operator-test", "STOK_WORKSPACE=workspace-1")
+			cmd.Env = append(os.Environ(), fmt.Sprintf("STOK_NAMESPACE=%s", namespace), "STOK_WORKSPACE=workspace-1")
 
-			stderr := new(bytes.Buffer)
-			stdbuf := new(bytes.Buffer)
-			out := io.MultiWriter(stdbuf, os.Stdout)
+			outbuf := new(bytes.Buffer)
+			out := io.MultiWriter(outbuf, os.Stdout)
+
+			errbuf := new(bytes.Buffer)
+			stderr := io.MultiWriter(errbuf, os.Stderr)
 
 			if tt.pty {
 				terminal, err := pty.Start(cmd)
@@ -220,7 +222,7 @@ func TestStok(t *testing.T) {
 			// (We can use stderr without pty but not with pty)
 			if !tt.pty {
 				for idx, warning := range tt.wantWarnings {
-					data := strings.Split(stderr.String(), "\n")[idx]
+					data := strings.Split(errbuf.String(), "\n")[idx]
 
 					got := &LogMsg{}
 					if err = logfmt.Unmarshal([]byte(data), got); err != nil {
@@ -235,8 +237,8 @@ func TestStok(t *testing.T) {
 				}
 			}
 
-			if !tt.wantStdoutRegex.MatchReader(stdbuf) {
-				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, stdbuf.String())
+			if !tt.wantStdoutRegex.MatchReader(outbuf) {
+				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, outbuf.String())
 			}
 		})
 	}
