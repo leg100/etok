@@ -99,6 +99,14 @@ func (app *App) Run() error {
 		os.Exit(3)
 	}()
 
+	ok, err := app.CheckWorkspaceExists()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("Workspace '%s' does not exist\n", app.Workspace)
+	}
+
 	tarball, err := CreateTar()
 	if err != nil {
 		return err

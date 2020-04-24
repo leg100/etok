@@ -67,7 +67,7 @@ var completedCommand = terraformv1alpha1.Command{
 	},
 	Status: terraformv1alpha1.CommandStatus{
 		Conditions: status.Conditions{
-			"Completed": status.Condition{
+			{
 				Type:   status.ConditionType("Completed"),
 				Status: corev1.ConditionTrue,
 			},

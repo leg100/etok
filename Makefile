@@ -11,11 +11,11 @@ clean:
 	- kubcetl delete workspaces.stok.goalspike.com example-workspace -n operator-test
 
 .PHONY: e2e
-e2e: cli-build operator-image kind-load-image
+e2e: cli-build operator-image kind-load-image e2e-cleanup
 	kubectl get ns operator-test || kubectl create ns operator-test
 	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
 	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
-	operator-sdk test local --namespace operator-test --verbose ./test/e2e/
+	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
 
 .PHONY: e2e
 e2e-cleanup:
