@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
+	cloud.google.com/go/storage v1.5.0
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect

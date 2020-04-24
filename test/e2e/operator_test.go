@@ -2,6 +2,8 @@ package e2e
 
 import (
 	"bytes"
+	"context"
+	goctx "context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	goctx "context"
+	"cloud.google.com/go/storage"
 
 	"github.com/kr/logfmt"
 	"github.com/kr/pty"
@@ -75,6 +77,15 @@ func TestStok(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// we want a clean backend beforehand :)
+	sclient, err := storage.NewClient(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bkt := sclient.Bucket("master-anagram-224816-tfstate")
+	// ignore errors
+	bkt.Object("default.tfstate").Delete(context.Background())
 
 	// create secret resource
 	var secret = corev1.Secret{
@@ -167,12 +178,20 @@ func TestStok(t *testing.T) {
 			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
-			name:            "stok plan with pty",
-			args:            []string{"plan", "--", "-no-color", "-input=true"},
+			name:            "stok plan with pty and plan file",
+			args:            []string{"plan", "--", "-no-color", "-input=true", "-out=out.plan"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`(?s)var\.suffix.*Enter a value:.*Refreshing Terraform state in-memory prior to plan`),
 			pty:             true,
 			stdin:           []byte("foo\n"),
+		},
+		{
+			name:            "stok apply with pty using plan file",
+			args:            []string{"apply", "--", "-no-color", "-input=true", "out.plan"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`TBD`),
+			pty:             true,
+			stdin:           []byte("yes\n"),
 		},
 	}
 
