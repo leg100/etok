@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	goctx "context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	goctx "context"
+	"cloud.google.com/go/storage"
 
 	"github.com/kr/logfmt"
 	"github.com/kr/pty"
@@ -75,6 +76,15 @@ func TestStok(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// we want a clean backend beforehand :)
+	sclient, err := storage.NewClient(goctx.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bkt := sclient.Bucket("master-anagram-224816-tfstate")
+	// ignore errors
+	bkt.Object("default.tfstate").Delete(goctx.Background())
 
 	// create secret resource
 	var secret = corev1.Secret{
@@ -175,6 +185,14 @@ func TestStok(t *testing.T) {
 			stdin:           []byte("foo\n"),
 		},
 		{
+			name:            "stok apply with pty",
+			args:            []string{"apply", "--", "-no-color", "-input=true"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`),
+			pty:             true,
+			stdin:           []byte("foo\nyes\n"),
+		},
+		{
 			name:            "stok shell",
 			args:            []string{"shell"},
 			wantExitCode:    0,
@@ -245,8 +263,9 @@ func TestStok(t *testing.T) {
 				}
 			}
 
-			if !tt.wantStdoutRegex.MatchReader(outbuf) {
-				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, outbuf.String())
+			got := outbuf.String()
+			if !tt.wantStdoutRegex.MatchString(got) {
+				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, got)
 			}
 		})
 	}
