@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"bytes"
-	"context"
 	goctx "context"
 	"fmt"
 	"io"
@@ -79,13 +78,13 @@ func TestStok(t *testing.T) {
 	}
 
 	// we want a clean backend beforehand :)
-	sclient, err := storage.NewClient(context.Background())
+	sclient, err := storage.NewClient(goctx.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	bkt := sclient.Bucket("master-anagram-224816-tfstate")
 	// ignore errors
-	bkt.Object("default.tfstate").Delete(context.Background())
+	bkt.Object("default.tfstate").Delete(goctx.Background())
 
 	// create secret resource
 	var secret = corev1.Secret{
