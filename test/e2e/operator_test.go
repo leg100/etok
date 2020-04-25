@@ -178,20 +178,28 @@ func TestStok(t *testing.T) {
 			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
-			name:            "stok plan with pty and plan file",
-			args:            []string{"plan", "--", "-no-color", "-input=true", "-out=out.plan"},
+			name:            "stok plan with pty",
+			args:            []string{"plan", "--", "-no-color", "-input=true"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`(?s)var\.suffix.*Enter a value:.*Refreshing Terraform state in-memory prior to plan`),
 			pty:             true,
 			stdin:           []byte("foo\n"),
 		},
 		{
-			name:            "stok apply with pty using plan file",
-			args:            []string{"apply", "--", "-no-color", "-input=true", "out.plan"},
+			name:            "stok apply with pty",
+			args:            []string{"apply", "--", "-no-color", "-input=true"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`TBD`),
+			wantStdoutRegex: regexp.MustCompile(`Added`),
 			pty:             true,
-			stdin:           []byte("yes\n"),
+			stdin:           []byte("foo\nyes\n"),
+		},
+		{
+			name:            "stok shell",
+			args:            []string{"shell"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`Linux`),
+			pty:             true,
+			stdin:           []byte("uname; sleep 1; exit\n"),
 		},
 	}
 
@@ -256,8 +264,9 @@ func TestStok(t *testing.T) {
 				}
 			}
 
-			if !tt.wantStdoutRegex.MatchReader(outbuf) {
-				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, outbuf.String())
+			got := outbuf.String()
+			if !tt.wantStdoutRegex.MatchString(got) {
+				t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, got)
 			}
 		})
 	}

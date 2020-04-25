@@ -24,11 +24,14 @@ Download and install the CLI from [releases](https://github.com/leg100/stok/rele
 Usage is similar to the terraform CLI:
 
 ```
+Supercharge terraform on kubernetes
+
 Usage:
   stok [command]
 
 Available Commands:
   apply        Run terraform apply
+  debug        Show configuration options
   destroy      Run terraform destroy
   force-unlock Run terraform force-unlock
   get          Run terraform get
@@ -38,6 +41,7 @@ Available Commands:
   output       Run terraform output
   plan         Run terraform plan
   refresh      Run terraform refresh
+  shell        Run interactive shell on workspace pod
   show         Run terraform show
   state        Run terraform state
   taint        Run terraform taint
