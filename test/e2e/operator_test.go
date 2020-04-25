@@ -189,7 +189,7 @@ func TestStok(t *testing.T) {
 			name:            "stok apply with pty",
 			args:            []string{"apply", "--", "-no-color", "-input=true"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`Added`),
+			wantStdoutRegex: regexp.MustCompile(`Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`),
 			pty:             true,
 			stdin:           []byte("foo\nyes\n"),
 		},
