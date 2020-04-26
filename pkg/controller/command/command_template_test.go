@@ -14,8 +14,9 @@ func TestScriptPlan(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command: []string{"terraform"},
-			Args:    []string{"plan"},
+			Command:      []string{"terraform"},
+			Args:         []string{"plan"},
+			ConfigMapKey: "tarball.tar.gz",
 		},
 	}
 
@@ -25,7 +26,7 @@ func TestScriptPlan(t *testing.T) {
 	}
 
 	want := `#Extract workspace tarball
-tar zxf /tarball/
+tar zxf /tarball/tarball.tar.gz
 
 # wait for client to inform us they're streaming logs
 kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
@@ -47,8 +48,9 @@ func TestScriptApply(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command: []string{"terraform"},
-			Args:    []string{"apply"},
+			Command:      []string{"terraform"},
+			Args:         []string{"apply"},
+			ConfigMapKey: "tarball.tar.gz",
 		},
 	}
 
@@ -58,7 +60,7 @@ func TestScriptApply(t *testing.T) {
 	}
 
 	want := `#Extract workspace tarball
-tar zxf /tarball/
+tar zxf /tarball/tarball.tar.gz
 
 # wait for client to inform us they're streaming logs
 kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
@@ -90,8 +92,9 @@ func TestScriptShell(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: v1alpha1.CommandSpec{
-			Command: []string{"sh"},
-			Args:    []string{},
+			Command:      []string{"sh"},
+			Args:         []string{},
+			ConfigMapKey: "tarball.tar.gz",
 		},
 	}
 
@@ -101,7 +104,7 @@ func TestScriptShell(t *testing.T) {
 	}
 
 	want := `#Extract workspace tarball
-tar zxf /tarball/
+tar zxf /tarball/tarball.tar.gz
 
 # wait for client to inform us they're streaming logs
 kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
