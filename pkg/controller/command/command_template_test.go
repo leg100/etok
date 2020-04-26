@@ -24,8 +24,11 @@ func TestScriptPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `# wait for client to inform us they're streaming logs
-/kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
+	want := `#Extract workspace tarball
+tar zxf /tarball/
+
+# wait for client to inform us they're streaming logs
+kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
 terraform plan
@@ -54,22 +57,25 @@ func TestScriptApply(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `# wait for client to inform us they're streaming logs
-/kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
+	want := `#Extract workspace tarball
+tar zxf /tarball/
+
+# wait for client to inform us they're streaming logs
+kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
 terraform apply
 
 # capture outputs if apply command was run
 terraform output -json \
-	| jq -r 'to_entries
-		| map(select(.value.sensitive | not))
-		| map("\(.key)=\(.value.value)")
-		| .[]' \
-	> outputs.env
+| jq -r 'to_entries
+| map(select(.value.sensitive | not))
+| map("\(.key)=\(.value.value)")
+| .[]' \
+> outputs.env
 
 # persist outputs to configmap
-kubectl create configmap cmd-xxx-state --from-env-file=outputs.env
+kubectl create configmap cmd-xxx-state --from-env-file=outputs.env > /dev/null
 `
 
 	if want != got {
@@ -94,8 +100,11 @@ func TestScriptShell(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `# wait for client to inform us they're streaming logs
-/kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
+	want := `#Extract workspace tarball
+tar zxf /tarball/
+
+# wait for client to inform us they're streaming logs
+kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
 sh
