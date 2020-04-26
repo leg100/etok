@@ -9,8 +9,7 @@ import (
 )
 
 func generateScript(cr *terraformv1alpha1.Command) (string, error) {
-	script := `
-# wait for client to inform us they're streaming logs
+	script := `# wait for client to inform us they're streaming logs
 /kubectl/kubectl wait --for=condition=ClientReady command/{{.Name}} > /dev/null
 
 # run stok command

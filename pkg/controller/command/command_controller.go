@@ -159,6 +159,12 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 
 	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
+		tfScript, err := generateScript(instance)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		reqLogger.Info("Generating Template", "Script", tfScript)
+
 		err = r.managePod(request, instance, secret)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -332,8 +338,8 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) (*corev1.
 					Name:    "terraform",
 					Image:   "hashicorp/terraform:0.12.21",
 					Command: []string{"sh"},
-					Args:  []string{"-eco pipefail", tfScript},
-					Stdin: true,
+					Args:    []string{"-o", "pipefail", "-ec", tfScript},
+					Stdin:   true,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "GOOGLE_APPLICATION_CREDENTIALS",

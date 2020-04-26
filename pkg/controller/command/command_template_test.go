@@ -24,8 +24,7 @@ func TestScriptPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `
-# wait for client to inform us they're streaming logs
+	want := `# wait for client to inform us they're streaming logs
 /kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
@@ -55,8 +54,7 @@ func TestScriptApply(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `
-# wait for client to inform us they're streaming logs
+	want := `# wait for client to inform us they're streaming logs
 /kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
@@ -96,8 +94,7 @@ func TestScriptShell(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `
-# wait for client to inform us they're streaming logs
+	want := `# wait for client to inform us they're streaming logs
 /kubectl/kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
 
 # run stok command
