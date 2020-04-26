@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"fmt"
 
 	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,8 +11,6 @@ import (
 )
 
 func (app *App) CreateRole(name string) (string, error) {
-	stateConfigMap := fmt.Sprintf("%s-state", name)
-
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -30,10 +27,9 @@ func (app *App) CreateRole(name string) (string, error) {
 				Verbs:         []string{"list", "get", "watch"},
 			},
 			{
-				APIGroups:     []string{""},
-				Resources:     []string{"configmaps"},
-				ResourceNames: []string{stateConfigMap},
-				Verbs:         []string{"create"},
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"create"},
 			},
 		},
 	}
