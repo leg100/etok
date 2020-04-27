@@ -1,3 +1,8 @@
+.PHONY: local
+local:
+	operator-sdk run --local --watch-namespace=default --verbose 2>&1 \
+		| jq -R -r '. as $$line | try fromjson catch $$line'
+
 .PHONY: clean
 clean:
 	@echo ....... Deleting Rules and Service Account .......

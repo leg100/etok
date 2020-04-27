@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
@@ -210,7 +209,10 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// Define a new Pod object
-	pod := newPodForCR(command, secret)
+	pod, err := newPodForCR(command, secret)
+	if err != nil {
+		return err
+	}
 
 	// Set Command instance as the owner and controller
 	if err := controllerutil.SetControllerReference(command, pod, r.scheme); err != nil {
@@ -219,7 +221,7 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 
 	// Check if this Pod already exists
 	found := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
 		err = r.client.Create(context.TODO(), pod)
@@ -268,13 +270,11 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.Pod {
-	tarScript := fmt.Sprintf("tar zxf /tarball/%s -C /workspace", cr.Spec.ConfigMapKey)
-
-	wait := fmt.Sprintf("/kubectl/kubectl wait --for=condition=ClientReady command/%s > /dev/null", cr.Name)
-	cmd := strings.Join(cr.Spec.Command, " ")
-	args := strings.Join(cr.Spec.Args, " ")
-	tfScript := fmt.Sprintf("%s; %s %s", wait, cmd, args)
+func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
+	tfScript, err := generateScript(cr)
+	if err != nil {
+		return nil, err
+	}
 
 	labels := map[string]string{
 		"app":       cr.Name,
@@ -288,49 +288,14 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: cr.Name,
-			InitContainers: []corev1.Container{
-				{
-					Name:                     "get-tarball",
-					Image:                    "busybox",
-					ImagePullPolicy:          corev1.PullIfNotPresent,
-					Command:                  []string{"sh"},
-					Args:                     []string{"-ec", tarScript},
-					TerminationMessagePolicy: "FallbackToLogsOnError",
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "tarball",
-							MountPath: filepath.Join("/tarball", cr.Spec.ConfigMapKey),
-							SubPath:   cr.Spec.ConfigMapKey,
-						},
-						{
-							Name:      "workspace",
-							MountPath: "/workspace",
-						},
-					},
-					WorkingDir: "/workspace",
-				},
-				{
-					Name:                     "kubectl",
-					Image:                    "bitnami/kubectl:1.17",
-					ImagePullPolicy:          corev1.PullIfNotPresent,
-					Command:                  []string{"sh"},
-					Args:                     []string{"-ec", "cp /opt/bitnami/kubectl/bin/kubectl /kubectl"},
-					TerminationMessagePolicy: "FallbackToLogsOnError",
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "kubectl",
-							MountPath: "/kubectl",
-						},
-					},
-				},
-			},
 			Containers: []corev1.Container{
 				{
-					Name:    "terraform",
-					Image:   "hashicorp/terraform:0.12.21",
-					Command: []string{"sh"},
-					Args:    []string{"-ec", tfScript},
-					Stdin:   true,
+					Name:            "terraform",
+					Image:           "leg100/terraform:latest",
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"sh"},
+					Args:            []string{"-o", "pipefail", "-ec", tfScript},
+					Stdin:           true,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
@@ -353,20 +318,15 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 							MountPath: "/credentials",
 						},
 						{
-							Name:      "kubectl",
-							MountPath: "/kubectl",
+							Name:      "tarball",
+							MountPath: filepath.Join("/tarball", cr.Spec.ConfigMapKey),
+							SubPath:   cr.Spec.ConfigMapKey,
 						},
 					},
 					WorkingDir: "/workspace",
 				},
 			},
 			Volumes: []corev1.Volume{
-				{
-					Name: "kubectl",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
 				{
 					Name: "cache",
 					VolumeSource: corev1.VolumeSource{
@@ -402,5 +362,5 @@ func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) *corev1.P
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
-	}
+	}, nil
 }
