@@ -29,7 +29,7 @@ func (app *App) CreateRole(name string) (string, error) {
 			{
 				APIGroups: []string{""},
 				Resources: []string{"configmaps"},
-				Verbs:     []string{"create"},
+				Verbs:     []string{"get", "patch"},
 			},
 		},
 	}

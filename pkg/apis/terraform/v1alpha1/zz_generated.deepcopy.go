@@ -204,6 +204,13 @@ func (in *WorkspaceStatus) DeepCopyInto(out *WorkspaceStatus) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Outputs != nil {
+		in, out := &in.Outputs, &out.Outputs
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

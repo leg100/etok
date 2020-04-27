@@ -78,6 +78,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resource ConfigMaps and requeue the owner Workspace
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &terraformv1alpha1.Workspace{},
+	})
+	if err != nil {
+		return err
+	}
+
 	// Watch for changes to resource Command and requeue the associated Workspace
 	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Command{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
@@ -132,6 +141,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
+	// Instantiate PVC struct
 	pvc := newPVCForCR(instance)
 
 	// Set Workspace instance as the owner and controller
@@ -140,16 +150,47 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// Check if this PVC already exists
-	found := &corev1.PersistentVolumeClaim{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, &corev1.PersistentVolumeClaim{})
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new PVC", "PVC.Namespace", pvc.Namespace, "PVC.Name", pvc.Name)
 		err = r.client.Create(context.TODO(), pvc)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
+		// TODO: having created a PVC, should we end the reconcile here?
 	} else if err != nil {
 		return reconcile.Result{}, err
+	}
+
+	// Instantiate ConfigMap struct
+	configMap := newConfigMapForCR(instance)
+
+	// Set Workspace instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, configMap)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+		err = r.client.Create(context.TODO(), configMap)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		// TODO: having created a ConfigMap, should we end the reconcile here?
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// update status if ConfigMap has changed
+	if !reflect.DeepEqual(configMap.Data, instance.Status.Outputs) {
+		instance.Status.Outputs = configMap.Data
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update outputs")
+			return reconcile.Result{}, err
+		}
+		reqLogger.Info("Updated outputs")
 	}
 
 	// process existing command queue
@@ -197,7 +238,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		instance.Status.Queue = newQueue
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
-			reqLogger.Error(err, "Failed to update Workspace status")
+			reqLogger.Error(err, "Failed to update queue")
 			return reconcile.Result{}, err
 		}
 	}
@@ -216,10 +257,11 @@ func cmdIsQueued(cmd *terraformv1alpha1.Command, queue []string) bool {
 
 func newPVCForCR(cr *terraformv1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	labels := map[string]string{
-		"app": cr.Name,
+		"workspace": cr.Name,
 	}
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
+			// TODO: consider "-cache" suffix
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
 			Labels:    labels,
@@ -234,5 +276,20 @@ func newPVCForCR(cr *terraformv1alpha1.Workspace) *corev1.PersistentVolumeClaim 
 				},
 			},
 		},
+	}
+}
+
+func newConfigMapForCR(cr *terraformv1alpha1.Workspace) *corev1.ConfigMap {
+	labels := map[string]string{
+		"workspace": cr.Name,
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			// TODO: consider "-outputs" suffix
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Data: map[string]string{},
 	}
 }
