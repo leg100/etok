@@ -247,8 +247,9 @@ func TestStok(t *testing.T) {
 			// Without a pty we expect a warning log msg telling us as much.
 			// (We can use stderr without pty but not with pty)
 			if !tt.pty {
+				// Ensure there are sufficient lines of stderr first
 				gotStderrLines := strings.Split(errbuf.String(), "\n")
-				if len(gotStderrLines) != len(tt.wantWarnings) {
+				if len(gotStderrLines) < len(tt.wantWarnings) {
 					t.Fatalf("want %d warnings got %d stderr lines\n", len(tt.wantWarnings), len(gotStderrLines))
 				}
 

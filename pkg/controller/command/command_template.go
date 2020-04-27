@@ -18,20 +18,7 @@ kubectl wait --for=condition=ClientReady command/{{.Name}} > /dev/null
 # run stok command
 {{join .Spec.Command " "}}{{ if gt (len .Spec.Args) 0 }} {{join .Spec.Args " " }}{{ end }}
 
-{{ if gt (len .Spec.Args) 0 }}{{ if eq (index .Spec.Args 0) "apply" }}# capture outputs if apply command was run
-outputs=$(terraform output -json)
-
-# filter out sensitive values and convert to flat JSON object
-patch=$(echo $outputs \
-| jq -r 'to_entries
-| map(select(.value.sensitive | not))
-| map({(.key): (.value.value | tostring)})
-| .[]' \
-| jq -cs add)
-
-# persist outputs to configmap
-kubectl patch configmap {{.Name}} -p  "{\"data\": $patch}" > /dev/null
-{{ end }}{{ end }}`
+`
 
 	tmpl := template.New("script")
 	tmpl = tmpl.Funcs(template.FuncMap{"join": strings.Join})
