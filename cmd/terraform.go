@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/leg100/stok/app"
 	"github.com/spf13/cobra"
@@ -62,14 +63,22 @@ func runApp(cmd string, args []string) {
 		os.Exit(1)
 	}
 
+	podWaitDuration, err := time.ParseDuration(podWaitTime)
+	if err != nil {
+		logger.Error(err)
+		logger.Sync()
+		os.Exit(1)
+	}
+
 	app := &app.App{
-		Namespace:  viper.GetString("namespace"),
-		Workspace:  viper.GetString("workspace"),
-		Command:    []string{cmd},
-		Logger:     logger,
-		Args:       args,
-		Client:     *client,
-		KubeClient: kubeClient,
+		Namespace:      viper.GetString("namespace"),
+		Workspace:      viper.GetString("workspace"),
+		Command:        []string{cmd},
+		Logger:         logger,
+		Args:           args,
+		Client:         *client,
+		KubeClient:     kubeClient,
+		PodWaitTimeout: podWaitDuration,
 	}
 	err = app.Run()
 	if err != nil {

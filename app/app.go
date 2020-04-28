@@ -70,8 +70,9 @@ type App struct {
 	// embed?
 	Client client.Client
 	// embed?
-	KubeClient kubernetes.Interface
-	Logger     *zap.SugaredLogger
+	KubeClient     kubernetes.Interface
+	Logger         *zap.SugaredLogger
+	PodWaitTimeout time.Duration
 }
 
 func (app *App) AddToCleanup(resource runtime.Object) {
@@ -135,9 +136,8 @@ func (app *App) Run() error {
 		return err
 	}
 
-	// TODO: make timeout configurable
 	app.Logger.Debug("Waiting for pod to be running and ready...")
-	pod, err := app.WaitForPod(name, podRunningAndReady, 10*time.Second)
+	pod, err := app.WaitForPod(name, podRunningAndReady, app.PodWaitTimeout)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("timed out waiting for pod %s to be running and ready", name)

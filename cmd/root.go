@@ -14,11 +14,12 @@ import (
 )
 
 var (
-	cfgFile   string
-	workspace string
-	namespace string
-	loglevel  *zapcore.Level
-	logger    *zap.SugaredLogger
+	cfgFile     string
+	workspace   string
+	namespace   string
+	loglevel    *zapcore.Level
+	logger      *zap.SugaredLogger
+	podWaitTime string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -45,6 +46,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
 	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "default", "terraform workspace")
+	rootCmd.PersistentFlags().StringVar(&podWaitTime, "pod-timeout", "10s", "pod wait timeout")
 
 	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
 	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
