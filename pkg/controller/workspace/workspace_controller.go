@@ -182,13 +182,12 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 	for _, cmd := range cmdList.Items {
 		if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-			reqLogger.Info("Command completed; not adding to queue", "Command.Name", cmd.GetName())
 			continue
 		}
 		if cmdIsQueued(&cmd, instance.Status.Queue) {
-			reqLogger.Info("Command already in queue; skipping", "Command.Name", cmd.GetName())
 			continue
 		}
+		reqLogger.Info("Adding command to queue", "Command.Name", cmd.GetName())
 		newQueue = append(newQueue, cmd.GetName())
 	}
 
@@ -197,7 +196,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		instance.Status.Queue = newQueue
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
-			reqLogger.Error(err, "Failed to update Workspace status")
+			reqLogger.Error(err, "Failed to update queue status")
 			return reconcile.Result{}, err
 		}
 	}

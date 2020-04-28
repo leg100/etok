@@ -1,18 +1,25 @@
 package cmd
 
 import (
-	"fmt"
+	"flag"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
-var workspace string
-var namespace string
+var (
+	cfgFile   string
+	workspace string
+	namespace string
+	loglevel  *zapcore.Level
+	logger    *zap.SugaredLogger
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -24,13 +31,16 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initConfig, initLogging)
+
+	loglevel = zap.LevelFlag("loglevel", zapcore.InfoLevel, "logging verbosity level")
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	viper.BindPFlags(pflag.CommandLine)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
 	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
@@ -38,6 +48,19 @@ func init() {
 
 	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
 	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
+}
+
+func initLogging() {
+	config := zap.NewProductionConfig()
+	config.Level.SetLevel(*loglevel)
+	config.DisableStacktrace = true
+	config.DisableCaller = true
+
+	l, err := config.Build()
+	if err != nil {
+		panic(err.Error())
+	}
+	logger = l.Sugar()
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -49,7 +72,8 @@ func initConfig() {
 		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err)
+			logger.Sync()
 			os.Exit(1)
 		}
 

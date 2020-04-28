@@ -8,6 +8,7 @@ import (
 
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -117,6 +118,7 @@ func TestCreateConfigMap(t *testing.T) {
 		Resources:  []runtime.Object{},
 		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
 		KubeClient: kubeFake.NewSimpleClientset(),
+		Logger:     zap.NewExample().Sugar(),
 	}
 
 	app.KubeClient.(*kubeFake.Clientset).PrependReactor("create", "configmaps", generateNameReactor)

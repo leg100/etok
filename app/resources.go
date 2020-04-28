@@ -35,6 +35,8 @@ func (app *App) CreateRole(name string) (string, error) {
 	}
 	app.AddToCleanup(role)
 
+	app.Logger.Debugw("resource created", "type", "role", "name", role.GetName(), "namespace", app.Namespace)
+
 	return role.GetName(), nil
 }
 
@@ -50,6 +52,8 @@ func (app *App) CreateServiceAccount(name string) (string, error) {
 		return "", err
 	}
 	app.AddToCleanup(serviceAccount)
+
+	app.Logger.Debugw("resource created", "type", "serviceAccount", "name", serviceAccount.GetName(), "namespace", app.Namespace)
 
 	return serviceAccount.GetName(), nil
 }
@@ -82,6 +86,8 @@ func (app *App) CreateRoleBinding(name string) (string, error) {
 	}
 	app.AddToCleanup(binding)
 
+	app.Logger.Debugw("resource created", "type", "rolebinding", "name", binding.GetName(), "namespace", app.Namespace)
+
 	return binding.GetName(), nil
 }
 
@@ -110,6 +116,8 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (string, error) {
 	}
 	app.AddToCleanup(configMap)
 
+	app.Logger.Debugw("resource created", "type", "configmap", "name", configMap.GetName(), "namespace", app.Namespace)
+
 	return configMap.GetName(), nil
 }
 
@@ -135,6 +143,8 @@ func (app *App) CreateCommand(name string) (*v1alpha1.Command, error) {
 		return command, err
 	}
 	app.AddToCleanup(command)
+
+	app.Logger.Debugw("resource created", "type", "command", "name", command.GetName(), "namespace", app.Namespace)
 
 	return command, nil
 }
