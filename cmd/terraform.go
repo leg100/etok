@@ -57,7 +57,8 @@ func runApp(cmd string, args []string) {
 	// initialise both controller-runtime client and client-go client
 	client, kubeClient, err := app.InitClient()
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		logger.Error(err)
+		logger.Sync()
 		os.Exit(1)
 	}
 
@@ -65,13 +66,15 @@ func runApp(cmd string, args []string) {
 		Namespace:  viper.GetString("namespace"),
 		Workspace:  viper.GetString("workspace"),
 		Command:    []string{cmd},
+		Logger:     logger,
 		Args:       args,
 		Client:     *client,
 		KubeClient: kubeClient,
 	}
 	err = app.Run()
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		logger.Error(err)
+		logger.Sync()
 		os.Exit(1)
 	}
 }

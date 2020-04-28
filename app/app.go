@@ -8,10 +8,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -37,12 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
-
-func init() {
-	if os.Getenv("STOK_DEBUG") != "" {
-		log.SetLevel(log.DebugLevel)
-	}
-}
 
 func InitClient() (*client.Client, *kubernetes.Clientset, error) {
 	// adds core GVKs
@@ -75,6 +71,7 @@ type App struct {
 	Client client.Client
 	// embed?
 	KubeClient kubernetes.Interface
+	Logger     *zap.SugaredLogger
 }
 
 func (app *App) AddToCleanup(resource runtime.Object) {
@@ -113,44 +110,43 @@ func (app *App) Run() error {
 		return err
 	}
 
-	log.Debugln("Creating configmap...")
 	name, err := app.CreateConfigMap(tarball)
 	if err != nil {
 		return err
 	}
 
-	log.Debugln("Creating service account...")
 	_, err = app.CreateServiceAccount(name)
 	if err != nil {
 		return err
 	}
 
-	log.Debugln("Creating role...")
 	_, err = app.CreateRole(name)
 	if err != nil {
 		return err
 	}
 
-	log.Debugln("Creating role binding...")
 	_, err = app.CreateRoleBinding(name)
 	if err != nil {
 		return err
 	}
 
-	log.Debugln("Creating command...")
 	command, err := app.CreateCommand(name)
 	if err != nil {
 		return err
 	}
 
 	// TODO: make timeout configurable
-	log.Debugln("Waiting for pod to be running and ready...")
+	app.Logger.Debug("Waiting for pod to be running and ready...")
 	pod, err := app.WaitForPod(name, podRunningAndReady, 10*time.Second)
 	if err != nil {
-		return err
+		if err == wait.ErrWaitTimeout {
+			return fmt.Errorf("timed out waiting for pod %s to be running and ready", name)
+		} else {
+			return err
+		}
 	}
 
-	log.Debugln("Retrieving log stream...")
+	app.Logger.Debug("Retrieving log stream...")
 	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
@@ -160,10 +156,10 @@ func (app *App) Run() error {
 
 	done := make(chan error)
 	go func() {
-		log.Debugln("Attach to pod TTY...")
+		app.Logger.Debug("Attach to pod TTY...")
 		err := app.handleAttachPod(pod)
 		if err != nil {
-			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
+			app.Logger.Warn("Failed to attach to pod TTY; falling back to streaming logs")
 			_, err = io.Copy(os.Stdout, logs)
 			done <- err
 		} else {
@@ -172,9 +168,9 @@ func (app *App) Run() error {
 	}()
 
 	// let operator know we're now streaming logs
-	log.Debugln("Telling the operator I'm ready to receive logs...")
+	app.Logger.Debug("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		log.Debugln("Attempt to update command resource...")
+		app.Logger.Debug("Attempt to update command resource...")
 		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
 		if err = app.Client.Get(context.Background(), key, command); err != nil {
 			done <- err
@@ -276,7 +272,7 @@ func (app *App) handleAttachPod(pod *corev1.Pod) error {
 			IOStreams: genericclioptions.IOStreams{
 				In:     os.Stdin,
 				Out:    os.Stdout,
-				ErrOut: log.New().WriterLevel(log.WarnLevel),
+				ErrOut: app,
 			},
 		},
 		Attach:        &attach.DefaultRemoteAttach{},
@@ -292,6 +288,14 @@ func (app *App) handleAttachPod(pod *corev1.Pod) error {
 	}
 
 	return nil
+}
+
+// permit app to be passed as a writer for the above handleAttachPod
+// method
+func (app *App) Write(in []byte) (int, error) {
+	s := strings.TrimSpace(string(in))
+	app.Logger.Warn(s)
+	return 0, nil
 }
 
 // ErrPodCompleted is returned by PodRunning or PodContainerRunning to indicate that

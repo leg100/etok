@@ -3,6 +3,7 @@ package e2e
 import (
 	"bytes"
 	goctx "context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,7 +16,6 @@ import (
 
 	"cloud.google.com/go/storage"
 
-	"github.com/kr/logfmt"
 	"github.com/kr/pty"
 	"golang.org/x/sys/unix"
 
@@ -257,14 +257,14 @@ func TestStok(t *testing.T) {
 					gotStderr := gotStderrLines[idx]
 
 					got := &LogMsg{}
-					if err = logfmt.Unmarshal([]byte(gotStderr), got); err != nil {
+					if err = json.Unmarshal([]byte(gotStderr), got); err != nil {
 						t.Fatal(err)
 					}
-					if got.Level != "warning" {
-						t.Errorf("want level=warning, got level=%s\n", got.Level)
+					if got.Level != "warn" {
+						t.Errorf("want level=warn, got level=%s\n", got.Level)
 					}
 					if got.Msg != warning {
-						t.Errorf("want message='%s', got message=%s\n", warning, got.Msg)
+						t.Errorf("want message='%s', got message='%s'\n", warning, got.Msg)
 					}
 				}
 			}
@@ -278,7 +278,6 @@ func TestStok(t *testing.T) {
 }
 
 type LogMsg struct {
-	Time  string
 	Level string
 	Msg   string
 }
