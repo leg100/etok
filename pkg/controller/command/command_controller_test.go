@@ -101,8 +101,6 @@ func TestReconcileCommand(t *testing.T) {
 		objs                     []runtime.Object
 		wantPod                  bool
 		wantClientReadyCondition corev1.ConditionStatus
-		wantReadyCondition       corev1.ConditionStatus
-		wantActiveCondition      corev1.ConditionStatus
 		wantCompletedCondition   corev1.ConditionStatus
 		wantRequeue              bool
 	}{
@@ -115,8 +113,6 @@ func TestReconcileCommand(t *testing.T) {
 			},
 			wantPod:                  false,
 			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantReadyCondition:       corev1.ConditionTrue,
-			wantActiveCondition:      corev1.ConditionFalse,
 			wantCompletedCondition:   corev1.ConditionUnknown,
 			wantRequeue:              false,
 		},
@@ -129,8 +125,6 @@ func TestReconcileCommand(t *testing.T) {
 			},
 			wantPod:                  true,
 			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantReadyCondition:       corev1.ConditionTrue,
-			wantActiveCondition:      corev1.ConditionTrue,
 			wantCompletedCondition:   corev1.ConditionUnknown,
 			wantRequeue:              false,
 		},
@@ -143,8 +137,6 @@ func TestReconcileCommand(t *testing.T) {
 			},
 			wantPod:                  true,
 			wantClientReadyCondition: corev1.ConditionTrue,
-			wantReadyCondition:       corev1.ConditionTrue,
-			wantActiveCondition:      corev1.ConditionTrue,
 			wantCompletedCondition:   corev1.ConditionUnknown,
 			wantRequeue:              false,
 		},
@@ -158,8 +150,6 @@ func TestReconcileCommand(t *testing.T) {
 			},
 			wantPod:                  true,
 			wantClientReadyCondition: corev1.ConditionTrue,
-			wantReadyCondition:       corev1.ConditionTrue,
-			wantActiveCondition:      corev1.ConditionFalse,
 			wantCompletedCondition:   corev1.ConditionTrue,
 			wantRequeue:              false,
 		},
@@ -205,8 +195,6 @@ func TestReconcileCommand(t *testing.T) {
 			}
 
 			assertCondition(t, tt.command, "Completed", tt.wantCompletedCondition)
-			assertCondition(t, tt.command, "Ready", tt.wantReadyCondition)
-			assertCondition(t, tt.command, "Active", tt.wantActiveCondition)
 		})
 	}
 }
