@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 )
 
 func init() {

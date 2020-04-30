@@ -8,7 +8,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/status"
 
 	"github.com/leg100/stok/pkg/apis"
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,26 +18,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var workspaceEmptyQueue = terraformv1alpha1.Workspace{
+var workspaceEmptyQueue = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
 }
 
-var workspaceWithQueue = terraformv1alpha1.Workspace{
+var workspaceWithQueue = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
-	Status: terraformv1alpha1.WorkspaceStatus{
+	Status: v1alpha1.WorkspaceStatus{
 		Queue: []string{
 			"command-1",
 		},
 	},
 }
 
-var command1 = terraformv1alpha1.Command{
+var command1 = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
 		Namespace: "operator-test",
@@ -47,7 +47,7 @@ var command1 = terraformv1alpha1.Command{
 	},
 }
 
-var command2 = terraformv1alpha1.Command{
+var command2 = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-2",
 		Namespace: "operator-test",
@@ -57,7 +57,7 @@ var command2 = terraformv1alpha1.Command{
 	},
 }
 
-var completedCommand = terraformv1alpha1.Command{
+var completedCommand = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-3",
 		Namespace: "operator-test",
@@ -65,7 +65,7 @@ var completedCommand = terraformv1alpha1.Command{
 			"workspace": "workspace-1",
 		},
 	},
-	Status: terraformv1alpha1.CommandStatus{
+	Status: v1alpha1.CommandStatus{
 		Conditions: status.Conditions{
 			{
 				Type:   status.ConditionType("Completed"),
@@ -75,7 +75,7 @@ var completedCommand = terraformv1alpha1.Command{
 	},
 }
 
-var commandWithNonExistantWorkspace = terraformv1alpha1.Command{
+var commandWithNonExistantWorkspace = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-with-nonexistant-workspace",
 		Namespace: "operator-test",
@@ -88,7 +88,7 @@ var commandWithNonExistantWorkspace = terraformv1alpha1.Command{
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
 		name        string
-		workspace   *terraformv1alpha1.Workspace
+		workspace   *v1alpha1.Workspace
 		objs        []runtime.Object
 		wantQueue   []string
 		wantRequeue bool

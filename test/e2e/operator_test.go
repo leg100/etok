@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/leg100/stok/pkg/apis"
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,13 +38,13 @@ var (
 )
 
 func TestStok(t *testing.T) {
-	workspaceList := &terraformv1alpha1.WorkspaceList{}
+	workspaceList := &v1alpha1.WorkspaceList{}
 	err := framework.AddToFrameworkScheme(apis.AddToScheme, workspaceList)
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
 
-	commandList := &terraformv1alpha1.CommandList{}
+	commandList := &v1alpha1.CommandList{}
 	err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
@@ -105,7 +105,7 @@ func TestStok(t *testing.T) {
 	}
 
 	// create workspace custom resource
-	workspace := &terraformv1alpha1.Workspace{
+	workspace := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "workspace-1",
 			Namespace: namespace,
@@ -113,7 +113,7 @@ func TestStok(t *testing.T) {
 		TypeMeta: metav1.TypeMeta{
 			Kind: "Workspace",
 		},
-		Spec: terraformv1alpha1.WorkspaceSpec{
+		Spec: v1alpha1.WorkspaceSpec{
 			SecretName: "secret-1",
 		},
 	}
