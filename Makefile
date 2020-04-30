@@ -80,6 +80,23 @@ generate-crds:
 	operator-sdk generate k8s && \
 	operator-sdk generate crds
 
+.PHONY: generate-clientset
+generate-clientset:
+	mkdir -p hack
+	sed -e 's,^,// ,; s,  *$$,,' LICENSE > hack/boilerplate.go.txt
+
+	rm -rf pkg/client/clientset
+	go run k8s.io/code-generator/cmd/client-gen \
+		--clientset-name clientset \
+		--input-base github.com/leg100/stok/pkg/apis \
+		--input stok/v1alpha1 \
+		-h hack/boilerplate.go.txt \
+		-p github.com/leg100/stok/pkg/client/
+
+	mkdir -p pkg/client
+	mv github.com/leg100/stok/pkg/client/clientset pkg/client/
+	rm -rf github.com
+
 .PHONY: cli-build
 cli-build:
 	go build -o build/_output/bin/stok github.com/leg100/stok

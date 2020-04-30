@@ -34,6 +34,7 @@ type CommandStatus struct {
 // Command is the Schema for the commands API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=commands,scope=Namespaced
+// +genclient
 type Command struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

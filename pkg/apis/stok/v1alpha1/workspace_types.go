@@ -28,6 +28,7 @@ type WorkspaceStatus struct {
 // Workspace is the Schema for the workspaces API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced
+// +genclient
 type Workspace struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
