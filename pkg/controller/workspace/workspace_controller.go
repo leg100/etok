@@ -25,11 +25,6 @@ import (
 var log = logf.Log.WithName("controller_workspace")
 var someIndexer client.FieldIndexer
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
 // Add creates a new Workspace Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -116,7 +111,7 @@ type ReconcileWorkspace struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Workspace")
+	reqLogger.V(1).Info("Reconciling Workspace")
 
 	// Fetch the Workspace instance
 	instance := &v1alpha1.Workspace{}
