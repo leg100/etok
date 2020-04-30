@@ -153,13 +153,13 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		cmd := &v1alpha1.Command{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: cmdName, Namespace: request.Namespace}, cmd)
 		if err != nil && errors.IsNotFound(err) {
-			reqLogger.Info("Command not found; removing from queue", "Command.Name", cmdName)
+			// cmd not found, so remove from queue
 			continue
 		} else if err != nil {
 			return reconcile.Result{}, err
 		} else {
 			if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-				reqLogger.Info("Command completed; removing from queue", "Command.Name", cmdName)
+				// cmd completed, so remove from queue
 				continue
 			} else {
 				newQueue = append(newQueue, cmdName)
@@ -182,12 +182,12 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		if cmdIsQueued(&cmd, instance.Status.Queue) {
 			continue
 		}
-		reqLogger.Info("Adding command to queue", "Command.Name", cmd.GetName())
 		newQueue = append(newQueue, cmd.GetName())
 	}
 
 	// update status if queue has changed
 	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
+		reqLogger.Info("Queue updated", "Old", instance.Status.Queue, "New", newQueue)
 		instance.Status.Queue = newQueue
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
