@@ -52,7 +52,7 @@ operator-unit:
 
 .PHONY: cli-unit
 cli-unit:
-	go test -v . ./app
+	go test -v ./cmd
 
 .PHONY: crds
 crds:
