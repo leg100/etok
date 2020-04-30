@@ -13,13 +13,11 @@ require (
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190203031600-7a902570cb17 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
-	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
 	github.com/kr/pty v1.1.5
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/operator-framework/operator-sdk v0.17.0
-	github.com/sirupsen/logrus v1.5.0
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5
