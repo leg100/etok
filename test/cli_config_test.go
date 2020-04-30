@@ -2,13 +2,13 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/fatih/structs"
-	"github.com/kr/logfmt"
 )
 
 func TestStok(t *testing.T) {
@@ -76,7 +76,7 @@ func TestStok(t *testing.T) {
 
 			// unmarshal into struct
 			lm := &LogMsg{}
-			if err := logfmt.Unmarshal(buf.Bytes(), lm); err != nil {
+			if err := json.Unmarshal(buf.Bytes(), lm); err != nil {
 				t.Fatal(err)
 			}
 			// convert into map
@@ -98,9 +98,6 @@ func TestStok(t *testing.T) {
 }
 
 type LogMsg struct {
-	Time       string
-	Level      string
-	Msg        string
 	Workspace  string
 	Namespace  string
 	ConfigFile string
