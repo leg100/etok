@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -49,8 +49,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	//_ = mgr.GetFieldIndexer().IndexField(&terraformv1alpha1.Command{}, "Spec.Workspace", func(o runtime.Object) []string {
-	//	workspace := o.(*terraformv1alpha1.Command).Spec.Workspace
+	//_ = mgr.GetFieldIndexer().IndexField(&v1alpha1.Command{}, "Spec.Workspace", func(o runtime.Object) []string {
+	//	workspace := o.(*v1alpha1.Command).Spec.Workspace
 	//	if workspace == "" {
 	//		return nil
 	//	}
@@ -58,13 +58,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	//})
 
 	// Watch for changes to primary resource Workspace
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to primary resource Workspace
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -72,16 +72,16 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
 	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &terraformv1alpha1.Workspace{},
+		OwnerType:    &v1alpha1.Workspace{},
 	})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to resource Command and requeue the associated Workspace
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Command{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Command{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			command := a.Object.(*terraformv1alpha1.Command)
+			command := a.Object.(*v1alpha1.Command)
 			return []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -119,7 +119,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	reqLogger.Info("Reconciling Workspace")
 
 	// Fetch the Workspace instance
-	instance := &terraformv1alpha1.Workspace{}
+	instance := &v1alpha1.Workspace{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -155,7 +155,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	// process existing command queue
 	newQueue := []string{}
 	for _, cmdName := range instance.Status.Queue {
-		cmd := &terraformv1alpha1.Command{}
+		cmd := &v1alpha1.Command{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: cmdName, Namespace: request.Namespace}, cmd)
 		if err != nil && errors.IsNotFound(err) {
 			reqLogger.Info("Command not found; removing from queue", "Command.Name", cmdName)
@@ -173,7 +173,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// process command resources
-	cmdList := &terraformv1alpha1.CommandList{}
+	cmdList := &v1alpha1.CommandList{}
 	err = r.client.List(context.TODO(), cmdList, client.InNamespace(request.Namespace), client.MatchingLabels{
 		"workspace": request.Name,
 	})
@@ -204,7 +204,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	return reconcile.Result{}, nil
 }
 
-func cmdIsQueued(cmd *terraformv1alpha1.Command, queue []string) bool {
+func cmdIsQueued(cmd *v1alpha1.Command, queue []string) bool {
 	for _, qCmd := range queue {
 		if qCmd == cmd.GetName() {
 			return true
@@ -213,7 +213,7 @@ func cmdIsQueued(cmd *terraformv1alpha1.Command, queue []string) bool {
 	return false
 }
 
-func newPVCForCR(cr *terraformv1alpha1.Workspace) *corev1.PersistentVolumeClaim {
+func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	labels := map[string]string{
 		"app": cr.Name,
 	}

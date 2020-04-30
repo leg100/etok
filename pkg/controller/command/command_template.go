@@ -5,10 +5,10 @@ import (
 	"strings"
 	"text/template"
 
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 )
 
-func generateScript(cr *terraformv1alpha1.Command) (string, error) {
+func generateScript(cr *v1alpha1.Command) (string, error) {
 	script := `#Extract workspace tarball
 tar zxf /tarball/{{ .Spec.ConfigMapKey }}
 

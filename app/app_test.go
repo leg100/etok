@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

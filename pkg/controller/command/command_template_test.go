@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

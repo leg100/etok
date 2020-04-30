@@ -4,7 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -48,7 +48,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource Command
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Command{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Command{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -57,17 +57,17 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for changes to secondary resource Pods and requeue the owner Command
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &terraformv1alpha1.Command{},
+		OwnerType:    &v1alpha1.Command{},
 	})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to resource Workspace and requeue the associated Commands
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			rc := r.(*ReconcileCommand)
-			cmdList := &terraformv1alpha1.CommandList{}
+			cmdList := &v1alpha1.CommandList{}
 			err = rc.client.List(context.TODO(), cmdList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingLabels{
 				"workspace": a.Meta.GetName(),
 			})
@@ -116,7 +116,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	reqLogger.Info("Reconciling Command")
 
 	// Fetch the Command instance
-	instance := &terraformv1alpha1.Command{}
+	instance := &v1alpha1.Command{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -130,7 +130,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 
 	// Fetch its Workspace object
-	workspace := &terraformv1alpha1.Workspace{}
+	workspace := &v1alpha1.Workspace{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -164,7 +164,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileCommand) updateCondition(command *terraformv1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) error {
+func (r *ReconcileCommand) updateCondition(command *v1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) error {
 	c := status.Condition{
 		Type:    status.ConditionType(conditionType),
 		Status:  conditionStatus,
@@ -191,7 +191,7 @@ func isFirstInQueue(queue []string, name string) bool {
 	}
 }
 
-func (r *ReconcileCommand) managePod(request reconcile.Request, command *terraformv1alpha1.Command, secret *corev1.Secret) error {
+func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha1.Command, secret *corev1.Secret) error {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// Define a new Pod object
@@ -240,7 +240,7 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
+func newPodForCR(cr *v1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
 	tfScript, err := generateScript(cr)
 	if err != nil {
 		return nil, err

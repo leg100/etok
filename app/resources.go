@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
