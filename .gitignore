@@ -1,3 +1,5 @@
+# hacks
+hack/
 # terraform
 .terraform
 # direnv
