@@ -5,7 +5,7 @@ hack/
 # direnv
 .envrc
 # Temporary Build Files
-stok
+/stok
 stok-operator
 build/_output
 build/_test
