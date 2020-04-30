@@ -21,6 +21,8 @@ e2e: cli-build operator-image kind-load-image e2e-cleanup
 	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
 	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
 	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
+	# also test the cli too while we're at it
+	go test -v test/cli_config_test.go
 
 .PHONY: e2e
 e2e-cleanup:
@@ -52,7 +54,7 @@ operator-unit:
 
 .PHONY: cli-unit
 cli-unit:
-	go test -v . ./app
+	go test -v ./cmd
 
 .PHONY: crds
 crds:
