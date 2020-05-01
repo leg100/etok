@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	crdapi "github.com/leg100/stok/pkg/apis"
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -27,7 +27,7 @@ var secret = corev1.Secret{
 	},
 }
 
-var command = terraformv1alpha1.Command{
+var command = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
 		Namespace: "operator-test",
@@ -35,12 +35,12 @@ var command = terraformv1alpha1.Command{
 			"workspace": "workspace-1",
 		},
 	},
-	Spec: terraformv1alpha1.CommandSpec{
+	Spec: v1alpha1.CommandSpec{
 		Args: []string{"version"},
 	},
 }
 
-var commandClientReady = terraformv1alpha1.Command{
+var commandClientReady = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
 		Namespace: "operator-test",
@@ -51,30 +51,30 @@ var commandClientReady = terraformv1alpha1.Command{
 			"stok.goalspike.com/client": "Ready",
 		},
 	},
-	Spec: terraformv1alpha1.CommandSpec{
+	Spec: v1alpha1.CommandSpec{
 		Args: []string{"version"},
 	},
 }
 
-var workspaceEmptyQueue = terraformv1alpha1.Workspace{
+var workspaceEmptyQueue = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
-	Spec: terraformv1alpha1.WorkspaceSpec{
+	Spec: v1alpha1.WorkspaceSpec{
 		SecretName: "secret-1",
 	},
 }
 
-var workspaceQueueOfOne = terraformv1alpha1.Workspace{
+var workspaceQueueOfOne = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
-	Spec: terraformv1alpha1.WorkspaceSpec{
+	Spec: v1alpha1.WorkspaceSpec{
 		SecretName: "secret-1",
 	},
-	Status: terraformv1alpha1.WorkspaceStatus{
+	Status: v1alpha1.WorkspaceStatus{
 		Queue: []string{"command-1"},
 	},
 }
@@ -97,7 +97,7 @@ func newTrue() *bool {
 func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
 		name                     string
-		command                  *terraformv1alpha1.Command
+		command                  *v1alpha1.Command
 		objs                     []runtime.Object
 		wantPod                  bool
 		wantClientReadyCondition corev1.ConditionStatus
@@ -199,7 +199,7 @@ func TestReconcileCommand(t *testing.T) {
 	}
 }
 
-func assertCondition(t *testing.T, command *terraformv1alpha1.Command, conditionType string, want corev1.ConditionStatus) {
+func assertCondition(t *testing.T, command *v1alpha1.Command, conditionType string, want corev1.ConditionStatus) {
 	if command.Status.Conditions.IsUnknownFor(status.ConditionType(conditionType)) && want != corev1.ConditionUnknown ||
 		command.Status.Conditions.IsTrueFor(status.ConditionType(conditionType)) && want != corev1.ConditionTrue ||
 		command.Status.Conditions.IsFalseFor(status.ConditionType(conditionType)) && want != corev1.ConditionFalse {

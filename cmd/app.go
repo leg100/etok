@@ -1,4 +1,4 @@
-package app
+package cmd
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

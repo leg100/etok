@@ -1,6 +1,6 @@
 before:
   hooks:
-    - go test . ./app ./pkg/...
+    - go test ./cmd ./pkg/...
 builds:
   - id: stok
     env:
@@ -31,7 +31,6 @@ dockers:
   image_templates:
   - "leg100/stok-operator:latest"
   - "leg100/stok-operator:{{ .Tag }}"
-  - "leg100/stok-operator:v{{ .Major }}"
   skip_push: auto
   dockerfile: build/Dockerfile
   extra_files:

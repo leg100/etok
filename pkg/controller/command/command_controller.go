@@ -4,7 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
-	terraformv1alpha1 "github.com/leg100/stok/pkg/apis/terraform/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,11 +22,6 @@ import (
 )
 
 var log = logf.Log.WithName("controller_command")
-
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
 
 // Add creates a new Command Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -48,26 +43,25 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource Command
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Command{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Command{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner Command
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &terraformv1alpha1.Command{},
+		OwnerType:    &v1alpha1.Command{},
 	})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to resource Workspace and requeue the associated Commands
-	err = c.Watch(&source.Kind{Type: &terraformv1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			rc := r.(*ReconcileCommand)
-			cmdList := &terraformv1alpha1.CommandList{}
+			cmdList := &v1alpha1.CommandList{}
 			err = rc.client.List(context.TODO(), cmdList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingLabels{
 				"workspace": a.Meta.GetName(),
 			})
@@ -106,17 +100,15 @@ type ReconcileCommand struct {
 
 // Reconcile reads that state of the cluster for a Command object and makes changes based on the state read
 // and what is in the Command.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Command")
+	reqLogger.V(1).Info("Reconciling Command")
 
 	// Fetch the Command instance
-	instance := &terraformv1alpha1.Command{}
+	instance := &v1alpha1.Command{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -130,7 +122,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 
 	// Fetch its Workspace object
-	workspace := &terraformv1alpha1.Workspace{}
+	workspace := &v1alpha1.Workspace{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -151,11 +143,13 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		val, ok := instance.Annotations["stok.goalspike.com/client"]
 		if ok {
 			if val == "Ready" {
-				reqLogger.Info("Client is ready to receive logs", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
 				// logs are being streamed to the client, we can let terraform begin
-				err = r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
+				updated, err := r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
 				if err != nil {
 					return reconcile.Result{}, err
+				}
+				if updated {
+					reqLogger.Info("Client is ready to receive logs", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
 				}
 			}
 		}
@@ -164,7 +158,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileCommand) updateCondition(command *terraformv1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) error {
+func (r *ReconcileCommand) updateCondition(command *v1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) (bool, error) {
 	c := status.Condition{
 		Type:    status.ConditionType(conditionType),
 		Status:  conditionStatus,
@@ -174,12 +168,12 @@ func (r *ReconcileCommand) updateCondition(command *terraformv1alpha1.Command, c
 	cc := command.Status.Conditions.GetCondition(c.Type)
 	if cc != nil && cc.Status == c.Status {
 		// condition with same type and status already exists, skip
-		return nil
+		return false, nil
 	} else {
 		// either the condition is not set or the status is different
 		// so set it anew
 		_ = command.Status.Conditions.SetCondition(c)
-		return r.client.Status().Update(context.TODO(), command)
+		return true, r.client.Status().Update(context.TODO(), command)
 	}
 }
 
@@ -191,7 +185,7 @@ func isFirstInQueue(queue []string, name string) bool {
 	}
 }
 
-func (r *ReconcileCommand) managePod(request reconcile.Request, command *terraformv1alpha1.Command, secret *corev1.Secret) error {
+func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha1.Command, secret *corev1.Secret) error {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// Define a new Pod object
@@ -220,12 +214,12 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 
 	switch found.Status.Phase {
 	case corev1.PodFailed:
-		err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
+		_, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
 		if err != nil {
 			return err
 		}
 	case corev1.PodSucceeded:
-		err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
+		_, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
 		if err != nil {
 			return err
 		}
@@ -240,7 +234,7 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *terrafo
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *terraformv1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
+func newPodForCR(cr *v1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
 	tfScript, err := generateScript(cr)
 	if err != nil {
 		return nil, err

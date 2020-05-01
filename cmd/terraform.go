@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/leg100/stok/app"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -56,7 +55,7 @@ func init() {
 
 func runApp(cmd string, args []string) {
 	// initialise both controller-runtime client and client-go client
-	client, kubeClient, err := app.InitClient()
+	client, kubeClient, err := InitClient()
 	if err != nil {
 		logger.Error(err)
 		logger.Sync()
@@ -70,7 +69,7 @@ func runApp(cmd string, args []string) {
 		os.Exit(1)
 	}
 
-	app := &app.App{
+	app := &App{
 		Namespace:      viper.GetString("namespace"),
 		Workspace:      viper.GetString("workspace"),
 		Command:        []string{cmd},

@@ -1,6 +1,11 @@
+LOGLEVEL ?= "info"
+
 .PHONY: local
 local:
-	operator-sdk run --local --watch-namespace=default --verbose 2>&1 \
+	operator-sdk run --local \
+		--operator-flags "--zap-level $(LOGLEVEL)" \
+		--watch-namespace=default \
+		--verbose 2>&1 \
 		| jq -R -r '. as $$line | try fromjson catch $$line'
 
 .PHONY: clean
@@ -21,6 +26,8 @@ e2e: cli-build operator-image kind-load-image e2e-cleanup
 	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
 	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
 	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
+	# also test the cli too while we're at it
+	go test -v test/cli_config_test.go
 
 .PHONY: e2e
 e2e-cleanup:
@@ -52,7 +59,7 @@ operator-unit:
 
 .PHONY: cli-unit
 cli-unit:
-	go test -v . ./app
+	go test -v ./cmd
 
 .PHONY: crds
 crds:
@@ -79,6 +86,23 @@ operator-image: operator-build
 generate-crds:
 	operator-sdk generate k8s && \
 	operator-sdk generate crds
+
+.PHONY: generate-clientset
+generate-clientset:
+	mkdir -p hack
+	sed -e 's,^,// ,; s,  *$$,,' LICENSE > hack/boilerplate.go.txt
+
+	rm -rf pkg/client/clientset
+	go run k8s.io/code-generator/cmd/client-gen \
+		--clientset-name clientset \
+		--input-base github.com/leg100/stok/pkg/apis \
+		--input stok/v1alpha1 \
+		-h hack/boilerplate.go.txt \
+		-p github.com/leg100/stok/pkg/client/
+
+	mkdir -p pkg/client
+	mv github.com/leg100/stok/pkg/client/clientset pkg/client/
+	rm -rf github.com
 
 .PHONY: cli-build
 cli-build:
