@@ -79,6 +79,19 @@ var workspaceQueueOfOne = v1alpha1.Workspace{
 	},
 }
 
+var workspaceBackOfQueue = v1alpha1.Workspace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "workspace-1",
+		Namespace: "operator-test",
+	},
+	Spec: v1alpha1.WorkspaceSpec{
+		SecretName: "secret-1",
+	},
+	Status: v1alpha1.WorkspaceStatus{
+		Queue: []string{"command-0", "command-1"},
+	},
+}
+
 var successfullyCompletedPod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
@@ -96,69 +109,111 @@ func newTrue() *bool {
 
 func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
-		name                     string
-		command                  *v1alpha1.Command
-		objs                     []runtime.Object
-		wantPod                  bool
-		wantClientReadyCondition corev1.ConditionStatus
-		wantCompletedCondition   corev1.ConditionStatus
-		wantRequeue              bool
+		name                      string
+		command                   v1alpha1.Command
+		objs                      []runtime.Object
+		wantClientReadyCondition  corev1.ConditionStatus
+		wantCompletedCondition    corev1.ConditionStatus
+		wantFrontOfQueueCondition corev1.ConditionStatus
+		wantReadyCondition        corev1.ConditionStatus
+		wantRequeue               bool
 	}{
 		{
 			name:    "Unqueued command",
-			command: &command,
+			command: command,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
 				runtime.Object(&secret),
 			},
-			wantPod:                  false,
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantRequeue:              false,
+			wantClientReadyCondition:  corev1.ConditionUnknown,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionUnknown,
+			wantReadyCondition:        corev1.ConditionUnknown,
+			wantRequeue:               false,
+		},
+		{
+			name:    "Missing workspace",
+			command: command,
+			objs: []runtime.Object{
+				runtime.Object(&secret),
+			},
+			wantClientReadyCondition:  corev1.ConditionUnknown,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionUnknown,
+			wantReadyCondition:        corev1.ConditionFalse,
+			wantRequeue:               false,
+		},
+		{
+			name:    "Missing secret",
+			command: command,
+			objs: []runtime.Object{
+				runtime.Object(&workspaceEmptyQueue),
+			},
+			wantClientReadyCondition:  corev1.ConditionUnknown,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionUnknown,
+			wantReadyCondition:        corev1.ConditionFalse,
+			wantRequeue:               false,
 		},
 		{
 			name:    "Command at front of queue",
-			command: &command,
+			command: command,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 			},
-			wantPod:                  true,
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantRequeue:              false,
+			wantClientReadyCondition:  corev1.ConditionUnknown,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionTrue,
+			wantReadyCondition:        corev1.ConditionUnknown,
+			wantRequeue:               false,
 		},
 		{
 			name:    "Command at front of queue and client is ready",
-			command: &commandClientReady,
+			command: commandClientReady,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 			},
-			wantPod:                  true,
-			wantClientReadyCondition: corev1.ConditionTrue,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantRequeue:              false,
+			wantClientReadyCondition:  corev1.ConditionTrue,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionTrue,
+			wantReadyCondition:        corev1.ConditionUnknown,
+			wantRequeue:               false,
 		},
 		{
 			name:    "Successfully completed command",
-			command: &commandClientReady,
+			command: commandClientReady,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 				runtime.Object(&successfullyCompletedPod),
 			},
-			wantPod:                  true,
-			wantClientReadyCondition: corev1.ConditionTrue,
-			wantCompletedCondition:   corev1.ConditionTrue,
-			wantRequeue:              false,
+			wantClientReadyCondition:  corev1.ConditionTrue,
+			wantCompletedCondition:    corev1.ConditionTrue,
+			wantFrontOfQueueCondition: corev1.ConditionTrue,
+			wantReadyCondition:        corev1.ConditionUnknown,
+			wantRequeue:               false,
+		},
+		{
+			name:    "Waiting in queue",
+			command: commandClientReady,
+			objs: []runtime.Object{
+				runtime.Object(&workspaceBackOfQueue),
+				runtime.Object(&secret),
+			},
+			wantClientReadyCondition:  corev1.ConditionTrue,
+			wantCompletedCondition:    corev1.ConditionUnknown,
+			wantFrontOfQueueCondition: corev1.ConditionUnknown,
+			wantReadyCondition:        corev1.ConditionUnknown,
+			wantRequeue:               false,
 		},
 	}
 	s := scheme.Scheme
 	crdapi.AddToScheme(s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			objs := append(tt.objs, runtime.Object(tt.command))
+			objs := append(tt.objs, runtime.Object(&tt.command))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			r := &ReconcileCommand{client: cl, scheme: s}
@@ -182,19 +237,13 @@ func TestReconcileCommand(t *testing.T) {
 			if err != nil && !errors.IsNotFound(err) {
 				t.Fatalf("error fetching pod %v", err)
 			}
-			if tt.wantPod && errors.IsNotFound(err) {
-				t.Errorf("wanted pod but pod not found")
-			}
-			if !tt.wantPod && !errors.IsNotFound(err) {
-				t.Errorf("did not want pod but pod found")
-			}
 
-			err = r.client.Get(context.TODO(), req.NamespacedName, tt.command)
+			err = r.client.Get(context.TODO(), req.NamespacedName, &tt.command)
 			if err != nil {
 				t.Fatalf("get command: (%v)", err)
 			}
 
-			assertCondition(t, tt.command, "Completed", tt.wantCompletedCondition)
+			assertCondition(t, &tt.command, "Completed", tt.wantCompletedCondition)
 		})
 	}
 }

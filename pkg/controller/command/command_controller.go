@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
@@ -125,6 +126,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	workspace := &v1alpha1.Workspace{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
 	if err != nil {
+		_, err := r.updateCondition(instance, "Ready", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace '%s' not found", workspace.GetName()))
 		return reconcile.Result{}, err
 	}
 
@@ -132,26 +134,38 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	secret := &corev1.Secret{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: workspace.Spec.SecretName, Namespace: request.Namespace}, secret)
 	if err != nil {
+		_, err := r.updateCondition(instance, "Ready", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
 		return reconcile.Result{}, err
 	}
 
-	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
-		err = r.managePod(request, instance, secret)
+	// Create pod if does not exist
+	updated, err := r.managePod(request, instance, secret)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if updated {
+		return reconcile.Result{}, nil
+	}
+
+	// Check if client has told us they're ready and set condition accordingly
+	if val, ok := instance.Annotations["stok.goalspike.com/client"]; ok && val == "Ready" {
+		updated, err := r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		val, ok := instance.Annotations["stok.goalspike.com/client"]
-		if ok {
-			if val == "Ready" {
-				// logs are being streamed to the client, we can let terraform begin
-				updated, err := r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				if updated {
-					reqLogger.Info("Client is ready to receive logs", "Request.Namespace", request.Namespace, "Request.Name", request.Name)
-				}
-			}
+		if updated {
+			return reconcile.Result{}, nil
+		}
+	}
+
+	// Check if we're first in queue and set condition accordingly
+	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
+		updated, err := r.updateCondition(instance, "FrontOfQueue", corev1.ConditionTrue, "", "Command is the first item in the workspace queue")
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if updated {
+			return reconcile.Result{}, nil
 		}
 	}
 
@@ -185,18 +199,19 @@ func isFirstInQueue(queue []string, name string) bool {
 	}
 }
 
-func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha1.Command, secret *corev1.Secret) error {
+func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha1.Command, secret *corev1.Secret) (bool, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	var updated bool
 
 	// Define a new Pod object
 	pod, err := newPodForCR(command, secret)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Set Command instance as the owner and controller
 	if err := controllerutil.SetControllerReference(command, pod, r.scheme); err != nil {
-		return err
+		return false, err
 	}
 
 	// Check if this Pod already exists
@@ -206,31 +221,31 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha
 		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
 		err = r.client.Create(context.TODO(), pod)
 		if err != nil {
-			return err
+			return false, err
 		}
 	} else if err != nil {
-		return err
+		return false, err
 	}
 
 	switch found.Status.Phase {
 	case corev1.PodFailed:
-		_, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
+		updated, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
 		if err != nil {
-			return err
+			return updated, err
 		}
 	case corev1.PodSucceeded:
-		_, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
+		updated, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
 		if err != nil {
-			return err
+			return updated, err
 		}
 	default:
 		// PodPending PodPhase = "Pending"
 		// PodRunning PodPhase = "Running"
 		// PodUnknown PodPhase = "Unknown"
-		return nil
+		return updated, nil
 	}
 
-	return nil
+	return updated, nil
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr

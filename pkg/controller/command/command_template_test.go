@@ -28,8 +28,10 @@ func TestScriptPlan(t *testing.T) {
 	want := `#Extract workspace tarball
 tar zxf /tarball/tarball.tar.gz
 
-# wait for client to inform us they're streaming logs
+# wait for both the client to be ready and
+# for the command to be front of the workspace queue
 kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
+kubectl wait --for=condition=FrontOfQueue command/cmd-xxx > /dev/null
 
 # run stok command
 terraform plan
@@ -62,8 +64,10 @@ func TestScriptShell(t *testing.T) {
 	want := `#Extract workspace tarball
 tar zxf /tarball/tarball.tar.gz
 
-# wait for client to inform us they're streaming logs
+# wait for both the client to be ready and
+# for the command to be front of the workspace queue
 kubectl wait --for=condition=ClientReady command/cmd-xxx > /dev/null
+kubectl wait --for=condition=FrontOfQueue command/cmd-xxx > /dev/null
 
 # run stok command
 sh
