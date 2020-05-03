@@ -3,14 +3,12 @@ package e2e
 import (
 	"bytes"
 	goctx "context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +33,12 @@ var (
 	timeout              = time.Second * 60
 	cleanupRetryInterval = time.Second * 1
 	cleanupTimeout       = time.Second * 5
+)
+
+const (
+	buildPath     = "../../../build/_output/bin/stok"
+	workspaceName = "workspace-1"
+	workspacePath = "./test/e2e/workspace"
 )
 
 func TestStok(t *testing.T) {
@@ -107,7 +111,7 @@ func TestStok(t *testing.T) {
 	// create workspace custom resource
 	workspace := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
+			Name:      workspaceName,
 			Namespace: namespace,
 		},
 		TypeMeta: metav1.TypeMeta{
@@ -123,7 +127,7 @@ func TestStok(t *testing.T) {
 	}
 
 	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: "workspace-1"}, &corev1.PersistentVolumeClaim{})
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: workspaceName}, &corev1.PersistentVolumeClaim{})
 
 		if err != nil {
 			return false, err
@@ -144,6 +148,7 @@ func TestStok(t *testing.T) {
 		pty             bool
 		wantWarnings    []string
 		stdin           []byte
+		testQueuing     bool
 	}{
 		{
 			name:            "stok",
@@ -156,7 +161,7 @@ func TestStok(t *testing.T) {
 			name:            "stok version",
 			args:            []string{"version"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`^Terraform v0\.1`),
+			wantStdoutRegex: regexp.MustCompile(`Terraform v0\.1`),
 			pty:             false,
 			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
@@ -164,7 +169,7 @@ func TestStok(t *testing.T) {
 			name:            "stok init",
 			args:            []string{"init", "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`^\nInitializing the backend`),
+			wantStdoutRegex: regexp.MustCompile(`\nInitializing the backend`),
 			pty:             false,
 			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
@@ -172,7 +177,7 @@ func TestStok(t *testing.T) {
 			name:            "stok plan",
 			args:            []string{"plan", "--", "-no-color", "-input=false", "-var 'suffix=foo'"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`^Refreshing Terraform state in-memory prior to plan`),
+			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
 			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
@@ -200,14 +205,22 @@ func TestStok(t *testing.T) {
 			pty:             true,
 			stdin:           []byte("uname; sleep 1; exit\n"),
 		},
+		{
+			name:            "stok queuing",
+			args:            []string{"shell", "--", "\"uname; sleep 5\""},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`Linux`),
+			pty:             false,
+			testQueuing:     true,
+		},
 	}
 
 	// invoke stok with each test case
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("../../../build/_output/bin/stok", tt.args...)
-			cmd.Dir = "./test/e2e/workspace"
-			cmd.Env = append(os.Environ(), fmt.Sprintf("STOK_NAMESPACE=%s", namespace), "STOK_WORKSPACE=workspace-1")
+			cmd := exec.Command(buildPath, tt.args...)
+			cmd.Dir = workspacePath
+			cmd.Env = envVars(namespace)
 
 			outbuf := new(bytes.Buffer)
 			out := io.MultiWriter(outbuf, os.Stdout)
@@ -233,7 +246,6 @@ func TestStok(t *testing.T) {
 			} else {
 				// without pty, so just use a buffer, and skip stdin
 				cmd.Stdout = out
-
 				cmd.Stderr = stderr
 
 				if err = cmd.Start(); err != nil {
@@ -241,30 +253,19 @@ func TestStok(t *testing.T) {
 				}
 			}
 
-			err = cmd.Wait()
-			exitCodeTest(t, err, tt.wantExitCode)
+			if tt.testQueuing {
+				testQueuing(t, tt.args, tt.wantExitCode, namespace)
+			}
+
+			exitCodeTest(t, cmd.Wait(), tt.wantExitCode)
 
 			// Without a pty we expect a warning log msg telling us as much.
 			// (We can use stderr without pty but not with pty)
 			if !tt.pty {
-				// Ensure there are sufficient lines of stderr first
-				gotStderrLines := strings.Split(errbuf.String(), "\n")
-				if len(gotStderrLines) < len(tt.wantWarnings) {
-					t.Fatalf("want %d warnings got %d stderr lines\n", len(tt.wantWarnings), len(gotStderrLines))
-				}
-
-				for idx, warning := range tt.wantWarnings {
-					gotStderr := gotStderrLines[idx]
-
-					got := &LogMsg{}
-					if err = json.Unmarshal([]byte(gotStderr), got); err != nil {
-						t.Fatal(err)
-					}
-					if got.Level != "warn" {
-						t.Errorf("want level=warn, got level=%s\n", got.Level)
-					}
-					if got.Msg != warning {
-						t.Errorf("want message='%s', got message='%s'\n", warning, got.Msg)
+				got := errbuf.String()
+				for _, want := range tt.wantWarnings {
+					if !regexp.MustCompile(want).MatchString(got) {
+						t.Errorf("want '%s', got '%s'\n", want, got)
 					}
 				}
 			}
@@ -277,9 +278,33 @@ func TestStok(t *testing.T) {
 	}
 }
 
-type LogMsg struct {
-	Level string
-	Msg   string
+func envVars(namespace string) []string {
+	return append(os.Environ(), "STOK_NAMESPACE="+namespace, "STOK_WORKSPACE="+workspaceName)
+}
+
+// Launch the command a 2nd time, in parallel, one second later, to test queuing functionality
+func testQueuing(t *testing.T, args []string, wantExitCode int, namespace string) {
+	cmd := exec.Command(buildPath, args...)
+	cmd.Dir = workspacePath
+	cmd.Env = envVars(namespace)
+
+	outbuf := new(bytes.Buffer)
+	out := io.MultiWriter(outbuf, os.Stdout)
+	cmd.Stdout = out
+
+	time.Sleep(time.Second)
+
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	exitCodeTest(t, cmd.Wait(), wantExitCode)
+
+	got := outbuf.String()
+	want := `Waiting in workspace queue; position: 1`
+	if !regexp.MustCompile(want).MatchString(got) {
+		t.Errorf("want '%s', got '%s'\n", want, got)
+	}
 }
 
 func echoOff(f *os.File) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -35,7 +36,11 @@ func (app *App) CreateRole(name string) (string, error) {
 	}
 	app.AddToCleanup(role)
 
-	app.Logger.Debugw("resource created", "type", "role", "name", role.GetName(), "namespace", app.Namespace)
+	log.WithFields(log.Fields{
+		"type":      "role",
+		"name":      role.GetName(),
+		"namespace": app.Namespace,
+	}).Debug("resource created")
 
 	return role.GetName(), nil
 }
@@ -53,7 +58,11 @@ func (app *App) CreateServiceAccount(name string) (string, error) {
 	}
 	app.AddToCleanup(serviceAccount)
 
-	app.Logger.Debugw("resource created", "type", "serviceAccount", "name", serviceAccount.GetName(), "namespace", app.Namespace)
+	log.WithFields(log.Fields{
+		"type":      "serviceAccount",
+		"name":      serviceAccount.GetName(),
+		"namespace": app.Namespace,
+	}).Debug("resource created")
 
 	return serviceAccount.GetName(), nil
 }
@@ -86,7 +95,11 @@ func (app *App) CreateRoleBinding(name string) (string, error) {
 	}
 	app.AddToCleanup(binding)
 
-	app.Logger.Debugw("resource created", "type", "rolebinding", "name", binding.GetName(), "namespace", app.Namespace)
+	log.WithFields(log.Fields{
+		"type":      "rolebinding",
+		"name":      binding.GetName(),
+		"namespace": app.Namespace,
+	}).Debug("resource created")
 
 	return binding.GetName(), nil
 }
@@ -116,7 +129,11 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (string, error) {
 	}
 	app.AddToCleanup(configMap)
 
-	app.Logger.Debugw("resource created", "type", "configmap", "name", configMap.GetName(), "namespace", app.Namespace)
+	log.WithFields(log.Fields{
+		"type":      "configmap",
+		"name":      configMap.GetName(),
+		"namespace": app.Namespace,
+	}).Debug("resource created")
 
 	return configMap.GetName(), nil
 }
@@ -144,7 +161,11 @@ func (app *App) CreateCommand(name string) (*v1alpha1.Command, error) {
 	}
 	app.AddToCleanup(command)
 
-	app.Logger.Debugw("resource created", "type", "command", "name", command.GetName(), "namespace", app.Namespace)
+	log.WithFields(log.Fields{
+		"type":      "command",
+		"name":      command.GetName(),
+		"namespace": app.Namespace,
+	}).Debug("resource created")
 
 	return command, nil
 }

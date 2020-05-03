@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/apex/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -11,11 +12,11 @@ var debugCmd = &cobra.Command{
 	Short: "Show configuration options",
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: Consider using viper.AllSettings()
-		logger.Infow("Dump of configuration values",
-			"workspace", viper.GetString("workspace"),
-			"namespace", viper.GetString("namespace"),
-			"configFile", viper.ConfigFileUsed(),
-		)
+		log.WithFields(log.Fields{
+			"workspace":  viper.GetString("workspace"),
+			"namespace":  viper.GetString("namespace"),
+			"configFile": viper.ConfigFileUsed(),
+		}).Info("Dump of configuration values")
 	},
 }
 

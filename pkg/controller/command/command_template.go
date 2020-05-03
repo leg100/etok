@@ -12,8 +12,10 @@ func generateScript(cr *v1alpha1.Command) (string, error) {
 	script := `#Extract workspace tarball
 tar zxf /tarball/{{ .Spec.ConfigMapKey }}
 
-# wait for client to inform us they're streaming logs
-kubectl wait --for=condition=ClientReady command/{{.Name}} > /dev/null
+# wait for both the client to be ready and
+# for the command to be front of the workspace queue
+kubectl wait --for=condition=WorkspaceReady --timeout=-1s command/{{.Name}} > /dev/null
+kubectl wait --for=condition=ClientReady --timeout=-1s command/{{.Name}} > /dev/null
 
 # run stok command
 {{join .Spec.Command " "}}{{ if gt (len .Spec.Args) 0 }} {{join .Spec.Args " " }}{{ end }}

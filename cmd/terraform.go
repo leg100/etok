@@ -3,6 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
+
+	"github.com/apex/log"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,7 +45,7 @@ func init() {
 			Use:   fmt.Sprintf("%s [flags] -- [%s args]", c, c),
 			Short: fmt.Sprintf("Run terraform %s", c),
 			Run: func(cmd *cobra.Command, args []string) {
-				dashArgs := append([]string{cmd.Name()}, getArgsAfterDash(cmd, args)...)
+				dashArgs := append([]string{cmd.Name()}, getArgsAfterDash(cmd, args))
 
 				// TODO: handle [DIR] positional argument
 				runApp("terraform", dashArgs)
@@ -54,35 +58,41 @@ func init() {
 
 func runApp(cmd string, args []string) {
 	// initialise both controller-runtime client and client-go client
-	client, kubeClient, err := InitClient()
+	client, kubeClient, clientset, err := InitClient()
 	if err != nil {
-		logger.Error(err)
-		logger.Sync()
+		log.WithError(err).Error("")
+		os.Exit(1)
+	}
+
+	podWaitDuration, err := time.ParseDuration(podWaitTime)
+	if err != nil {
+		log.WithError(err).Error("")
 		os.Exit(1)
 	}
 
 	app := &App{
-		Namespace:  viper.GetString("namespace"),
-		Workspace:  viper.GetString("workspace"),
-		Command:    []string{cmd},
-		Logger:     logger,
-		Args:       args,
-		Client:     *client,
-		KubeClient: kubeClient,
+		Namespace:      viper.GetString("namespace"),
+		Workspace:      viper.GetString("workspace"),
+		Command:        []string{cmd},
+		Args:           args,
+		Client:         *client,
+		KubeClient:     kubeClient,
+		Clientset:      clientset,
+		PodWaitTimeout: podWaitDuration,
 	}
 	err = app.Run()
 	if err != nil {
-		logger.Error(err)
-		logger.Sync()
+		log.WithError(err).Error("")
 		os.Exit(1)
 	}
 }
 
 // extract args after '--' (if provided)
-func getArgsAfterDash(cmd *cobra.Command, args []string) []string {
+func getArgsAfterDash(cmd *cobra.Command, args []string) string {
+	var str string
 	if cmd.ArgsLenAtDash() > -1 {
-		return args[cmd.ArgsLenAtDash():]
-	} else {
-		return []string{}
+		str = strings.Join(args[cmd.ArgsLenAtDash():], " ")
 	}
+
+	return str
 }
