@@ -8,15 +8,18 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
 	"github.com/leg100/stok/util"
+	"github.com/operator-framework/operator-sdk/pkg/status"
+	"golang.org/x/crypto/ssh/terminal"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,24 +43,32 @@ import (
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-func InitClient() (*client.Client, *kubernetes.Clientset, error) {
+func InitClient() (*client.Client, *kubernetes.Clientset, *v1alpha1clientset.StokV1alpha1Client, error) {
 	// adds core GVKs
 	s := scheme.Scheme
 	// adds CRD GVKs
 	apis.AddToScheme(s)
 
+	// controller-runtime dynamic client
 	config := runtimeconfig.GetConfigOrDie()
 	client, err := client.New(config, client.Options{Scheme: s})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
+	// client-go client
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return &client, kubeClient, nil
+	// generated clientset
+	clientset, err := v1alpha1clientset.NewForConfig(config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return &client, kubeClient, clientset, nil
 }
 
 type App struct {
@@ -71,7 +82,7 @@ type App struct {
 	Client client.Client
 	// embed?
 	KubeClient     kubernetes.Interface
-	Logger         *zap.SugaredLogger
+	Clientset      v1alpha1clientset.StokV1alpha1Interface
 	PodWaitTimeout time.Duration
 }
 
@@ -97,14 +108,6 @@ func (app *App) Run() error {
 		app.Cleanup()
 		os.Exit(3)
 	}()
-
-	ok, err := app.CheckWorkspaceExists()
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("Workspace '%s' does not exist\n", app.Workspace)
-	}
 
 	tarball, err := CreateTar()
 	if err != nil {
@@ -136,7 +139,21 @@ func (app *App) Run() error {
 		return err
 	}
 
-	app.Logger.Debug("Waiting for pod to be running and ready...")
+	log.WithFields(log.Fields{
+		"id": command.GetName(),
+	}).Info("Initialising")
+
+	log.Debug("Monitoring workspace queue...")
+	_, err = app.WaitForWorkspaceReady(name, time.Duration(queueTimeout)*time.Second)
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			return fmt.Errorf("timed out waiting for workspace to be available")
+		} else {
+			return err
+		}
+	}
+
+	log.Debug("Waiting for pod to be running and ready...")
 	pod, err := app.WaitForPod(name, podRunningAndReady, app.PodWaitTimeout)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
@@ -146,7 +163,7 @@ func (app *App) Run() error {
 		}
 	}
 
-	app.Logger.Debug("Retrieving log stream...")
+	log.Debug("Retrieving log stream...")
 	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
@@ -156,10 +173,15 @@ func (app *App) Run() error {
 
 	done := make(chan error)
 	go func() {
-		app.Logger.Debug("Attach to pod TTY...")
+		log.WithFields(log.Fields{
+			"pod": pod.GetName(),
+		}).Info("Attaching")
+
+		drawDivider()
+
 		err := app.handleAttachPod(pod)
 		if err != nil {
-			app.Logger.Warn("Failed to attach to pod TTY; falling back to streaming logs")
+			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
 			_, err = io.Copy(os.Stdout, logs)
 			done <- err
 		} else {
@@ -168,9 +190,9 @@ func (app *App) Run() error {
 	}()
 
 	// let operator know we're now streaming logs
-	app.Logger.Debug("Telling the operator I'm ready to receive logs...")
+	log.Debug("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		app.Logger.Debug("Attempt to update command resource...")
+		log.Debug("Attempt to update command resource...")
 		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
 		if err = app.Client.Get(context.Background(), key, command); err != nil {
 			done <- err
@@ -190,18 +212,14 @@ func (app *App) Run() error {
 	return <-done
 }
 
-func (app *App) CheckWorkspaceExists() (bool, error) {
-	key := types.NamespacedName{Namespace: app.Namespace, Name: app.Workspace}
-	err := app.Client.Get(context.Background(), key, &v1alpha1.Workspace{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		} else {
-			// something unexpected happened
-			return false, err
-		}
+// draw divider the width of the terminal
+func drawDivider() {
+	width := 80
+
+	if terminal.IsTerminal(int(os.Stdin.Fd())) {
+		width, _, _ = terminal.GetSize(0)
 	}
-	return true, nil
+	fmt.Println(strings.Repeat("-", width))
 }
 
 // TODO: unit test
@@ -254,6 +272,71 @@ func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, 
 	return result, err
 }
 
+// waitForWorkspace watches the given workspace until the exitCondition is true
+func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (*v1alpha1.Command, error) {
+	ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), timeout)
+	defer cancel()
+
+	fieldSelector := fields.OneTermEqualSelector("metadata.name", name).String()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return app.Clientset.Commands(app.Namespace).List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return app.Clientset.Commands(app.Namespace).Watch(options)
+		},
+	}
+
+	intr := interrupt.New(nil, cancel)
+	var result *v1alpha1.Command
+	err := intr.Run(func() error {
+		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Command{}, nil, func(ev watch.Event) (bool, error) {
+			switch ev.Type {
+			case watch.Deleted:
+				return false, errors.NewNotFound(schema.GroupResource{Resource: "commands"}, "")
+			}
+			switch t := ev.Object.(type) {
+			case *v1alpha1.Command:
+				condition := t.Status.Conditions.GetCondition(status.ConditionType("WorkspaceReady"))
+				if condition != nil {
+					status, err := strconv.ParseBool(string(condition.Status))
+					if err != nil {
+						return false, fmt.Errorf("Could not parse WorkspaceReady condition status")
+					}
+
+					log.Debugf("reason: %s", string(condition.Reason))
+					switch string(condition.Reason) {
+					case "WorkspaceNotFound":
+						return false, fmt.Errorf(condition.Message)
+					case "SecretNotFound":
+						return false, fmt.Errorf(condition.Message)
+					case "Queued":
+						log.WithFields(log.Fields{
+							"msg": condition.Message,
+						}).Info("Status update")
+						return status, nil
+					default:
+						log.WithFields(log.Fields{
+							"msg": condition.Message,
+						}).Debug("Status update")
+						return status, nil
+					}
+				}
+			}
+
+			return false, nil
+		})
+		if ev != nil {
+			result = ev.Object.(*v1alpha1.Command)
+		}
+		return err
+	})
+
+	return result, err
+}
+
 func (app *App) handleAttachPod(pod *corev1.Pod) error {
 	config := runtimeconfig.GetConfigOrDie()
 	config.ContentConfig = rest.ContentConfig{
@@ -294,7 +377,7 @@ func (app *App) handleAttachPod(pod *corev1.Pod) error {
 // method
 func (app *App) Write(in []byte) (int, error) {
 	s := strings.TrimSpace(string(in))
-	app.Logger.Warn(s)
+	log.Warn(s)
 	return 0, nil
 }
 

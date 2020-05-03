@@ -10,3 +10,13 @@ func ContainsString(slice []string, str string) bool {
 
 	return false
 }
+
+// Return index of matching string in slice; otherwise return -1
+func StringIndex(slice []string, str string) int {
+	for idx := range slice {
+		if slice[idx] == str {
+			return idx
+		}
+	}
+	return -1
+}

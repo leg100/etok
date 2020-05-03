@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/util/slice"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -126,7 +127,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	workspace := &v1alpha1.Workspace{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
 	if err != nil {
-		_, err := r.updateCondition(instance, "Ready", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace '%s' not found", workspace.GetName()))
+		_, err := r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace '%s' not found", instance.Labels["workspace"]))
 		return reconcile.Result{}, err
 	}
 
@@ -134,7 +135,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	secret := &corev1.Secret{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: workspace.Spec.SecretName, Namespace: request.Namespace}, secret)
 	if err != nil {
-		_, err := r.updateCondition(instance, "Ready", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
+		_, err := r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
 		return reconcile.Result{}, err
 	}
 
@@ -158,15 +159,18 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		}
 	}
 
-	// Check if we're first in queue and set condition accordingly
-	if isFirstInQueue(workspace.Status.Queue, instance.Name) {
-		updated, err := r.updateCondition(instance, "FrontOfQueue", corev1.ConditionTrue, "", "Command is the first item in the workspace queue")
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		if updated {
-			return reconcile.Result{}, nil
-		}
+	// Check workspace queue position
+	pos := slice.StringIndex(workspace.Status.Queue, instance.GetName())
+	switch {
+	case pos == 0:
+		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionTrue, "Active", "Front of workspace queue")
+	case pos < 0:
+		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "Unenqueued", "Waiting to be added to the workspace queue")
+	default:
+		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "Queued", fmt.Sprintf("Waiting in workspace queue; position: %d", pos))
+	}
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
@@ -180,22 +184,14 @@ func (r *ReconcileCommand) updateCondition(command *v1alpha1.Command, conditionT
 		Message: msg,
 	}
 	cc := command.Status.Conditions.GetCondition(c.Type)
-	if cc != nil && cc.Status == c.Status {
-		// condition with same type and status already exists, skip
-		return false, nil
-	} else {
-		// either the condition is not set or the status is different
-		// so set it anew
+
+	// only update if this is a new condition status or
+	// any of the condition attributes have changed
+	if cc == nil || cc.Status != c.Status || cc.Reason != c.Reason || cc.Message != c.Message {
 		_ = command.Status.Conditions.SetCondition(c)
 		return true, r.client.Status().Update(context.TODO(), command)
-	}
-}
-
-func isFirstInQueue(queue []string, name string) bool {
-	if len(queue) > 0 && queue[0] == name {
-		return true
 	} else {
-		return false
+		return false, nil
 	}
 }
 
@@ -220,7 +216,9 @@ func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
 		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
+
+		// ignore errors where two reconciles in quick succession try to create a pod
+		if err != nil && !errors.IsAlreadyExists(err) {
 			return false, err
 		}
 	} else if err != nil {

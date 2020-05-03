@@ -1,25 +1,24 @@
 package cmd
 
 import (
-	"flag"
 	"os"
 
+	"github.com/apex/log"
+	"github.com/leg100/stok/logging/handlers/cli"
+	"github.com/leg100/stok/logging/handlers/prefix"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
 var (
-	cfgFile     string
-	workspace   string
-	namespace   string
-	loglevel    *zapcore.Level
-	logger      *zap.SugaredLogger
-	podWaitTime string
+	cfgFile      string
+	workspace    string
+	namespace    string
+	loglevel     string
+	podWaitTime  string
+	queueTimeout int
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -39,30 +38,20 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig, initLogging)
 
-	loglevel = zap.LevelFlag("loglevel", zapcore.InfoLevel, "logging verbosity level")
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	viper.BindPFlags(pflag.CommandLine)
-
+	rootCmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "logging verbosity level")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
 	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "default", "terraform workspace")
 	rootCmd.PersistentFlags().StringVar(&podWaitTime, "pod-timeout", "10s", "pod wait timeout")
+	rootCmd.PersistentFlags().IntVar(&queueTimeout, "queue-timeout", 60, "queue timeout in seconds")
 
 	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
 	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
 }
 
 func initLogging() {
-	config := zap.NewProductionConfig()
-	config.Level.SetLevel(*loglevel)
-	config.DisableStacktrace = true
-	config.DisableCaller = true
-
-	l, err := config.Build()
-	if err != nil {
-		panic(err.Error())
-	}
-	logger = l.Sugar()
+	log.SetHandler(prefix.New(cli.New(os.Stdout, os.Stderr), "[stok] "))
+	log.SetLevelFromString(loglevel)
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -74,8 +63,7 @@ func initConfig() {
 		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
-			logger.Error(err)
-			logger.Sync()
+			log.WithError(err).Error("")
 			os.Exit(1)
 		}
 

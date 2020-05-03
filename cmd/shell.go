@@ -10,7 +10,11 @@ var shellCmd = &cobra.Command{
 	Short: "Run interactive shell on workspace pod",
 	Run: func(cmd *cobra.Command, args []string) {
 		dashArgs := getArgsAfterDash(cmd, args)
-		runApp("sh", dashArgs)
+		if dashArgs != "" {
+			runApp("sh", []string{"-c", "\"" + dashArgs + "\""})
+		} else {
+			runApp("sh", []string{""})
+		}
 	},
 }
 

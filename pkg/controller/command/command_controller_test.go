@@ -27,28 +27,22 @@ var secret = corev1.Secret{
 	},
 }
 
+// conditions lifecyle:
+// 1. check for workspace, if not found set WorkspaceReady to false
+// 2. check for secret, if not found set WorkspaceReady to false
+// 3. check if client has set annotation, if set set ClientReady to true
+// 4. check pod, if completed successfully or failed, set Complete to true
+// 5. check workspace queue
+//  a. if unenqueued, set WorkspaceReady to false, reason unenqueued
+//  b. if queue pos is >0, set WorkspaceReady to false, reason queued
+//  b. if queue pos is 0, set WorkspaceReady to true, reason active
+
 var command = v1alpha1.Command{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
 		Namespace: "operator-test",
 		Labels: map[string]string{
 			"workspace": "workspace-1",
-		},
-	},
-	Spec: v1alpha1.CommandSpec{
-		Args: []string{"version"},
-	},
-}
-
-var commandClientReady = v1alpha1.Command{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-1",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"workspace": "workspace-1",
-		},
-		Annotations: map[string]string{
-			"stok.goalspike.com/client": "Ready",
 		},
 	},
 	Spec: v1alpha1.CommandSpec{
@@ -109,118 +103,149 @@ func newTrue() *bool {
 
 func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
-		name                      string
-		command                   v1alpha1.Command
-		objs                      []runtime.Object
-		wantClientReadyCondition  corev1.ConditionStatus
-		wantCompletedCondition    corev1.ConditionStatus
-		wantFrontOfQueueCondition corev1.ConditionStatus
-		wantReadyCondition        corev1.ConditionStatus
-		wantRequeue               bool
+		name                        string
+		annotations                 map[string]string
+		conditions                  status.Conditions
+		objs                        []runtime.Object
+		wantClientReadyCondition    corev1.ConditionStatus
+		wantCompletedCondition      corev1.ConditionStatus
+		wantWorkspaceReadyCondition corev1.ConditionStatus
+		wantRequeue                 bool
 	}{
 		{
-			name:    "Unqueued command",
-			command: command,
-			objs: []runtime.Object{
-				runtime.Object(&workspaceEmptyQueue),
-				runtime.Object(&secret),
-			},
-			wantClientReadyCondition:  corev1.ConditionUnknown,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionUnknown,
-			wantReadyCondition:        corev1.ConditionUnknown,
-			wantRequeue:               false,
-		},
-		{
-			name:    "Missing workspace",
-			command: command,
+			name: "Missing workspace",
 			objs: []runtime.Object{
 				runtime.Object(&secret),
 			},
-			wantClientReadyCondition:  corev1.ConditionUnknown,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionUnknown,
-			wantReadyCondition:        corev1.ConditionFalse,
-			wantRequeue:               false,
+			wantWorkspaceReadyCondition: corev1.ConditionFalse,
+			wantClientReadyCondition:    corev1.ConditionUnknown,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantRequeue:                 false,
 		},
 		{
-			name:    "Missing secret",
-			command: command,
+			name: "Missing secret",
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
 			},
-			wantClientReadyCondition:  corev1.ConditionUnknown,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionUnknown,
-			wantReadyCondition:        corev1.ConditionFalse,
-			wantRequeue:               false,
+			wantWorkspaceReadyCondition: corev1.ConditionFalse,
+			wantClientReadyCondition:    corev1.ConditionUnknown,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantRequeue:                 false,
 		},
 		{
-			name:    "Command at front of queue",
-			command: command,
+			name: "Client has set annotation",
+			annotations: map[string]string{
+				"stok.goalspike.com/client": "Ready",
+			},
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 			},
-			wantClientReadyCondition:  corev1.ConditionUnknown,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionTrue,
-			wantReadyCondition:        corev1.ConditionUnknown,
-			wantRequeue:               false,
+			wantClientReadyCondition:    corev1.ConditionTrue,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantWorkspaceReadyCondition: corev1.ConditionUnknown,
+			wantRequeue:                 false,
 		},
 		{
-			name:    "Command at front of queue and client is ready",
-			command: commandClientReady,
-			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&secret),
+			name: "Successfully completed pod",
+			annotations: map[string]string{
+				"stok.goalspike.com/client": "Ready",
 			},
-			wantClientReadyCondition:  corev1.ConditionTrue,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionTrue,
-			wantReadyCondition:        corev1.ConditionUnknown,
-			wantRequeue:               false,
-		},
-		{
-			name:    "Successfully completed command",
-			command: commandClientReady,
+			conditions: status.Conditions{
+				{
+					Type:    status.ConditionType("ClientReady"),
+					Reason:  status.ConditionReason("ClientReceivingLogs"),
+					Message: "Logs are being streamed to the client",
+					Status:  corev1.ConditionTrue,
+				},
+				{
+					Type:    status.ConditionType("WorkspaceReady"),
+					Reason:  status.ConditionReason("Active"),
+					Message: "Front of workspace queue",
+					Status:  corev1.ConditionTrue,
+				},
+			},
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
 				runtime.Object(&successfullyCompletedPod),
 			},
-			wantClientReadyCondition:  corev1.ConditionTrue,
-			wantCompletedCondition:    corev1.ConditionTrue,
-			wantFrontOfQueueCondition: corev1.ConditionTrue,
-			wantReadyCondition:        corev1.ConditionUnknown,
-			wantRequeue:               false,
+			wantClientReadyCondition:    corev1.ConditionTrue,
+			wantWorkspaceReadyCondition: corev1.ConditionTrue,
+			wantCompletedCondition:      corev1.ConditionTrue,
+			wantRequeue:                 false,
 		},
 		{
-			name:    "Waiting in queue",
-			command: commandClientReady,
+			name: "Unenqueued command",
+			objs: []runtime.Object{
+				runtime.Object(&workspaceEmptyQueue),
+				runtime.Object(&secret),
+			},
+			wantClientReadyCondition:    corev1.ConditionUnknown,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantWorkspaceReadyCondition: corev1.ConditionFalse,
+			wantRequeue:                 false,
+		},
+		{
+			name: "Waiting in queue",
+			annotations: map[string]string{
+				"stok.goalspike.com/client": "Ready",
+			},
 			objs: []runtime.Object{
 				runtime.Object(&workspaceBackOfQueue),
 				runtime.Object(&secret),
 			},
-			wantClientReadyCondition:  corev1.ConditionTrue,
-			wantCompletedCondition:    corev1.ConditionUnknown,
-			wantFrontOfQueueCondition: corev1.ConditionUnknown,
-			wantReadyCondition:        corev1.ConditionUnknown,
-			wantRequeue:               false,
+			conditions: status.Conditions{
+				{
+					Type:    status.ConditionType("ClientReady"),
+					Reason:  status.ConditionReason("ClientReceivingLogs"),
+					Message: "Logs are being streamed to the client",
+					Status:  corev1.ConditionTrue,
+				},
+			},
+			wantClientReadyCondition:    corev1.ConditionTrue,
+			wantWorkspaceReadyCondition: corev1.ConditionFalse,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantRequeue:                 false,
+		},
+		{
+			name: "Command at front of queue",
+			annotations: map[string]string{
+				"stok.goalspike.com/client": "Ready",
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
+			},
+			conditions: status.Conditions{
+				{
+					Type:    status.ConditionType("ClientReady"),
+					Reason:  status.ConditionReason("ClientReceivingLogs"),
+					Message: "Logs are being streamed to the client",
+					Status:  corev1.ConditionTrue,
+				},
+			},
+			wantClientReadyCondition:    corev1.ConditionTrue,
+			wantCompletedCondition:      corev1.ConditionUnknown,
+			wantWorkspaceReadyCondition: corev1.ConditionTrue,
+			wantRequeue:                 false,
 		},
 	}
 	s := scheme.Scheme
 	crdapi.AddToScheme(s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			objs := append(tt.objs, runtime.Object(&tt.command))
+			command.Status.Conditions = tt.conditions
+			command.SetAnnotations(tt.annotations)
+
+			objs := append(tt.objs, runtime.Object(&command))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			r := &ReconcileCommand{client: cl, scheme: s}
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.command.GetName(),
-					Namespace: tt.command.GetNamespace(),
+					Name:      command.GetName(),
+					Namespace: command.GetNamespace(),
 				},
 			}
 			res, err := r.Reconcile(req)
@@ -238,12 +263,14 @@ func TestReconcileCommand(t *testing.T) {
 				t.Fatalf("error fetching pod %v", err)
 			}
 
-			err = r.client.Get(context.TODO(), req.NamespacedName, &tt.command)
+			err = r.client.Get(context.TODO(), req.NamespacedName, &command)
 			if err != nil {
 				t.Fatalf("get command: (%v)", err)
 			}
 
-			assertCondition(t, &tt.command, "Completed", tt.wantCompletedCondition)
+			assertCondition(t, &command, "Completed", tt.wantCompletedCondition)
+			assertCondition(t, &command, "WorkspaceReady", tt.wantWorkspaceReadyCondition)
+			assertCondition(t, &command, "ClientReady", tt.wantClientReadyCondition)
 		})
 	}
 }
@@ -253,6 +280,6 @@ func assertCondition(t *testing.T, command *v1alpha1.Command, conditionType stri
 		command.Status.Conditions.IsTrueFor(status.ConditionType(conditionType)) && want != corev1.ConditionTrue ||
 		command.Status.Conditions.IsFalseFor(status.ConditionType(conditionType)) && want != corev1.ConditionFalse {
 
-		t.Errorf("expected %s status to be %v, got %v", conditionType, want, command.Status.Conditions.GetCondition(status.ConditionType(conditionType)))
+		t.Errorf("expected %s status to be %v, got '%v'", conditionType, want, command.Status.Conditions.GetCondition(status.ConditionType(conditionType)))
 	}
 }

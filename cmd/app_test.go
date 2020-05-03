@@ -8,7 +8,6 @@ import (
 
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,49 +61,6 @@ var pod = v1.Pod{
 	},
 }
 
-func TestCheckWorkspaceExistsTrue(t *testing.T) {
-	// adds core GVKs
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
-
-	app := &App{
-		Namespace: "default",
-		Workspace: "default",
-		Client:    fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
-	}
-
-	found, err := app.CheckWorkspaceExists()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !found {
-		t.Error("want workspace, got no workspace")
-	}
-
-}
-
-func TestCheckWorkspaceExistsFalse(t *testing.T) {
-	// adds core GVKs
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
-
-	app := &App{
-		Namespace: "default",
-		Workspace: "default",
-		Client:    fake.NewFakeClientWithScheme(s),
-	}
-
-	found, err := app.CheckWorkspaceExists()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if found {
-		t.Error("don't want workspace, got workspace")
-	}
-}
-
 func TestCreateConfigMap(t *testing.T) {
 	// adds core GVKs
 	s := scheme.Scheme
@@ -118,7 +74,6 @@ func TestCreateConfigMap(t *testing.T) {
 		Resources:  []runtime.Object{},
 		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
 		KubeClient: kubeFake.NewSimpleClientset(),
-		Logger:     zap.NewExample().Sugar(),
 	}
 
 	app.KubeClient.(*kubeFake.Clientset).PrependReactor("create", "configmaps", generateNameReactor)

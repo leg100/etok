@@ -2,13 +2,13 @@ package e2e
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/fatih/structs"
+	"github.com/kr/logfmt"
 )
 
 func TestStok(t *testing.T) {
@@ -66,9 +66,9 @@ func TestStok(t *testing.T) {
 			cmd := exec.Command("../build/_output/bin/stok", tt.args...)
 			cmd.Env = append([]string{"PATH=/usr/bin:/bin"}, tt.env...)
 
-			// print to stderr too to aid with debugging
+			// print to stdout too to aid with debugging
 			buf := new(bytes.Buffer)
-			cmd.Stderr = io.MultiWriter(buf, os.Stderr)
+			cmd.Stdout = io.MultiWriter(buf, os.Stdout)
 
 			if err := cmd.Run(); err != nil {
 				t.Fatal(err)
@@ -76,7 +76,7 @@ func TestStok(t *testing.T) {
 
 			// unmarshal into struct
 			lm := &LogMsg{}
-			if err := json.Unmarshal(buf.Bytes(), lm); err != nil {
+			if err := logfmt.Unmarshal(buf.Bytes(), lm); err != nil {
 				t.Fatal(err)
 			}
 			// convert into map
