@@ -7,15 +7,15 @@ import (
 )
 
 type Script struct {
-	CommandName  string
-	ConfigMapKey string
-	Command      []string
-	Args         []string
+	CommandName string
+	Tarball     string
+	Command     []string
+	Args        []string
 }
 
 func (s Script) generate() (string, error) {
 	script := `#Extract workspace tarball
-tar zxf /tarball/{{ .ConfigMapKey }}
+tar zxf /tarball/{{ .Tarball }}
 
 # wait for both the client to be ready and
 # for the command to be front of the workspace queue

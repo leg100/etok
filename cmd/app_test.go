@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
-	ktesting "k8s.io/client-go/testing"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -27,14 +25,19 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
-// generateNameReactor implements the logic required for the GenerateName field to work when using
-// the fake client. Add it with client.PrependReactor to your fake client.
-func generateNameReactor(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
-	s := action.(ktesting.CreateAction).GetObject().(*v1.ConfigMap)
-	if s.Name == "" && s.GenerateName != "" {
-		s.Name = fmt.Sprintf("%sxxxx", s.GenerateName)
-	}
-	return false, nil, nil
+var command = v1alpha1.Command{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "stok-xxxx",
+		Namespace: "default",
+		Labels: map[string]string{
+			"app":       "stok",
+			"workspace": "workspace-1",
+		},
+	},
+	Spec: v1alpha1.CommandSpec{
+		Command: []string{"terraform"},
+		Args:    []string{"plan"},
+	},
 }
 
 var pod = v1.Pod{
@@ -72,20 +75,29 @@ func TestCreateConfigMap(t *testing.T) {
 		Workspace:  "default",
 		Args:       []string{"plan"},
 		Resources:  []runtime.Object{},
-		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
+		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&command)),
 		KubeClient: kubeFake.NewSimpleClientset(),
 	}
 
-	app.KubeClient.(*kubeFake.Clientset).PrependReactor("create", "configmaps", generateNameReactor)
-
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")
-	name, err := app.CreateConfigMap(tarball)
+	configMap, err := app.CreateConfigMap(&command, tarball)
 	if err != nil {
 		t.Error(err)
 	}
-	if name != "stok-xxxx" {
-		t.Errorf("want stok-xxxx, got %s\n", name)
+	if configMap.Name != "stok-xxxx" {
+		t.Errorf("want stok-xxxx, got %s\n", configMap.Name)
+	}
+
+	ownerRefs := configMap.GetOwnerReferences()
+	if len(ownerRefs) != 1 {
+		t.Fatal("want one ownerref, got none")
+	}
+	if ownerRefs[0].Kind != "Command" {
+		t.Errorf("want ownerref controller kind %s got %s\n", "Command", ownerRefs[0].Kind)
+	}
+	if ownerRefs[0].Name != "stok-xxxx" {
+		t.Errorf("want ownerref controller name %s got %s\n", "Command", ownerRefs[0].Name)
 	}
 }
 

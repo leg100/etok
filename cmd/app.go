@@ -114,12 +114,14 @@ func (app *App) Run() error {
 		return err
 	}
 
-	name, err := app.CreateConfigMap(tarball)
+	command, err := app.CreateCommand()
 	if err != nil {
 		return err
 	}
+	// the pod name is the same as the command name
+	podName := command.Name
 
-	command, err := app.CreateCommand(name)
+	_, err = app.CreateConfigMap(command, tarball)
 	if err != nil {
 		return err
 	}
@@ -129,7 +131,7 @@ func (app *App) Run() error {
 	}).Info("Initialising")
 
 	log.Debug("Monitoring workspace queue...")
-	_, err = app.WaitForWorkspaceReady(name, time.Duration(queueTimeout)*time.Second)
+	_, err = app.WaitForWorkspaceReady(command.Name, time.Duration(queueTimeout)*time.Second)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("timed out waiting for workspace to be available")
@@ -139,17 +141,17 @@ func (app *App) Run() error {
 	}
 
 	log.Debug("Waiting for pod to be running and ready...")
-	pod, err := app.WaitForPod(name, podRunningAndReady, app.PodWaitTimeout)
+	pod, err := app.WaitForPod(podName, podRunningAndReady, app.PodWaitTimeout)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
-			return fmt.Errorf("timed out waiting for pod %s to be running and ready", name)
+			return fmt.Errorf("timed out waiting for pod %s to be running and ready", podName)
 		} else {
 			return err
 		}
 	}
 
 	log.Debug("Retrieving log stream...")
-	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(name, &corev1.PodLogOptions{Follow: true})
+	req := app.KubeClient.CoreV1().Pods(app.Namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
 		return err
@@ -178,7 +180,7 @@ func (app *App) Run() error {
 	log.Debug("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		log.Debug("Attempt to update command resource...")
-		key := types.NamespacedName{Name: name, Namespace: app.Namespace}
+		key := types.NamespacedName{Name: command.Name, Namespace: app.Namespace}
 		if err = app.Client.Get(context.Background(), key, command); err != nil {
 			done <- err
 		} else {
@@ -257,7 +259,7 @@ func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, 
 	return result, err
 }
 
-// waitForWorkspace watches the given workspace until the exitCondition is true
+// waitForWorkspaceReady watches the command until the WorkspaceReady condition is true
 func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (*v1alpha1.Command, error) {
 	ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), timeout)
 	defer cancel()
