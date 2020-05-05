@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var terraformCommands = []string{
+var TerraformCommands = []string{
 	"apply",
 	//"console",
 	"destroy",
@@ -40,7 +40,7 @@ var terraformCommands = []string{
 }
 
 func init() {
-	for _, c := range terraformCommands {
+	for _, c := range TerraformCommands {
 		var cc = &cobra.Command{
 			Use:   fmt.Sprintf("%s [flags] -- [%s args]", c, c),
 			Short: fmt.Sprintf("Run terraform %s", c),
