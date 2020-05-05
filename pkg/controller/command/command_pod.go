@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/leg100/stok/constants"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -12,7 +13,6 @@ type CommandPod struct {
 	corev1.Pod
 	commandName        string
 	configMap          string
-	configMapKey       string
 	serviceAccountName string
 	secretName         string
 	workspaceName      string
@@ -27,10 +27,10 @@ func (cp *CommandPod) GetRuntimeObj() runtime.Object {
 
 func (cp *CommandPod) Construct() error {
 	script, err := Script{
-		CommandName:  cp.commandName,
-		ConfigMapKey: cp.configMapKey,
-		Command:      cp.command,
-		Args:         cp.args,
+		CommandName: cp.commandName,
+		Tarball:     constants.Tarball,
+		Command:     cp.command,
+		Args:        cp.args,
 	}.generate()
 	if err != nil {
 		return err
@@ -69,8 +69,8 @@ func (cp *CommandPod) Construct() error {
 					},
 					{
 						Name:      "tarball",
-						MountPath: filepath.Join("/tarball", cp.configMapKey),
-						SubPath:   cp.configMapKey,
+						MountPath: filepath.Join("/tarball", constants.Tarball),
+						SubPath:   constants.Tarball,
 					},
 				},
 				WorkingDir: "/workspace",

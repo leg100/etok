@@ -2,14 +2,16 @@ package command
 
 import (
 	"testing"
+
+	"github.com/leg100/stok/constants"
 )
 
 func TestScriptPlan(t *testing.T) {
 	got, err := Script{
-		CommandName:  "cmd-xxx",
-		ConfigMapKey: "tarball.tar.gz",
-		Command:      []string{"terraform"},
-		Args:         []string{"plan"},
+		CommandName: "cmd-xxx",
+		Tarball:     constants.Tarball,
+		Command:     []string{"terraform"},
+		Args:        []string{"plan"},
 	}.generate()
 	if err != nil {
 		t.Fatal(err)
@@ -35,10 +37,10 @@ terraform plan
 
 func TestScriptShell(t *testing.T) {
 	got, err := Script{
-		CommandName:  "cmd-xxx",
-		ConfigMapKey: "tarball.tar.gz",
-		Command:      []string{"sh"},
-		Args:         []string{},
+		CommandName: "cmd-xxx",
+		Tarball:     constants.Tarball,
+		Command:     []string{"sh"},
+		Args:        []string{},
 	}.generate()
 	if err != nil {
 		t.Fatal(err)
