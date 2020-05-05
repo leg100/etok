@@ -86,6 +86,13 @@ var workspaceBackOfQueue = v1alpha1.Workspace{
 	},
 }
 
+var pod = corev1.Pod{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "command-1",
+		Namespace: "operator-test",
+	},
+}
+
 var successfullyCompletedPod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "command-1",
@@ -140,6 +147,7 @@ func TestReconcileCommand(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
+				runtime.Object(&pod),
 			},
 			wantClientReadyCondition:    corev1.ConditionTrue,
 			wantCompletedCondition:      corev1.ConditionUnknown,
@@ -180,6 +188,7 @@ func TestReconcileCommand(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
 				runtime.Object(&secret),
+				runtime.Object(&pod),
 			},
 			wantClientReadyCondition:    corev1.ConditionUnknown,
 			wantCompletedCondition:      corev1.ConditionUnknown,
@@ -194,6 +203,7 @@ func TestReconcileCommand(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&workspaceBackOfQueue),
 				runtime.Object(&secret),
+				runtime.Object(&pod),
 			},
 			conditions: status.Conditions{
 				{
@@ -216,6 +226,7 @@ func TestReconcileCommand(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&secret),
+				runtime.Object(&pod),
 			},
 			conditions: status.Conditions{
 				{
@@ -253,8 +264,15 @@ func TestReconcileCommand(t *testing.T) {
 				t.Fatalf("reconcile: (%v)", err)
 			}
 
-			if tt.wantRequeue && !res.Requeue {
-				t.Error("expected reconcile to requeue")
+			if tt.wantRequeue {
+				if !res.Requeue {
+					res, err = r.Reconcile(req)
+					if err != nil {
+						t.Fatalf("requeued reconcile: (%v)", err)
+					}
+				} else {
+					t.Error("want requeue got no requeue")
+				}
 			}
 
 			pod := &corev1.Pod{}

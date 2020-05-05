@@ -119,21 +119,6 @@ func (app *App) Run() error {
 		return err
 	}
 
-	_, err = app.CreateServiceAccount(name)
-	if err != nil {
-		return err
-	}
-
-	_, err = app.CreateRole(name)
-	if err != nil {
-		return err
-	}
-
-	_, err = app.CreateRoleBinding(name)
-	if err != nil {
-		return err
-	}
-
 	command, err := app.CreateCommand(name)
 	if err != nil {
 		return err
