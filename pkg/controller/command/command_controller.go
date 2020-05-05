@@ -3,19 +3,17 @@ package command
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/controller/dependents"
 	"github.com/leg100/stok/util/slice"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -110,8 +108,8 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	reqLogger.V(1).Info("Reconciling Command")
 
 	// Fetch the Command instance
-	instance := &v1alpha1.Command{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	c := &v1alpha1.Command{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, c)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -125,9 +123,9 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 
 	// Fetch its Workspace object
 	workspace := &v1alpha1.Workspace{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["workspace"], Namespace: request.Namespace}, workspace)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: c.Labels["workspace"], Namespace: request.Namespace}, workspace)
 	if err != nil {
-		_, err := r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace '%s' not found", instance.Labels["workspace"]))
+		_, err := r.updateCondition(c, "WorkspaceReady", corev1.ConditionFalse, "WorkspaceNotFound", fmt.Sprintf("Workspace '%s' not found", c.Labels["workspace"]))
 		return reconcile.Result{}, err
 	}
 
@@ -135,45 +133,81 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 	secret := &corev1.Secret{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: workspace.Spec.SecretName, Namespace: request.Namespace}, secret)
 	if err != nil {
-		_, err := r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
+		_, err := r.updateCondition(c, "WorkspaceReady", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
 		return reconcile.Result{}, err
 	}
 
-	// Create pod if does not exist
-	updated, err := r.managePod(request, instance, secret)
+	labels := map[string]string{
+		"app":       "stok",
+		"command":   c.Name,
+		"workspace": workspace.Name,
+	}
+	dm := dependents.NewDependentMgr(c, r.client, r.scheme, request.Name, request.Namespace, labels)
+
+	// Create service account
+	if _, err := dm.GetOrCreate(&CommandServiceAccount{}); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Create role
+	if _, err := dm.GetOrCreate(&CommandRole{commandName: c.Name}); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	//// Create rolebinding
+	rb := CommandRoleBinding{serviceAccountName: c.Name, roleName: c.Name}
+	if _, err := dm.GetOrCreate(&rb); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Create pod
+	pod := &CommandPod{
+		commandName:        c.Name,
+		workspaceName:      workspace.Name,
+		serviceAccountName: c.Name,
+		secretName:         secret.Name,
+		configMap:          c.Spec.ConfigMap,
+		configMapKey:       c.Spec.ConfigMapKey,
+		pvcName:            workspace.Name,
+		command:            c.Spec.Command,
+		args:               c.Spec.Args,
+	}
+	created, err := dm.GetOrCreate(pod)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if updated {
-		return reconcile.Result{}, nil
+	if created {
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// Signal pod completion to workspace
+	phase := pod.Status.Phase
+	if phase == corev1.PodSucceeded || phase == corev1.PodFailed {
+		updated, err := r.updateCondition(c, "Completed", corev1.ConditionTrue, "Pod"+string(phase), "")
+		if err != nil || updated {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Check if client has told us they're ready and set condition accordingly
-	if val, ok := instance.Annotations["stok.goalspike.com/client"]; ok && val == "Ready" {
-		updated, err := r.updateCondition(instance, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
-		if err != nil {
+	if val, ok := c.Annotations["stok.goalspike.com/client"]; ok && val == "Ready" {
+		updated, err := r.updateCondition(c, "ClientReady", corev1.ConditionTrue, "ClientReceivingLogs", "Logs are being streamed to the client")
+		if err != nil || updated {
 			return reconcile.Result{}, err
-		}
-		if updated {
-			return reconcile.Result{}, nil
 		}
 	}
 
 	// Check workspace queue position
-	pos := slice.StringIndex(workspace.Status.Queue, instance.GetName())
+	pos := slice.StringIndex(workspace.Status.Queue, c.GetName())
 	switch {
 	case pos == 0:
-		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionTrue, "Active", "Front of workspace queue")
+		_, err = r.updateCondition(c, "WorkspaceReady", corev1.ConditionTrue, "Active", "Front of workspace queue")
 	case pos < 0:
-		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "Unenqueued", "Waiting to be added to the workspace queue")
+		_, err = r.updateCondition(c, "WorkspaceReady", corev1.ConditionFalse, "Unenqueued", "Waiting to be added to the workspace queue")
 	default:
-		_, err = r.updateCondition(instance, "WorkspaceReady", corev1.ConditionFalse, "Queued", fmt.Sprintf("Waiting in workspace queue; position: %d", pos))
+		_, err = r.updateCondition(c, "WorkspaceReady", corev1.ConditionFalse, "Queued", fmt.Sprintf("Waiting in workspace queue; position: %d", pos))
 	}
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, err
 }
 
 func (r *ReconcileCommand) updateCondition(command *v1alpha1.Command, conditionType string, conditionStatus corev1.ConditionStatus, reason string, msg string) (bool, error) {
@@ -193,151 +227,4 @@ func (r *ReconcileCommand) updateCondition(command *v1alpha1.Command, conditionT
 	} else {
 		return false, nil
 	}
-}
-
-func (r *ReconcileCommand) managePod(request reconcile.Request, command *v1alpha1.Command, secret *corev1.Secret) (bool, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	var updated bool
-
-	// Define a new Pod object
-	pod, err := newPodForCR(command, secret)
-	if err != nil {
-		return false, err
-	}
-
-	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(command, pod, r.scheme); err != nil {
-		return false, err
-	}
-
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-
-		// ignore errors where two reconciles in quick succession try to create a pod
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return false, err
-		}
-	} else if err != nil {
-		return false, err
-	}
-
-	switch found.Status.Phase {
-	case corev1.PodFailed:
-		updated, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodFailed", "")
-		if err != nil {
-			return updated, err
-		}
-	case corev1.PodSucceeded:
-		updated, err = r.updateCondition(command, "Completed", corev1.ConditionTrue, "PodSucceeded", "")
-		if err != nil {
-			return updated, err
-		}
-	default:
-		// PodPending PodPhase = "Pending"
-		// PodRunning PodPhase = "Running"
-		// PodUnknown PodPhase = "Unknown"
-		return updated, nil
-	}
-
-	return updated, nil
-}
-
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *v1alpha1.Command, secret *corev1.Secret) (*corev1.Pod, error) {
-	tfScript, err := generateScript(cr)
-	if err != nil {
-		return nil, err
-	}
-
-	labels := map[string]string{
-		"app":       cr.Name,
-		"workspace": cr.Labels["workspace"],
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			ServiceAccountName: cr.Name,
-			Containers: []corev1.Container{
-				{
-					Name:            "terraform",
-					Image:           "leg100/terraform:latest",
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command:         []string{"sh"},
-					Args:            []string{"-o", "pipefail", "-ec", tfScript},
-					Stdin:           true,
-					Env: []corev1.EnvVar{
-						{
-							Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-							Value: "/credentials/google-credentials.json",
-						},
-					},
-					TTY:                      true,
-					TerminationMessagePolicy: "FallbackToLogsOnError",
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "workspace",
-							MountPath: "/workspace",
-						},
-						{
-							Name:      "cache",
-							MountPath: "/workspace/.terraform",
-						},
-						{
-							Name:      "credentials",
-							MountPath: "/credentials",
-						},
-						{
-							Name:      "tarball",
-							MountPath: filepath.Join("/tarball", cr.Spec.ConfigMapKey),
-							SubPath:   cr.Spec.ConfigMapKey,
-						},
-					},
-					WorkingDir: "/workspace",
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "cache",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: cr.Labels["workspace"],
-						},
-					},
-				},
-				{
-					Name: "workspace",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
-					},
-				},
-				{
-					Name: "tarball",
-					VolumeSource: corev1.VolumeSource{
-						ConfigMap: &corev1.ConfigMapVolumeSource{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: cr.Spec.ConfigMap,
-							},
-						},
-					},
-				},
-				{
-					Name: "credentials",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: secret.Name,
-						},
-					},
-				},
-			},
-			RestartPolicy: corev1.RestartPolicyNever,
-		},
-	}, nil
 }
