@@ -1,0 +1,7 @@
+apiVersion: stok.goalspike.com/v1alpha1
+kind: Plan
+metadata:
+  name: example-plan
+spec:
+  # Add fields here
+  size: 3
