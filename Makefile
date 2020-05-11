@@ -59,9 +59,9 @@ operator-unit:
 cli-unit:
 	go test -v ./cmd
 
-.PHONY: crds
-crds:
-	for crd in $$(ls ./deploy/crds/*_crd.yaml); do kubectl apply -f $${crd}; done
+.PHONY: deploy-crds
+deploy-crds:
+	kubectl apply -f $(ALL_CRD)
 
 .PHONY: operator-build
 operator-build:
