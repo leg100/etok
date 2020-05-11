@@ -1,4 +1,5 @@
 LOGLEVEL ?= "info"
+ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
 
 .PHONY: local
 local:
@@ -23,7 +24,7 @@ clean:
 .PHONY: e2e
 e2e: cli-build operator-image kind-load-image e2e-cleanup
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_all_crd.yaml -n operator-test
+	kubectl apply -f $(ALL_CRD) -n operator-test
 	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
 	# also test the cli too while we're at it
 	go test -v test/cli_config_test.go
@@ -40,7 +41,7 @@ e2e-cleanup:
 .PHONY: e2e-local
 e2e-local: cli-build
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_all_crd.yaml -n operator-test
+	kubectl apply -f $(ALL_CRD) -n operator-test
 	operator-sdk test local --up-local --namespace operator-test --verbose ./test/e2e/
 
 .PHONY: kind-load-image
@@ -85,7 +86,7 @@ generate-deepcopy:
 generate-crds:
 	operator-sdk generate crds
 	# combine crd yamls into one
-	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > ./deploy/crds/stok.goalspike.com_all_crd.yaml
+	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > $(ALL_CRD)
 
 .PHONY: generate-clientset
 generate-clientset:
