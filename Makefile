@@ -23,17 +23,15 @@ clean:
 .PHONY: e2e
 e2e: cli-build operator-image kind-load-image e2e-cleanup
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_all_crd.yaml -n operator-test
 	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
 	# also test the cli too while we're at it
 	go test -v test/cli_config_test.go
 
 .PHONY: e2e
 e2e-cleanup:
-	kubectl delete -n operator-test --all deploy
-	kubectl delete -n operator-test --all command
-	kubectl delete -n operator-test --all workspace
+	# delete all stok custom resources
+	kubectl delete -n operator-test --all $$(kubectl api-resources | awk '$$2 == "stok.goalspike.com" { print $$1 }' | tr '\n' ',' | sed 's/.$$//') || true
 	kubectl delete -n operator-test secret secret-1 || true
 	kubectl delete -n operator-test serviceaccounts stok-operator || true
 	kubectl delete -n operator-test --all roles.rbac.authorization.k8s.io
@@ -42,8 +40,7 @@ e2e-cleanup:
 .PHONY: e2e-local
 e2e-local: cli-build
 	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml -n operator-test
-	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml -n operator-test
+	kubectl apply -f deploy/crds/stok.goalspike.com_all_crd.yaml -n operator-test
 	operator-sdk test local --up-local --namespace operator-test --verbose ./test/e2e/
 
 .PHONY: kind-load-image
@@ -63,16 +60,7 @@ cli-unit:
 
 .PHONY: crds
 crds:
-	kubectl apply -f deploy/crds/stok.goalspike.com_workspaces_crd.yaml
-	kubectl apply -f deploy/crds/stok.goalspike.com_commands_crd.yaml
-
-.PHONY: deploy
-deploy: crds
-	operator-sdk build stok-operator --image-build-args "--iidfile stok-operator.iid" && \
-		TAG=$$(cat stok-operator.iid | sed 's/sha256:\(.*\)/\1/') && \
-		docker tag stok-operator:latest stok-operator:$${TAG} && \
-		kind load docker-image stok-operator:$${TAG} && \
-		helm upgrade -i --wait --set-string image.tag=$$TAG stok-operator ./charts/stok-operator
+	for crd in $$(ls ./deploy/crds/*_crd.yaml); do kubectl apply -f $${crd}; done
 
 .PHONY: operator-build
 operator-build:
@@ -82,10 +70,22 @@ operator-build:
 operator-image: operator-build
 	docker build -f build/Dockerfile -t leg100/stok-operator:latest .
 
+.PHONY: generate-all
+generate-all: generate generate-crds generate-deepcopy generate-clientset
+
+.PHONY: generate
+generate:
+	go generate ./...
+
+.PHONY: generate-deepcopy
+generate-deepcopy:
+	operator-sdk generate k8s
+
 .PHONY: generate-crds
 generate-crds:
-	operator-sdk generate k8s && \
 	operator-sdk generate crds
+	# combine crd yamls into one
+	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > ./deploy/crds/stok.goalspike.com_all_crd.yaml
 
 .PHONY: generate-clientset
 generate-clientset:

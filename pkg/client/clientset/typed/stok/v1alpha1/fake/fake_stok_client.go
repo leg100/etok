@@ -26,8 +26,28 @@ type FakeStokV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeStokV1alpha1) Commands(namespace string) v1alpha1.CommandInterface {
-	return &FakeCommands{c, namespace}
+func (c *FakeStokV1alpha1) Applies(namespace string) v1alpha1.ApplyInterface {
+	return &FakeApplies{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) ForceUnlocks(namespace string) v1alpha1.ForceUnlockInterface {
+	return &FakeForceUnlocks{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Inits(namespace string) v1alpha1.InitInterface {
+	return &FakeInits{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Plans(namespace string) v1alpha1.PlanInterface {
+	return &FakePlans{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Shells(namespace string) v1alpha1.ShellInterface {
+	return &FakeShells{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Versions(namespace string) v1alpha1.VersionInterface {
+	return &FakeVersions{c, namespace}
 }
 
 func (c *FakeStokV1alpha1) Workspaces(namespace string) v1alpha1.WorkspaceInterface {

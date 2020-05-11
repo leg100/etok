@@ -86,6 +86,7 @@ rules:
   - '*'
   - workspaces
   - plans
+  - inits
   verbs:
   - create
   - delete

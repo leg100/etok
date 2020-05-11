@@ -1,20 +1,20 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: commands.stok.goalspike.com
+  name: inits.stok.goalspike.com
 spec:
   group: stok.goalspike.com
   names:
-    kind: Command
-    listKind: CommandList
-    plural: commands
-    singular: command
+    kind: Init
+    listKind: InitList
+    plural: inits
+    singular: init
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Command is the Schema for the commands API
+      description: Init is the Schema for the inits API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -32,10 +32,6 @@ spec:
           description: CommandSpec defines the desired state of Command
           properties:
             args:
-              items:
-                type: string
-              type: array
-            command:
               description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                 Important: Run "operator-sdk generate k8s" to regenerate code after
                 modifying this file Add custom validation using kubebuilder tags:

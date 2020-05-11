@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -25,7 +26,7 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
-var command = v1alpha1.Command{
+var plan = v1alpha1.Plan{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "stok-xxxx",
 		Namespace: "default",
@@ -34,9 +35,8 @@ var command = v1alpha1.Command{
 			"workspace": "workspace-1",
 		},
 	},
-	Spec: v1alpha1.CommandSpec{
-		Command: []string{"terraform"},
-		Args:    []string{"plan"},
+	CommandSpec: v1alpha1.CommandSpec{
+		Args: []string{"plan"},
 	},
 }
 
@@ -64,6 +64,35 @@ var pod = v1.Pod{
 	},
 }
 
+func TestCreateCommand(t *testing.T) {
+	// adds core GVKs
+	s := scheme.Scheme
+	// adds CRD GVKs
+	apis.AddToScheme(s)
+
+	app := &App{
+		Namespace:  "default",
+		Workspace:  "default",
+		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
+		Args:       []string{},
+		Resources:  []runtime.Object{},
+		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
+		KubeClient: kubeFake.NewSimpleClientset(),
+		Command:    &v1alpha1.Plan{},
+	}
+
+	// TODO: create real tarball
+	err := app.CreateCommand()
+	if err != nil {
+		t.Error(err)
+	}
+
+	gotArgs := app.Command.GetArgs()
+	if len(gotArgs) != 0 {
+		t.Fatalf("want one arg, got %d\n", len(gotArgs))
+	}
+}
+
 func TestCreateConfigMap(t *testing.T) {
 	// adds core GVKs
 	s := scheme.Scheme
@@ -73,15 +102,17 @@ func TestCreateConfigMap(t *testing.T) {
 	app := &App{
 		Namespace:  "default",
 		Workspace:  "default",
+		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
 		Args:       []string{"plan"},
 		Resources:  []runtime.Object{},
-		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&command)),
+		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&plan)),
 		KubeClient: kubeFake.NewSimpleClientset(),
+		Command:    &plan,
 	}
 
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")
-	configMap, err := app.CreateConfigMap(&command, tarball)
+	configMap, err := app.CreateConfigMap(tarball)
 	if err != nil {
 		t.Error(err)
 	}
@@ -93,11 +124,11 @@ func TestCreateConfigMap(t *testing.T) {
 	if len(ownerRefs) != 1 {
 		t.Fatal("want one ownerref, got none")
 	}
-	if ownerRefs[0].Kind != "Command" {
-		t.Errorf("want ownerref controller kind %s got %s\n", "Command", ownerRefs[0].Kind)
+	if ownerRefs[0].Kind != "Plan" {
+		t.Errorf("want ownerref controller kind Plan, got %s\n", ownerRefs[0].Kind)
 	}
 	if ownerRefs[0].Name != "stok-xxxx" {
-		t.Errorf("want ownerref controller name %s got %s\n", "Command", ownerRefs[0].Name)
+		t.Errorf("want ownerref controller name stok-xxxx got %s\n", ownerRefs[0].Name)
 	}
 }
 

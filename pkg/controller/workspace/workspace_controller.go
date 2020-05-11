@@ -5,7 +5,6 @@ import (
 	"reflect"
 
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -58,12 +57,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to primary resource Workspace
-	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
 	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
 	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
@@ -73,18 +66,24 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to resource Command and requeue the associated Workspace
-	err = c.Watch(&source.Kind{Type: &v1alpha1.Command{}}, &handler.EnqueueRequestsFromMapFunc{
+	// Watch for changes to resource Pod and requeue the associated Workspace.
+	// Filter out pods with irrelevant labels.
+	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			command := a.Object.(*v1alpha1.Command)
-			return []reconcile.Request{
-				{
-					NamespacedName: types.NamespacedName{
-						Name:      command.Labels["workspace"],
-						Namespace: a.Meta.GetNamespace(),
-					},
-				},
+			pod := a.Object.(*corev1.Pod)
+			if app, ok := pod.GetLabels()["app"]; ok && app == "stok" {
+				if workspace, ok := pod.GetLabels()["workspace"]; ok {
+					return []reconcile.Request{
+						{
+							NamespacedName: types.NamespacedName{
+								Name:      workspace,
+								Namespace: a.Meta.GetNamespace(),
+							},
+						},
+					}
+				}
 			}
+			return []reconcile.Request{}
 		}),
 	})
 	if err != nil {
@@ -147,43 +146,39 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	// process existing command queue
-	newQueue := []string{}
-	for _, cmdName := range instance.Status.Queue {
-		cmd := &v1alpha1.Command{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: cmdName, Namespace: request.Namespace}, cmd)
-		if err != nil && errors.IsNotFound(err) {
-			// cmd not found, so remove from queue
-			continue
-		} else if err != nil {
-			return reconcile.Result{}, err
-		} else {
-			if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-				// cmd completed, so remove from queue
-				continue
-			} else {
-				newQueue = append(newQueue, cmdName)
-			}
-		}
-	}
-
-	// process command resources
-	cmdList := &v1alpha1.CommandList{}
-	err = r.client.List(context.TODO(), cmdList, client.InNamespace(request.Namespace), client.MatchingLabels{
+	// fetch list of (relevant) pods
+	podList := corev1.PodList{}
+	err = r.client.List(context.TODO(), &podList, client.InNamespace(request.Namespace), client.MatchingLabels{
+		"app":       "stok",
 		"workspace": request.Name,
 	})
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	for _, cmd := range cmdList.Items {
-		if cmd.Status.Conditions.IsTrueFor(status.ConditionType("Completed")) {
-			continue
+
+	// filter running pods
+	n := 0
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			podList.Items[n] = pod
+			n++
 		}
-		if cmdIsQueued(&cmd, instance.Status.Queue) {
-			continue
-		}
-		newQueue = append(newQueue, cmd.GetName())
 	}
+	podList.Items = podList.Items[:n]
+
+	// Filter out completed/deleted commands from existing queue, building new queue
+	newQueue := []string{}
+	for _, cmd := range instance.Status.Queue {
+		if i := podListMatchingName(&podList, cmd); i > -1 {
+			// add to new queue
+			newQueue = append(newQueue, cmd)
+			// remove from pod list so we don't include it again later
+			podList.Items = append(podList.Items[:i], podList.Items[i+1:]...)
+		}
+		// cmd not found, leave it out of new queue
+	}
+	// Append remainder of pods
+	newQueue = append(newQueue, podListNames(&podList)...)
 
 	// update status if queue has changed
 	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
@@ -197,15 +192,6 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func cmdIsQueued(cmd *v1alpha1.Command, queue []string) bool {
-	for _, qCmd := range queue {
-		if qCmd == cmd.GetName() {
-			return true
-		}
-	}
-	return false
 }
 
 func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
@@ -229,4 +215,21 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 			},
 		},
 	}
+}
+
+func podListMatchingName(podList *corev1.PodList, name string) int {
+	for i, pod := range podList.Items {
+		if pod.GetName() == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func podListNames(podList *corev1.PodList) []string {
+	names := []string{}
+	for _, pod := range podList.Items {
+		names = append(names, pod.GetName())
+	}
+	return names
 }
