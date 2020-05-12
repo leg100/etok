@@ -30,24 +30,60 @@ func (c *FakeStokV1alpha1) Applies(namespace string) v1alpha1.ApplyInterface {
 	return &FakeApplies{c, namespace}
 }
 
+func (c *FakeStokV1alpha1) Destroys(namespace string) v1alpha1.DestroyInterface {
+	return &FakeDestroys{c, namespace}
+}
+
 func (c *FakeStokV1alpha1) ForceUnlocks(namespace string) v1alpha1.ForceUnlockInterface {
 	return &FakeForceUnlocks{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Gets(namespace string) v1alpha1.GetInterface {
+	return &FakeGets{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Imps(namespace string) v1alpha1.ImpInterface {
+	return &FakeImps{c, namespace}
 }
 
 func (c *FakeStokV1alpha1) Inits(namespace string) v1alpha1.InitInterface {
 	return &FakeInits{c, namespace}
 }
 
+func (c *FakeStokV1alpha1) Outputs(namespace string) v1alpha1.OutputInterface {
+	return &FakeOutputs{c, namespace}
+}
+
 func (c *FakeStokV1alpha1) Plans(namespace string) v1alpha1.PlanInterface {
 	return &FakePlans{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Refreshes(namespace string) v1alpha1.RefreshInterface {
+	return &FakeRefreshes{c, namespace}
 }
 
 func (c *FakeStokV1alpha1) Shells(namespace string) v1alpha1.ShellInterface {
 	return &FakeShells{c, namespace}
 }
 
-func (c *FakeStokV1alpha1) Versions(namespace string) v1alpha1.VersionInterface {
-	return &FakeVersions{c, namespace}
+func (c *FakeStokV1alpha1) Shows(namespace string) v1alpha1.ShowInterface {
+	return &FakeShows{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) States(namespace string) v1alpha1.StateInterface {
+	return &FakeStates{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Taints(namespace string) v1alpha1.TaintInterface {
+	return &FakeTaints{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Untaints(namespace string) v1alpha1.UntaintInterface {
+	return &FakeUntaints{c, namespace}
+}
+
+func (c *FakeStokV1alpha1) Validates(namespace string) v1alpha1.ValidateInterface {
+	return &FakeValidates{c, namespace}
 }
 
 func (c *FakeStokV1alpha1) Workspaces(namespace string) v1alpha1.WorkspaceInterface {

@@ -47,7 +47,6 @@ Available Commands:
   taint        Run terraform taint
   untaint      Run terraform untaint
   validate     Run terraform validate
-  version      Run terraform version
 
 Flags:
       --config string      config file (default is $HOME/.stok.yaml)

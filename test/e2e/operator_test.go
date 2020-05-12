@@ -158,14 +158,6 @@ func TestStok(t *testing.T) {
 			pty:             false,
 		},
 		{
-			name:            "stok version",
-			args:            []string{"version"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`Terraform v0\.1`),
-			pty:             false,
-			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
-		},
-		{
 			name:            "stok init",
 			args:            []string{"init", "--", "-no-color", "-input=false"},
 			wantExitCode:    0,

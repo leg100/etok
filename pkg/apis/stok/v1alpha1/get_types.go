@@ -7,11 +7,11 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Apply is the Schema for the applies API
+// Get is the Schema for the gets API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=applies,scope=Namespaced
+// +kubebuilder:resource:path=gets,scope=Namespaced
 // +genclient
-type Apply struct {
+type Get struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -21,13 +21,13 @@ type Apply struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ApplyList contains a list of Apply
-type ApplyList struct {
+// GetList contains a list of Get
+type GetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Apply `json:"items"`
+	Items           []Get `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Apply{}, &ApplyList{})
+	SchemeBuilder.Register(&Get{}, &GetList{})
 }

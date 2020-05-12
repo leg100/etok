@@ -18,14 +18,32 @@ package v1alpha1
 
 type ApplyExpansion interface{}
 
+type DestroyExpansion interface{}
+
 type ForceUnlockExpansion interface{}
+
+type GetExpansion interface{}
+
+type ImpExpansion interface{}
 
 type InitExpansion interface{}
 
+type OutputExpansion interface{}
+
 type PlanExpansion interface{}
+
+type RefreshExpansion interface{}
 
 type ShellExpansion interface{}
 
-type VersionExpansion interface{}
+type ShowExpansion interface{}
+
+type StateExpansion interface{}
+
+type TaintExpansion interface{}
+
+type UntaintExpansion interface{}
+
+type ValidateExpansion interface{}
 
 type WorkspaceExpansion interface{}

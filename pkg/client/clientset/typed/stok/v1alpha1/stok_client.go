@@ -25,11 +25,20 @@ import (
 type StokV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AppliesGetter
+	DestroysGetter
 	ForceUnlocksGetter
+	GetsGetter
+	ImpsGetter
 	InitsGetter
+	OutputsGetter
 	PlansGetter
+	RefreshesGetter
 	ShellsGetter
-	VersionsGetter
+	ShowsGetter
+	StatesGetter
+	TaintsGetter
+	UntaintsGetter
+	ValidatesGetter
 	WorkspacesGetter
 }
 
@@ -42,24 +51,60 @@ func (c *StokV1alpha1Client) Applies(namespace string) ApplyInterface {
 	return newApplies(c, namespace)
 }
 
+func (c *StokV1alpha1Client) Destroys(namespace string) DestroyInterface {
+	return newDestroys(c, namespace)
+}
+
 func (c *StokV1alpha1Client) ForceUnlocks(namespace string) ForceUnlockInterface {
 	return newForceUnlocks(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Gets(namespace string) GetInterface {
+	return newGets(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Imps(namespace string) ImpInterface {
+	return newImps(c, namespace)
 }
 
 func (c *StokV1alpha1Client) Inits(namespace string) InitInterface {
 	return newInits(c, namespace)
 }
 
+func (c *StokV1alpha1Client) Outputs(namespace string) OutputInterface {
+	return newOutputs(c, namespace)
+}
+
 func (c *StokV1alpha1Client) Plans(namespace string) PlanInterface {
 	return newPlans(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Refreshes(namespace string) RefreshInterface {
+	return newRefreshes(c, namespace)
 }
 
 func (c *StokV1alpha1Client) Shells(namespace string) ShellInterface {
 	return newShells(c, namespace)
 }
 
-func (c *StokV1alpha1Client) Versions(namespace string) VersionInterface {
-	return newVersions(c, namespace)
+func (c *StokV1alpha1Client) Shows(namespace string) ShowInterface {
+	return newShows(c, namespace)
+}
+
+func (c *StokV1alpha1Client) States(namespace string) StateInterface {
+	return newStates(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Taints(namespace string) TaintInterface {
+	return newTaints(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Untaints(namespace string) UntaintInterface {
+	return newUntaints(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Validates(namespace string) ValidateInterface {
+	return newValidates(c, namespace)
 }
 
 func (c *StokV1alpha1Client) Workspaces(namespace string) WorkspaceInterface {

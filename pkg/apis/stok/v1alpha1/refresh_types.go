@@ -7,11 +7,11 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Apply is the Schema for the applies API
+// Refresh is the Schema for the refreshs API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=applies,scope=Namespaced
+// +kubebuilder:resource:path=refreshs,scope=Namespaced
 // +genclient
-type Apply struct {
+type Refresh struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -21,13 +21,13 @@ type Apply struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ApplyList contains a list of Apply
-type ApplyList struct {
+// RefreshList contains a list of Refresh
+type RefreshList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Apply `json:"items"`
+	Items           []Refresh `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Apply{}, &ApplyList{})
+	SchemeBuilder.Register(&Refresh{}, &RefreshList{})
 }
