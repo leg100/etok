@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+//go:generate go run generate.go
+
 var (
 	cfgFile      string
 	workspace    string
@@ -76,4 +78,13 @@ func initConfig() {
 	viper.AutomaticEnv() // read in environment variables that match
 
 	viper.ReadInConfig()
+}
+
+// extract args after '--' (if provided)
+func getArgsAfterDash(cmd *cobra.Command, args []string) []string {
+	if cmd.ArgsLenAtDash() > -1 {
+		return args[cmd.ArgsLenAtDash():]
+	} else {
+		return []string{}
+	}
 }

@@ -24,7 +24,12 @@ import (
 
 type StokV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	CommandsGetter
+	AppliesGetter
+	ForceUnlocksGetter
+	InitsGetter
+	PlansGetter
+	ShellsGetter
+	VersionsGetter
 	WorkspacesGetter
 }
 
@@ -33,8 +38,28 @@ type StokV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *StokV1alpha1Client) Commands(namespace string) CommandInterface {
-	return newCommands(c, namespace)
+func (c *StokV1alpha1Client) Applies(namespace string) ApplyInterface {
+	return newApplies(c, namespace)
+}
+
+func (c *StokV1alpha1Client) ForceUnlocks(namespace string) ForceUnlockInterface {
+	return newForceUnlocks(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Inits(namespace string) InitInterface {
+	return newInits(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Plans(namespace string) PlanInterface {
+	return newPlans(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Shells(namespace string) ShellInterface {
+	return newShells(c, namespace)
+}
+
+func (c *StokV1alpha1Client) Versions(namespace string) VersionInterface {
+	return newVersions(c, namespace)
 }
 
 func (c *StokV1alpha1Client) Workspaces(namespace string) WorkspaceInterface {

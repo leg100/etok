@@ -37,15 +37,15 @@ var secret = corev1.Secret{
 //  b. if queue pos is >0, set WorkspaceReady to false, reason queued
 //  b. if queue pos is 0, set WorkspaceReady to true, reason active
 
-var command = v1alpha1.Command{
+var plan = v1alpha1.Plan{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-1",
+		Name:      "plan-1",
 		Namespace: "operator-test",
 		Labels: map[string]string{
 			"workspace": "workspace-1",
 		},
 	},
-	Spec: v1alpha1.CommandSpec{
+	CommandSpec: v1alpha1.CommandSpec{
 		Args: []string{"version"},
 	},
 }
@@ -69,7 +69,7 @@ var workspaceQueueOfOne = v1alpha1.Workspace{
 		SecretName: "secret-1",
 	},
 	Status: v1alpha1.WorkspaceStatus{
-		Queue: []string{"command-1"},
+		Queue: []string{"plan-1"},
 	},
 }
 
@@ -82,20 +82,20 @@ var workspaceBackOfQueue = v1alpha1.Workspace{
 		SecretName: "secret-1",
 	},
 	Status: v1alpha1.WorkspaceStatus{
-		Queue: []string{"command-0", "command-1"},
+		Queue: []string{"plan-0", "plan-1"},
 	},
 }
 
 var pod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-1",
+		Name:      "plan-1",
 		Namespace: "operator-test",
 	},
 }
 
 var successfullyCompletedPod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-1",
+		Name:      "plan-1",
 		Namespace: "operator-test",
 	},
 	Status: corev1.PodStatus{
@@ -246,27 +246,27 @@ func TestReconcileCommand(t *testing.T) {
 	crdapi.AddToScheme(s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			command.Status.Conditions = tt.conditions
-			command.SetAnnotations(tt.annotations)
+			plan.SetConditions(tt.conditions)
+			plan.SetAnnotations(tt.annotations)
 
-			objs := append(tt.objs, runtime.Object(&command))
+			objs := append(tt.objs, runtime.Object(&plan))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
-			r := &ReconcileCommand{client: cl, scheme: s}
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      command.GetName(),
-					Namespace: command.GetNamespace(),
+					Name:      plan.GetName(),
+					Namespace: plan.GetNamespace(),
 				},
 			}
-			res, err := r.Reconcile(req)
+
+			res, err := Reconcile(cl, s, req, &plan, "plan")
 			if err != nil {
 				t.Fatalf("reconcile: (%v)", err)
 			}
 
 			if tt.wantRequeue {
 				if !res.Requeue {
-					res, err = r.Reconcile(req)
+					res, err = Reconcile(cl, s, req, &plan, "plan")
 					if err != nil {
 						t.Fatalf("requeued reconcile: (%v)", err)
 					}
@@ -276,28 +276,28 @@ func TestReconcileCommand(t *testing.T) {
 			}
 
 			pod := &corev1.Pod{}
-			err = r.client.Get(context.TODO(), req.NamespacedName, pod)
+			err = cl.Get(context.TODO(), req.NamespacedName, pod)
 			if err != nil && !errors.IsNotFound(err) {
 				t.Fatalf("error fetching pod %v", err)
 			}
 
-			err = r.client.Get(context.TODO(), req.NamespacedName, &command)
+			err = cl.Get(context.TODO(), req.NamespacedName, &plan)
 			if err != nil {
 				t.Fatalf("get command: (%v)", err)
 			}
 
-			assertCondition(t, &command, "Completed", tt.wantCompletedCondition)
-			assertCondition(t, &command, "WorkspaceReady", tt.wantWorkspaceReadyCondition)
-			assertCondition(t, &command, "ClientReady", tt.wantClientReadyCondition)
+			assertCondition(t, &plan, "Completed", tt.wantCompletedCondition)
+			assertCondition(t, &plan, "WorkspaceReady", tt.wantWorkspaceReadyCondition)
+			assertCondition(t, &plan, "ClientReady", tt.wantClientReadyCondition)
 		})
 	}
 }
 
-func assertCondition(t *testing.T, command *v1alpha1.Command, conditionType string, want corev1.ConditionStatus) {
-	if command.Status.Conditions.IsUnknownFor(status.ConditionType(conditionType)) && want != corev1.ConditionUnknown ||
-		command.Status.Conditions.IsTrueFor(status.ConditionType(conditionType)) && want != corev1.ConditionTrue ||
-		command.Status.Conditions.IsFalseFor(status.ConditionType(conditionType)) && want != corev1.ConditionFalse {
+func assertCondition(t *testing.T, command Command, conditionType string, want corev1.ConditionStatus) {
+	if command.GetConditions().IsUnknownFor(status.ConditionType(conditionType)) && want != corev1.ConditionUnknown ||
+		command.GetConditions().IsTrueFor(status.ConditionType(conditionType)) && want != corev1.ConditionTrue ||
+		command.GetConditions().IsFalseFor(status.ConditionType(conditionType)) && want != corev1.ConditionFalse {
 
-		t.Errorf("expected %s status to be %v, got '%v'", conditionType, want, command.Status.Conditions.GetCondition(status.ConditionType(conditionType)))
+		t.Errorf("expected %s status to be %v, got '%v'", conditionType, want, command.GetConditions().GetCondition(status.ConditionType(conditionType)))
 	}
 }

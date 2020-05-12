@@ -25,7 +25,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - "rbac.authorization.k8s.io"
+  - rbac.authorization.k8s.io
   resources:
   - roles
   - rolebindings
@@ -85,6 +85,8 @@ rules:
   resources:
   - '*'
   - workspaces
+  - plans
+  - inits
   verbs:
   - create
   - delete

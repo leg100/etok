@@ -33,7 +33,7 @@ func (r *CommandRole) Construct() error {
 	r.Rules = []rbacv1.PolicyRule{
 		{
 			APIGroups:     []string{"stok.goalspike.com"},
-			Resources:     []string{"commands"},
+			Resources:     []string{"*"},
 			ResourceNames: []string{r.commandName},
 			Verbs:         []string{"list", "get", "watch"},
 		},

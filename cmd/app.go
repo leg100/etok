@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/controller/command"
 	"github.com/leg100/stok/util"
 	"github.com/operator-framework/operator-sdk/pkg/status"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -75,7 +77,7 @@ type App struct {
 	Workspace string
 	Namespace string
 	Tarball   *bytes.Buffer
-	Command   []string
+	Command   command.Command
 	Args      []string
 	Resources []runtime.Object
 	// embed?
@@ -84,6 +86,45 @@ type App struct {
 	KubeClient     kubernetes.Interface
 	Clientset      v1alpha1clientset.StokV1alpha1Interface
 	PodWaitTimeout time.Duration
+	crd            crdinfo.CRDInfo
+}
+
+func runApp(command command.Command, crdname string, args []string) {
+	// initialise both controller-runtime client and client-go client
+	client, kubeClient, clientset, err := InitClient()
+	if err != nil {
+		log.WithError(err).Error("")
+		os.Exit(1)
+	}
+
+	podWaitDuration, err := time.ParseDuration(podWaitTime)
+	if err != nil {
+		log.WithError(err).Error("")
+		os.Exit(1)
+	}
+
+	crd, ok := crdinfo.Inventory[crdname]
+	if !ok {
+		log.Errorf("Could not find crd '%s'", crd)
+		os.Exit(1)
+	}
+
+	app := &App{
+		Namespace:      viper.GetString("namespace"),
+		Workspace:      viper.GetString("workspace"),
+		Command:        command,
+		Args:           args,
+		Client:         *client,
+		KubeClient:     kubeClient,
+		Clientset:      clientset,
+		PodWaitTimeout: podWaitDuration,
+		crd:            crd,
+	}
+	err = app.Run()
+	if err != nil {
+		log.WithError(err).Error("")
+		os.Exit(1)
+	}
 }
 
 func (app *App) AddToCleanup(resource runtime.Object) {
@@ -114,24 +155,24 @@ func (app *App) Run() error {
 		return err
 	}
 
-	command, err := app.CreateCommand()
+	err = app.CreateCommand()
 	if err != nil {
 		return err
 	}
 	// the pod name is the same as the command name
-	podName := command.Name
+	podName := app.Command.GetName()
 
-	_, err = app.CreateConfigMap(command, tarball)
+	_, err = app.CreateConfigMap(tarball)
 	if err != nil {
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"id": command.GetName(),
+		"id": app.Command.GetName(),
 	}).Info("Initialising")
 
 	log.Debug("Monitoring workspace queue...")
-	_, err = app.WaitForWorkspaceReady(command.Name, time.Duration(queueTimeout)*time.Second)
+	_, err = app.WaitForWorkspaceReady(app.Command.GetName(), time.Duration(queueTimeout)*time.Second)
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("timed out waiting for workspace to be available")
@@ -180,18 +221,18 @@ func (app *App) Run() error {
 	log.Debug("Telling the operator I'm ready to receive logs...")
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		log.Debug("Attempt to update command resource...")
-		key := types.NamespacedName{Name: command.Name, Namespace: app.Namespace}
-		if err = app.Client.Get(context.Background(), key, command); err != nil {
+		key := types.NamespacedName{Name: app.Command.GetName(), Namespace: app.Namespace}
+		if err = app.Client.Get(context.Background(), key, app.Command); err != nil {
 			done <- err
 		} else {
-			annotations := command.GetAnnotations()
+			annotations := app.Command.GetAnnotations()
 			if annotations == nil {
 				annotations = make(map[string]string)
 			}
 			annotations["stok.goalspike.com/client"] = "Ready"
-			command.SetAnnotations(annotations)
+			app.Command.SetAnnotations(annotations)
 
-			return app.Client.Update(context.Background(), command)
+			return app.Client.Update(context.Background(), app.Command)
 		}
 		return nil
 	})
@@ -228,6 +269,7 @@ func CreateTar() (*bytes.Buffer, error) {
 }
 
 // waitForPod watches the given pod until the exitCondition is true
+// TODO: replace with watching cmd
 func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, timeout time.Duration) (*corev1.Pod, error) {
 	ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), timeout)
 	defer cancel()
@@ -260,33 +302,23 @@ func (app *App) WaitForPod(name string, exitCondition watchtools.ConditionFunc, 
 }
 
 // waitForWorkspaceReady watches the command until the WorkspaceReady condition is true
-func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (*v1alpha1.Command, error) {
+func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (command.Command, error) {
 	ctx, cancel := watchtools.ContextWithOptionalTimeout(context.Background(), timeout)
 	defer cancel()
 
-	fieldSelector := fields.OneTermEqualSelector("metadata.name", name).String()
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = fieldSelector
-			return app.Clientset.Commands(app.Namespace).List(options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = fieldSelector
-			return app.Clientset.Commands(app.Namespace).Watch(options)
-		},
-	}
+	fieldSelector := fields.OneTermEqualSelector("metadata.name", name)
+	lw := cache.NewListWatchFromClient(app.Clientset.RESTClient(), app.crd.APIPlural, app.Namespace, fieldSelector)
 
 	intr := interrupt.New(nil, cancel)
-	var result *v1alpha1.Command
+	var result command.Command
 	err := intr.Run(func() error {
-		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Command{}, nil, func(ev watch.Event) (bool, error) {
+		ev, err := watchtools.UntilWithSync(ctx, lw, app.Command, nil, func(ev watch.Event) (bool, error) {
 			switch ev.Type {
 			case watch.Deleted:
-				return false, errors.NewNotFound(schema.GroupResource{Resource: "commands"}, "")
+				return false, errors.NewNotFound(schema.GroupResource{Resource: app.crd.APIPlural}, "")
 			}
-			switch t := ev.Object.(type) {
-			case *v1alpha1.Command:
-				condition := t.Status.Conditions.GetCondition(status.ConditionType("WorkspaceReady"))
+			if t, ok := ev.Object.(command.Command); ok {
+				condition := t.GetConditions().GetCondition(status.ConditionType("WorkspaceReady"))
 				if condition != nil {
 					status, err := strconv.ParseBool(string(condition.Status))
 					if err != nil {
@@ -295,19 +327,12 @@ func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (*v1al
 
 					log.Debugf("reason: %s", string(condition.Reason))
 					switch string(condition.Reason) {
-					case "WorkspaceNotFound":
+					case "WorkspaceNotFound", "SecretNotFound":
 						return false, fmt.Errorf(condition.Message)
-					case "SecretNotFound":
-						return false, fmt.Errorf(condition.Message)
-					case "Queued":
-						log.WithFields(log.Fields{
-							"msg": condition.Message,
-						}).Info("Status update")
-						return status, nil
 					default:
 						log.WithFields(log.Fields{
 							"msg": condition.Message,
-						}).Debug("Status update")
+						}).Info("Status update")
 						return status, nil
 					}
 				}
@@ -316,7 +341,7 @@ func (app *App) WaitForWorkspaceReady(name string, timeout time.Duration) (*v1al
 			return false, nil
 		})
 		if ev != nil {
-			result = ev.Object.(*v1alpha1.Command)
+			result = ev.Object.(command.Command)
 		}
 		return err
 	})

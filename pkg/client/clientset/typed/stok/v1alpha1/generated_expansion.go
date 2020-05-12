@@ -16,6 +16,16 @@
 
 package v1alpha1
 
-type CommandExpansion interface{}
+type ApplyExpansion interface{}
+
+type ForceUnlockExpansion interface{}
+
+type InitExpansion interface{}
+
+type PlanExpansion interface{}
+
+type ShellExpansion interface{}
+
+type VersionExpansion interface{}
 
 type WorkspaceExpansion interface{}

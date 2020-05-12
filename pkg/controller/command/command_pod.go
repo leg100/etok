@@ -6,19 +6,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/leg100/stok/constants"
+	"github.com/leg100/stok/crdinfo"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type CommandPod struct {
 	corev1.Pod
-	commandName        string
+	resource           string
 	configMap          string
 	serviceAccountName string
 	secretName         string
 	workspaceName      string
 	pvcName            string
-	command            []string
 	args               []string
+	crd                crdinfo.CRDInfo
 }
 
 func (cp *CommandPod) GetRuntimeObj() runtime.Object {
@@ -27,10 +28,11 @@ func (cp *CommandPod) GetRuntimeObj() runtime.Object {
 
 func (cp *CommandPod) Construct() error {
 	script, err := Script{
-		CommandName: cp.commandName,
-		Tarball:     constants.Tarball,
-		Command:     cp.command,
-		Args:        cp.args,
+		Resource:   cp.resource,
+		Tarball:    constants.Tarball,
+		Entrypoint: cp.crd.Entrypoint,
+		Kind:       cp.crd.APISingular,
+		Args:       cp.args,
 	}.generate()
 	if err != nil {
 		return err

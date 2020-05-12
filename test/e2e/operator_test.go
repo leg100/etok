@@ -48,11 +48,11 @@ func TestStok(t *testing.T) {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
 
-	commandList := &v1alpha1.CommandList{}
-	err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
-	if err != nil {
-		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
-	}
+	//commandList := &v1alpha1.CommandList{}
+	//err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
+	//if err != nil {
+	//	t.Fatalf("failed to add custom resource scheme to framework: %v", err)
+	//}
 
 	ctx := framework.NewTestCtx(t)
 	defer ctx.Cleanup()

@@ -5,8 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/operator-framework/operator-sdk/pkg/status"
-
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,54 +30,59 @@ var workspaceWithQueue = v1alpha1.Workspace{
 	},
 	Status: v1alpha1.WorkspaceStatus{
 		Queue: []string{
-			"command-1",
+			"pod-1",
 		},
 	},
 }
 
-var command1 = v1alpha1.Command{
+var pod1 = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-1",
+		Name:      "pod-1",
 		Namespace: "operator-test",
 		Labels: map[string]string{
+			"app":       "stok",
 			"workspace": "workspace-1",
 		},
 	},
+	Status: corev1.PodStatus{
+		Phase: corev1.PodRunning,
+	},
 }
 
-var command2 = v1alpha1.Command{
+var pod2 = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-2",
+		Name:      "pod-2",
 		Namespace: "operator-test",
 		Labels: map[string]string{
+			"app":       "stok",
 			"workspace": "workspace-1",
 		},
 	},
+	Status: corev1.PodStatus{
+		Phase: corev1.PodRunning,
+	},
 }
 
-var completedCommand = v1alpha1.Command{
+var completedPod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-3",
+		Name:      "pod-3",
 		Namespace: "operator-test",
 		Labels: map[string]string{
+			"app":       "stok",
 			"workspace": "workspace-1",
 		},
 	},
-	Status: v1alpha1.CommandStatus{
-		Conditions: status.Conditions{
-			{
-				Type:   status.ConditionType("Completed"),
-				Status: corev1.ConditionTrue,
-			},
-		},
+	Status: corev1.PodStatus{
+		Phase: corev1.PodSucceeded,
 	},
 }
 
-var commandWithNonExistantWorkspace = v1alpha1.Command{
+var podWithNonExistantWorkspace = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "command-with-nonexistant-workspace",
+		Name:      "pod-with-nonexistant-workspace",
 		Namespace: "operator-test",
 		Labels: map[string]string{
+			"app":       "stok",
 			"workspace": "workspace-does-not-exist",
 		},
 	},
@@ -97,7 +100,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "No commands",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&commandWithNonExistantWorkspace),
+				runtime.Object(&podWithNonExistantWorkspace),
 			},
 			wantQueue:   []string{},
 			wantRequeue: false,
@@ -106,40 +109,40 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Single command",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&command1),
+				runtime.Object(&pod1),
 			},
-			wantQueue:   []string{"command-1"},
+			wantQueue:   []string{"pod-1"},
 			wantRequeue: false,
 		},
 		{
 			name:      "Two commands",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&command1),
-				runtime.Object(&command2),
+				runtime.Object(&pod1),
+				runtime.Object(&pod2),
 			},
-			wantQueue:   []string{"command-1", "command-2"},
+			wantQueue:   []string{"pod-1", "pod-2"},
 			wantRequeue: false,
 		},
 		{
 			name:      "Existing queue",
 			workspace: &workspaceWithQueue,
 			objs: []runtime.Object{
-				runtime.Object(&command1),
-				runtime.Object(&command2),
+				runtime.Object(&pod1),
+				runtime.Object(&pod2),
 			},
-			wantQueue:   []string{"command-1", "command-2"},
+			wantQueue:   []string{"pod-1", "pod-2"},
 			wantRequeue: false,
 		},
 		{
 			name:      "Completed command",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&completedCommand),
-				runtime.Object(&command1),
-				runtime.Object(&command2),
+				runtime.Object(&completedPod),
+				runtime.Object(&pod1),
+				runtime.Object(&pod2),
 			},
-			wantQueue:   []string{"command-1", "command-2"},
+			wantQueue:   []string{"pod-1", "pod-2"},
 			wantRequeue: false,
 		},
 	}
