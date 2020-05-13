@@ -15,6 +15,9 @@ type CRDInfo struct {
 	Entrypoint  []string
 	ArgsHandler string
 	StateOnly   bool
+
+	//Override cobra command description
+	Description string
 }
 
 var Inventory = map[string]CRDInfo{
@@ -100,6 +103,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "shells",
 		Entrypoint:  []string{"sh"},
 		ArgsHandler: "ShellWrapDoubleDashArgsHandler",
+		Description: "Run interactive shell on workspace pod",
 	},
 	"show": {
 		Name:        "show",

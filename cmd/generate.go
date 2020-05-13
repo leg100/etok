@@ -28,7 +28,7 @@ import (
 
 var cmd{{ .Name | ToCamel }} = &cobra.Command{
 	Use:   "{{ .Name }} [global flags] -- [{{ .Name }} args]",
-	Short: "Run terraform {{ .Name }}",
+	Short: "{{ if ne .Description "" }}{{ .Description }}{{ else }}Run terraform {{ .Name }}{{ end }}",
 	{{ if not .StateOnly }}PreRun: validatePath,{{ end }}
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.{{ .Kind | ToCamel }}{}, "{{ .Name }}", {{ .ArgsHandler }}(os.Args))
