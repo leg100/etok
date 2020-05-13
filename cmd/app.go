@@ -250,7 +250,10 @@ func drawDivider() {
 	fmt.Println(strings.Repeat("-", width))
 }
 
+// Creates tarball from *.tf files found in 'path'
 // TODO: unit test
+// TODO: skip this (and the config file it's embedded in) if command
+// doesn't need *.tf files (e.g. terraform import)
 func CreateTar() (*bytes.Buffer, error) {
 	if err := os.Chdir(path); err != nil {
 		return nil, err
