@@ -14,6 +14,7 @@ type CRDInfo struct {
 	APIPlural   string
 	Entrypoint  []string
 	ArgsHandler string
+	StateOnly   bool
 }
 
 var Inventory = map[string]CRDInfo{
@@ -57,6 +58,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "imports",
 		Entrypoint:  []string{"terraform", "import"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"init": {
 		Name:        "init",
@@ -73,6 +75,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "outputs",
 		Entrypoint:  []string{"terraform", "output"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"plan": {
 		Name:        "plan",
@@ -105,6 +108,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "shows",
 		Entrypoint:  []string{"terraform", "show"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"state": {
 		Name:        "state",
@@ -113,6 +117,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "states",
 		Entrypoint:  []string{"terraform", "state"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"taint": {
 		Name:        "taint",
@@ -121,6 +126,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "taints",
 		Entrypoint:  []string{"terraform", "taint"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"untaint": {
 		Name:        "untaint",
@@ -129,6 +135,7 @@ var Inventory = map[string]CRDInfo{
 		APIPlural:   "untaints",
 		Entrypoint:  []string{"terraform", "untaint"},
 		ArgsHandler: "DoubleDashArgsHandler",
+		StateOnly:   true,
 	},
 	"validate": {
 		Name:        "validate",

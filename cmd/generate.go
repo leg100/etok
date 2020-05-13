@@ -27,14 +27,16 @@ import (
 )
 
 var cmd{{ .Name | ToCamel }} = &cobra.Command{
-	Use:   "{{ .Name }} [flags] -- [{{ .Name }} args]",
+	Use:   "{{ .Name }} [global flags] -- [{{ .Name }} args]",
 	Short: "Run terraform {{ .Name }}",
+	{{ if not .StateOnly }}PreRun: validatePath,{{ end }}
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.{{ .Kind | ToCamel }}{}, "{{ .Name }}", {{ .ArgsHandler }}(os.Args))
 	},
 }
 
 func init() {
+	cmd{{ .Name | ToCamel }}.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmd{{ .Name | ToCamel }})
 }
 `

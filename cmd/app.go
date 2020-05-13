@@ -252,15 +252,20 @@ func drawDivider() {
 
 // TODO: unit test
 func CreateTar() (*bytes.Buffer, error) {
-	// create tar
+	if err := os.Chdir(path); err != nil {
+		return nil, err
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
+
 	filenames, err := filepath.Glob("*.tf")
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("found *.tf files: %v", filenames)
+
 	tar, err := util.Create(wd, filenames)
 	if err != nil {
 		return nil, err
