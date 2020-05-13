@@ -10,7 +10,7 @@ Google:
 
 ```
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
-```.
+```
 
 AWS:
 
