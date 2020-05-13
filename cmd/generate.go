@@ -30,7 +30,7 @@ var cmd{{ .Name | ToCamel }} = &cobra.Command{
 	Use:   "{{ .Name }} [flags] -- [{{ .Name }} args]",
 	Short: "Run terraform {{ .Name }}",
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.{{ .Name | ToCamel }}{}, "{{ .Name }}", {{ .ArgsHandler }}(os.Args))
+		runApp(&v1alpha1.{{ .Kind | ToCamel }}{}, "{{ .Name }}", {{ .ArgsHandler }}(os.Args))
 	},
 }
 

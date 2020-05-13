@@ -25,11 +25,11 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// {{ .Name | ToCamel }} is the Schema for the {{ .APIPlural }} API
+// {{ .Kind | ToCamel }} is the Schema for the {{ .APIPlural }} API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path={{ .APIPlural }},scope=Namespaced
 // +genclient
-type {{ .Name | ToCamel }} struct {
+type {{ .Kind | ToCamel }} struct {
 	metav1.TypeMeta   <backtick>json:",inline"<backtick>
 	metav1.ObjectMeta <backtick>json:"metadata,omitempty"<backtick>
 
@@ -39,14 +39,14 @@ type {{ .Name | ToCamel }} struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// {{ .Name | ToCamel }}List contains a list of {{ .Name | ToCamel }}
-type {{ .Name | ToCamel }}List struct {
+// {{ .Kind | ToCamel }}List contains a list of {{ .Kind | ToCamel }}
+type {{ .Kind | ToCamel }}List struct {
 	metav1.TypeMeta <backtick>json:",inline"<backtick>
 	metav1.ListMeta <backtick>json:"metadata,omitempty"<backtick>
-	Items           []{{ .Name | ToCamel }} <backtick>json:"items"<backtick>
+	Items           []{{ .Kind | ToCamel }} <backtick>json:"items"<backtick>
 }
 
 func init() {
-	SchemeBuilder.Register(&{{ .Name | ToCamel }}{}, &{{ .Name | ToCamel }}List{})
+	SchemeBuilder.Register(&{{ .Kind | ToCamel }}{}, &{{ .Kind | ToCamel }}List{})
 }
 `
