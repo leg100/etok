@@ -39,7 +39,7 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 
 	crd, ok := crdinfo.Inventory[crdname]
 	if !ok {
-		return reconcile.Result{}, fmt.Errorf("Could not find crd '%s'", crd)
+		return reconcile.Result{}, fmt.Errorf("Could not find crd '%s'", crdname)
 	}
 
 	err := client.Get(context.TODO(), request.NamespacedName, command)
