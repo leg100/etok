@@ -49,10 +49,14 @@ Available Commands:
   validate     Run terraform validate
 
 Flags:
-      --config string      config file (default is $HOME/.stok.yaml)
-  -h, --help               help for stok
-      --namespace string   kubernetes namespace (default "default")
-      --workspace string   terraform workspace (default "default")
+      --config string        config file (default is $HOME/.stok.yaml)
+  -h, --help                 help for stok
+      --loglevel string      logging verbosity level (default "info")
+      --namespace string     kubernetes namespace (default "default")
+      --path string          path containing terraform config files (default ".")
+      --pod-timeout string   pod wait timeout (default "10s")
+      --queue-timeout int    queue timeout in seconds (default 60)
+      --workspace string     terraform workspace (default "default")
 
 Use "stok [command] --help" for more information about a command.
 ```

@@ -9,13 +9,15 @@ import (
 )
 
 var cmdGet = &cobra.Command{
-	Use:   "get [flags] -- [get args]",
+	Use:   "get [global flags] -- [get args]",
 	Short: "Run terraform get",
+	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.Get{}, "get", DoubleDashArgsHandler(os.Args))
 	},
 }
 
 func init() {
+	cmdGet.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmdGet)
 }

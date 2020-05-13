@@ -9,13 +9,15 @@ import (
 )
 
 var cmdTaint = &cobra.Command{
-	Use:   "taint [flags] -- [taint args]",
+	Use:   "taint [global flags] -- [taint args]",
 	Short: "Run terraform taint",
+	
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.Taint{}, "taint", DoubleDashArgsHandler(os.Args))
 	},
 }
 
 func init() {
+	cmdTaint.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmdTaint)
 }

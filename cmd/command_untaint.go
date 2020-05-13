@@ -9,13 +9,15 @@ import (
 )
 
 var cmdUntaint = &cobra.Command{
-	Use:   "untaint [flags] -- [untaint args]",
+	Use:   "untaint [global flags] -- [untaint args]",
 	Short: "Run terraform untaint",
+	
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.Untaint{}, "untaint", DoubleDashArgsHandler(os.Args))
 	},
 }
 
 func init() {
+	cmdUntaint.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmdUntaint)
 }

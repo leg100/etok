@@ -9,13 +9,15 @@ import (
 )
 
 var cmdRefresh = &cobra.Command{
-	Use:   "refresh [flags] -- [refresh args]",
+	Use:   "refresh [global flags] -- [refresh args]",
 	Short: "Run terraform refresh",
+	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.Refresh{}, "refresh", DoubleDashArgsHandler(os.Args))
 	},
 }
 
 func init() {
+	cmdRefresh.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmdRefresh)
 }

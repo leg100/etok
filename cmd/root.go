@@ -20,6 +20,7 @@ var (
 	namespace    string
 	loglevel     string
 	podWaitTime  string
+	path         string
 	queueTimeout int
 )
 
@@ -40,8 +41,11 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig, initLogging)
 
+	rootCmd.DisableFlagsInUseLine = true
+
 	rootCmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "logging verbosity level")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
+	rootCmd.PersistentFlags().StringVar(&path, "path", ".", "path containing terraform config files")
 	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
 	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "default", "terraform workspace")
 	rootCmd.PersistentFlags().StringVar(&podWaitTime, "pod-timeout", "10s", "pod wait timeout")
@@ -49,6 +53,7 @@ func init() {
 
 	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
 	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
+	viper.BindPFlag("path", rootCmd.PersistentFlags().Lookup("path"))
 }
 
 func initLogging() {
@@ -80,11 +85,9 @@ func initConfig() {
 	viper.ReadInConfig()
 }
 
-// extract args after '--' (if provided)
-func getArgsAfterDash(cmd *cobra.Command, args []string) []string {
-	if cmd.ArgsLenAtDash() > -1 {
-		return args[cmd.ArgsLenAtDash():]
-	} else {
-		return []string{}
+func validatePath(cmd *cobra.Command, args []string) {
+	if _, err := os.Stat(path); err != nil {
+		log.Errorf("error reading path: %v\n", err)
+		os.Exit(10)
 	}
 }

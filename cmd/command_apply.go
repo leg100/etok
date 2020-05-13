@@ -9,13 +9,15 @@ import (
 )
 
 var cmdApply = &cobra.Command{
-	Use:   "apply [flags] -- [apply args]",
+	Use:   "apply [global flags] -- [apply args]",
 	Short: "Run terraform apply",
+	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
 		runApp(&v1alpha1.Apply{}, "apply", DoubleDashArgsHandler(os.Args))
 	},
 }
 
 func init() {
+	cmdApply.DisableFlagsInUseLine = true
 	rootCmd.AddCommand(cmdApply)
 }

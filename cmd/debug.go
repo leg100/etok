@@ -16,6 +16,7 @@ var debugCmd = &cobra.Command{
 			"workspace":  viper.GetString("workspace"),
 			"namespace":  viper.GetString("namespace"),
 			"configFile": viper.ConfigFileUsed(),
+			"path":       viper.GetString("path"),
 		}).Info("Dump of configuration values")
 	},
 }
