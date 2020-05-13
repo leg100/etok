@@ -4,10 +4,19 @@
 
 ## install
 
-Create kubernetes secret containing google credentials. These are for the google provider (only the google provider is currently supported). You'll need to have downloaded a key for a service account with sufficient permissions.
+Create a kubernetes secret containing the credentials you need for terraform.
+
+Google:
 
 ```
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
+```.
+
+AWS:
+
+```
+kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"
+--from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
 ```
 
 Deploy the helm chart to your cluster:
