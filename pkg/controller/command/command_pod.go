@@ -54,6 +54,15 @@ func (cp *CommandPod) Construct() error {
 						Value: "/credentials/google-credentials.json",
 					},
 				},
+				EnvFrom: []corev1.EnvFromSource{
+					{
+						SecretRef: &corev1.SecretEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: cp.secretName,
+							},
+						},
+					},
+				},
 				TTY:                      true,
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []corev1.VolumeMount{
