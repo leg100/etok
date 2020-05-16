@@ -6,16 +6,7 @@ import (
 	"text/template"
 )
 
-type Script struct {
-	Resource   string
-	Tarball    string
-	Kind       string
-	Entrypoint []string
-	Args       []string
-}
-
-func (s Script) generate() (string, error) {
-	script := `#Extract workspace tarball
+const scriptTemplate = `#Extract workspace tarball
 tar zxf /tarball/{{ .Tarball }}
 
 # wait for both the client to be ready and
@@ -28,9 +19,18 @@ kubectl wait --for=condition=ClientReady --timeout=-1s {{ .Kind }}/{{ .Resource 
 
 `
 
+type Script struct {
+	Resource   string
+	Tarball    string
+	Kind       string
+	Entrypoint []string
+	Args       []string
+}
+
+func (s Script) generate() (string, error) {
 	tmpl := template.New("script")
 	tmpl = tmpl.Funcs(template.FuncMap{"join": strings.Join})
-	tmpl, err := tmpl.Parse(script)
+	tmpl, err := tmpl.Parse(scriptTemplate)
 	if err != nil {
 		return "", err
 	}

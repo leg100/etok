@@ -1,5 +1,6 @@
 package constants
 
 const (
-	Tarball = "tarball.tar.gz"
+	Tarball            = "tarball.tar.gz"
+	ServiceAccountName = "stok-workspace"
 )

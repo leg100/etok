@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/crdinfo"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/controller/dependents"
@@ -54,6 +55,7 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 		return reconcile.Result{}, err
 	}
 
+	//TODO: we really shouldn't be using a label for this but a spec field instead
 	workspaceName, ok := command.GetLabels()["workspace"]
 	if !ok {
 		return reconcile.Result{}, fmt.Errorf("could not find workspace label")
@@ -67,11 +69,11 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Get workspace's secret resource
+	// Get workspace's secret resource if one exists
 	secret := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: workspace.Spec.SecretName, Namespace: request.Namespace}, secret)
-	if err != nil {
-		_, err := updateCondition(client, command, "WorkspaceReady", corev1.ConditionFalse, "SecretNotFound", fmt.Sprintf("Secret '%s' not found", secret.GetName()))
+	// ignore not found errors because a secret is optional
+	if err != nil && !errors.IsNotFound(err) {
 		return reconcile.Result{}, err
 	}
 
@@ -82,28 +84,12 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 	}
 	dm := dependents.NewDependentMgr(command, client, scheme, request.Name, request.Namespace, labels)
 
-	// Create service account
-	if _, err := dm.GetOrCreate(&CommandServiceAccount{}); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Create role
-	if _, err := dm.GetOrCreate(&CommandRole{commandName: command.GetName()}); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	//// Create rolebinding
-	rb := CommandRoleBinding{serviceAccountName: command.GetName(), roleName: command.GetName()}
-	if _, err := dm.GetOrCreate(&rb); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Create pod
 	pod := &CommandPod{
 		resource:           command.GetName(),
 		workspaceName:      workspace.Name,
-		serviceAccountName: command.GetName(),
-		secretName:         secret.Name,
+		serviceAccountName: constants.ServiceAccountName,
+		secretName:         secret.GetName(),
 		configMap:          command.GetName(),
 		pvcName:            workspace.Name,
 		args:               command.GetArgs(),

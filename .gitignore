@@ -1,3 +1,6 @@
+# docker push artefacts
+push.out
+stok-operator.digest
 # hacks
 hack/
 # terraform

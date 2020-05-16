@@ -14,12 +14,10 @@ fullnameOverride: ""
 
 secretName: stok
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name:
+# Enable GKE Workload Identity:
+# https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+workloadIdentity: false
 
+# If Workload Identity is enabled, specify the GCP service account that
+# the workspace K8s service account will act as.
+gcpServiceAccount: ""

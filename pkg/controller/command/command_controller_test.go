@@ -17,22 +17,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var secret = corev1.Secret{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "secret-1",
-		Namespace: "operator-test",
-	},
-	StringData: map[string]string{
-		"google_application_credentials.json": "abc",
-	},
-}
-
 // conditions lifecyle:
 // 1. check for workspace, if not found set WorkspaceReady to false
-// 2. check for secret, if not found set WorkspaceReady to false
-// 3. check if client has set annotation, if set set ClientReady to true
-// 4. check pod, if completed successfully or failed, set Complete to true
-// 5. check workspace queue
+// 2. check if client has set annotation, if set set ClientReady to true
+// 3. check pod, if completed successfully or failed, set Complete to true
+// 4. check workspace queue
 //  a. if unenqueued, set WorkspaceReady to false, reason unenqueued
 //  b. if queue pos is >0, set WorkspaceReady to false, reason queued
 //  b. if queue pos is 0, set WorkspaceReady to true, reason active
@@ -47,6 +36,16 @@ var plan = v1alpha1.Plan{
 	},
 	CommandSpec: v1alpha1.CommandSpec{
 		Args: []string{"version"},
+	},
+}
+
+var secret = corev1.Secret{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "secret-1",
+		Namespace: "operator-test",
+	},
+	StringData: map[string]string{
+		"google_application_credentials.json": "abc",
 	},
 }
 
@@ -118,6 +117,7 @@ func TestReconcileCommand(t *testing.T) {
 		wantCompletedCondition      corev1.ConditionStatus
 		wantWorkspaceReadyCondition corev1.ConditionStatus
 		wantRequeue                 bool
+		wantGoogleCredentials       bool
 	}{
 		{
 			name: "Missing workspace",
@@ -130,14 +130,16 @@ func TestReconcileCommand(t *testing.T) {
 			wantRequeue:                 false,
 		},
 		{
-			name: "Missing secret",
+			name: "Create pod",
 			objs: []runtime.Object{
-				runtime.Object(&workspaceEmptyQueue),
+				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
 			},
-			wantWorkspaceReadyCondition: corev1.ConditionFalse,
+			wantWorkspaceReadyCondition: corev1.ConditionTrue,
 			wantClientReadyCondition:    corev1.ConditionUnknown,
 			wantCompletedCondition:      corev1.ConditionUnknown,
-			wantRequeue:                 false,
+			wantRequeue:                 true,
+			wantGoogleCredentials:       true,
 		},
 		{
 			name: "Client has set annotation",
@@ -265,7 +267,7 @@ func TestReconcileCommand(t *testing.T) {
 			}
 
 			if tt.wantRequeue {
-				if !res.Requeue {
+				if res.Requeue {
 					res, err = Reconcile(cl, s, req, &plan, "plan")
 					if err != nil {
 						t.Fatalf("requeued reconcile: (%v)", err)
@@ -284,6 +286,14 @@ func TestReconcileCommand(t *testing.T) {
 			err = cl.Get(context.TODO(), req.NamespacedName, &plan)
 			if err != nil {
 				t.Fatalf("get command: (%v)", err)
+			}
+
+			if tt.wantGoogleCredentials {
+				want := "/credentials/google-credentials.json"
+				got := pod.Spec.Containers[0].Env[0].Value
+				if want != got {
+					t.Errorf("want %s got %s", want, got)
+				}
 			}
 
 			assertCondition(t, &plan, "Completed", tt.wantCompletedCondition)
