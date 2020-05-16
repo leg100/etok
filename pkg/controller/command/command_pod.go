@@ -31,7 +31,7 @@ func (cp *CommandPod) Construct() error {
 		Resource:   cp.resource,
 		Tarball:    constants.Tarball,
 		Entrypoint: cp.crd.Entrypoint,
-		Kind:       cp.crd.APISingular,
+		Kind:       cp.crd.APIPlural,
 		Args:       cp.args,
 	}.generate()
 	if err != nil {
@@ -42,27 +42,12 @@ func (cp *CommandPod) Construct() error {
 		ServiceAccountName: cp.serviceAccountName,
 		Containers: []corev1.Container{
 			{
-				Name:            "terraform",
-				Image:           "leg100/terraform:latest",
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"sh"},
-				Args:            []string{"-o", "pipefail", "-ec", script},
-				Stdin:           true,
-				Env: []corev1.EnvVar{
-					{
-						Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-						Value: "/credentials/google-credentials.json",
-					},
-				},
-				EnvFrom: []corev1.EnvFromSource{
-					{
-						SecretRef: &corev1.SecretEnvSource{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: cp.secretName,
-							},
-						},
-					},
-				},
+				Name:                     "terraform",
+				Image:                    "leg100/terraform:latest",
+				ImagePullPolicy:          corev1.PullIfNotPresent,
+				Command:                  []string{"sh"},
+				Args:                     []string{"-o", "pipefail", "-ec", script},
+				Stdin:                    true,
 				TTY:                      true,
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []corev1.VolumeMount{
@@ -73,10 +58,6 @@ func (cp *CommandPod) Construct() error {
 					{
 						Name:      "cache",
 						MountPath: "/workspace/.terraform",
-					},
-					{
-						Name:      "credentials",
-						MountPath: "/credentials",
 					},
 					{
 						Name:      "tarball",
@@ -112,16 +93,50 @@ func (cp *CommandPod) Construct() error {
 					},
 				},
 			},
-			{
-				Name: "credentials",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: cp.secretName,
-					},
-				},
-			},
 		},
 		RestartPolicy: corev1.RestartPolicyNever,
 	}
+
+	if cp.secretName != "" {
+		cp.mountCredentials()
+	}
+
 	return nil
+}
+
+// Mount secret into a volume and set GOOGLE_APPLICATION_CREDENTIALS to
+// the hardcoded google credentials file (whether it exists or not). Also
+// expose the secret data via environment variables.
+func (cp *CommandPod) mountCredentials() {
+	cp.Spec.Volumes = append(cp.Spec.Volumes, corev1.Volume{
+		Name: "credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: cp.secretName,
+			},
+		},
+	})
+
+	cp.Spec.Containers[0].VolumeMounts = append(cp.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{
+			Name:      "credentials",
+			MountPath: "/credentials",
+		})
+
+	//TODO: we set this regardless of whether google credentials exist and that
+	//doesn't cause any obvious problems but really should only set it if they exist
+	cp.Spec.Containers[0].Env = append(cp.Spec.Containers[0].Env,
+		corev1.EnvVar{
+			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+			Value: "/credentials/google-credentials.json",
+		})
+
+	cp.Spec.Containers[0].EnvFrom = append(cp.Spec.Containers[0].EnvFrom,
+		corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: cp.secretName,
+				},
+			},
+		})
 }

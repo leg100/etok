@@ -3,9 +3,7 @@ package e2e
 import (
 	"bytes"
 	goctx "context"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -16,13 +14,6 @@ import (
 
 	"github.com/kr/pty"
 	"golang.org/x/sys/unix"
-
-	"github.com/leg100/stok/pkg/apis"
-	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -37,30 +28,14 @@ var (
 
 const (
 	buildPath     = "../../../build/_output/bin/stok"
-	workspaceName = "workspace-1"
+	workspaceName = "stok"
 	workspacePath = "./test/e2e/workspace"
+	backendBucket = "master-anagram-224816-tfstate"
 )
 
 func TestStok(t *testing.T) {
-	workspaceList := &v1alpha1.WorkspaceList{}
-	err := framework.AddToFrameworkScheme(apis.AddToScheme, workspaceList)
-	if err != nil {
-		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
-	}
-
-	//commandList := &v1alpha1.CommandList{}
-	//err = framework.AddToFrameworkScheme(apis.AddToScheme, commandList)
-	//if err != nil {
-	//	t.Fatalf("failed to add custom resource scheme to framework: %v", err)
-	//}
-
 	ctx := framework.NewTestCtx(t)
 	defer ctx.Cleanup()
-
-	err = ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
-	if err != nil {
-		t.Fatalf("failed to initialize cluster resources: %v", err)
-	}
 
 	// get namespace
 	namespace, err := ctx.GetOperatorNamespace()
@@ -69,14 +44,8 @@ func TestStok(t *testing.T) {
 	}
 	// get global framework variables
 	f := framework.Global
-	// wait for workspace-operator to be ready
+	// wait for stok-operator to be ready
 	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "stok-operator", 1, time.Second*5, time.Second*30)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// get credentials
-	creds, err := getGoogleCredentials()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,58 +55,10 @@ func TestStok(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bkt := sclient.Bucket("master-anagram-224816-tfstate")
+	bkt := sclient.Bucket(backendBucket)
 	// ignore errors
 	bkt.Object("default.tfstate").Delete(goctx.Background())
-
-	// create secret resource
-	var secret = corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "secret-1",
-			Namespace: namespace,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind: "Secret",
-		},
-		StringData: map[string]string{
-			"google-credentials.json": creds,
-		},
-	}
-	err = f.Client.Create(goctx.TODO(), &secret, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// create workspace custom resource
-	workspace := &v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workspaceName,
-			Namespace: namespace,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind: "Workspace",
-		},
-		Spec: v1alpha1.WorkspaceSpec{
-			SecretName: "secret-1",
-		},
-	}
-	err = f.Client.Create(goctx.TODO(), workspace, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 5, RetryInterval: time.Second * 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: workspaceName}, &corev1.PersistentVolumeClaim{})
-
-		if err != nil {
-			return false, err
-		}
-
-		return true, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	bkt.Object("default.tflock").Delete(goctx.Background())
 
 	tests := []struct {
 		name            string
@@ -333,21 +254,4 @@ func exitCodeTest(t *testing.T, err error, wantExitCode int) {
 			t.Errorf("expected exit code %d, got 0\n", wantExitCode)
 		}
 	}
-}
-
-func getGoogleCredentials() (string, error) {
-	path := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if path == "" {
-		return "", fmt.Errorf("Could not find env var GOOGLE_APPLICATION_CREDENTIALS")
-	}
-
-	bytes, err := ioutil.ReadFile(path)
-	if os.IsNotExist(err) {
-		return "", fmt.Errorf("Env var GOOGLE_APPLICATION_CREDENTIALS resolves to %s but %s does not exist\n", path, path)
-	}
-	if err != nil {
-		return "", err
-	}
-
-	return string(bytes), nil
 }

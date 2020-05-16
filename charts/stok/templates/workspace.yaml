@@ -4,3 +4,4 @@ metadata:
   name: {{ include "stok.fullname" . }}
 spec:
   secretName: {{ .Values.secretName }}
+  #serviceAccount: stok-workspace

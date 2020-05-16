@@ -66,8 +66,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "stok.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create -}}
+{{- define "stok.operator.serviceAccountName" -}}
+{{- if .Values.operator.serviceAccount.create -}}
     {{ default (include "stok.fullname" .) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}

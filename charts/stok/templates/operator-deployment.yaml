@@ -1,8 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "stok.fullname" . }}
+  name: {{ include "stok.fullname" . }}-operator
   labels:
+    app.kubernetes.io/component: operator
     {{- include "stok.labels" . | nindent 4 }}
 spec:
   replicas: 1
@@ -18,7 +19,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ include "stok.serviceAccountName" . }}
+      serviceAccountName: {{ include "stok.fullname" . }}-operator
       containers:
         - name: stok-operator
           image: "{{ .Values.image.repository }}{{ include "stok.tag" . }}"

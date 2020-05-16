@@ -43,6 +43,9 @@ import (
 	"k8s.io/kubectl/pkg/util/interrupt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	//needed for kube configs using the gcp helper (for gke)
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 func InitClient() (*client.Client, *kubernetes.Clientset, *v1alpha1clientset.StokV1alpha1Client, error) {

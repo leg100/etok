@@ -1,7 +1,22 @@
-LOGLEVEL ?= "info"
+LOGLEVEL ?= info
+NAMESPACE ?= operator-test
+IMAGE_TAG ?= latest
+RELEASE ?= stok
 ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
+GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
+KIND_CONTEXT ?= kind-kind
+GKE_CONTEXT ?= gke-stok
 
-.PHONY: local
+.PHONY: local kind-deploy kind-context deploy-crds undeploy \
+	create-namespace create-secret \
+	e2e e2e-run \
+	gcp-deploy \
+	delete-command-resources \
+	unit \
+	cli-unit cli-build cli-test \
+	operator-build operator-image operator-load-image operator-unit \
+	generate-all generate generate-deepcopy generate-crds generate-clientset
+
 local:
 	operator-sdk run --local \
 		--operator-flags "--zap-level $(LOGLEVEL)" \
@@ -9,86 +24,91 @@ local:
 		--verbose 2>&1 \
 		| jq -R -r '. as $$line | try fromjson catch $$line'
 
-.PHONY: clean
-clean:
-	@echo ....... Deleting Rules and Service Account .......
-	- kubectl delete -f deploy/role.yaml -n operator-test
-	- kubectl delete -f deploy/role_binding.yaml -n operator-test
-	- kubectl delete -f deploy/service_account.yaml -n operator-test
-	@echo ....... Deleting Operator .......
-	- kubectl delete -f deploy/operator.yaml -n operator-test
-	@echo ....... Deleting test CRs .......
-	- kubectl delete commands.stok.goalspike.com example-command -n operator-test
-	- kubcetl delete workspaces.stok.goalspike.com example-workspace -n operator-test
+kind-context:
+	kubectl config use-context kind-kind
 
-.PHONY: e2e
-e2e: cli-build operator-image kind-load-image e2e-cleanup
-	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f $(ALL_CRD) -n operator-test
-	operator-sdk test local --operator-namespace operator-test --verbose ./test/e2e/
-	# also test the cli too while we're at it
-	go test -v test/cli_config_test.go
+kind-deploy:
+	helm upgrade -i $(RELEASE) ./charts/stok/ \
+		--kube-context kind-kind \
+		--wait --timeout 1m \
+		--set image.tag=$(IMAGE_TAG) --namespace $(NAMESPACE)
 
-.PHONY: e2e
-e2e-cleanup:
-	# delete all stok custom resources
-	kubectl delete -n operator-test --all $$(kubectl api-resources | awk '$$2 == "stok.goalspike.com" { print $$1 }' | tr '\n' ',' | sed 's/.$$//') || true
-	kubectl delete -n operator-test secret secret-1 || true
-	kubectl delete -n operator-test serviceaccounts stok-operator || true
-	kubectl delete -n operator-test --all roles.rbac.authorization.k8s.io
-	kubectl delete -n operator-test --all rolebindings.rbac.authorization.k8s.io
+gcp-deploy:
+	helm upgrade -i $(RELEASE) ./charts/stok/ \
+		--kube-context gke-stok \
+		--wait --timeout 1m \
+		--set image.digest=$$(cat stok-operator.digest) \
+		--set image.pullPolicy=Always \
+		--set workloadIdentity=true \
+		--set gcpServiceAccount=$(GCP_SVC_ACC) \
+		--namespace default
 
-.PHONY: e2e-local
-e2e-local: cli-build
-	kubectl get ns operator-test || kubectl create ns operator-test
-	kubectl apply -f $(ALL_CRD) -n operator-test
-	operator-sdk test local --up-local --namespace operator-test --verbose ./test/e2e/
+deploy-crds:
+	kubectl --namespace $(NAMESPACE) apply -f $(ALL_CRD)
 
-.PHONY: kind-load-image
-kind-load-image:
-	kind load docker-image leg100/stok-operator:latest
+undeploy:
+	helm delete $(RELEASE) --namespace $(NAMESPACE)
 
-.PHONY: unit
+create-namespace:
+	kubectl get ns $(NAMESPACE) || kubectl create ns $(NAMESPACE)
+
+create-secret:
+	kubectl --namespace $(NAMESPACE) create secret generic stok \
+		--from-file=google-credentials.json=$(KEY)
+
+e2e: cli-build operator-image operator-load-image kind-context create-namespace kind-deploy e2e-run undeploy
+
+e2e-run:
+	operator-sdk test local --operator-namespace $(NAMESPACE) --verbose \
+		--no-setup ./test/e2e
+
+# delete all stok custom resources except workspace
+delete-command-resources:
+	kubectl delete -n $(NAMESPACE) --all $$(kubectl api-resources \
+		| awk '$$2 == "stok.goalspike.com" && $$1 != "workspaces" { print $$1 }' \
+		| tr '\n' ',' | sed 's/.$$//') || true
+
 unit: operator-unit cli-unit
 
-.PHONY: operator-unit
-operator-unit:
-	go test -v ./pkg/...
-
-.PHONY: cli-unit
 cli-unit:
 	go test -v ./cmd
 
-.PHONY: deploy-crds
-deploy-crds:
-	kubectl apply -f $(ALL_CRD)
+cli-build:
+	go build -o build/_output/bin/stok github.com/leg100/stok
 
-.PHONY: operator-build
+# TODO: change this test so we don't have to build a binary first
+cli-test: cli-build
+	go test -v test/cli_config_test.go
+
 operator-build:
 	go build -o stok-operator github.com/leg100/stok/cmd/manager
 
-.PHONY: operator-image
 operator-image: operator-build
 	docker build -f build/Dockerfile -t leg100/stok-operator:latest .
 
-.PHONY: generate-all
+operator-push: operator-image
+	docker push leg100/stok-operator:latest | tee push.out
+	grep -o 'sha256:[a-f0-9]*' push.out > stok-operator.digest
+
+operator-load-image:
+	kind load docker-image leg100/stok-operator:latest
+
+operator-unit:
+	go test -v ./pkg/...
+
 generate-all: generate generate-crds generate-deepcopy generate-clientset
 
-.PHONY: generate
 generate:
 	go generate ./...
 
-.PHONY: generate-deepcopy
 generate-deepcopy:
 	operator-sdk generate k8s
 
-.PHONY: generate-crds
 generate-crds:
 	operator-sdk generate crds
 	# combine crd yamls into one
 	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > $(ALL_CRD)
 
-.PHONY: generate-clientset
 generate-clientset:
 	mkdir -p hack
 	sed -e 's,^,// ,; s,  *$$,,' LICENSE > hack/boilerplate.go.txt
@@ -104,7 +124,3 @@ generate-clientset:
 	mkdir -p pkg/client
 	mv github.com/leg100/stok/pkg/client/clientset pkg/client/
 	rm -rf github.com
-
-.PHONY: cli-build
-cli-build:
-	go build -o build/_output/bin/stok github.com/leg100/stok
