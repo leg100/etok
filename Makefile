@@ -76,10 +76,6 @@ cli-unit:
 cli-build:
 	go build -o build/_output/bin/stok github.com/leg100/stok
 
-# TODO: change this test so we don't have to build a binary first
-cli-test: cli-build
-	go test -v test/cli_config_test.go
-
 operator-build:
 	go build -o stok-operator github.com/leg100/stok/cmd/manager
 
