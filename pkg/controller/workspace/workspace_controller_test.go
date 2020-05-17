@@ -23,6 +23,19 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
+var workspaceWithCacheSpec = v1alpha1.Workspace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "workspace-1",
+		Namespace: "operator-test",
+	},
+	Spec: v1alpha1.WorkspaceSpec{
+		Cache: v1alpha1.WorkspaceCacheSpec{
+			Size:         "2Gi",
+			StorageClass: "local-path",
+		},
+	},
+}
+
 var workspaceWithQueue = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
@@ -90,12 +103,22 @@ var podWithNonExistantWorkspace = corev1.Pod{
 
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
-		name        string
-		workspace   *v1alpha1.Workspace
-		objs        []runtime.Object
-		wantQueue   []string
-		wantRequeue bool
+		name                  string
+		workspace             *v1alpha1.Workspace
+		objs                  []runtime.Object
+		wantQueue             []string
+		wantRequeue           bool
+		wantCacheSize         string
+		wantCacheStorageClass string
 	}{
+		{
+			name:                  "Workspace with cache spec",
+			workspace:             &workspaceWithCacheSpec,
+			wantQueue:             []string{},
+			wantRequeue:           false,
+			wantCacheSize:         "2Gi",
+			wantCacheStorageClass: "local-path",
+		},
 		{
 			name:      "No commands",
 			workspace: &workspaceEmptyQueue,
@@ -173,6 +196,23 @@ func TestReconcileWorkspace(t *testing.T) {
 			err = r.client.Get(context.TODO(), req.NamespacedName, pvc)
 			if err != nil {
 				t.Errorf("get pvc: (%v)", err)
+			}
+
+			// If not set, want default of 1Gi
+			if tt.wantCacheSize == "" {
+				tt.wantCacheSize = "1Gi"
+			}
+			gotSize, _ := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+			if tt.wantCacheSize != gotSize.String() {
+				t.Errorf("want %s got %s", tt.wantCacheSize, gotSize.String())
+			}
+
+			// Don't test when StorageClass is unset
+			if tt.wantCacheStorageClass != "" {
+				gotStorageClass := pvc.Spec.StorageClassName
+				if tt.wantCacheStorageClass != *gotStorageClass {
+					t.Errorf("want %s got %s", tt.wantCacheStorageClass, *gotStorageClass)
+				}
 			}
 
 			err = r.client.Get(context.TODO(), req.NamespacedName, tt.workspace)

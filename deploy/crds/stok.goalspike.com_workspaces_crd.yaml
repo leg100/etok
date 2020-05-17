@@ -31,21 +31,35 @@ spec:
         spec:
           description: WorkspaceSpec defines the desired state of Workspace
           properties:
+            cache:
+              description: WorkspaceSpec defines the desired state of Workspace's
+                cache storage
+              properties:
+                size:
+                  type: string
+                storageClass:
+                  description: 'Important: Run "operator-sdk generate k8s" to regenerate
+                    code after modifying this file Add custom validation using kubebuilder
+                    tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+                  type: string
+              required:
+              - size
+              - storageClass
+              type: object
             secretName:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              description: 'Important: Run "operator-sdk generate k8s" to regenerate
+                code after modifying this file Add custom validation using kubebuilder
+                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               type: string
           required:
+          - cache
           - secretName
           type: object
         status:
           description: WorkspaceStatus defines the observed state of Workspace
           properties:
             queue:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "operator-sdk generate k8s" to regenerate
+              description: 'Important: Run "operator-sdk generate k8s" to regenerate
                 code after modifying this file Add custom validation using kubebuilder
                 tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               items:

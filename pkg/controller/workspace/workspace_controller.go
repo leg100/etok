@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/leg100/stok/constants"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -134,6 +135,8 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// Check if this PVC already exists
+	// NOTE: Once created, changes to the PVC, such as the size or the storage class name, are
+	// ignored. The PVC has to be manually deleted and then let the controller re-create it.
 	found := &corev1.PersistentVolumeClaim{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
@@ -198,7 +201,11 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	labels := map[string]string{
 		"app": cr.Name,
 	}
-	return &corev1.PersistentVolumeClaim{
+	size := constants.WorkspaceCacheSize
+	if cr.Spec.Cache.Size != "" {
+		size = cr.Spec.Cache.Size
+	}
+	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
@@ -210,11 +217,17 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("1Gi"),
+					corev1.ResourceStorage: resource.MustParse(size),
 				},
 			},
 		},
 	}
+
+	if cr.Spec.Cache.StorageClass != "" {
+		pvc.Spec.StorageClassName = &cr.Spec.Cache.StorageClass
+	}
+
+	return &pvc
 }
 
 func podListMatchingName(podList *corev1.PodList, name string) int {
