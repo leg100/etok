@@ -1,37 +1,23 @@
-package e2e
+package cmd
 
 import (
-	"bytes"
-	"io"
+	"io/ioutil"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/fatih/structs"
 	"github.com/kr/logfmt"
 )
 
-func TestStok(t *testing.T) {
+func TestDebug(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		env  []string
 		want map[string]string
 	}{
 		{
-			name: "stok with env vars",
-			args: []string{"debug"},
-			env:  []string{"STOK_NAMESPACE=foo", "STOK_WORKSPACE=foo"},
-			want: map[string]string{
-				"Workspace":  "foo",
-				"Namespace":  "foo",
-				"ConfigFile": "",
-			},
-		},
-		{
 			name: "stok with cli flags",
-			args: []string{"debug", "--namespace", "foo", "--workspace", "foo"},
-			env:  []string{},
+			args: []string{"stok", "debug", "--namespace", "foo", "--workspace", "foo"},
 			want: map[string]string{
 				"Workspace":  "foo",
 				"Namespace":  "foo",
@@ -40,8 +26,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name: "stok with config file",
-			args: []string{"debug", "--config", "fixtures/config.yaml"},
-			env:  []string{},
+			args: []string{"stok", "debug", "--config", "fixtures/config.yaml"},
 			want: map[string]string{
 				"Workspace":  "foo",
 				"Namespace":  "foo",
@@ -50,10 +35,9 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name: "stok with mix",
-			args: []string{"debug", "--config", "fixtures/config.yaml", "--namespace", "baz"},
-			env:  []string{"STOK_WORKSPACE=bar"},
+			args: []string{"stok", "debug", "--config", "fixtures/config.yaml", "--namespace", "baz"},
 			want: map[string]string{
-				"Workspace":  "bar",
+				"Workspace":  "foo",
 				"Namespace":  "baz",
 				"ConfigFile": "fixtures/config.yaml",
 			},
@@ -63,20 +47,22 @@ func TestStok(t *testing.T) {
 	// invoke stok with each test case
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("../build/_output/bin/stok", tt.args...)
-			cmd.Env = append([]string{"PATH=/usr/bin:/bin"}, tt.env...)
+			// set args
+			os.Args = tt.args
 
-			// print to stdout too to aid with debugging
-			buf := new(bytes.Buffer)
-			cmd.Stdout = io.MultiWriter(buf, os.Stdout)
+			old := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
 
-			if err := cmd.Run(); err != nil {
-				t.Fatal(err)
-			}
+			debugCmd.Execute()
+
+			w.Close()
+			os.Stdout = old
+			out, _ := ioutil.ReadAll(r)
 
 			// unmarshal into struct
 			lm := &LogMsg{}
-			if err := logfmt.Unmarshal(buf.Bytes(), lm); err != nil {
+			if err := logfmt.Unmarshal(out, lm); err != nil {
 				t.Fatal(err)
 			}
 			// convert into map
