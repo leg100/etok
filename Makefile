@@ -41,6 +41,7 @@ gcp-deploy:
 		--set image.pullPolicy=Always \
 		--set workloadIdentity=true \
 		--set gcpServiceAccount=$(GCP_SVC_ACC) \
+		--set cache.storageClass=local-path \
 		--namespace default
 
 deploy-crds:

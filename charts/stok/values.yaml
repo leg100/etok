@@ -21,3 +21,13 @@ workloadIdentity: false
 # If Workload Identity is enabled, specify the GCP service account that
 # the workspace K8s service account will act as.
 gcpServiceAccount: ""
+
+# Persistent Volume Claim settings for the workspace cache
+cache:
+  # Requested storage size of the PVC
+  size: "1Gi"
+  # Storage class name
+  # Note: setting this to the empty string "" has different behaviour to
+  # leaving it unset:
+  #   https://kubernetes.io/docs/concepts/storage/persistent-volumes/#class-1
+  #storageClassName: ""

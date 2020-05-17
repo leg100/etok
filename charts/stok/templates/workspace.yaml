@@ -4,4 +4,8 @@ metadata:
   name: {{ include "stok.fullname" . }}
 spec:
   secretName: {{ .Values.secretName }}
-  #serviceAccount: stok-workspace
+  cache:
+    size: {{ .Values.cache.size }}
+    {{ if .Values.cache.storageClass }}
+    storageClass: {{ .Values.cache.storageClass }}
+    {{ end }}
