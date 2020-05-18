@@ -13,7 +13,7 @@ import (
 )
 
 func (app *App) CreateCommand() error {
-	app.Command.SetGenerateName("stok-")
+	app.Command.SetGenerateName("stok" + "-" + app.crd.Name + "-")
 	app.Command.SetNamespace(app.Namespace)
 	app.Command.SetLabels(map[string]string{
 		"app":       "stok",
