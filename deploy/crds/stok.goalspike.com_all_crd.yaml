@@ -1623,6 +1623,11 @@ kind: CustomResourceDefinition
 metadata:
   name: workspaces.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.queue
+    description: The workspace command queue
+    name: Queue
+    type: string
   group: stok.goalspike.com
   names:
     kind: Workspace
