@@ -100,12 +100,6 @@ func runApp(command command.Command, crdname string, args []string) {
 		os.Exit(1)
 	}
 
-	podWaitDuration, err := time.ParseDuration(podWaitTime)
-	if err != nil {
-		log.WithError(err).Error("")
-		os.Exit(1)
-	}
-
 	crd, ok := crdinfo.Inventory[crdname]
 	if !ok {
 		log.Errorf("Could not find crd '%s'", crd)
@@ -113,15 +107,14 @@ func runApp(command command.Command, crdname string, args []string) {
 	}
 
 	app := &App{
-		Namespace:      viper.GetString("namespace"),
-		Workspace:      viper.GetString("workspace"),
-		Command:        command,
-		Args:           args,
-		Client:         *client,
-		KubeClient:     kubeClient,
-		Clientset:      clientset,
-		PodWaitTimeout: podWaitDuration,
-		crd:            crd,
+		Namespace:  viper.GetString("namespace"),
+		Workspace:  viper.GetString("workspace"),
+		Command:    command,
+		Args:       args,
+		Client:     *client,
+		KubeClient: kubeClient,
+		Clientset:  clientset,
+		crd:        crd,
 	}
 	err = app.Run()
 	if err != nil {
@@ -175,7 +168,7 @@ func (app *App) Run() error {
 	}).Info("Initialising")
 
 	log.Debug("Monitoring workspace queue...")
-	_, err = app.WaitForWorkspaceReady(app.Command.GetName(), time.Duration(queueTimeout)*time.Second)
+	_, err = app.WaitForWorkspaceReady(app.Command.GetName(), viper.GetDuration("timeout-queue"))
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("timed out waiting for workspace to be available")
@@ -185,7 +178,7 @@ func (app *App) Run() error {
 	}
 
 	log.Debug("Waiting for pod to be running and ready...")
-	pod, err := app.WaitForPod(podName, podRunningAndReady, app.PodWaitTimeout)
+	pod, err := app.WaitForPod(podName, podRunningAndReady, viper.GetDuration("timeout-pod"))
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			return fmt.Errorf("timed out waiting for pod %s to be running and ready", podName)
@@ -205,7 +198,7 @@ func (app *App) Run() error {
 	done := make(chan error)
 	go func() {
 		log.WithFields(log.Fields{
-			"pod": pod.GetName(),
+			"pod": podName,
 		}).Info("Attaching")
 
 		drawDivider()
@@ -258,7 +251,7 @@ func drawDivider() {
 // TODO: skip this (and the config file it's embedded in) if command
 // doesn't need *.tf files (e.g. terraform import)
 func CreateTar() (*bytes.Buffer, error) {
-	if err := os.Chdir(path); err != nil {
+	if err := os.Chdir(viper.GetString("path")); err != nil {
 		return nil, err
 	}
 	wd, err := os.Getwd()

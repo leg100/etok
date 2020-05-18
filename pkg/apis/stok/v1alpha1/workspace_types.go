@@ -10,16 +10,16 @@ import (
 type WorkspaceCacheSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	StorageClass string `json:"storageClass,omitname"`
-	Size         string `json:"size,omitname"`
+	StorageClass string `json:"storageClass,omitempty"`
+	Size         string `json:"size,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	SecretName string             `json:"secretName,omitname"`
-	Cache      WorkspaceCacheSpec `json:"cache,omitname"`
+	SecretName string             `json:"secretName,omitempty"`
+	Cache      WorkspaceCacheSpec `json:"cache,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace

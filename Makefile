@@ -47,8 +47,11 @@ gcp-deploy:
 deploy-crds:
 	kubectl --namespace $(NAMESPACE) apply -f $(ALL_CRD)
 
+delete-crds:
+	kubectl delete crds --all
+
 undeploy:
-	helm delete $(RELEASE) --namespace $(NAMESPACE)
+	helm delete $(RELEASE) --namespace $(NAMESPACE) || true
 
 create-namespace:
 	kubectl get ns $(NAMESPACE) || kubectl create ns $(NAMESPACE)
@@ -57,7 +60,8 @@ create-secret:
 	kubectl --namespace $(NAMESPACE) create secret generic stok \
 		--from-file=google-credentials.json=$(KEY)
 
-e2e: cli-build operator-image operator-load-image kind-context create-namespace kind-deploy e2e-run undeploy
+e2e: cli-build operator-image operator-load-image kind-context \
+	create-namespace delete-command-resources undeploy delete-crds kind-deploy e2e-run undeploy
 
 e2e-run:
 	operator-sdk test local --operator-namespace $(NAMESPACE) --verbose \
