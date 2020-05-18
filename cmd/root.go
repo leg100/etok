@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/logging/handlers/cli"
@@ -15,13 +16,8 @@ import (
 //go:generate go run generate.go
 
 var (
-	cfgFile      string
-	workspace    string
-	namespace    string
-	loglevel     string
-	podWaitTime  string
-	path         string
-	queueTimeout int
+	cfgFile  string
+	loglevel string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -45,15 +41,19 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "logging verbosity level")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
-	rootCmd.PersistentFlags().StringVar(&path, "path", ".", "path containing terraform config files")
-	rootCmd.PersistentFlags().StringVar(&namespace, "namespace", "default", "kubernetes namespace")
-	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "default", "terraform workspace")
-	rootCmd.PersistentFlags().StringVar(&podWaitTime, "pod-timeout", "10s", "pod wait timeout")
-	rootCmd.PersistentFlags().IntVar(&queueTimeout, "queue-timeout", 60, "queue timeout in seconds")
+	rootCmd.PersistentFlags().String("path", ".", "path containing terraform config files")
+	rootCmd.PersistentFlags().String("namespace", "default", "kubernetes namespace")
+	rootCmd.PersistentFlags().String("workspace", "default", "terraform workspace")
+	rootCmd.PersistentFlags().Duration("timeout-pod", time.Minute, "timeout for pod to be ready and running")
+	rootCmd.PersistentFlags().Duration("timeout-client", 10*time.Second, "timeout for client to signal readiness")
+	rootCmd.PersistentFlags().Duration("timeout-queue", time.Hour, "timeout waiting in workspace queue")
 
 	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
 	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
 	viper.BindPFlag("path", rootCmd.PersistentFlags().Lookup("path"))
+	viper.BindPFlag("timeout-pod", rootCmd.PersistentFlags().Lookup("timeout-pod"))
+	viper.BindPFlag("timeout-client", rootCmd.PersistentFlags().Lookup("timeout-client"))
+	viper.BindPFlag("timeout-queue", rootCmd.PersistentFlags().Lookup("timeout-queue"))
 }
 
 func initLogging() {
@@ -86,7 +86,7 @@ func initConfig() {
 }
 
 func validatePath(cmd *cobra.Command, args []string) {
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(viper.GetString("path")); err != nil {
 		log.Errorf("error reading path: %v\n", err)
 		os.Exit(10)
 	}

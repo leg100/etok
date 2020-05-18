@@ -11,8 +11,8 @@ tar zxf /tarball/{{ .Tarball }}
 
 # wait for both the client to be ready and
 # for the command to be front of the workspace queue
-kubectl wait --for=condition=WorkspaceReady --timeout=-1s {{ .Kind }}/{{ .Resource }} > /dev/null
-kubectl wait --for=condition=ClientReady --timeout=-1s {{ .Kind }}/{{ .Resource }} > /dev/null
+kubectl wait --for=condition=WorkspaceReady --timeout={{ .TimeoutQueue }} {{ .Kind }}/{{ .Resource }} > /dev/null
+kubectl wait --for=condition=ClientReady --timeout={{ .TimeoutClient }} {{ .Kind }}/{{ .Resource }} > /dev/null
 
 # run stok command
 {{ join .Entrypoint " " }}{{ if gt (len .Args) 0 }} {{ join .Args " " }}{{ end }}
@@ -20,11 +20,13 @@ kubectl wait --for=condition=ClientReady --timeout=-1s {{ .Kind }}/{{ .Resource 
 `
 
 type Script struct {
-	Resource   string
-	Tarball    string
-	Kind       string
-	Entrypoint []string
-	Args       []string
+	Resource      string
+	Tarball       string
+	Kind          string
+	TimeoutQueue  string
+	TimeoutClient string
+	Entrypoint    []string
+	Args          []string
 }
 
 func (s Script) generate() (string, error) {

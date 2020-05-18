@@ -6,6 +6,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/constants"
+	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubectl/pkg/scheme"
@@ -20,6 +21,8 @@ func (app *App) CreateCommand() error {
 		"workspace": app.Workspace,
 	})
 	app.Command.SetArgs(app.Args)
+	app.Command.SetTimeoutClient(viper.GetString("timeout-client"))
+	app.Command.SetTimeoutQueue(viper.GetString("timeout-queue"))
 
 	if err := app.Client.Create(context.Background(), app.Command); err != nil {
 		return err

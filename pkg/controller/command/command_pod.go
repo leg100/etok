@@ -12,13 +12,12 @@ import (
 
 type CommandPod struct {
 	corev1.Pod
-	resource           string
+	command            Command
 	configMap          string
 	serviceAccountName string
 	secretName         string
 	workspaceName      string
 	pvcName            string
-	args               []string
 	crd                crdinfo.CRDInfo
 }
 
@@ -28,11 +27,13 @@ func (cp *CommandPod) GetRuntimeObj() runtime.Object {
 
 func (cp *CommandPod) Construct() error {
 	script, err := Script{
-		Resource:   cp.resource,
-		Tarball:    constants.Tarball,
-		Entrypoint: cp.crd.Entrypoint,
-		Kind:       cp.crd.APIPlural,
-		Args:       cp.args,
+		Resource:      cp.command.GetName(),
+		Tarball:       constants.Tarball,
+		Entrypoint:    cp.crd.Entrypoint,
+		Kind:          cp.crd.APIPlural,
+		Args:          cp.command.GetArgs(),
+		TimeoutClient: cp.command.GetTimeoutClient(),
+		TimeoutQueue:  cp.command.GetTimeoutQueue(),
 	}.generate()
 	if err != nil {
 		return err

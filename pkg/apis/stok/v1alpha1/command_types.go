@@ -12,15 +12,33 @@ type CommandSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
-	Args []string `json:"args,omitempty"`
+	Args          []string `json:"args,omitempty"`
+	TimeoutClient string   `json:"timeoutclient"`
+	TimeoutQueue  string   `json:"timeoutqueue"`
 }
 
+// Get/Set Args functions
 func (c *CommandSpec) GetArgs() []string {
 	return c.Args
 }
-
 func (c *CommandSpec) SetArgs(args []string) {
 	c.Args = args
+}
+
+// Get/Set TimeoutClient functions
+func (c *CommandSpec) GetTimeoutClient() string {
+	return c.TimeoutClient
+}
+func (c *CommandSpec) SetTimeoutClient(timeout string) {
+	c.TimeoutClient = timeout
+}
+
+// Get/Set TimeoutQueue functions
+func (c *CommandSpec) GetTimeoutQueue() string {
+	return c.TimeoutQueue
+}
+func (c *CommandSpec) SetTimeoutQueue(timeout string) {
+	c.TimeoutQueue = timeout
 }
 
 // CommandStatus defines the observed state of Command

@@ -32,6 +32,10 @@ type Command interface {
 	SetConditions(status.Conditions)
 	GetArgs() []string
 	SetArgs([]string)
+	GetTimeoutClient() string
+	SetTimeoutClient(string)
+	GetTimeoutQueue() string
+	SetTimeoutQueue(string)
 }
 
 func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.Request, command Command, crdname string) (reconcile.Result, error) {
@@ -86,13 +90,12 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 
 	// Create pod
 	pod := &CommandPod{
-		resource:           command.GetName(),
+		command:            command,
 		workspaceName:      workspace.Name,
 		serviceAccountName: constants.ServiceAccountName,
 		secretName:         secret.GetName(),
 		configMap:          command.GetName(),
 		pvcName:            workspace.Name,
-		args:               command.GetArgs(),
 		crd:                crd,
 	}
 	created, err := dm.GetOrCreate(pod)
