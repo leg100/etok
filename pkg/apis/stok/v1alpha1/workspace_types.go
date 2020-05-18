@@ -34,6 +34,7 @@ type WorkspaceStatus struct {
 // Workspace is the Schema for the workspaces API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced
+// +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue",description="The workspace command queue"
 // +genclient
 type Workspace struct {
 	metav1.TypeMeta   `json:",inline"`
