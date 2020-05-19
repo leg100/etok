@@ -107,6 +107,11 @@ generate-deepcopy:
 
 generate-crds:
 	operator-sdk generate crds
+	# add app=stok label to each crd
+	@for f in ./deploy/crds/*_crd.yaml; do \
+		kubectl label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml; \
+		mv crd_with_label.yaml $$f; \
+	done
 	# combine crd yamls into one
 	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > $(ALL_CRD)
 
