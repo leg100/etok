@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "stok.fullname" . }}-operator
+  namespace: {{ .Release.Namespace | quote }}
   labels:
     app.kubernetes.io/component: operator
     {{- include "stok.labels" . | nindent 4 }}
@@ -28,9 +29,7 @@ spec:
           - stok-operator
           env:
             - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: ""
             - name: POD_NAME
               valueFrom:
                 fieldRef:
