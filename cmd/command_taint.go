@@ -11,9 +11,9 @@ import (
 var cmdTaint = &cobra.Command{
 	Use:   "taint [global flags] -- [taint args]",
 	Short: "Run terraform taint",
-	
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Taint{}, "taint", DoubleDashArgsHandler(os.Args))
+		app := newApp("taint", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Taint{})
 	},
 }
 

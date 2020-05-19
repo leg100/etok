@@ -19,27 +19,27 @@ func TestDebug(t *testing.T) {
 			name: "stok with cli flags",
 			args: []string{"stok", "debug", "--namespace", "foo", "--workspace", "foo"},
 			want: map[string]string{
-				"Workspace":  "foo",
-				"Namespace":  "foo",
-				"ConfigFile": "",
+				"Workspace": "foo",
+				"Namespace": "foo",
+				"Config":    "",
 			},
 		},
 		{
 			name: "stok with config file",
 			args: []string{"stok", "debug", "--config", "fixtures/config.yaml"},
 			want: map[string]string{
-				"Workspace":  "foo",
-				"Namespace":  "foo",
-				"ConfigFile": "fixtures/config.yaml",
+				"Workspace": "foo",
+				"Namespace": "foo",
+				"Config":    "fixtures/config.yaml",
 			},
 		},
 		{
 			name: "stok with mix",
 			args: []string{"stok", "debug", "--config", "fixtures/config.yaml", "--namespace", "baz"},
 			want: map[string]string{
-				"Workspace":  "foo",
-				"Namespace":  "baz",
-				"ConfigFile": "fixtures/config.yaml",
+				"Workspace": "foo",
+				"Namespace": "baz",
+				"Config":    "fixtures/config.yaml",
 			},
 		},
 	}
@@ -84,7 +84,7 @@ func TestDebug(t *testing.T) {
 }
 
 type LogMsg struct {
-	Workspace  string
-	Namespace  string
-	ConfigFile string
+	Workspace string
+	Namespace string
+	Config    string
 }

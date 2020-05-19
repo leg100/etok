@@ -11,9 +11,9 @@ import (
 var cmdRefresh = &cobra.Command{
 	Use:   "refresh [global flags] -- [refresh args]",
 	Short: "Run terraform refresh",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Refresh{}, "refresh", DoubleDashArgsHandler(os.Args))
+		app := newApp("refresh", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Refresh{})
 	},
 }
 

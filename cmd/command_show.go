@@ -11,9 +11,9 @@ import (
 var cmdShow = &cobra.Command{
 	Use:   "show [global flags] -- [show args]",
 	Short: "Run terraform show",
-	
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Show{}, "show", DoubleDashArgsHandler(os.Args))
+		app := newApp("show", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Show{})
 	},
 }
 

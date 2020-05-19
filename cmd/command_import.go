@@ -11,9 +11,9 @@ import (
 var cmdImport = &cobra.Command{
 	Use:   "import [global flags] -- [import args]",
 	Short: "Run terraform import",
-	
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Imp{}, "import", DoubleDashArgsHandler(os.Args))
+		app := newApp("import", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Imp{})
 	},
 }
 

@@ -11,9 +11,9 @@ import (
 var cmdShell = &cobra.Command{
 	Use:   "shell [global flags] -- [shell args]",
 	Short: "Run interactive shell on workspace pod",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Shell{}, "shell", ShellWrapDoubleDashArgsHandler(os.Args))
+		app := newApp("shell", ShellWrapDoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Shell{})
 	},
 }
 

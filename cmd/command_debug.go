@@ -11,13 +11,7 @@ var debugCmd = &cobra.Command{
 	Use:   "debug",
 	Short: "Show configuration options",
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: Consider using viper.AllSettings()
-		log.WithFields(log.Fields{
-			"workspace":  viper.GetString("workspace"),
-			"namespace":  viper.GetString("namespace"),
-			"configFile": viper.ConfigFileUsed(),
-			"path":       viper.GetString("path"),
-		}).Info("Dump of configuration values")
+		log.WithFields(log.Fields(viper.AllSettings())).Info("Config dump")
 	},
 }
 

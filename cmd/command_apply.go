@@ -11,9 +11,9 @@ import (
 var cmdApply = &cobra.Command{
 	Use:   "apply [global flags] -- [apply args]",
 	Short: "Run terraform apply",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Apply{}, "apply", DoubleDashArgsHandler(os.Args))
+		app := newApp("apply", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Apply{})
 	},
 }
 

@@ -16,14 +16,14 @@ import (
 //go:generate go run generate.go
 
 var (
-	cfgFile  string
-	loglevel string
+	cfgFile string
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "stok [command] -- [terraform args]",
-	Short: "Supercharge terraform on kubernetes",
+	Use:              "stok [command] -- [terraform args]",
+	PersistentPreRun: validate,
+	Short:            "Supercharge terraform on kubernetes",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -39,8 +39,8 @@ func init() {
 
 	rootCmd.DisableFlagsInUseLine = true
 
-	rootCmd.PersistentFlags().StringVar(&loglevel, "loglevel", "info", "logging verbosity level")
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.stok.yaml)")
+	rootCmd.PersistentFlags().String("config", "", "config file (default is $HOME/.stok.yaml)")
+	rootCmd.PersistentFlags().String("loglevel", "info", "logging verbosity level")
 	rootCmd.PersistentFlags().String("path", ".", "path containing terraform config files")
 	rootCmd.PersistentFlags().String("namespace", "default", "kubernetes namespace")
 	rootCmd.PersistentFlags().String("workspace", "default", "terraform workspace")
@@ -48,17 +48,12 @@ func init() {
 	rootCmd.PersistentFlags().Duration("timeout-client", 10*time.Second, "timeout for client to signal readiness")
 	rootCmd.PersistentFlags().Duration("timeout-queue", time.Hour, "timeout waiting in workspace queue")
 
-	viper.BindPFlag("namespace", rootCmd.PersistentFlags().Lookup("namespace"))
-	viper.BindPFlag("workspace", rootCmd.PersistentFlags().Lookup("workspace"))
-	viper.BindPFlag("path", rootCmd.PersistentFlags().Lookup("path"))
-	viper.BindPFlag("timeout-pod", rootCmd.PersistentFlags().Lookup("timeout-pod"))
-	viper.BindPFlag("timeout-client", rootCmd.PersistentFlags().Lookup("timeout-client"))
-	viper.BindPFlag("timeout-queue", rootCmd.PersistentFlags().Lookup("timeout-queue"))
+	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 func initLogging() {
 	log.SetHandler(prefix.New(cli.New(os.Stdout, os.Stderr), "[stok] "))
-	log.SetLevelFromString(loglevel)
+	log.SetLevelFromString(viper.GetString("loglevel"))
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -85,7 +80,7 @@ func initConfig() {
 	viper.ReadInConfig()
 }
 
-func validatePath(cmd *cobra.Command, args []string) {
+func validate(cmd *cobra.Command, args []string) {
 	if _, err := os.Stat(viper.GetString("path")); err != nil {
 		log.Errorf("error reading path: %v\n", err)
 		os.Exit(10)

@@ -6,46 +6,60 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/constants"
+	"github.com/leg100/stok/pkg/controller/command"
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func (app *App) CreateCommand() error {
-	app.Command.SetGenerateName("stok" + "-" + app.crd.Name + "-")
-	app.Command.SetNamespace(app.Namespace)
-	app.Command.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": app.Workspace,
-	})
-	app.Command.SetArgs(app.Args)
-	app.Command.SetTimeoutClient(viper.GetString("timeout-client"))
-	app.Command.SetTimeoutQueue(viper.GetString("timeout-queue"))
+func (app *app) addToCleanup(resource runtime.Object) {
+	app.resources = append(app.resources, resource)
+}
 
-	if err := app.Client.Create(context.Background(), app.Command); err != nil {
+func (app *app) cleanup() {
+	for _, r := range app.resources {
+		app.client.Delete(context.TODO(), r)
+	}
+}
+
+func (app *app) createCommand(command command.Command) error {
+	command.SetGenerateName("stok" + "-" + app.crd.Name + "-")
+	command.SetNamespace(viper.GetString("namespace"))
+	command.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": viper.GetString("workspace"),
+	})
+	command.SetArgs(app.args)
+	command.SetTimeoutClient(viper.GetString("timeout-client"))
+	command.SetTimeoutQueue(viper.GetString("timeout-queue"))
+
+	if err := app.client.Create(context.Background(), command); err != nil {
 		return err
 	}
 
+	app.addToCleanup(command)
+
 	log.WithFields(log.Fields{
 		"type":      "command",
-		"name":      app.Command.GetName(),
-		"namespace": app.Namespace,
+		"name":      command.GetName(),
+		"namespace": viper.GetString("namespace"),
 	}).Debug("resource created")
 
 	return nil
 }
 
-func (app *App) CreateConfigMap(tarball *bytes.Buffer) (*corev1.ConfigMap, error) {
+func (app *app) createConfigMap(command command.Command, tarball *bytes.Buffer) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      app.Command.GetName(),
-			Namespace: app.Namespace,
+			Name:      command.GetName(),
+			Namespace: viper.GetString("namespace"),
 			Labels: map[string]string{
 				"app":       "stok",
-				"workspace": app.Workspace,
-				"command":   app.Command.GetName(),
+				"workspace": viper.GetString("workspace"),
+				"command":   command.GetName(),
 			},
 		},
 		TypeMeta: metav1.TypeMeta{
@@ -58,11 +72,11 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (*corev1.ConfigMap, error
 	}
 
 	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(app.Command, configMap, scheme.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(command, configMap, scheme.Scheme); err != nil {
 		return nil, err
 	}
 
-	configMap, err := app.KubeClient.CoreV1().ConfigMaps(app.Namespace).Create(configMap)
+	configMap, err := app.kubeClient.CoreV1().ConfigMaps(viper.GetString("namespace")).Create(configMap)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +84,7 @@ func (app *App) CreateConfigMap(tarball *bytes.Buffer) (*corev1.ConfigMap, error
 	log.WithFields(log.Fields{
 		"type":      "configmap",
 		"name":      configMap.GetName(),
-		"namespace": app.Namespace,
+		"namespace": viper.GetString("namespace"),
 	}).Debug("resource created")
 
 	return configMap, nil

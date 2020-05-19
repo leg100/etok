@@ -11,9 +11,9 @@ import (
 var cmdDestroy = &cobra.Command{
 	Use:   "destroy [global flags] -- [destroy args]",
 	Short: "Run terraform destroy",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Destroy{}, "destroy", DoubleDashArgsHandler(os.Args))
+		app := newApp("destroy", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Destroy{})
 	},
 }
 

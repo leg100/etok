@@ -11,9 +11,9 @@ import (
 var cmdValidate = &cobra.Command{
 	Use:   "validate [global flags] -- [validate args]",
 	Short: "Run terraform validate",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Validate{}, "validate", DoubleDashArgsHandler(os.Args))
+		app := newApp("validate", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Validate{})
 	},
 }
 

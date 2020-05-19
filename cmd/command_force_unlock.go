@@ -11,9 +11,9 @@ import (
 var cmdForceUnlock = &cobra.Command{
 	Use:   "force-unlock [global flags] -- [force-unlock args]",
 	Short: "Run terraform force-unlock",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.ForceUnlock{}, "force-unlock", DoubleDashArgsHandler(os.Args))
+		app := newApp("force-unlock", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.ForceUnlock{})
 	},
 }
 

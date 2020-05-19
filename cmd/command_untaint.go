@@ -11,9 +11,9 @@ import (
 var cmdUntaint = &cobra.Command{
 	Use:   "untaint [global flags] -- [untaint args]",
 	Short: "Run terraform untaint",
-	
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Untaint{}, "untaint", DoubleDashArgsHandler(os.Args))
+		app := newApp("untaint", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Untaint{})
 	},
 }
 

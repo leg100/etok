@@ -11,9 +11,9 @@ import (
 var cmdInit = &cobra.Command{
 	Use:   "init [global flags] -- [init args]",
 	Short: "Run terraform init",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Init{}, "init", DoubleDashArgsHandler(os.Args))
+		app := newApp("init", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Init{})
 	},
 }
 

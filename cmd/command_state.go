@@ -11,9 +11,9 @@ import (
 var cmdState = &cobra.Command{
 	Use:   "state [global flags] -- [state args]",
 	Short: "Run terraform state",
-	
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.State{}, "state", DoubleDashArgsHandler(os.Args))
+		app := newApp("state", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.State{})
 	},
 }
 

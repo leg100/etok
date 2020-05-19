@@ -11,9 +11,9 @@ import (
 var cmdPlan = &cobra.Command{
 	Use:   "plan [global flags] -- [plan args]",
 	Short: "Run terraform plan",
-	PreRun: validatePath,
 	Run: func(cmd *cobra.Command, args []string) {
-		runApp(&v1alpha1.Plan{}, "plan", DoubleDashArgsHandler(os.Args))
+		app := newApp("plan", DoubleDashArgsHandler(os.Args))
+		app.run(&v1alpha1.Plan{})
 	},
 }
 

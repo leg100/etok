@@ -8,6 +8,7 @@ import (
 	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -64,30 +65,52 @@ var pod = v1.Pod{
 	},
 }
 
+var podFailed = v1.Pod{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "stok-xxxx",
+		Namespace: "default",
+	},
+	Spec: v1.PodSpec{
+		Containers: []v1.Container{
+			{
+				Name:  "terraform",
+				Image: "hashicorp/terraform:0.12.21",
+			},
+		},
+	},
+	Status: v1.PodStatus{
+		Phase: v1.PodFailed,
+		ContainerStatuses: []v1.ContainerStatus{
+			{
+				State: v1.ContainerState{
+					Terminated: &v1.ContainerStateTerminated{
+						Message: "Message regarding last termination of container",
+					},
+				},
+			},
+		},
+	},
+}
+
 func TestCreateCommand(t *testing.T) {
 	// adds core GVKs
 	s := scheme.Scheme
 	// adds CRD GVKs
 	apis.AddToScheme(s)
 
-	app := &App{
-		Namespace:  "default",
-		Workspace:  "default",
+	app := &app{
 		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
-		Args:       []string{},
-		Resources:  []runtime.Object{},
-		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
-		KubeClient: kubeFake.NewSimpleClientset(),
-		Command:    &v1alpha1.Plan{},
+		client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
+		kubeClient: kubeFake.NewSimpleClientset(),
 	}
 
-	// TODO: create real tarball
-	err := app.CreateCommand()
+	plan := &v1alpha1.Plan{}
+	err := app.createCommand(plan)
 	if err != nil {
 		t.Error(err)
 	}
 
-	gotArgs := app.Command.GetArgs()
+	gotArgs := plan.GetArgs()
 	if len(gotArgs) != 0 {
 		t.Fatalf("want one arg, got %d\n", len(gotArgs))
 	}
@@ -99,20 +122,19 @@ func TestCreateConfigMap(t *testing.T) {
 	// adds CRD GVKs
 	apis.AddToScheme(s)
 
-	app := &App{
-		Namespace:  "default",
-		Workspace:  "default",
+	app := &app{
 		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
-		Args:       []string{"plan"},
-		Resources:  []runtime.Object{},
-		Client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&plan)),
-		KubeClient: kubeFake.NewSimpleClientset(),
-		Command:    &plan,
+		args:       []string{"plan"},
+		client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&plan)),
+		kubeClient: kubeFake.NewSimpleClientset(),
 	}
+
+	plan := &v1alpha1.Plan{}
+	plan.SetName("stok-xxxx")
 
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")
-	configMap, err := app.CreateConfigMap(tarball)
+	configMap, err := app.createConfigMap(plan, tarball)
 	if err != nil {
 		t.Error(err)
 	}
@@ -133,49 +155,23 @@ func TestCreateConfigMap(t *testing.T) {
 }
 
 func TestWaitForPodReadyAndRunning(t *testing.T) {
-	app := &App{
-		Namespace:  "default",
-		Workspace:  "default",
-		KubeClient: kubeFake.NewSimpleClientset(),
+	viper.Set("namespace", "default")
+
+	app := &app{
+		kubeClient: kubeFake.NewSimpleClientset(&pod),
 	}
 
-	_, err := app.KubeClient.CoreV1().Pods(app.Namespace).Create(&pod)
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = app.WaitForPod("stok-xxxx", podRunningAndReady, 1*time.Second)
-	if err != nil {
+	if _, err := app.waitForPod("stok-xxxx", podRunningAndReady, time.Second); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestWaitForPodFailed(t *testing.T) {
-	app := &App{
-		Namespace:  "default",
-		Workspace:  "default",
-		KubeClient: kubeFake.NewSimpleClientset(),
+	app := &app{
+		kubeClient: kubeFake.NewSimpleClientset(&podFailed),
 	}
 
-	pod.Status = v1.PodStatus{
-		Phase: v1.PodFailed,
-		ContainerStatuses: []v1.ContainerStatus{
-			{
-				State: v1.ContainerState{
-					Terminated: &v1.ContainerStateTerminated{
-						Message: "Message regarding last termination of container",
-					},
-				},
-			},
-		},
-	}
-
-	_, err := app.KubeClient.CoreV1().Pods(app.Namespace).Create(&pod)
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = app.WaitForPod("stok-xxxx", podRunningAndReady, 1*time.Second)
+	_, err := app.waitForPod("stok-xxxx", podRunningAndReady, time.Second)
 	if err.Error() != "Message regarding last termination of container" {
 		t.Error(err)
 	}
