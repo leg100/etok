@@ -78,7 +78,6 @@ func (app *app) waitForWorkspaceReady(cmd command.Command, timeout time.Duration
 						return false, fmt.Errorf("Could not parse WorkspaceReady condition status")
 					}
 
-					log.Debugf("reason: %s", string(condition.Reason))
 					switch string(condition.Reason) {
 					case "WorkspaceNotFound", "SecretNotFound":
 						return false, fmt.Errorf(condition.Message)

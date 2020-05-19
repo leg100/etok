@@ -4,6 +4,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,10 @@ var cmdShell = &cobra.Command{
 	Short: "Run interactive shell on workspace pod",
 	Run: func(cmd *cobra.Command, args []string) {
 		app := newApp("shell", ShellWrapDoubleDashArgsHandler(os.Args))
-		app.run(&v1alpha1.Shell{})
+		if err := app.run(&v1alpha1.Shell{}); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
+		}
 	},
 }
 
