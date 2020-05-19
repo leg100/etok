@@ -28,7 +28,7 @@ kubectl wait --for=condition=WorkspaceReady --timeout=60m plan/stok-plan-xxx > /
 kubectl wait --for=condition=ClientReady --timeout=10s plan/stok-plan-xxx > /dev/null
 
 # run stok command
-terraform plan
+exec terraform plan
 
 `
 
@@ -60,7 +60,7 @@ kubectl wait --for=condition=WorkspaceReady --timeout=60m shell/stok-shell-xxx >
 kubectl wait --for=condition=ClientReady --timeout=10s shell/stok-shell-xxx > /dev/null
 
 # run stok command
-sh -c "foo bar"
+exec sh -c "foo bar"
 
 `
 
