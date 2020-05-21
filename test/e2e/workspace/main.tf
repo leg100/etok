@@ -1,6 +1,7 @@
 terraform {
   backend "gcs" {
-    bucket  = "master-anagram-224816-tfstate"
+    bucket = "automatize-tfstate"
+    prefix = "e2e"
   }
 }
 

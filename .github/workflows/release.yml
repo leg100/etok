@@ -45,8 +45,14 @@ jobs:
           service_account_email: ${{ secrets.GSA_EMAIL }}
           service_account_key: ${{ secrets.GSA_KEY }}
 
-      - name: Run chart-releaser
+      - name: Release stok-operator helm chart
         uses: ./.github/actions/gcs-helm-charts-action
         with:
-          path: charts/stok
+          path: charts/stok-operator
+          bucket: goalspike-charts
+
+      - name: Release stok-workspace helm chart
+        uses: ./.github/actions/gcs-helm-charts-action
+        with:
+          path: charts/stok-workspace
           bucket: goalspike-charts

@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: {{ include "stok.fullname" . }}-operator
+  name: {{ include "stok-operator.fullname" . }}
 rules:
 - apiGroups:
   - ""
@@ -62,7 +62,7 @@ rules:
 - apiGroups:
   - apps
   resourceNames:
-  - {{ include "stok.fullname" . }}
+  - {{ include "stok-operator.fullname" . }}
   resources:
   - deployments/finalizers
   verbs:

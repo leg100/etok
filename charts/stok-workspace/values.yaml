@@ -1,14 +1,13 @@
-# Default values for stok.
+# Default values for stok-workspace.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-image:
-  repository: leg100/stok-operator
-  pullPolicy: IfNotPresent
-  # Set explicit docker image tag rather than chart appVersion (default)
-  # tag:
+# Name to be given to the workspace
+workspace: default
 
-imagePullSecrets: []
+# Service Account name. If not set, it's set to one based on the helm release name
+# serviceAccountName:
+
 nameOverride: ""
 fullnameOverride: ""
 

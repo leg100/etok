@@ -1,7 +1,10 @@
 LOGLEVEL ?= info
-NAMESPACE ?= operator-test
 IMAGE_TAG ?= latest
-RELEASE ?= stok
+OPERATOR_NAMESPACE ?= default
+OPERATOR_RELEASE ?= stok-operator
+WORKSPACE_NAME ?= default
+WORKSPACE_NAMESPACE ?= default
+WORKSPACE_RELEASE ?= stok-workspace
 ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
 GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
 KIND_CONTEXT ?= kind-kind
@@ -11,7 +14,7 @@ GKE_CONTEXT ?= gke-stok
 	create-namespace create-secret \
 	e2e e2e-run \
 	gcp-deploy \
-	delete-command-resources \
+	clean delete-command-resources delete-crds \
 	unit \
 	cli-unit cli-build cli-test \
 	operator-build operator-image operator-load-image operator-unit \
@@ -25,16 +28,25 @@ local:
 		| jq -R -r '. as $$line | try fromjson catch $$line'
 
 kind-context:
-	kubectl config use-context kind-kind
+	kubectl config use-context $(KIND_CONTEXT)
 
-kind-deploy:
-	helm upgrade -i $(RELEASE) ./charts/stok/ \
-		--kube-context kind-kind \
+gke-context:
+	kubectl config use-context $(GKE_CONTEXT)
+
+deploy-operator:
+	helm upgrade -i $(OPERATOR_RELEASE) ./charts/stok-operator/ \
 		--wait --timeout 1m \
-		--set image.tag=$(IMAGE_TAG) --namespace $(NAMESPACE)
+		--set image.tag=$(IMAGE_TAG) \
+		--namespace $(OPERATOR_NAMESPACE)
+
+deploy-workspace:
+	helm upgrade -i $(WORKSPACE_RELEASE) ./charts/stok-workspace/ \
+		--wait --timeout 1m \
+		--set workspace=$(WORKSPACE_NAME) \
+		--namespace $(WORKSPACE_NAMESPACE)
 
 gcp-deploy:
-	helm upgrade -i $(RELEASE) ./charts/stok/ \
+	helm upgrade -i $(OPERATOR_RELEASE) ./charts/stok-operator/ \
 		--kube-context gke-stok \
 		--wait --timeout 1m \
 		--set image.digest=$$(cat stok-operator.digest) \
@@ -50,26 +62,31 @@ deploy-crds:
 delete-crds:
 	kubectl delete crds --all
 
-undeploy:
-	helm delete $(RELEASE) --namespace $(NAMESPACE) || true
+undeploy-operator:
+	helm delete $(OPERATOR_RELEASE) --namespace $(OPERATOR_NAMESPACE) || true
+
+undeploy-workspace:
+	helm delete $(WORKSPACE_RELEASE) --namespace $(WORKSPACE_NAMESPACE) || true
 
 create-namespace:
-	kubectl get ns $(NAMESPACE) || kubectl create ns $(NAMESPACE)
+	kubectl get ns $(NAMESPACE) > /dev/null 2>&1 || kubectl create ns $(NAMESPACE)
 
 create-secret:
 	kubectl --namespace $(NAMESPACE) create secret generic stok \
 		--from-file=google-credentials.json=$(KEY)
 
 e2e: cli-build operator-image operator-load-image kind-context \
-	create-namespace delete-command-resources undeploy delete-crds kind-deploy e2e-run undeploy
+	create-namespace deploy-operator deploy-workspace e2e-run e2e-clean
+
+e2e-clean: delete-command-resources undeploy-workspace undeploy-operator delete-crds
 
 e2e-run:
-	operator-sdk test local --operator-namespace $(NAMESPACE) --verbose \
+	operator-sdk test local --operator-namespace $(OPERATOR_NAMESPACE) --verbose \
 		--no-setup ./test/e2e
 
 # delete all stok custom resources except workspace
 delete-command-resources:
-	kubectl delete -n $(NAMESPACE) --all $$(kubectl api-resources \
+	kubectl delete -n $(WORKSPACE_NAMESPACE) --all $$(kubectl api-resources \
 		| awk '$$2 == "stok.goalspike.com" && $$1 != "workspaces" { print $$1 }' \
 		| tr '\n' ',' | sed 's/.$$//') || true
 

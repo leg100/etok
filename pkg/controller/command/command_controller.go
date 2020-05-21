@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/crdinfo"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/controller/dependents"
@@ -92,8 +91,8 @@ func Reconcile(client client.Client, scheme *runtime.Scheme, request reconcile.R
 	pod := &CommandPod{
 		command:            command,
 		workspaceName:      workspace.Name,
-		serviceAccountName: constants.ServiceAccountName,
-		secretName:         secret.GetName(),
+		serviceAccountName: workspace.Spec.ServiceAccountName,
+		secretName:         workspace.Spec.SecretName,
 		configMap:          command.GetName(),
 		pvcName:            workspace.Name,
 		crd:                crd,
