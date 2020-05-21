@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: plans.stok.goalspike.com
 spec:
   group: stok.goalspike.com

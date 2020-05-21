@@ -15,7 +15,7 @@ kubectl wait --for=condition=WorkspaceReady --timeout={{ .TimeoutQueue }} {{ .Ki
 kubectl wait --for=condition=ClientReady --timeout={{ .TimeoutClient }} {{ .Kind }}/{{ .Resource }} > /dev/null
 
 # run stok command
-{{ join .Entrypoint " " }}{{ if gt (len .Args) 0 }} {{ join .Args " " }}{{ end }}
+exec {{ join .Entrypoint " " }}{{ if gt (len .Args) 0 }} {{ join .Args " " }}{{ end }}
 
 `
 

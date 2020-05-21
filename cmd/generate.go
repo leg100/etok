@@ -22,6 +22,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +32,10 @@ var cmd{{ .Name | ToCamel }} = &cobra.Command{
 	Short: "{{ if ne .Description "" }}{{ .Description }}{{ else }}Run terraform {{ .Name }}{{ end }}",
 	Run: func(cmd *cobra.Command, args []string) {
 		app := newApp("{{ .Name }}", {{ .ArgsHandler }}(os.Args))
-		app.run(&v1alpha1.{{ .Kind | ToCamel }}{})
+		if err := app.run(&v1alpha1.{{ .Kind | ToCamel }}{}); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
+		}
 	},
 }
 

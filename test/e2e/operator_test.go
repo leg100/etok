@@ -28,9 +28,10 @@ var (
 
 const (
 	buildPath     = "../../../build/_output/bin/stok"
-	workspaceName = "stok"
+	workspaceName = "default"
 	workspacePath = "./test/e2e/workspace"
-	backendBucket = "master-anagram-224816-tfstate"
+	backendBucket = "automatize-tfstate"
+	backendPrefix = "e2e"
 )
 
 func TestStok(t *testing.T) {
@@ -57,8 +58,8 @@ func TestStok(t *testing.T) {
 	}
 	bkt := sclient.Bucket(backendBucket)
 	// ignore errors
-	bkt.Object("default.tfstate").Delete(goctx.Background())
-	bkt.Object("default.tflock").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default.tfstate").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default.tflock").Delete(goctx.Background())
 
 	tests := []struct {
 		name            string

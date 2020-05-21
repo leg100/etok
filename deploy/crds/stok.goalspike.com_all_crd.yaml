@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: applies.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -109,6 +111,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: destroys.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -217,6 +221,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: forceunlocks.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -325,6 +331,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: gets.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -433,6 +441,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: imports.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -541,6 +551,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: inits.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -649,6 +661,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: outputs.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -757,6 +771,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: plans.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -865,6 +881,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: refreshs.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -973,6 +991,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: shells.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1081,6 +1101,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: shows.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1189,6 +1211,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: states.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1297,6 +1321,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: taints.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1405,6 +1431,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: untaints.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1513,6 +1541,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: validates.stok.goalspike.com
 spec:
   group: stok.goalspike.com
@@ -1621,6 +1651,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
+  labels:
+    app: stok
   name: workspaces.stok.goalspike.com
 spec:
   additionalPrinterColumns:
@@ -1672,6 +1704,8 @@ spec:
               description: 'Important: Run "operator-sdk generate k8s" to regenerate
                 code after modifying this file Add custom validation using kubebuilder
                 tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              type: string
+            serviceAccountName:
               type: string
           type: object
         status:

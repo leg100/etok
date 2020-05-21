@@ -1,6 +1,6 @@
 apiVersion: v2
-name: stok
-description: A Helm chart for Kubernetes
+name: stok-operator
+description: A Helm chart for the operator component of Stok
 
 # A chart can be either an 'application' or a 'library' chart.
 #

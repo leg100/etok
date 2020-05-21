@@ -18,8 +18,9 @@ type WorkspaceCacheSpec struct {
 type WorkspaceSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	SecretName string             `json:"secretName,omitempty"`
-	Cache      WorkspaceCacheSpec `json:"cache,omitempty"`
+	SecretName         string             `json:"secretName,omitempty"`
+	ServiceAccountName string             `json:"serviceAccountName,omitempty"`
+	Cache              WorkspaceCacheSpec `json:"cache,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace

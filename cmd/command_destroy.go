@@ -4,6 +4,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,10 @@ var cmdDestroy = &cobra.Command{
 	Short: "Run terraform destroy",
 	Run: func(cmd *cobra.Command, args []string) {
 		app := newApp("destroy", DoubleDashArgsHandler(os.Args))
-		app.run(&v1alpha1.Destroy{})
+		if err := app.run(&v1alpha1.Destroy{}); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
+		}
 	},
 }
 

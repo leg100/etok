@@ -4,6 +4,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,10 @@ var cmdRefresh = &cobra.Command{
 	Short: "Run terraform refresh",
 	Run: func(cmd *cobra.Command, args []string) {
 		app := newApp("refresh", DoubleDashArgsHandler(os.Args))
-		app.run(&v1alpha1.Refresh{})
+		if err := app.run(&v1alpha1.Refresh{}); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
+		}
 	},
 }
 
