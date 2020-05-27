@@ -155,18 +155,56 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	serviceAccount := &corev1.ServiceAccount{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}, serviceAccount)
 	if err != nil && errors.IsNotFound(err) {
-		updated := instance.Status.Conditions.SetCondition(status.Condition{
-			Type:    status.ConditionType("ServiceAccountNotFound"),
-			Status:  corev1.ConditionTrue,
-			Reason:  status.ConditionReason("ServiceAccountNotFound"),
-			Message: fmt.Sprintf("Secret '%s' not found", instance.Spec.ServiceAccountName),
-		})
+		updated := instance.Status.Conditions.SetCondition(serviceAccountNotFoundCondition(instance.Spec.ServiceAccountName))
 		if updated {
-			r.client.Status().Update(context.TODO(), instance)
-			return reconcile.Result{}, nil
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	} else if err != nil {
 		return reconcile.Result{}, err
+	} else {
+		updated := instance.Status.Conditions.SetCondition(serviceAccountFoundCondition(instance.Spec.ServiceAccountName))
+		if updated {
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	}
+
+	// Check specified Secret exists
+	secret := &corev1.Secret{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.SecretName, Namespace: request.Namespace}, secret)
+	if err != nil && errors.IsNotFound(err) {
+		updated := instance.Status.Conditions.SetCondition(secretNotFoundCondition(instance.Spec.SecretName))
+		if updated {
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else if err != nil {
+		return reconcile.Result{}, err
+	} else {
+		updated := instance.Status.Conditions.SetCondition(secretFoundCondition(instance.Spec.SecretName))
+		if updated {
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	}
+
+	// Set Phase
+	var phase string
+	if allConditionsTrue(instance.Status.Conditions) {
+		phase = "Ready"
+	} else {
+		phase = "Unready"
+	}
+	if instance.Status.Phase != phase {
+		instance.Status.Phase = phase
+		if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// fetch list of (relevant) pods
@@ -269,9 +307,45 @@ func podListNames(podList *corev1.PodList) []string {
 
 func serviceAccountNotFoundCondition(serviceAccountName string) status.Condition {
 	return status.Condition{
-		Type:    status.ConditionType("ServiceAccountNotFound"),
-		Status:  corev1.ConditionTrue,
+		Type:    status.ConditionType("ServiceAccountReady"),
+		Status:  corev1.ConditionFalse,
 		Reason:  status.ConditionReason("ServiceAccountNotFound"),
 		Message: fmt.Sprintf("ServiceAccount '%s' not found", serviceAccountName),
 	}
+}
+
+func serviceAccountFoundCondition(serviceAccountName string) status.Condition {
+	return status.Condition{
+		Type:    status.ConditionType("ServiceAccountReady"),
+		Status:  corev1.ConditionTrue,
+		Reason:  status.ConditionReason("ServiceAccountFound"),
+		Message: fmt.Sprintf("ServiceAccount '%s' found", serviceAccountName),
+	}
+}
+
+func secretNotFoundCondition(secretName string) status.Condition {
+	return status.Condition{
+		Type:    status.ConditionType("SecretReady"),
+		Status:  corev1.ConditionFalse,
+		Reason:  status.ConditionReason("SecretNotFound"),
+		Message: fmt.Sprintf("Secret '%s' not found", secretName),
+	}
+}
+
+func secretFoundCondition(secretName string) status.Condition {
+	return status.Condition{
+		Type:    status.ConditionType("SecretReady"),
+		Status:  corev1.ConditionTrue,
+		Reason:  status.ConditionReason("SecretFound"),
+		Message: fmt.Sprintf("Secret '%s' found", secretName),
+	}
+}
+
+func allConditionsTrue(conditions status.Conditions) bool {
+	for _, cond := range conditions {
+		if cond.IsFalse() {
+			return false
+		}
+	}
+	return true
 }

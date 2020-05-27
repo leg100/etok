@@ -21,6 +21,10 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
+	Spec: v1alpha1.WorkspaceSpec{
+		SecretName:         "stok",
+		ServiceAccountName: "stok",
+	},
 }
 
 var workspaceWithCacheSpec = v1alpha1.Workspace{
@@ -33,6 +37,8 @@ var workspaceWithCacheSpec = v1alpha1.Workspace{
 			Size:         "2Gi",
 			StorageClass: "local-path",
 		},
+		SecretName:         "stok",
+		ServiceAccountName: "stok",
 	},
 }
 
@@ -41,9 +47,28 @@ var workspaceWithQueue = v1alpha1.Workspace{
 		Name:      "workspace-1",
 		Namespace: "operator-test",
 	},
-	Status: v1alpha1.WorkspaceStatus{
-		Queue: []string{
-			"pod-1",
+	Spec: v1alpha1.WorkspaceSpec{
+		SecretName:         "stok",
+		ServiceAccountName: "stok",
+	},
+}
+
+var secret = corev1.Secret{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "stok",
+		Namespace: "operator-test",
+		Labels: map[string]string{
+			"app": "stok",
+		},
+	},
+}
+
+var serviceAccount = corev1.ServiceAccount{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "stok",
+		Namespace: "operator-test",
+		Labels: map[string]string{
+			"app": "stok",
 		},
 	},
 }
@@ -103,39 +128,84 @@ var podWithNonExistantWorkspace = corev1.Pod{
 
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
-		name                  string
-		workspace             *v1alpha1.Workspace
-		objs                  []runtime.Object
-		wantQueue             []string
-		wantRequeue           bool
-		wantCacheSize         string
-		wantCacheStorageClass string
+		name                             string
+		workspace                        *v1alpha1.Workspace
+		objs                             []runtime.Object
+		status                           v1alpha1.WorkspaceStatus
+		wantQueue                        []string
+		wantRequeue                      bool
+		wantCacheSize                    string
+		wantCacheStorageClass            string
+		wantPhase                        string
+		wantSecretReadyCondition         corev1.ConditionStatus
+		wantServiceAccountReadyCondition corev1.ConditionStatus
 	}{
 		{
-			name:                  "Workspace with cache spec",
-			workspace:             &workspaceWithCacheSpec,
-			wantQueue:             []string{},
-			wantRequeue:           false,
-			wantCacheSize:         "2Gi",
-			wantCacheStorageClass: "local-path",
+			name:      "Missing secret",
+			workspace: &workspaceEmptyQueue,
+			objs: []runtime.Object{
+				runtime.Object(&serviceAccount),
+			},
+			wantQueue:                        []string{},
+			wantRequeue:                      false,
+			wantPhase:                        "Unready",
+			wantSecretReadyCondition:         corev1.ConditionFalse,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+		},
+		{
+			name:      "Missing service account",
+			workspace: &workspaceEmptyQueue,
+			objs: []runtime.Object{
+				runtime.Object(&secret),
+			},
+			wantQueue:                        []string{},
+			wantRequeue:                      false,
+			wantPhase:                        "Unready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionFalse,
+		},
+		{
+			name:      "Workspace with cache spec",
+			workspace: &workspaceWithCacheSpec,
+			objs: []runtime.Object{
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
+			},
+			wantQueue:                        []string{},
+			wantRequeue:                      false,
+			wantCacheSize:                    "2Gi",
+			wantCacheStorageClass:            "local-path",
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "No commands",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
 				runtime.Object(&podWithNonExistantWorkspace),
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
 			},
-			wantQueue:   []string{},
-			wantRequeue: false,
+			wantQueue:                        []string{},
+			wantRequeue:                      false,
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Single command",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
 				runtime.Object(&pod1),
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
 			},
-			wantQueue:   []string{"pod-1"},
-			wantRequeue: false,
+			wantQueue:                        []string{"pod-1"},
+			wantRequeue:                      false,
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Two commands",
@@ -143,9 +213,14 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&pod1),
 				runtime.Object(&pod2),
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
 			},
-			wantQueue:   []string{"pod-1", "pod-2"},
-			wantRequeue: false,
+			wantQueue:                        []string{"pod-1", "pod-2"},
+			wantRequeue:                      false,
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Existing queue",
@@ -153,9 +228,19 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&pod1),
 				runtime.Object(&pod2),
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
 			},
-			wantQueue:   []string{"pod-1", "pod-2"},
-			wantRequeue: false,
+			status: v1alpha1.WorkspaceStatus{
+				Queue: []string{
+					"pod-1",
+				},
+			},
+			wantQueue:                        []string{"pod-1", "pod-2"},
+			wantRequeue:                      false,
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Completed command",
@@ -164,15 +249,21 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&completedPod),
 				runtime.Object(&pod1),
 				runtime.Object(&pod2),
+				runtime.Object(&secret),
+				runtime.Object(&serviceAccount),
 			},
-			wantQueue:   []string{"pod-1", "pod-2"},
-			wantRequeue: false,
+			wantQueue:                        []string{"pod-1", "pod-2"},
+			wantRequeue:                      false,
+			wantPhase:                        "Ready",
+			wantSecretReadyCondition:         corev1.ConditionTrue,
+			wantServiceAccountReadyCondition: corev1.ConditionTrue,
 		},
 	}
 	s := scheme.Scheme
 	apis.AddToScheme(s)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.workspace.Status = tt.status
 			objs := append(tt.objs, runtime.Object(tt.workspace))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
@@ -218,6 +309,11 @@ func TestReconcileWorkspace(t *testing.T) {
 			err = r.client.Get(context.TODO(), req.NamespacedName, tt.workspace)
 			if err != nil {
 				t.Fatalf("get ws: (%v)", err)
+			}
+
+			gotPhase := tt.workspace.Status.Phase
+			if tt.wantPhase != gotPhase {
+				t.Errorf("want %s got %s", tt.wantPhase, gotPhase)
 			}
 
 			queue := tt.workspace.Status.Queue
