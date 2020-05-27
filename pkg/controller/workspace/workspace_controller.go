@@ -2,10 +2,12 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/leg100/stok/constants"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -149,6 +151,24 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
+	// Check specified ServiceAccount exists
+	serviceAccount := &corev1.ServiceAccount{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}, serviceAccount)
+	if err != nil && errors.IsNotFound(err) {
+		updated := instance.Status.Conditions.SetCondition(status.Condition{
+			Type:    status.ConditionType("ServiceAccountNotFound"),
+			Status:  corev1.ConditionTrue,
+			Reason:  status.ConditionReason("ServiceAccountNotFound"),
+			Message: fmt.Sprintf("Secret '%s' not found", instance.Spec.ServiceAccountName),
+		})
+		if updated {
+			r.client.Status().Update(context.TODO(), instance)
+			return reconcile.Result{}, nil
+		}
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// fetch list of (relevant) pods
 	podList := corev1.PodList{}
 	err = r.client.List(context.TODO(), &podList, client.InNamespace(request.Namespace), client.MatchingLabels{
@@ -245,4 +265,13 @@ func podListNames(podList *corev1.PodList) []string {
 		names = append(names, pod.GetName())
 	}
 	return names
+}
+
+func serviceAccountNotFoundCondition(serviceAccountName string) status.Condition {
+	return status.Condition{
+		Type:    status.ConditionType("ServiceAccountNotFound"),
+		Status:  corev1.ConditionTrue,
+		Reason:  status.ConditionReason("ServiceAccountNotFound"),
+		Message: fmt.Sprintf("ServiceAccount '%s' not found", serviceAccountName),
+	}
 }
