@@ -152,58 +152,43 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// Check specified ServiceAccount exists
-	serviceAccount := &corev1.ServiceAccount{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}, serviceAccount)
+	var serviceAccountFound bool
+	serviceAccountNamespacedName := types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}
+	err = r.client.Get(context.TODO(), serviceAccountNamespacedName, &corev1.ServiceAccount{})
 	if err != nil && errors.IsNotFound(err) {
-		updated := instance.Status.Conditions.SetCondition(serviceAccountNotFoundCondition(instance.Spec.ServiceAccountName))
-		if updated {
-			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+		if updated := instance.Status.Conditions.SetCondition(missingServiceAccountCondition); updated {
+			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	} else if err != nil {
 		return reconcile.Result{}, err
 	} else {
-		updated := instance.Status.Conditions.SetCondition(serviceAccountFoundCondition(instance.Spec.ServiceAccountName))
-		if updated {
-			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
+		serviceAccountFound = true
 	}
 
 	// Check specified Secret exists
-	secret := &corev1.Secret{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.SecretName, Namespace: request.Namespace}, secret)
+	var secretFound bool
+	secretNamespacedName := types.NamespacedName{Name: instance.Spec.SecretName, Namespace: request.Namespace}
+	err = r.client.Get(context.TODO(), secretNamespacedName, &corev1.Secret{})
 	if err != nil && errors.IsNotFound(err) {
-		updated := instance.Status.Conditions.SetCondition(secretNotFoundCondition(instance.Spec.SecretName))
-		if updated {
-			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+		if updated := instance.Status.Conditions.SetCondition(missingSecretCondition); updated {
+			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	} else if err != nil {
 		return reconcile.Result{}, err
 	} else {
-		updated := instance.Status.Conditions.SetCondition(secretFoundCondition(instance.Spec.SecretName))
-		if updated {
-			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
+		secretFound = true
 	}
 
-	// Set Phase
-	var phase string
-	if allConditionsTrue(instance.Status.Conditions) {
-		phase = "Ready"
-	} else {
-		phase = "Unready"
-	}
-	if instance.Status.Phase != phase {
-		instance.Status.Phase = phase
-		if err = r.client.Status().Update(context.TODO(), instance); err != nil {
-			return reconcile.Result{}, err
+	// Set Healthy Condition if both Secret and ServiceAccount found
+	if serviceAccountFound && secretFound {
+		if updated := instance.Status.Conditions.SetCondition(allResourcesFoundCondition); updated {
+			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
@@ -243,7 +228,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 
 	// update status if queue has changed
 	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
-		reqLogger.Info("Queue updated", "Old", instance.Status.Queue, "New", newQueue)
+		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", newQueue))
 		instance.Status.Queue = newQueue
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
@@ -305,47 +290,29 @@ func podListNames(podList *corev1.PodList) []string {
 	return names
 }
 
-func serviceAccountNotFoundCondition(serviceAccountName string) status.Condition {
-	return status.Condition{
-		Type:    status.ConditionType("ServiceAccountReady"),
-		Status:  corev1.ConditionFalse,
-		Reason:  status.ConditionReason("ServiceAccountNotFound"),
-		Message: fmt.Sprintf("ServiceAccount '%s' not found", serviceAccountName),
-	}
-}
+const (
+	WorkspaceHealthy status.ConditionType = "Healthy"
+)
 
-func serviceAccountFoundCondition(serviceAccountName string) status.Condition {
-	return status.Condition{
-		Type:    status.ConditionType("ServiceAccountReady"),
+var (
+	allResourcesFoundCondition = status.Condition{
+		Type:    WorkspaceHealthy,
 		Status:  corev1.ConditionTrue,
-		Reason:  status.ConditionReason("ServiceAccountFound"),
-		Message: fmt.Sprintf("ServiceAccount '%s' found", serviceAccountName),
+		Reason:  status.ConditionReason("AllResourcesFound"),
+		Message: "All prerequisite resources have been found",
 	}
-}
 
-func secretNotFoundCondition(secretName string) status.Condition {
-	return status.Condition{
-		Type:    status.ConditionType("SecretReady"),
+	missingSecretCondition = status.Condition{
+		Type:    WorkspaceHealthy,
 		Status:  corev1.ConditionFalse,
-		Reason:  status.ConditionReason("SecretNotFound"),
-		Message: fmt.Sprintf("Secret '%s' not found", secretName),
+		Reason:  status.ConditionReason("MissingResource"),
+		Message: "Secret resource not found",
 	}
-}
 
-func secretFoundCondition(secretName string) status.Condition {
-	return status.Condition{
-		Type:    status.ConditionType("SecretReady"),
-		Status:  corev1.ConditionTrue,
-		Reason:  status.ConditionReason("SecretFound"),
-		Message: fmt.Sprintf("Secret '%s' found", secretName),
+	missingServiceAccountCondition = status.Condition{
+		Type:    WorkspaceHealthy,
+		Status:  corev1.ConditionFalse,
+		Reason:  status.ConditionReason("MissingResource"),
+		Message: "ServiceAccount resource not found",
 	}
-}
-
-func allConditionsTrue(conditions status.Conditions) bool {
-	for _, cond := range conditions {
-		if cond.IsFalse() {
-			return false
-		}
-	}
-	return true
-}
+)

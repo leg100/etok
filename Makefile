@@ -57,7 +57,7 @@ gcp-deploy:
 		--namespace default
 
 deploy-crds:
-	kubectl --namespace $(NAMESPACE) apply -f $(ALL_CRD)
+	kubectl create -f $(ALL_CRD)
 
 delete-crds:
 	kubectl delete crds --all

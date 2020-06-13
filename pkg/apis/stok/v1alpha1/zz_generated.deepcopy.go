@@ -1084,6 +1084,13 @@ func (in *WorkspaceStatus) DeepCopyInto(out *WorkspaceStatus) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make(status.Conditions, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 

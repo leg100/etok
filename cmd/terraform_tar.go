@@ -7,15 +7,14 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/util"
-	"github.com/spf13/viper"
 )
 
 // Creates tarball from *.tf files found in 'path'
 // TODO: unit test
 // TODO: skip this (and the config file it's embedded in) if command
 // doesn't need *.tf files (e.g. terraform import)
-func createTar() (*bytes.Buffer, error) {
-	if err := os.Chdir(viper.GetString("path")); err != nil {
+func (t *terraformCmd) createTar() (*bytes.Buffer, error) {
+	if err := os.Chdir(t.Path); err != nil {
 		return nil, err
 	}
 	wd, err := os.Getwd()

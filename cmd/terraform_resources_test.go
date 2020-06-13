@@ -8,13 +8,13 @@ import (
 	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	dfake "k8s.io/client-go/dynamic/fake"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubectl/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var workspaceEmptyQueue = v1alpha1.Workspace{
@@ -93,26 +93,41 @@ var podFailed = v1.Pod{
 }
 
 func TestCreateCommand(t *testing.T) {
+	tc := &terraformCmd{
+		Command:       "plan",
+		Workspace:     newNamespacedWorkspace("default", "default"),
+		Args:          []string{},
+		TimeoutClient: time.Minute,
+		TimeoutQueue:  time.Minute,
+	}
+
+	crd, ok := crdinfo.Inventory[tc.Command]
+	if !ok {
+		t.Fatalf("Could not find Custom Resource Definition '%s'", tc.Command)
+	}
+
 	// adds core GVKs
 	s := scheme.Scheme
 	// adds CRD GVKs
 	apis.AddToScheme(s)
 
-	app := &app{
-		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
-		client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue)),
-		kubeClient: kubeFake.NewSimpleClientset(),
-	}
+	client := dfake.NewSimpleDynamicClient(s, runtime.Object(&workspaceEmptyQueue))
 
-	plan := &v1alpha1.Plan{}
-	err := app.createCommand(plan)
+	plan, err := tc.createCommand(client, crd)
 	if err != nil {
 		t.Error(err)
 	}
 
-	gotArgs := plan.GetArgs()
-	if len(gotArgs) != 0 {
-		t.Fatalf("want one arg, got %d\n", len(gotArgs))
+	args, ok, err := unstructured.NestedStringSlice(plan.Object, "spec", "args")
+	if !ok {
+		t.Fatalf("Could not find spec.args in Plan resource")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(args) != 0 {
+		t.Fatalf("want one arg, got %d\n", len(args))
 	}
 }
 
@@ -122,19 +137,16 @@ func TestCreateConfigMap(t *testing.T) {
 	// adds CRD GVKs
 	apis.AddToScheme(s)
 
-	app := &app{
-		crd:        crdinfo.CRDInfo{Name: "plan", APISingular: "plan", APIPlural: "plans", Entrypoint: []string{"terraform", "plan"}},
-		args:       []string{"plan"},
-		client:     fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue), runtime.Object(&plan)),
-		kubeClient: kubeFake.NewSimpleClientset(),
+	tc := &terraformCmd{
+		Command:   "plan",
+		Workspace: newNamespacedWorkspace("default", "default"),
 	}
 
-	plan := &v1alpha1.Plan{}
-	plan.SetName("stok-xxxx")
+	client := kubeFake.NewSimpleClientset()
 
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")
-	configMap, err := app.createConfigMap(plan, tarball)
+	configMap, err := tc.createConfigMap(client, &plan, tarball)
 	if err != nil {
 		t.Error(err)
 	}
@@ -151,28 +163,5 @@ func TestCreateConfigMap(t *testing.T) {
 	}
 	if ownerRefs[0].Name != "stok-xxxx" {
 		t.Errorf("want ownerref controller name stok-xxxx got %s\n", ownerRefs[0].Name)
-	}
-}
-
-func TestWaitForPodReadyAndRunning(t *testing.T) {
-	viper.Set("namespace", "default")
-
-	app := &app{
-		kubeClient: kubeFake.NewSimpleClientset(&pod),
-	}
-
-	if _, err := app.waitForPod("stok-xxxx", podRunningAndReady, time.Second); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestWaitForPodFailed(t *testing.T) {
-	app := &app{
-		kubeClient: kubeFake.NewSimpleClientset(&podFailed),
-	}
-
-	_, err := app.waitForPod("stok-xxxx", podRunningAndReady, time.Second)
-	if err.Error() != "Message regarding last termination of container" {
-		t.Error(err)
 	}
 }

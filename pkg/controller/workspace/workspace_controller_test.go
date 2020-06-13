@@ -7,6 +7,7 @@ import (
 
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -128,17 +129,15 @@ var podWithNonExistantWorkspace = corev1.Pod{
 
 func TestReconcileWorkspace(t *testing.T) {
 	tests := []struct {
-		name                             string
-		workspace                        *v1alpha1.Workspace
-		objs                             []runtime.Object
-		status                           v1alpha1.WorkspaceStatus
-		wantQueue                        []string
-		wantRequeue                      bool
-		wantCacheSize                    string
-		wantCacheStorageClass            string
-		wantPhase                        string
-		wantSecretReadyCondition         corev1.ConditionStatus
-		wantServiceAccountReadyCondition corev1.ConditionStatus
+		name                  string
+		workspace             *v1alpha1.Workspace
+		objs                  []runtime.Object
+		status                v1alpha1.WorkspaceStatus
+		wantQueue             []string
+		wantRequeue           bool
+		wantCacheSize         string
+		wantCacheStorageClass string
+		wantHealthyCondition  corev1.ConditionStatus
 	}{
 		{
 			name:      "Missing secret",
@@ -146,11 +145,9 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{},
-			wantRequeue:                      false,
-			wantPhase:                        "Unready",
-			wantSecretReadyCondition:         corev1.ConditionFalse,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionFalse,
 		},
 		{
 			name:      "Missing service account",
@@ -158,11 +155,9 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				runtime.Object(&secret),
 			},
-			wantQueue:                        []string{},
-			wantRequeue:                      false,
-			wantPhase:                        "Unready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionFalse,
+			wantQueue:            []string{},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionFalse,
 		},
 		{
 			name:      "Workspace with cache spec",
@@ -171,13 +166,11 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{},
-			wantRequeue:                      false,
-			wantCacheSize:                    "2Gi",
-			wantCacheStorageClass:            "local-path",
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:             []string{},
+			wantRequeue:           false,
+			wantCacheSize:         "2Gi",
+			wantCacheStorageClass: "local-path",
+			wantHealthyCondition:  corev1.ConditionTrue,
 		},
 		{
 			name:      "No commands",
@@ -187,11 +180,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{},
-			wantRequeue:                      false,
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Single command",
@@ -201,11 +192,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{"pod-1"},
-			wantRequeue:                      false,
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{"pod-1"},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Two commands",
@@ -216,11 +205,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{"pod-1", "pod-2"},
-			wantRequeue:                      false,
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{"pod-1", "pod-2"},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Existing queue",
@@ -236,11 +223,9 @@ func TestReconcileWorkspace(t *testing.T) {
 					"pod-1",
 				},
 			},
-			wantQueue:                        []string{"pod-1", "pod-2"},
-			wantRequeue:                      false,
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{"pod-1", "pod-2"},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
 		},
 		{
 			name:      "Completed command",
@@ -252,11 +237,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:                        []string{"pod-1", "pod-2"},
-			wantRequeue:                      false,
-			wantPhase:                        "Ready",
-			wantSecretReadyCondition:         corev1.ConditionTrue,
-			wantServiceAccountReadyCondition: corev1.ConditionTrue,
+			wantQueue:            []string{"pod-1", "pod-2"},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
 		},
 	}
 	s := scheme.Scheme
@@ -311,14 +294,14 @@ func TestReconcileWorkspace(t *testing.T) {
 				t.Fatalf("get ws: (%v)", err)
 			}
 
-			gotPhase := tt.workspace.Status.Phase
-			if tt.wantPhase != gotPhase {
-				t.Errorf("want %s got %s", tt.wantPhase, gotPhase)
+			gotHealthyCondition := tt.workspace.Status.Conditions.GetCondition(status.ConditionType("Healthy"))
+			if tt.wantHealthyCondition != gotHealthyCondition.Status {
+				t.Fatalf("want %s got %s", tt.wantHealthyCondition, gotHealthyCondition.Status)
 			}
 
 			queue := tt.workspace.Status.Queue
 			if !reflect.DeepEqual(tt.wantQueue, queue) {
-				t.Fatalf("workspace queue expected to be %+v, but got %+v", tt.wantQueue, queue)
+				t.Fatalf("workspace queue expected to be %#v, but got %#v", tt.wantQueue, queue)
 			}
 		})
 	}

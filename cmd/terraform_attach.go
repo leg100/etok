@@ -13,12 +13,10 @@ import (
 	"k8s.io/kubectl/pkg/cmd/attach"
 	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
-	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-func (app *app) handleAttachPod(pod *corev1.Pod) error {
-	// TODO: just horrible
-	config := runtimeconfig.GetConfigOrDie()
+// Attach to pod's TTY. Code borrowed from kubectl.
+func (t *terraformCmd) handleAttachPod(config rest.Config, pod *corev1.Pod) error {
 	config.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -35,7 +33,7 @@ func (app *app) handleAttachPod(pod *corev1.Pod) error {
 			IOStreams: genericclioptions.IOStreams{
 				In:     os.Stdin,
 				Out:    os.Stdout,
-				ErrOut: app,
+				ErrOut: attachErrOut{},
 			},
 		},
 		Attach:        &attach.DefaultRemoteAttach{},
@@ -43,7 +41,7 @@ func (app *app) handleAttachPod(pod *corev1.Pod) error {
 		GetPodTimeout: time.Second * 10,
 	}
 
-	opts.Config = config
+	opts.Config = &config
 	opts.Pod = pod
 
 	if err := opts.Run(); err != nil {
@@ -53,9 +51,11 @@ func (app *app) handleAttachPod(pod *corev1.Pod) error {
 	return nil
 }
 
-// permit app to be passed as a writer for the above handleAttachPod
-// method
-func (app *app) Write(in []byte) (int, error) {
+// ErrOut above wants an obj with Write method, so lets provide one that writes to our logger with
+// warning level
+type attachErrOut struct{}
+
+func (_ attachErrOut) Write(in []byte) (int, error) {
 	s := strings.TrimSpace(string(in))
 	log.Warn(s)
 	return 0, nil
