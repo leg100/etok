@@ -18,7 +18,7 @@ func TestDeleteWorkspace(t *testing.T) {
 
 	clientset := fakeStokClient.NewSimpleClientset(ws1)
 
-	lwc := &deleteWorkspaceCmd{Name: "workspace-1", Namespace: "default"}
+	lwc := &deleteWorkspaceCmd{Namespace: "default", Name: "workspace-1"}
 
 	if err := lwc.deleteWorkspace(clientset.StokV1alpha1()); err != nil {
 		t.Fatal(err)

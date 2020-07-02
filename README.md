@@ -4,6 +4,21 @@
 
 ## install
 
+Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
+
+Deploy the
+[CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) to your cluster:
+
+```
+stok generate crds | kubectl create -f -
+```
+
+Deploy the operator to your cluster:
+
+```
+stok generate operator | kubectl apply -f -
+```
+
 Create a kubernetes secret containing the credentials you need for terraform.
 
 Google:
@@ -19,15 +34,6 @@ kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccessk
 --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
 ```
 
-Deploy the helm chart to your cluster:
-
-```
-helm repo add goalspike https://goalspike-charts.storage.googleapis.com
-helm install stok goalspike/stok
-```
-
-Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
-
 ## usage
 
 Usage is similar to the terraform CLI:
@@ -40,9 +46,9 @@ Usage:
 
 Available Commands:
   apply        Run terraform apply
-  debug        Show configuration options
   destroy      Run terraform destroy
   force-unlock Run terraform force-unlock
+  generate     Generate stok kubernetes resources
   get          Run terraform get
   help         Help about any command
   import       Run terraform import
@@ -50,22 +56,18 @@ Available Commands:
   output       Run terraform output
   plan         Run terraform plan
   refresh      Run terraform refresh
-  shell        Run interactive shell on workspace pod
+  shell        Run terraform shell
   show         Run terraform show
   state        Run terraform state
   taint        Run terraform taint
   untaint      Run terraform untaint
   validate     Run terraform validate
+  workspace    Stok workspace management
 
 Flags:
-      --config string        config file (default is $HOME/.stok.yaml)
-  -h, --help                 help for stok
-      --loglevel string      logging verbosity level (default "info")
-      --namespace string     kubernetes namespace (default "default")
-      --path string          path containing terraform config files (default ".")
-      --pod-timeout string   pod wait timeout (default "10s")
-      --queue-timeout int    queue timeout in seconds (default 60)
-      --workspace string     terraform workspace (default "default")
+      --config string     config file (default is $HOME/.stok.yaml)
+  -h, --help              help for stok
+      --loglevel string   logging verbosity level (default "info")
 
 Use "stok [command] --help" for more information about a command.
 ```

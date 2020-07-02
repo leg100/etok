@@ -28,6 +28,16 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
+var workspaceWithoutSecret = v1alpha1.Workspace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "workspace-1",
+		Namespace: "operator-test",
+	},
+	Spec: v1alpha1.WorkspaceSpec{
+		ServiceAccountName: "stok",
+	},
+}
+
 var workspaceWithCacheSpec = v1alpha1.Workspace{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "workspace-1",
@@ -74,60 +84,45 @@ var serviceAccount = corev1.ServiceAccount{
 	},
 }
 
-var pod1 = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "pod-1",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app":       "stok",
-			"workspace": "workspace-1",
-		},
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodRunning,
-	},
-}
-
-var pod2 = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "pod-2",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app":       "stok",
-			"workspace": "workspace-1",
-		},
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodRunning,
-	},
-}
-
-var completedPod = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "pod-3",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app":       "stok",
-			"workspace": "workspace-1",
-		},
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodSucceeded,
-	},
-}
-
-var podWithNonExistantWorkspace = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "pod-with-nonexistant-workspace",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app":       "stok",
-			"workspace": "workspace-does-not-exist",
-		},
-	},
-}
-
 func TestReconcileWorkspace(t *testing.T) {
+	plan1 := v1alpha1.Plan{}
+	plan1.SetName("plan-1")
+	plan1.SetNamespace("operator-test")
+	plan1.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": "workspace-1",
+	})
+
+	plan2 := v1alpha1.Plan{}
+	plan2.SetName("plan-2")
+	plan2.SetNamespace("operator-test")
+	plan2.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": "workspace-1",
+	})
+
+	planWithNonExistantWorkspace := v1alpha1.Plan{}
+	planWithNonExistantWorkspace.SetName("pod-with-non-existant-workspace")
+	planWithNonExistantWorkspace.SetNamespace("operator-test")
+	planWithNonExistantWorkspace.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": "workspace-does-not-exist",
+	})
+
+	planCompleted := v1alpha1.Plan{}
+	planCompleted.SetName("plan-3")
+	planCompleted.SetNamespace("operator-test")
+	planCompleted.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": "workspace-1",
+	})
+	planCompleted.Conditions.SetCondition(
+		status.Condition{
+			Type:   v1alpha1.ConditionCompleted,
+			Status: corev1.ConditionTrue,
+		},
+	)
+
 	tests := []struct {
 		name                  string
 		workspace             *v1alpha1.Workspace
@@ -160,6 +155,16 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantHealthyCondition: corev1.ConditionFalse,
 		},
 		{
+			name:      "No secret",
+			workspace: &workspaceWithoutSecret,
+			objs: []runtime.Object{
+				runtime.Object(&serviceAccount),
+			},
+			wantQueue:            []string{},
+			wantRequeue:          false,
+			wantHealthyCondition: corev1.ConditionTrue,
+		},
+		{
 			name:      "Workspace with cache spec",
 			workspace: &workspaceWithCacheSpec,
 			objs: []runtime.Object{
@@ -176,7 +181,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "No commands",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&podWithNonExistantWorkspace),
+				runtime.Object(&planWithNonExistantWorkspace),
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
@@ -188,11 +193,11 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Single command",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&pod1),
+				runtime.Object(&plan1),
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:            []string{"pod-1"},
+			wantQueue:            []string{"plan-1"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
 		},
@@ -200,12 +205,12 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Two commands",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&pod1),
-				runtime.Object(&pod2),
+				runtime.Object(&plan1),
+				runtime.Object(&plan2),
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:            []string{"pod-1", "pod-2"},
+			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
 		},
@@ -213,17 +218,17 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Existing queue",
 			workspace: &workspaceWithQueue,
 			objs: []runtime.Object{
-				runtime.Object(&pod1),
-				runtime.Object(&pod2),
+				runtime.Object(&plan1),
+				runtime.Object(&plan2),
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
 			status: v1alpha1.WorkspaceStatus{
 				Queue: []string{
-					"pod-1",
+					"plan-1",
 				},
 			},
-			wantQueue:            []string{"pod-1", "pod-2"},
+			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
 		},
@@ -231,13 +236,13 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Completed command",
 			workspace: &workspaceEmptyQueue,
 			objs: []runtime.Object{
-				runtime.Object(&completedPod),
-				runtime.Object(&pod1),
-				runtime.Object(&pod2),
+				runtime.Object(&planCompleted),
+				runtime.Object(&plan1),
+				runtime.Object(&plan2),
 				runtime.Object(&secret),
 				runtime.Object(&serviceAccount),
 			},
-			wantQueue:            []string{"pod-1", "pod-2"},
+			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
 		},
@@ -259,7 +264,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			}
 			res, err := r.Reconcile(req)
 			if err != nil {
-				t.Fatalf("reconcile: (%v)", err)
+				t.Fatal(err)
 			}
 
 			if tt.wantRequeue && !res.Requeue {
@@ -294,7 +299,7 @@ func TestReconcileWorkspace(t *testing.T) {
 				t.Fatalf("get ws: (%v)", err)
 			}
 
-			gotHealthyCondition := tt.workspace.Status.Conditions.GetCondition(status.ConditionType("Healthy"))
+			gotHealthyCondition := tt.workspace.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy)
 			if tt.wantHealthyCondition != gotHealthyCondition.Status {
 				t.Fatalf("want %s got %s", tt.wantHealthyCondition, gotHealthyCondition.Status)
 			}

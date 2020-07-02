@@ -4,30 +4,28 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
-	workspaceController "github.com/leg100/stok/pkg/controller/workspace"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 )
 
 type newWorkspaceCmd struct {
-	Name                namespacedWorkspace
-	Path                string
-	CacheSize           string
-	StorageClass        string
-	CreateRBACResources bool
-	NoSecret            bool
-	Secret              string
-	ServiceAccount      string
-	KubeConfigPath      string
-	Timeout             time.Duration
+	Name           string
+	Namespace      string
+	Path           string
+	CacheSize      string
+	StorageClass   string
+	NoSecret       bool
+	Secret         string
+	ServiceAccount string
+	KubeConfigPath string
+	Timeout        time.Duration
 
 	cmd *cobra.Command
 }
@@ -35,20 +33,17 @@ type newWorkspaceCmd struct {
 func newNewWorkspaceCmd() *cobra.Command {
 	cc := &newWorkspaceCmd{}
 	cc.cmd = &cobra.Command{
-		Use:   "new <namespace/workspace>",
-		Short: "Create a new stok workspace",
-		Long:  "Deploys a Workspace resource",
-		Args: func(cmd *cobra.Command, args []string) error {
-			return validateWorkspaceArg(args)
-		},
+		Use:     "new <workspace>",
+		Short:   "Create a new stok workspace",
+		Long:    "Deploys a Workspace resource",
 		PreRunE: cc.preRun,
 		RunE:    cc.doNewWorkspace,
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
-	cc.cmd.Flags().StringVar(&cc.ServiceAccount, "service-account", "stok", "Name of ServiceAccount")
+	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
+	cc.cmd.Flags().StringVar(&cc.ServiceAccount, "service-account", "", "Name of ServiceAccount")
 	cc.cmd.Flags().StringVar(&cc.Secret, "secret", "stok", "Name of Secret containing credentials")
 	cc.cmd.Flags().BoolVar(&cc.NoSecret, "no-secret", false, "Don't reference a Secret resource")
-	cc.cmd.Flags().BoolVar(&cc.CreateRBACResources, "create-rbac-resources", false, "Create RBAC resources: ServiceAccount, Role, and RoleBinding")
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
@@ -62,13 +57,13 @@ func (t *newWorkspaceCmd) preRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	t.Name = namespacedWorkspace(args[0])
+	t.Name = args[0]
 
 	return nil
 }
 
-// wait til Workspace resource is healthy
-// write .terraform/environment
+// Wait til Workspace resource is healthy
+// Write .terraform/environment
 func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) error {
 	config, err := configFromPath(t.KubeConfigPath)
 	if err != nil {
@@ -80,116 +75,43 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	if t.CreateRBACResources {
-		client, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			return err
-		}
-
-		if _, err := t.createServiceAccount(client); err != nil {
-			return err
-		}
-		if _, err := t.createRole(client); err != nil {
-			return err
-		}
-		if _, err := t.createRoleBinding(client); err != nil {
-			return err
-		}
-	}
-
 	ws, err := t.createWorkspace(clientset)
 	if err != nil {
 		return err
 	}
 
-	ws, err = t.waitUntilWorkspaceHealthy(clientset, ws)
+	fmt.Printf("Created workspace '%s' in namespace '%s'\n", t.Name, t.Namespace)
+
+	_, err = t.waitUntilWorkspaceHealthy(clientset, ws)
 	if err != nil {
 		return err
 	}
 
-	if err := t.Name.writeEnvironmentFile(t.Path); err != nil {
+	if err := writeEnvironmentFile(t.Path, t.Namespace, t.Name); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (t *newWorkspaceCmd) createServiceAccount(client kubernetes.Interface) (*corev1.ServiceAccount, error) {
-	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.ServiceAccount,
-			Namespace: t.Name.getNamespace(),
-			Labels: map[string]string{
-				"app": "stok",
-			},
-		},
-	}
-
-	return client.CoreV1().ServiceAccounts(t.Name.getNamespace()).Create(sa)
-}
-
-func (t *newWorkspaceCmd) createRole(client kubernetes.Interface) (*rbacv1.Role, error) {
-	role := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok",
-			Namespace: t.Name.getNamespace(),
-			Labels: map[string]string{
-				"app": "stok",
-			},
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{"stok.goalspike.com"},
-				Resources: []string{"*"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-		},
-	}
-
-	return client.RbacV1().Roles(t.Name.getNamespace()).Create(role)
-}
-
-func (t *newWorkspaceCmd) createRoleBinding(client kubernetes.Interface) (*rbacv1.RoleBinding, error) {
-	rb := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok",
-			Namespace: t.Name.getNamespace(),
-			Labels: map[string]string{
-				"app": "stok",
-			},
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind: "ServiceAccount",
-				Name: t.ServiceAccount,
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "Role",
-			Name:     "stok",
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-	}
-
-	return client.RbacV1().RoleBindings(t.Name.getNamespace()).Create(rb)
-}
-
 func (t *newWorkspaceCmd) createWorkspace(clientset v1alpha1clientset.StokV1alpha1Interface) (*v1alpha1types.Workspace, error) {
 	ws := &v1alpha1types.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.Name.getWorkspace(),
-			Namespace: t.Name.getNamespace(),
+			Name:      t.Name,
+			Namespace: t.Namespace,
 			Labels: map[string]string{
 				"app": "stok",
 			},
 		},
-		Spec: v1alpha1types.WorkspaceSpec{
-			ServiceAccountName: t.ServiceAccount,
-		},
+		Spec: v1alpha1types.WorkspaceSpec{},
 	}
 
 	if !t.NoSecret {
 		ws.Spec.SecretName = t.Secret
+	}
+
+	if t.ServiceAccount != "" {
+		ws.Spec.ServiceAccountName = t.ServiceAccount
 	}
 
 	if t.CacheSize != "" {
@@ -200,7 +122,7 @@ func (t *newWorkspaceCmd) createWorkspace(clientset v1alpha1clientset.StokV1alph
 		ws.Spec.Cache.StorageClass = t.StorageClass
 	}
 
-	return clientset.Workspaces(t.Name.getNamespace()).Create(ws)
+	return clientset.Workspaces(t.Namespace).Create(ws)
 }
 
 func (t *newWorkspaceCmd) waitUntilWorkspaceHealthy(cs *v1alpha1clientset.StokV1alpha1Client, workspace *v1alpha1types.Workspace) (*v1alpha1types.Workspace, error) {
@@ -223,7 +145,7 @@ func workspaceHealthy(event watch.Event) (bool, error) {
 			return false, nil
 		}
 		for i := range conditions {
-			if conditions[i].Type == workspaceController.WorkspaceHealthy {
+			if conditions[i].Type == v1alpha1.ConditionHealthy {
 				if conditions[i].Status == corev1.ConditionTrue {
 					return true, nil
 				}

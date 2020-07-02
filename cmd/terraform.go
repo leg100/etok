@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,22 +9,26 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/crdinfo"
+	"github.com/leg100/stok/pkg/apis"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
-	workspaceController "github.com/leg100/stok/pkg/controller/workspace"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type terraformCmd struct {
-	Workspace      namespacedWorkspace
+	Workspace      string
+	Namespace      string
 	Path           string
 	Args           []string
 	Command        string
@@ -32,9 +37,9 @@ type terraformCmd struct {
 	TimeoutQueue   time.Duration
 	KubeConfigPath string
 
-	cmdObj *unstructured.Unstructured
-
 	cmd *cobra.Command
+
+	scheme *runtime.Scheme
 }
 
 type terraformCmds []*terraformCmd
@@ -63,9 +68,9 @@ func newTerraformCmds() terraformCmds {
 		cc.cmd.Flags().DurationVar(&cc.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
 		cc.cmd.Flags().DurationVar(&cc.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
 		cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
+		cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "", "Kubernetes namespace of workspace (defaults to namespace set in .terraform/environment, or if that does not exist, \"default\")")
 
-		cc.Workspace = newNamespacedWorkspace("default", "default")
-		cc.cmd.Flags().Var(&cc.Workspace, "workspace", "terraform workspace")
+		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, if that does not exist, \"default\")")
 
 		cmds = append(cmds, cc)
 	}
@@ -79,10 +84,43 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	if t.Command == "shell" {
-		t.Args = ShellWrapDoubleDashArgsHandler(args)
+		t.Args = shellWrapArgs(args)
 	} else {
-		t.Args = DoubleDashArgsHandler(args)
+		t.Args = args
 	}
+
+	// Workspace config precedence:
+	// 1. Flag
+	// 2. Environment File
+	// 3. "default"
+	if t.Workspace == "" {
+		_, workspace, err := readEnvironmentFile(t.Path)
+		if errors.IsNotFound(err) {
+			t.Workspace = "default"
+		} else if err != nil {
+			return err
+		}
+		t.Workspace = workspace
+	}
+
+	// Namespace config precedence:
+	// 1. Flag
+	// 2. Environment File
+	// 3. "default"
+	if t.Namespace == "" {
+		namespace, _, err := readEnvironmentFile(t.Path)
+		if errors.IsNotFound(err) {
+			t.Namespace = "default"
+		} else if err != nil {
+			return err
+		}
+		t.Namespace = namespace
+	}
+
+	// Get built-in scheme
+	t.scheme = scheme.Scheme
+	// And add our CRDs
+	apis.AddToScheme(t.scheme)
 
 	return t.run()
 }
@@ -108,8 +146,8 @@ func (t *terraformCmd) run() error {
 		return err
 	}
 
-	// Dynamic client for constructing command resource
-	dc, err := dynamic.NewForConfig(config)
+	// Controller-runtime client for constructing command resource
+	rc, err := client.New(config, client.Options{Scheme: t.scheme})
 	if err != nil {
 		return err
 	}
@@ -126,12 +164,18 @@ func (t *terraformCmd) run() error {
 		return err
 	}
 
-	// Check workspace resource exists and is healthy
-	ws, err := gc.Workspaces(t.Workspace.getNamespace()).Get(t.Workspace.getWorkspace(), metav1.GetOptions{})
+	// Check namespace exists
+	_, err = kc.CoreV1().Namespaces().Get(t.Namespace, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	wsHealth := ws.Status.Conditions.GetCondition(workspaceController.WorkspaceHealthy)
+
+	// Check workspace resource exists and is healthy
+	ws, err := gc.Workspaces(t.Namespace).Get(t.Workspace, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	wsHealth := ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy)
 	if wsHealth == nil {
 		return fmt.Errorf("Workspace %s is missing a WorkspaceHealthy condition", t.Workspace)
 	}
@@ -140,15 +184,14 @@ func (t *terraformCmd) run() error {
 	}
 
 	// Construct and deploy command resource
-	cmdRes, err := t.createCommand(dc, crd)
+	cmdRes, err := t.createCommand(rc, crd)
 	if err != nil {
 		return err
 	}
 
 	// Delete command resource upon program termination
-	gvr := cmdRes.GroupVersionKind().GroupVersion().WithResource(crd.APIPlural)
 	defer func() {
-		dc.Resource(gvr).Delete(cmdRes.GetName(), &metav1.DeleteOptions{})
+		rc.Delete(context.TODO(), cmdRes)
 	}()
 
 	// Compile tarball of terraform module
@@ -164,13 +207,13 @@ func (t *terraformCmd) run() error {
 	}
 
 	// Wait for pod to be running and ready
-	pod, err := t.waitUntilPodRunningAndReady(kc, &corev1.Pod{}, cmdRes.GetName(), t.Workspace.getNamespace())
+	pod, err := t.waitUntilPodRunningAndReady(kc, &corev1.Pod{}, cmdRes.GetName(), t.Namespace)
 	if err != nil {
 		return err
 	}
 
 	// Retrieve pod log stream
-	req := kc.CoreV1().Pods(t.Workspace.getNamespace()).GetLogs(cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
+	req := kc.CoreV1().Pods(t.Namespace).GetLogs(cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
 		return err
@@ -198,7 +241,8 @@ func (t *terraformCmd) run() error {
 
 	// Let operator know we're now streaming logs
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		cmdRes, err = dc.Resource(gvr).Namespace(t.Workspace.getNamespace()).Get(cmdRes.GetName(), metav1.GetOptions{})
+		objKey := types.NamespacedName{Name: cmdRes.GetName(), Namespace: t.Namespace}
+		err = rc.Get(context.TODO(), objKey, cmdRes)
 		if err != nil {
 			done <- err
 		} else {
@@ -209,8 +253,7 @@ func (t *terraformCmd) run() error {
 			annotations["stok.goalspike.com/client"] = "Ready"
 			cmdRes.SetAnnotations(annotations)
 
-			_, err = dc.Resource(gvr).Namespace(t.Workspace.getNamespace()).Update(cmdRes, metav1.UpdateOptions{})
-			return err
+			return rc.Update(context.TODO(), cmdRes, &client.UpdateOptions{})
 		}
 		return nil
 	})

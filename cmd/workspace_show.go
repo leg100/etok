@@ -26,12 +26,12 @@ func newShowWorkspaceCmd() *cobra.Command {
 }
 
 func (t *showWorkspaceCmd) doShowWorkspace(cmd *cobra.Command, args []string) error {
-	env, err := readEnvironmentFile(t.Path)
+	namespace, workspace, err := readEnvironmentFile(t.Path)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(env)
+	fmt.Printf("%s/%s\n", namespace, workspace)
 
 	return nil
 }

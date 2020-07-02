@@ -7,9 +7,9 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Imp is the Schema for the imports API
+// Imp is the Schema for the imps API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=imports,scope=Namespaced
+// +kubebuilder:resource:path=imps,scope=Namespaced
 // +genclient
 type Imp struct {
 	metav1.TypeMeta   `json:",inline"`

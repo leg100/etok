@@ -30,11 +30,11 @@ func TestListWorkspaces(t *testing.T) {
 
 	out := new(bytes.Buffer)
 
-	if err := lwc.listWorkspaces(clientset.StokV1alpha1(), "workspace-1", out); err != nil {
+	if err := lwc.listWorkspaces(clientset.StokV1alpha1(), "default", "workspace-1", out); err != nil {
 		t.Fatal(err)
 	}
 
-	want := "*\tworkspace-1\n\tworkspace-2\n"
+	want := "*\tdefault/workspace-1\n\tdev/workspace-2\n"
 	got := out.String()
 	if want != got {
 		t.Errorf("want %s got %s", want, got)

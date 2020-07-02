@@ -10,11 +10,10 @@ import (
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	dfake "k8s.io/client-go/dynamic/fake"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var workspaceEmptyQueue = v1alpha1.Workspace{
@@ -35,9 +34,6 @@ var plan = v1alpha1.Plan{
 			"app":       "stok",
 			"workspace": "workspace-1",
 		},
-	},
-	CommandSpec: v1alpha1.CommandSpec{
-		Args: []string{"plan"},
 	},
 }
 
@@ -93,12 +89,18 @@ var podFailed = v1.Pod{
 }
 
 func TestCreateCommand(t *testing.T) {
+	s := scheme.Scheme
+	// adds CRD GVKs
+	apis.AddToScheme(s)
+
 	tc := &terraformCmd{
 		Command:       "plan",
-		Workspace:     newNamespacedWorkspace("default", "default"),
+		Namespace:     "default",
+		Workspace:     "default",
 		Args:          []string{},
 		TimeoutClient: time.Minute,
 		TimeoutQueue:  time.Minute,
+		scheme:        s,
 	}
 
 	crd, ok := crdinfo.Inventory[tc.Command]
@@ -106,28 +108,15 @@ func TestCreateCommand(t *testing.T) {
 		t.Fatalf("Could not find Custom Resource Definition '%s'", tc.Command)
 	}
 
-	// adds core GVKs
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
-
-	client := dfake.NewSimpleDynamicClient(s, runtime.Object(&workspaceEmptyQueue))
+	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
 
 	plan, err := tc.createCommand(client, crd)
-	if err != nil {
-		t.Error(err)
-	}
-
-	args, ok, err := unstructured.NestedStringSlice(plan.Object, "spec", "args")
-	if !ok {
-		t.Fatalf("Could not find spec.args in Plan resource")
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(args) != 0 {
-		t.Fatalf("want one arg, got %d\n", len(args))
+	if len(plan.GetArgs()) != 0 {
+		t.Fatalf("want one arg, got %d\n", len(plan.GetArgs()))
 	}
 }
 
@@ -139,7 +128,8 @@ func TestCreateConfigMap(t *testing.T) {
 
 	tc := &terraformCmd{
 		Command:   "plan",
-		Workspace: newNamespacedWorkspace("default", "default"),
+		Namespace: "default",
+		Workspace: "default",
 	}
 
 	client := kubeFake.NewSimpleClientset()

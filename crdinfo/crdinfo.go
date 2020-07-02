@@ -1,12 +1,14 @@
 package crdinfo
 
+import (
+	"github.com/iancoleman/strcase"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+)
+
 type CRDInfo struct {
 	// CLI command
 	Name string
-
-	// Used in go syntax, e.g. variable names, package names (if not set, defaults to Name)
-	// (`import` command in particular needs this exception...)
-	GoName string
 
 	// Kind (templates take care of CamelCasing)
 	Kind        string
@@ -18,6 +20,18 @@ type CRDInfo struct {
 
 	//Override cobra command description
 	Description string
+}
+
+func (crd *CRDInfo) GroupVersionResource() schema.GroupVersionResource {
+	return v1alpha1.SchemeGroupVersion.WithResource(crd.APIPlural)
+}
+
+func (crd *CRDInfo) GroupVersionKind() schema.GroupVersionKind {
+	return v1alpha1.SchemeGroupVersion.WithKind(strcase.ToCamel(crd.Kind))
+}
+
+func (crd *CRDInfo) GroupVersionKindList() schema.GroupVersionKind {
+	return v1alpha1.SchemeGroupVersion.WithKind(strcase.ToCamel(crd.Kind) + "List")
 }
 
 var Inventory = map[string]CRDInfo{
@@ -55,10 +69,9 @@ var Inventory = map[string]CRDInfo{
 	},
 	"import": {
 		Name:        "import",
-		GoName:      "tfimport",
 		Kind:        "imp",
-		APISingular: "import",
-		APIPlural:   "imports",
+		APISingular: "imp",
+		APIPlural:   "imps",
 		Entrypoint:  []string{"terraform", "import"},
 		ArgsHandler: "DoubleDashArgsHandler",
 		StateOnly:   true,

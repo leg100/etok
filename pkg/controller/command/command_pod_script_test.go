@@ -13,7 +13,6 @@ func TestScriptPlan(t *testing.T) {
 		Kind:          "plan",
 		Entrypoint:    []string{"terraform", "plan"},
 		TimeoutClient: "10s",
-		TimeoutQueue:  "60m",
 	}.generate()
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +23,6 @@ tar zxf /tarball/tarball.tar.gz
 
 # wait for both the client to be ready and
 # for the command to be front of the workspace queue
-kubectl wait --for=condition=WorkspaceReady --timeout=60m plan/stok-plan-xxx > /dev/null
 kubectl wait --for=condition=ClientReady --timeout=10s plan/stok-plan-xxx > /dev/null
 
 # run stok command
@@ -45,7 +43,6 @@ func TestScriptShell(t *testing.T) {
 		Entrypoint:    []string{"sh"},
 		Args:          []string{"-c", "\"foo bar\""},
 		TimeoutClient: "10s",
-		TimeoutQueue:  "60m",
 	}.generate()
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +53,6 @@ tar zxf /tarball/tarball.tar.gz
 
 # wait for both the client to be ready and
 # for the command to be front of the workspace queue
-kubectl wait --for=condition=WorkspaceReady --timeout=60m shell/stok-shell-xxx > /dev/null
 kubectl wait --for=condition=ClientReady --timeout=10s shell/stok-shell-xxx > /dev/null
 
 # run stok command

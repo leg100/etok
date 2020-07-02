@@ -41,12 +41,12 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 		return err
 	}
 
-	current, err := readEnvironmentFile(t.Path)
+	currentNamespace, currentWorkspace, err := readEnvironmentFile(t.Path)
 	if err != nil {
 		return err
 	}
 
-	err = t.listWorkspaces(clientset, current.getWorkspace(), os.Stdout)
+	err = t.listWorkspaces(clientset, currentNamespace, currentWorkspace, os.Stdout)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 	return nil
 }
 
-func (t *listWorkspaceCmd) listWorkspaces(clientset v1alpha1clientset.StokV1alpha1Interface, current string, writer io.Writer) error {
+func (t *listWorkspaceCmd) listWorkspaces(clientset v1alpha1clientset.StokV1alpha1Interface, currentNamespace, currentWorkspace string, writer io.Writer) error {
 	workspaces, err := clientset.Workspaces("").List(metav1.ListOptions{})
 	if err != nil {
 		return err
@@ -62,12 +62,12 @@ func (t *listWorkspaceCmd) listWorkspaces(clientset v1alpha1clientset.StokV1alph
 
 	var prefix string
 	for _, ws := range workspaces.Items {
-		if ws.GetName() == current {
+		if ws.GetNamespace() == currentNamespace && ws.GetName() == currentWorkspace {
 			prefix = "*"
 		} else {
 			prefix = ""
 		}
-		fmt.Fprintf(writer, "%s\t%s\n", prefix, ws.GetName())
+		fmt.Fprintf(writer, "%s\t%s/%s\n", prefix, ws.GetNamespace(), ws.GetName())
 	}
 
 	return nil

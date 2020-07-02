@@ -19,7 +19,7 @@ type stokCmd struct {
 }
 
 func allCommands() []*cobra.Command {
-	return append(newTerraformCmds().getCommands(), workspaceCmd())
+	return append(newTerraformCmds().getCommands(), workspaceCmd(), generateCmd())
 }
 
 func Execute(args []string) error {

@@ -36,8 +36,21 @@ type CommandStatus struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
 	Conditions status.Conditions `json:"conditions"`
-	Phase      string            `json:"phase"`
 }
 
 func (c *CommandStatus) GetConditions() *status.Conditions          { return &c.Conditions }
 func (c *CommandStatus) SetConditions(conditions status.Conditions) { c.Conditions = conditions }
+
+const (
+	ConditionCompleted   status.ConditionType = "Completed"
+	ConditionClientReady status.ConditionType = "ClientReady"
+	ConditionAttachable  status.ConditionType = "PodAttachable"
+
+	ReasonWorkspaceUnspecified status.ConditionReason = "WorkspaceUnspecified"
+	ReasonWorkspaceNotFound    status.ConditionReason = "WorkspaceNotFound"
+	ReasonUnscheduled          status.ConditionReason = "Unscheduled"
+	ReasonQueued               status.ConditionReason = "InWorkspaceQueue"
+	ReasonPodRunningAndReady   status.ConditionReason = "PodRunningAndReady"
+	ReasonClientAttached       status.ConditionReason = "ClientAttached"
+	ReasonPodCompleted         status.ConditionReason = "PodCompleted"
+)

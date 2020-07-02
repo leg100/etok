@@ -38,21 +38,3 @@ jobs:
           args: release --skip-sign
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
-        with:
-          version: '270.0.0'
-          service_account_email: ${{ secrets.GSA_EMAIL }}
-          service_account_key: ${{ secrets.GSA_KEY }}
-
-      - name: Release stok-operator helm chart
-        uses: ./.github/actions/gcs-helm-charts-action
-        with:
-          path: charts/stok-operator
-          bucket: goalspike-charts
-
-      - name: Release stok-workspace helm chart
-        uses: ./.github/actions/gcs-helm-charts-action
-        with:
-          path: charts/stok-workspace
-          bucket: goalspike-charts

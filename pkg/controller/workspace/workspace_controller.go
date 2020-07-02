@@ -6,10 +6,14 @@ import (
 	"reflect"
 
 	"github.com/leg100/stok/constants"
+	"github.com/leg100/stok/crdinfo"
+	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,13 +50,21 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	//_ = mgr.GetFieldIndexer().IndexField(&v1alpha1.Command{}, "Spec.Workspace", func(o runtime.Object) []string {
-	//	workspace := o.(*v1alpha1.Command).Spec.Workspace
-	//	if workspace == "" {
-	//		return nil
-	//	}
-	//	return []string{workspace}
-	//})
+	_ = mgr.GetFieldIndexer().IndexField(&v1alpha1.Workspace{}, "spec.serviceAccountName", func(o runtime.Object) []string {
+		sa := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
+		if sa == "" {
+			return nil
+		}
+		return []string{sa}
+	})
+
+	_ = mgr.GetFieldIndexer().IndexField(&v1alpha1.Workspace{}, "spec.secretName", func(o runtime.Object) []string {
+		sa := o.(*v1alpha1.Workspace).Spec.SecretName
+		if sa == "" {
+			return nil
+		}
+		return []string{sa}
+	})
 
 	// Watch for changes to primary resource Workspace
 	err = c.Watch(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestForObject{})
@@ -69,29 +81,88 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to resource Pod and requeue the associated Workspace.
-	// Filter out pods with irrelevant labels.
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
+	// Watch for changes to service accounts and secrets, because they may affect the functionality
+	// of a Workspace (e.g. the deletion of a service account)
+	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			pod := a.Object.(*corev1.Pod)
-			if app, ok := pod.GetLabels()["app"]; ok && app == "stok" {
-				if workspace, ok := pod.GetLabels()["workspace"]; ok {
-					return []reconcile.Request{
-						{
-							NamespacedName: types.NamespacedName{
-								Name:      workspace,
-								Namespace: a.Meta.GetNamespace(),
-							},
-						},
-					}
-				}
+			var reqs []reconcile.Request
+			wsList := &v1alpha1.WorkspaceList{}
+			filter := client.MatchingFields{"spec.serviceAccountName": a.Meta.GetName()}
+			err = r.(*ReconcileWorkspace).client.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
+			if err != nil {
+				return reqs
 			}
-			return []reconcile.Request{}
+			meta.EachListItem(wsList, func(ws runtime.Object) error {
+				reqs = append(reqs, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      ws.(*v1alpha1.Workspace).GetName(),
+						Namespace: a.Meta.GetNamespace(),
+					},
+				})
+				return nil
+			})
+			return reqs
 		}),
 	})
 	if err != nil {
 		return err
 	}
+
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			var reqs []reconcile.Request
+			wsList := &v1alpha1.WorkspaceList{}
+			filter := client.MatchingFields{"spec.secretName": a.Meta.GetName()}
+			err = r.(*ReconcileWorkspace).client.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
+			if err != nil {
+				return reqs
+			}
+			meta.EachListItem(wsList, func(ws runtime.Object) error {
+				reqs = append(reqs, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      ws.(*v1alpha1.Workspace).GetName(),
+						Namespace: a.Meta.GetNamespace(),
+					},
+				})
+				return nil
+			})
+			return reqs
+		}),
+	})
+	if err != nil {
+		return err
+	}
+
+	s := mgr.GetScheme()
+	apis.AddToScheme(s)
+	// Watch for changes to command resources and requeue the associated Workspace.
+	for _, crd := range crdinfo.Inventory {
+		o, err := s.New(crd.GroupVersionKind())
+		if err != nil {
+			return err
+		}
+
+		err = c.Watch(&source.Kind{Type: o}, &handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				cmd := a.Object.(command.Interface)
+				if ws, ok := cmd.GetLabels()["workspace"]; ok {
+					return []reconcile.Request{
+						{
+							NamespacedName: types.NamespacedName{
+								Name:      ws,
+								Namespace: a.Meta.GetNamespace(),
+							},
+						},
+					}
+				}
+				return []reconcile.Request{}
+			}),
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -126,13 +197,21 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Error retrieving workspace")
 		return reconcile.Result{}, err
+	}
+
+	// Because it is a required attribute we need to set the queue status to an empty array if it
+	// is not already set
+	if instance.Status.Queue == nil {
+		instance.Status.Queue = []string{}
 	}
 
 	pvc := newPVCForCR(instance)
 
 	// Set Workspace instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+		reqLogger.Error(err, "Error setting controller reference on PVC")
 		return reconcile.Result{}, err
 	}
 
@@ -141,99 +220,126 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	// ignored. The PVC has to be manually deleted and then let the controller re-create it.
 	found := &corev1.PersistentVolumeClaim{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
+	if errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new PVC", "PVC.Namespace", pvc.Namespace, "PVC.Name", pvc.Name)
-		err = r.client.Create(context.TODO(), pvc)
-		if err != nil {
+		if err = r.client.Create(context.TODO(), pvc); err != nil {
+			reqLogger.Error(err, "Error creating PVC")
 			return reconcile.Result{}, err
 		}
 	} else if err != nil {
+		reqLogger.Error(err, "Error retrieving PVC")
 		return reconcile.Result{}, err
 	}
 
-	// Check specified ServiceAccount exists
-	var serviceAccountFound bool
-	serviceAccountNamespacedName := types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}
-	err = r.client.Get(context.TODO(), serviceAccountNamespacedName, &corev1.ServiceAccount{})
-	if err != nil && errors.IsNotFound(err) {
-		if updated := instance.Status.Conditions.SetCondition(missingServiceAccountCondition); updated {
-			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
+	// Check ServiceAccount exists (if specified)
+	if instance.Spec.ServiceAccountName != "" {
+		serviceAccountNamespacedName := types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}
+		err = r.client.Get(context.TODO(), serviceAccountNamespacedName, &corev1.ServiceAccount{})
+		if errors.IsNotFound(err) {
+			instance.Status.Conditions.SetCondition(status.Condition{
+				Type:    v1alpha1.ConditionHealthy,
+				Status:  corev1.ConditionFalse,
+				Reason:  v1alpha1.ReasonMissingResource,
+				Message: "ServiceAccount resource not found",
+			})
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
 			}
-		}
-	} else if err != nil {
-		return reconcile.Result{}, err
-	} else {
-		serviceAccountFound = true
-	}
-
-	// Check specified Secret exists
-	var secretFound bool
-	secretNamespacedName := types.NamespacedName{Name: instance.Spec.SecretName, Namespace: request.Namespace}
-	err = r.client.Get(context.TODO(), secretNamespacedName, &corev1.Secret{})
-	if err != nil && errors.IsNotFound(err) {
-		if updated := instance.Status.Conditions.SetCondition(missingSecretCondition); updated {
-			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-	} else if err != nil {
-		return reconcile.Result{}, err
-	} else {
-		secretFound = true
-	}
-
-	// Set Healthy Condition if both Secret and ServiceAccount found
-	if serviceAccountFound && secretFound {
-		if updated := instance.Status.Conditions.SetCondition(allResourcesFoundCondition); updated {
-			if err := r.client.Status().Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
+			// Pointless proceeding any further or requeuing a request (the service account watch will
+			// take care of triggering a request)
+			return reconcile.Result{}, nil
+		} else if err != nil {
+			return reconcile.Result{}, err
 		}
 	}
 
-	// fetch list of (relevant) pods
-	podList := corev1.PodList{}
-	err = r.client.List(context.TODO(), &podList, client.InNamespace(request.Namespace), client.MatchingLabels{
-		"app":       "stok",
-		"workspace": request.Name,
+	// Flag success if Secret is either:
+	// (a) unspecified and thus not required
+	// (b) specified and successfully found
+	if instance.Spec.SecretName != "" {
+		secretNamespacedName := types.NamespacedName{Name: instance.Spec.SecretName, Namespace: request.Namespace}
+		err = r.client.Get(context.TODO(), secretNamespacedName, &corev1.Secret{})
+		if errors.IsNotFound(err) {
+			instance.Status.Conditions.SetCondition(status.Condition{
+				Type:    v1alpha1.ConditionHealthy,
+				Status:  corev1.ConditionFalse,
+				Reason:  v1alpha1.ReasonMissingResource,
+				Message: "Secret resource not found",
+			})
+			if err = r.client.Status().Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
+			}
+			// Pointless proceeding any further or requeuing a request (the secret watch will
+			// take care of triggering a request)
+			return reconcile.Result{}, nil
+		} else if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Set Healthy Condition since all pre-requisities satisfied
+	instance.Status.Conditions.SetCondition(status.Condition{
+		Type:    v1alpha1.ConditionHealthy,
+		Status:  corev1.ConditionTrue,
+		Reason:  v1alpha1.ReasonAllResourcesFound,
+		Message: "All prerequisite resources found",
 	})
-	if err != nil {
-		return reconcile.Result{}, err
+	if err := r.client.Status().Update(context.TODO(), instance); err != nil {
+		return reconcile.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
 	}
 
-	// filter running pods
+	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
+	var cmdList []command.Interface
+	// Fetch and append each type of command to cmdList
+	for _, crd := range crdinfo.Inventory {
+		ccList, err := r.scheme.New(crd.GroupVersionKindList())
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		err = r.client.List(context.TODO(), ccList, client.InNamespace(request.Namespace), client.MatchingLabels{
+			"workspace": request.Name,
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		meta.EachListItem(ccList, func(o runtime.Object) error {
+			cmdList = append(cmdList, o.(command.Interface))
+			return nil
+		})
+	}
+
+	// Filter out completed commands
 	n := 0
-	for _, pod := range podList.Items {
-		if pod.Status.Phase == corev1.PodRunning {
-			podList.Items[n] = pod
+	for _, cmd := range cmdList {
+		if cond := cmd.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted); !cond {
+			cmdList[n] = cmd
 			n++
 		}
 	}
-	podList.Items = podList.Items[:n]
+	cmdList = cmdList[:n]
 
 	// Filter out completed/deleted commands from existing queue, building new queue
 	newQueue := []string{}
 	for _, cmd := range instance.Status.Queue {
-		if i := podListMatchingName(&podList, cmd); i > -1 {
+		if i := cmdListMatchingName(cmdList, cmd); i > -1 {
 			// add to new queue
 			newQueue = append(newQueue, cmd)
-			// remove from pod list so we don't include it again later
-			podList.Items = append(podList.Items[:i], podList.Items[i+1:]...)
+			// remove from cmd list
+			cmdList = append(cmdList[:i], cmdList[i+1:]...)
 		}
 		// cmd not found, leave it out of new queue
 	}
-	// Append remainder of pods
-	newQueue = append(newQueue, podListNames(&podList)...)
+	// Append remainder of commands
+	newQueue = append(newQueue, cmdListNames(cmdList)...)
 
 	// update status if queue has changed
 	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
 		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", newQueue))
 		instance.Status.Queue = newQueue
-		err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update queue status")
-			return reconcile.Result{}, err
+		if err := r.client.Status().Update(context.TODO(), instance); err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed to update queue status: %w", err)
 		}
 	}
 
@@ -273,46 +379,19 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	return &pvc
 }
 
-func podListMatchingName(podList *corev1.PodList, name string) int {
-	for i, pod := range podList.Items {
-		if pod.GetName() == name {
+func cmdListMatchingName(cmdList []command.Interface, name string) int {
+	for i, cmd := range cmdList {
+		if cmd.GetName() == name {
 			return i
 		}
 	}
 	return -1
 }
 
-func podListNames(podList *corev1.PodList) []string {
+func cmdListNames(cmdList []command.Interface) []string {
 	names := []string{}
-	for _, pod := range podList.Items {
-		names = append(names, pod.GetName())
+	for _, cmd := range cmdList {
+		names = append(names, cmd.GetName())
 	}
 	return names
 }
-
-const (
-	WorkspaceHealthy status.ConditionType = "Healthy"
-)
-
-var (
-	allResourcesFoundCondition = status.Condition{
-		Type:    WorkspaceHealthy,
-		Status:  corev1.ConditionTrue,
-		Reason:  status.ConditionReason("AllResourcesFound"),
-		Message: "All prerequisite resources have been found",
-	}
-
-	missingSecretCondition = status.Condition{
-		Type:    WorkspaceHealthy,
-		Status:  corev1.ConditionFalse,
-		Reason:  status.ConditionReason("MissingResource"),
-		Message: "Secret resource not found",
-	}
-
-	missingServiceAccountCondition = status.Condition{
-		Type:    WorkspaceHealthy,
-		Status:  corev1.ConditionFalse,
-		Reason:  status.ConditionReason("MissingResource"),
-		Message: "ServiceAccount resource not found",
-	}
-)

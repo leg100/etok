@@ -12,11 +12,8 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -66,18 +63,6 @@ func defaultKubeConfigPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".kube", "config"), nil
-}
-
-type PodListWatch struct {
-	kubernetes.Interface
-}
-
-func (p PodListWatch) List(options metav1.ListOptions) (runtime.Object, error) {
-	return p.Interface.CoreV1().Pods("mynamespace").List(options)
-}
-
-func (p PodListWatch) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	return p.Interface.CoreV1().Pods("mynamespace").Watch(options)
 }
 
 // Wrapper for watchtools.UntilWithSync

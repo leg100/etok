@@ -4,82 +4,7 @@ import (
 	"testing"
 
 	fakeStokClient "github.com/leg100/stok/pkg/client/clientset/fake"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/client-go/kubernetes/fake"
 )
-
-func TestCreateServiceAccount(t *testing.T) {
-	nwc := &newWorkspaceCmd{
-		Name:           "default/default",
-		ServiceAccount: "stok",
-	}
-
-	sa := &corev1.ServiceAccount{}
-	clientset := fake.NewSimpleClientset()
-
-	sa, err := nwc.createServiceAccount(clientset)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if sa.GetName() != "stok" {
-		t.Errorf("want 'stok' got %s", sa.GetName())
-	}
-
-	if sa.GetNamespace() != "default" {
-		t.Errorf("want 'default' got %s", sa.GetName())
-	}
-}
-
-func TestCreateRole(t *testing.T) {
-	nwc := &newWorkspaceCmd{
-		Name: "default/default",
-	}
-
-	role := &rbacv1.Role{}
-	clientset := fake.NewSimpleClientset()
-
-	role, err := nwc.createRole(clientset)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if role.GetName() != "stok" {
-		t.Errorf("want 'stok' got %s", role.GetName())
-	}
-
-	if role.GetNamespace() != "default" {
-		t.Errorf("want 'default' got %s", role.GetName())
-	}
-}
-
-func TestCreateRoleBinding(t *testing.T) {
-	nwc := &newWorkspaceCmd{
-		Name:           "default/default",
-		ServiceAccount: "my-service-account",
-	}
-
-	rolebinding := &rbacv1.RoleBinding{}
-	clientset := fake.NewSimpleClientset()
-
-	rolebinding, err := nwc.createRoleBinding(clientset)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if rolebinding.GetName() != "stok" {
-		t.Errorf("want 'stok' got %s", rolebinding.GetName())
-	}
-
-	if rolebinding.GetNamespace() != "default" {
-		t.Errorf("want 'default' got %s", rolebinding.GetName())
-	}
-
-	if rolebinding.Subjects[0].Name != "my-service-account" {
-		t.Errorf("want 'my-service-account' got %s", rolebinding.Subjects[0].Name)
-	}
-}
 
 func TestCreateWorkspace(t *testing.T) {
 	tests := []struct {
@@ -104,6 +29,11 @@ func TestCreateWorkspace(t *testing.T) {
 			noSecret:       true,
 		},
 		{
+			name:      "no-service-account",
+			namespace: "default",
+			noSecret:  true,
+		},
+		{
 			name:           "storage-class",
 			namespace:      "default",
 			serviceAccount: "stok",
@@ -122,7 +52,8 @@ func TestCreateWorkspace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			nwc := &newWorkspaceCmd{
-				Name:           newNamespacedWorkspace(tt.namespace, tt.name),
+				Name:           tt.name,
+				Namespace:      tt.namespace,
 				ServiceAccount: tt.serviceAccount,
 				Secret:         tt.secret,
 				StorageClass:   tt.storageClass,
@@ -144,8 +75,14 @@ func TestCreateWorkspace(t *testing.T) {
 				t.Errorf("want %s got %s", tt.namespace, ws.GetNamespace())
 			}
 
-			if ws.Spec.ServiceAccountName != tt.serviceAccount {
-				t.Errorf("want %s got %s", tt.serviceAccount, ws.Spec.ServiceAccountName)
+			if tt.serviceAccount != "" {
+				if ws.Spec.ServiceAccountName != tt.serviceAccount {
+					t.Errorf("want %s got %s", tt.serviceAccount, ws.Spec.ServiceAccountName)
+				}
+			} else {
+				if ws.Spec.ServiceAccountName != "" {
+					t.Errorf("want '' got %s", ws.Spec.ServiceAccountName)
+				}
 			}
 
 			if tt.noSecret {

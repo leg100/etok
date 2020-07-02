@@ -22,5 +22,7 @@ import (
 )
 
 func main() {
-	cmd.Execute(os.Args[1:])
+	if err := cmd.Execute(os.Args[1:]); err != nil {
+		os.Exit(1)
+	}
 }
