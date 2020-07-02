@@ -104,6 +104,13 @@ func TestStok(t *testing.T) {
 			pty:             false,
 		},
 		{
+			name:            "stok version",
+			args:            []string{"-v"},
+			wantExitCode:    0,
+			wantStdoutRegex: regexp.MustCompile(`^stok version v.+ [a-f0-9]+`),
+			pty:             false,
+		},
+		{
 			name:            "new workspace",
 			args:            []string{"workspace", "new", wsName, "--timeout", "5s"},
 			wantExitCode:    0,
