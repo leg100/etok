@@ -1,7 +1,5 @@
 package controller
 
-//go:generate go run generate.go
-
 import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )

@@ -15,8 +15,14 @@ limitations under the License.
 */
 package main
 
-import "github.com/leg100/stok/cmd"
+import (
+	"os"
+
+	"github.com/leg100/stok/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(os.Args[1:]); err != nil {
+		os.Exit(1)
+	}
 }

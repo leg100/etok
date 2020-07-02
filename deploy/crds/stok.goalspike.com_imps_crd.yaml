@@ -3,20 +3,20 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: stok
-  name: inits.stok.goalspike.com
+  name: imps.stok.goalspike.com
 spec:
   group: stok.goalspike.com
   names:
-    kind: Init
-    listKind: InitList
-    plural: inits
-    singular: init
+    kind: Imp
+    listKind: ImpList
+    plural: imps
+    singular: imp
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Init is the Schema for the inits API
+      description: Imp is the Schema for the imps API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

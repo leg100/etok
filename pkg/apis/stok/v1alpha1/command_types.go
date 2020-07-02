@@ -18,28 +18,16 @@ type CommandSpec struct {
 }
 
 // Get/Set Args functions
-func (c *CommandSpec) GetArgs() []string {
-	return c.Args
-}
-func (c *CommandSpec) SetArgs(args []string) {
-	c.Args = args
-}
+func (c *CommandSpec) GetArgs() []string     { return c.Args }
+func (c *CommandSpec) SetArgs(args []string) { c.Args = args }
 
 // Get/Set TimeoutClient functions
-func (c *CommandSpec) GetTimeoutClient() string {
-	return c.TimeoutClient
-}
-func (c *CommandSpec) SetTimeoutClient(timeout string) {
-	c.TimeoutClient = timeout
-}
+func (c *CommandSpec) GetTimeoutClient() string        { return c.TimeoutClient }
+func (c *CommandSpec) SetTimeoutClient(timeout string) { c.TimeoutClient = timeout }
 
 // Get/Set TimeoutQueue functions
-func (c *CommandSpec) GetTimeoutQueue() string {
-	return c.TimeoutQueue
-}
-func (c *CommandSpec) SetTimeoutQueue(timeout string) {
-	c.TimeoutQueue = timeout
-}
+func (c *CommandSpec) GetTimeoutQueue() string        { return c.TimeoutQueue }
+func (c *CommandSpec) SetTimeoutQueue(timeout string) { c.TimeoutQueue = timeout }
 
 // CommandStatus defines the observed state of Command
 type CommandStatus struct {
@@ -48,13 +36,21 @@ type CommandStatus struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
 	Conditions status.Conditions `json:"conditions"`
-	Phase      string            `json:"phase"`
 }
 
-func (c *CommandStatus) GetConditions() *status.Conditions {
-	return &c.Conditions
-}
+func (c *CommandStatus) GetConditions() *status.Conditions          { return &c.Conditions }
+func (c *CommandStatus) SetConditions(conditions status.Conditions) { c.Conditions = conditions }
 
-func (c *CommandStatus) SetConditions(conditions status.Conditions) {
-	c.Conditions = conditions
-}
+const (
+	ConditionCompleted   status.ConditionType = "Completed"
+	ConditionClientReady status.ConditionType = "ClientReady"
+	ConditionAttachable  status.ConditionType = "PodAttachable"
+
+	ReasonWorkspaceUnspecified status.ConditionReason = "WorkspaceUnspecified"
+	ReasonWorkspaceNotFound    status.ConditionReason = "WorkspaceNotFound"
+	ReasonUnscheduled          status.ConditionReason = "Unscheduled"
+	ReasonQueued               status.ConditionReason = "InWorkspaceQueue"
+	ReasonPodRunningAndReady   status.ConditionReason = "PodRunningAndReady"
+	ReasonClientAttached       status.ConditionReason = "ClientAttached"
+	ReasonPodCompleted         status.ConditionReason = "PodCompleted"
+)
