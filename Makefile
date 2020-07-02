@@ -1,3 +1,6 @@
+VERSION = $(shell git describe --tags --dirty --always)
+GIT_COMMIT = $(shell git rev-parse HEAD)
+REPO = github.com/leg100/stok
 LOGLEVEL ?= info
 IMAGE_TAG ?= latest
 OPERATOR_NAMESPACE ?= default
@@ -8,6 +11,10 @@ GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
 KIND_CONTEXT ?= kind-kind
 GKE_CONTEXT ?= gke-stok
 CLI_BIN ?= build/_output/bin/stok
+LD_FLAGS = " \
+	-X '$(REPO)/version.Version=$(VERSION)' \
+	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
+	" \
 
 .PHONY: local kind-deploy kind-context deploy-crds undeploy \
 	create-namespace create-secret \
@@ -79,11 +86,13 @@ unit: operator-unit cli-unit
 cli-unit:
 	go test -v ./cmd
 
+build: cli-build operator-build
+
 cli-build:
-	go build -o $(CLI_BIN) github.com/leg100/stok
+	go build -o $(CLI_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
 
 operator-build:
-	go build -o stok-operator github.com/leg100/stok/cmd/manager
+	go build -o stok-operator -ldflags $(LD_FLAGS) github.com/leg100/stok/cmd/manager
 
 operator-image: operator-build
 	docker build -f build/Dockerfile -t leg100/stok-operator:latest .

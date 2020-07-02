@@ -39,7 +39,7 @@ func newStokCmd() *stokCmd {
 		Short:             "Supercharge terraform on kubernetes",
 		PersistentPreRunE: cc.preRun,
 		SilenceUsage:      true,
-		Version:           version.Version,
+		Version:           version.Version + " " + version.Commit,
 	}
 
 	cc.cmd.PersistentFlags().StringVar(&cc.Config, "config", "", "config file (default is $HOME/.stok.yaml)")
