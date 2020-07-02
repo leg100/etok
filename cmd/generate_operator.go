@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,14 @@ type operatorCmd struct {
 	cmd *cobra.Command
 }
 
+const (
+	imageRepo = "leg100/stok-operator"
+)
+
+var (
+	defaultImage = imageRepo + ":" + version.Version
+)
+
 func newOperatorCmd() *cobra.Command {
 	cc := &operatorCmd{}
 	cc.cmd = &cobra.Command{
@@ -36,7 +45,7 @@ func newOperatorCmd() *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.Name, "name", "stok-operator", "Name for kubernetes resources")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace for resources")
 	// TODO: replace latest with tag, or better still, a digest
-	cc.cmd.Flags().StringVar(&cc.Image, "image", "leg100/stok-operator:latest", "Docker image name (including tag)")
+	cc.cmd.Flags().StringVar(&cc.Image, "image", defaultImage, "Docker image name (including tag)")
 
 	return cc.cmd
 }

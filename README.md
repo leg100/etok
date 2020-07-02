@@ -68,6 +68,7 @@ Flags:
       --config string     config file (default is $HOME/.stok.yaml)
   -h, --help              help for stok
       --loglevel string   logging verbosity level (default "info")
+  -v, --version           version for stok
 
 Use "stok [command] --help" for more information about a command.
 ```
