@@ -130,6 +130,7 @@ func TestReconcileWorkspace(t *testing.T) {
 		status                v1alpha1.WorkspaceStatus
 		wantQueue             []string
 		wantRequeue           bool
+		wantPVC               bool
 		wantCacheSize         string
 		wantCacheStorageClass string
 		wantHealthyCondition  corev1.ConditionStatus
@@ -163,6 +164,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 		{
 			name:      "Workspace with cache spec",
@@ -176,6 +178,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantCacheSize:         "2Gi",
 			wantCacheStorageClass: "local-path",
 			wantHealthyCondition:  corev1.ConditionTrue,
+			wantPVC:               true,
 		},
 		{
 			name:      "No commands",
@@ -188,6 +191,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 		{
 			name:      "Single command",
@@ -200,6 +204,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{"plan-1"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 		{
 			name:      "Two commands",
@@ -213,6 +218,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 		{
 			name:      "Existing queue",
@@ -231,6 +237,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 		{
 			name:      "Completed command",
@@ -245,6 +252,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			wantQueue:            []string{"plan-1", "plan-2"},
 			wantRequeue:          false,
 			wantHealthyCondition: corev1.ConditionTrue,
+			wantPVC:              true,
 		},
 	}
 	s := scheme.Scheme
@@ -271,29 +279,6 @@ func TestReconcileWorkspace(t *testing.T) {
 				t.Error("expected reconcile to requeue")
 			}
 
-			pvc := &corev1.PersistentVolumeClaim{}
-			err = r.client.Get(context.TODO(), req.NamespacedName, pvc)
-			if err != nil {
-				t.Errorf("get pvc: (%v)", err)
-			}
-
-			// If not set, want default of 1Gi
-			if tt.wantCacheSize == "" {
-				tt.wantCacheSize = "1Gi"
-			}
-			gotSize, _ := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-			if tt.wantCacheSize != gotSize.String() {
-				t.Errorf("want %s got %s", tt.wantCacheSize, gotSize.String())
-			}
-
-			// Don't test when StorageClass is unset
-			if tt.wantCacheStorageClass != "" {
-				gotStorageClass := pvc.Spec.StorageClassName
-				if tt.wantCacheStorageClass != *gotStorageClass {
-					t.Errorf("want %s got %s", tt.wantCacheStorageClass, *gotStorageClass)
-				}
-			}
-
 			err = r.client.Get(context.TODO(), req.NamespacedName, tt.workspace)
 			if err != nil {
 				t.Fatalf("get ws: (%v)", err)
@@ -307,6 +292,31 @@ func TestReconcileWorkspace(t *testing.T) {
 			queue := tt.workspace.Status.Queue
 			if !reflect.DeepEqual(tt.wantQueue, queue) {
 				t.Fatalf("workspace queue expected to be %#v, but got %#v", tt.wantQueue, queue)
+			}
+
+			if tt.wantPVC {
+				pvc := &corev1.PersistentVolumeClaim{}
+				err = r.client.Get(context.TODO(), req.NamespacedName, pvc)
+				if err != nil {
+					t.Errorf("get pvc: (%v)", err)
+				}
+
+				// If not set, want default of 1Gi
+				if tt.wantCacheSize == "" {
+					tt.wantCacheSize = "1Gi"
+				}
+				gotSize, _ := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+				if tt.wantCacheSize != gotSize.String() {
+					t.Errorf("want %s got %s", tt.wantCacheSize, gotSize.String())
+				}
+
+				// Don't test when StorageClass is unset
+				if tt.wantCacheStorageClass != "" {
+					gotStorageClass := pvc.Spec.StorageClassName
+					if tt.wantCacheStorageClass != *gotStorageClass {
+						t.Errorf("want %s got %s", tt.wantCacheStorageClass, *gotStorageClass)
+					}
+				}
 			}
 		})
 	}

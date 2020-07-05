@@ -207,30 +207,6 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		instance.Status.Queue = []string{}
 	}
 
-	pvc := newPVCForCR(instance)
-
-	// Set Workspace instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
-		reqLogger.Error(err, "Error setting controller reference on PVC")
-		return reconcile.Result{}, err
-	}
-
-	// Check if this PVC already exists
-	// NOTE: Once created, changes to the PVC, such as the size or the storage class name, are
-	// ignored. The PVC has to be manually deleted and then let the controller re-create it.
-	found := &corev1.PersistentVolumeClaim{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
-	if errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new PVC", "PVC.Namespace", pvc.Namespace, "PVC.Name", pvc.Name)
-		if err = r.client.Create(context.TODO(), pvc); err != nil {
-			reqLogger.Error(err, "Error creating PVC")
-			return reconcile.Result{}, err
-		}
-	} else if err != nil {
-		reqLogger.Error(err, "Error retrieving PVC")
-		return reconcile.Result{}, err
-	}
-
 	// Check ServiceAccount exists (if specified)
 	if instance.Spec.ServiceAccountName != "" {
 		serviceAccountNamespacedName := types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: request.Namespace}
@@ -286,6 +262,30 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	})
 	if err := r.client.Status().Update(context.TODO(), instance); err != nil {
 		return reconcile.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
+	}
+
+	pvc := newPVCForCR(instance)
+
+	// Set Workspace instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+		reqLogger.Error(err, "Error setting controller reference on PVC")
+		return reconcile.Result{}, err
+	}
+
+	// Check if this PVC already exists
+	// NOTE: Once created, changes to the PVC, such as the size or the storage class name, are
+	// ignored. The PVC has to be manually deleted and then let the controller re-create it.
+	found := &corev1.PersistentVolumeClaim{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
+	if errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new PVC", "PVC.Namespace", pvc.Namespace, "PVC.Name", pvc.Name)
+		if err = r.client.Create(context.TODO(), pvc); err != nil {
+			reqLogger.Error(err, "Error creating PVC")
+			return reconcile.Result{}, err
+		}
+	} else if err != nil {
+		reqLogger.Error(err, "Error retrieving PVC")
+		return reconcile.Result{}, err
 	}
 
 	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
