@@ -91,6 +91,11 @@ cli-unit:
 cli-build:
 	go build -o $(CLI_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
 
+install: cli-install
+
+cli-install:
+	go install -ldflags $(LD_FLAGS) github.com/leg100/stok
+
 operator-build:
 	go build -o stok-operator -ldflags $(LD_FLAGS) github.com/leg100/stok/cmd/manager
 
