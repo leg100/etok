@@ -1,6 +1,6 @@
 # stok
 
-**s**upercharge **t**erraform **o**n **k**ubernetes
+**s**upercharge **t**erraform **o**n **k**ubernetes (or, more accurately, a poor man's Terraform Enterprise)
 
 ## install
 
