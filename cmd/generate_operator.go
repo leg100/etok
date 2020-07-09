@@ -44,7 +44,6 @@ func newOperatorCmd() *cobra.Command {
 
 	cc.cmd.Flags().StringVar(&cc.Name, "name", "stok-operator", "Name for kubernetes resources")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace for resources")
-	// TODO: replace latest with tag, or better still, a digest
 	cc.cmd.Flags().StringVar(&cc.Image, "image", defaultImage, "Docker image name (including tag)")
 
 	return cc.cmd

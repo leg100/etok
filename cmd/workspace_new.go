@@ -33,11 +33,11 @@ type newWorkspaceCmd struct {
 func newNewWorkspaceCmd() *cobra.Command {
 	cc := &newWorkspaceCmd{}
 	cc.cmd = &cobra.Command{
-		Use:     "new <workspace>",
-		Short:   "Create a new stok workspace",
-		Long:    "Deploys a Workspace resource",
-		PreRunE: cc.preRun,
-		RunE:    cc.doNewWorkspace,
+		Use:   "new <workspace>",
+		Short: "Create a new stok workspace",
+		Long:  "Deploys a Workspace resource",
+		Args:  cobra.ExactArgs(1),
+		RunE:  cc.doNewWorkspace,
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
@@ -52,19 +52,16 @@ func newNewWorkspaceCmd() *cobra.Command {
 	return cc.cmd
 }
 
-func (t *newWorkspaceCmd) preRun(cmd *cobra.Command, args []string) error {
+// 1. Wait til Workspace resource is healthy
+// 2. Run init command
+// 3. Write .terraform/environment
+func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) error {
 	if err := unmarshalV(t); err != nil {
 		return err
 	}
 
 	t.Name = args[0]
 
-	return nil
-}
-
-// Wait til Workspace resource is healthy
-// Write .terraform/environment
-func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) error {
 	config, err := configFromPath(t.KubeConfigPath)
 	if err != nil {
 		return err

@@ -22,9 +22,10 @@ LD_FLAGS = " \
 	gcp-deploy \
 	clean delete-command-resources delete-crds \
 	unit \
-	cli-unit cli-build cli-test \
+	install \
+	cli-unit cli-build cli-test cli-install \
 	operator-build operator-image operator-load-image operator-unit \
-	generate-all generate generate-deepcopy generate-crds generate-clientset
+	generate-all generate generate-deepcopy generate-crds
 
 local:
 	operator-sdk run --local \
@@ -112,7 +113,7 @@ operator-load-image:
 operator-unit:
 	go test -v ./pkg/...
 
-generate-all: generate generate-crds generate-deepcopy generate-clientset
+generate-all: generate generate-crds generate-deepcopy
 
 generate:
 	go generate ./...
@@ -129,19 +130,3 @@ generate-crds:
 	done
 	# combine crd yamls into one
 	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > $(ALL_CRD)
-
-generate-clientset:
-	mkdir -p hack
-	sed -e 's,^,// ,; s,  *$$,,' LICENSE > hack/boilerplate.go.txt
-
-	rm -rf pkg/client/clientset
-	go run k8s.io/code-generator/cmd/client-gen \
-		--clientset-name clientset \
-		--input-base github.com/leg100/stok/pkg/apis \
-		--input stok/v1alpha1 \
-		-h hack/boilerplate.go.txt \
-		-p github.com/leg100/stok/pkg/client/
-
-	mkdir -p pkg/client
-	mv github.com/leg100/stok/pkg/client/clientset pkg/client/
-	rm -rf github.com

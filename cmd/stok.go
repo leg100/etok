@@ -5,7 +5,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/logging/handlers/cli"
-	"github.com/leg100/stok/logging/handlers/prefix"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,30 +34,29 @@ func newStokCmd() *stokCmd {
 	cc := &stokCmd{}
 
 	cc.cmd = &cobra.Command{
-		Use:               "stok",
-		Short:             "Supercharge terraform on kubernetes",
-		PersistentPreRunE: cc.preRun,
-		SilenceUsage:      true,
-		Version:           version.Version + " " + version.Commit,
+		Use:   "stok",
+		Short: "Supercharge terraform on kubernetes",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := cc.initConfig(); err != nil {
+				return err
+			}
+
+			if err := unmarshalV(cc); err != nil {
+				return err
+			}
+
+			initLogging(cc)
+
+			return nil
+		},
+		SilenceUsage: true,
+		Version:      version.Version + " " + version.Commit,
 	}
 
 	cc.cmd.PersistentFlags().StringVar(&cc.Config, "config", "", "config file (default is $HOME/.stok.yaml)")
 	cc.cmd.PersistentFlags().StringVar(&cc.Loglevel, "loglevel", "info", "logging verbosity level")
 
 	return cc
-}
-
-func (cc *stokCmd) preRun(cmd *cobra.Command, args []string) error {
-	if err := cc.initConfig(); err != nil {
-		return err
-	}
-
-	if err := unmarshalV(cc); err != nil {
-		return err
-	}
-
-	initLogging(cc)
-	return nil
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -87,6 +85,6 @@ func (cc *stokCmd) initConfig() error {
 }
 
 func initLogging(cmd *stokCmd) {
-	log.SetHandler(prefix.New(cli.New(os.Stdout, os.Stderr), "[stok] "))
+	log.SetHandler(cli.New(os.Stdout, os.Stderr))
 	log.SetLevelFromString(cmd.Loglevel)
 }

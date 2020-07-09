@@ -127,7 +127,7 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 
 // create dynamic client
 // exit if workspace is unhealthy
-// construct unstructured command resource
+// construct command resource
 // create tarball
 // embed tarball in configmap
 // deploy resources
@@ -169,12 +169,15 @@ func (t *terraformCmd) run() error {
 	if err != nil {
 		return err
 	}
+	log.WithFields(log.Fields{"namespace": t.Namespace}).Debug("resource checked")
 
 	// Check workspace resource exists and is healthy
 	ws, err := gc.Workspaces(t.Namespace).Get(t.Workspace, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
+	log.WithFields(log.Fields{"workspace": t.Workspace, "namespace": t.Namespace}).Debug("resource checked")
+
 	wsHealth := ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy)
 	if wsHealth == nil {
 		return fmt.Errorf("Workspace %s is missing a WorkspaceHealthy condition", t.Workspace)
@@ -206,13 +209,19 @@ func (t *terraformCmd) run() error {
 		return err
 	}
 
-	// Wait for pod to be running and ready
+	log.WithFields(log.Fields{
+		"pod":       cmdRes.GetName(),
+		"namespace": t.Namespace,
+	}).Debug("awaiting readiness")
 	pod, err := t.waitUntilPodRunningAndReady(kc, &corev1.Pod{}, cmdRes.GetName(), t.Namespace)
 	if err != nil {
 		return err
 	}
 
-	// Retrieve pod log stream
+	log.WithFields(log.Fields{
+		"pod":       cmdRes.GetName(),
+		"namespace": t.Namespace,
+	}).Debug("retrieve log stream")
 	req := kc.CoreV1().Pods(t.Namespace).GetLogs(cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
 	logs, err := req.Stream()
 	if err != nil {
@@ -225,12 +234,13 @@ func (t *terraformCmd) run() error {
 	go func() {
 		log.WithFields(log.Fields{
 			"pod": cmdRes.GetName(),
-		}).Debug("Attaching")
+		}).Debug("attaching")
 
 		drawDivider()
 
 		err := t.handleAttachPod(*config, pod)
 		if err != nil {
+			// TODO: use log fields
 			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
 			_, err = io.Copy(os.Stdout, logs)
 			done <- err

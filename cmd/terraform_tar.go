@@ -26,11 +26,16 @@ func (t *terraformCmd) createTar() (*bytes.Buffer, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("found *.tf files: %v", filenames)
 
 	tar, err := util.Create(wd, filenames)
 	if err != nil {
 		return nil, err
 	}
+
+	log.WithFields(log.Fields{
+		"files": filenames,
+		"bytes": tar.Len(),
+	}).Debug("archive created")
+
 	return tar, nil
 }

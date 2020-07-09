@@ -42,8 +42,7 @@ func (t *terraformCmd) createCommand(rc client.Client, crd crdinfo.CRDInfo) (com
 	}
 
 	log.WithFields(log.Fields{
-		"type":      "command",
-		"name":      cmd.GetName(),
+		t.Command:   cmd.GetName(),
 		"namespace": t.Namespace,
 	}).Debug("resource created")
 
@@ -77,8 +76,7 @@ func (t *terraformCmd) createConfigMap(client kubernetes.Interface, command meta
 	}
 
 	log.WithFields(log.Fields{
-		"type":      "configmap",
-		"name":      configMap.GetName(),
+		"configmap": configMap.GetName(),
 		"namespace": t.Namespace,
 	}).Debug("resource created")
 
