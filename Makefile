@@ -103,6 +103,9 @@ operator-build:
 operator-image: operator-build
 	docker build -f build/Dockerfile -t $(DOCKER_IMAGE) .
 
+# TODO: We should not be pushing to docker hub, which is for public consumption and should only be
+# for images that have been through the release process. Instead use a private Google Container
+# Registry specifically for GKE testing.
 operator-push: operator-image
 	docker push $(DOCKER_IMAGE) | tee push.out
 	grep -o 'sha256:[a-f0-9]*' push.out > stok-operator.digest
@@ -113,6 +116,7 @@ operator-load-image:
 operator-unit:
 	go test -v ./pkg/...
 
+# TODO: parallelize generate-crds and generate-deepcopy
 generate-all: generate generate-crds generate-deepcopy
 
 generate:
