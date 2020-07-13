@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 
+	"github.com/leg100/stok/pkg/apis"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	fakeStokClient "github.com/leg100/stok/pkg/client/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestDeleteWorkspace(t *testing.T) {
@@ -16,16 +20,21 @@ func TestDeleteWorkspace(t *testing.T) {
 		},
 	}
 
-	clientset := fakeStokClient.NewSimpleClientset(ws1)
+	s := scheme.Scheme
+	// adds CRD GVKs
+	apis.AddToScheme(s)
+
+	client := fake.NewFakeClientWithScheme(s, ws1)
 
 	lwc := &deleteWorkspaceCmd{Namespace: "default", Name: "workspace-1"}
 
-	if err := lwc.deleteWorkspace(clientset.StokV1alpha1()); err != nil {
+	if err := lwc.deleteWorkspace(client); err != nil {
 		t.Fatal(err)
 	}
 
-	workspaces, err := clientset.StokV1alpha1().Workspaces("default").List(metav1.ListOptions{})
-	if err != nil {
+	workspaces := v1alpha1.WorkspaceList{}
+	// List across all namespaces
+	if err := client.List(context.TODO(), &workspaces); err != nil {
 		t.Fatal(err)
 	}
 

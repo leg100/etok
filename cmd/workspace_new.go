@@ -1,18 +1,25 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/apex/log"
+	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 type newWorkspaceCmd struct {
@@ -67,19 +74,32 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	clientset, err := v1alpha1clientset.NewForConfig(config)
+	// Get built-in scheme
+	s := scheme.Scheme
+	// And add our CRDs
+	apis.AddToScheme(s)
+
+	// Controller-runtime client for constructing workspace resource
+	rc, err := client.New(config, client.Options{Scheme: s})
 	if err != nil {
 		return err
 	}
 
-	ws, err := t.createWorkspace(clientset)
+	// Get REST Client for listwatch for watching command resource
+	gvk := v1alpha1.SchemeGroupVersion.WithKind("Workspace")
+	restclient, err := apiutil.RESTClientForGVK(gvk, config, serializer.NewCodecFactory(s))
+	if err != nil {
+		return err
+	}
+
+	ws, err := t.createWorkspace(rc)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Created workspace '%s' in namespace '%s'\n", t.Name, t.Namespace)
 
-	_, err = t.waitUntilWorkspaceHealthy(clientset, ws)
+	_, err = t.waitUntilWorkspaceHealthy(restclient, ws)
 	if err != nil {
 		return err
 	}
@@ -91,7 +111,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	return nil
 }
 
-func (t *newWorkspaceCmd) createWorkspace(clientset v1alpha1clientset.StokV1alpha1Interface) (*v1alpha1types.Workspace, error) {
+func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Workspace, error) {
 	ws := &v1alpha1types.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      t.Name,
@@ -119,11 +139,12 @@ func (t *newWorkspaceCmd) createWorkspace(clientset v1alpha1clientset.StokV1alph
 		ws.Spec.Cache.StorageClass = t.StorageClass
 	}
 
-	return clientset.Workspaces(t.Namespace).Create(ws)
+	err := rc.Create(context.TODO(), ws)
+	return ws, err
 }
 
-func (t *newWorkspaceCmd) waitUntilWorkspaceHealthy(cs *v1alpha1clientset.StokV1alpha1Client, workspace *v1alpha1types.Workspace) (*v1alpha1types.Workspace, error) {
-	obj, err := waitUntil(cs.RESTClient(), workspace, workspace.GetName(), workspace.GetNamespace(), "workspaces", workspaceHealthy, t.Timeout)
+func (t *newWorkspaceCmd) waitUntilWorkspaceHealthy(rc rest.Interface, workspace *v1alpha1types.Workspace) (*v1alpha1types.Workspace, error) {
+	obj, err := waitUntil(rc, workspace, workspace.GetName(), workspace.GetNamespace(), "workspaces", workspaceHealthy, t.Timeout)
 	return obj.(*v1alpha1types.Workspace), err
 }
 
@@ -143,6 +164,12 @@ func workspaceHealthy(event watch.Event) (bool, error) {
 		}
 		for i := range conditions {
 			if conditions[i].Type == v1alpha1.ConditionHealthy {
+				log.WithFields(log.Fields{
+					"workspace": t.GetName(),
+					"namespace": t.GetNamespace(),
+					"reason":    conditions[i].Reason,
+				}).Debug("Checking health")
+
 				if conditions[i].Status == corev1.ConditionTrue {
 					return true, nil
 				}

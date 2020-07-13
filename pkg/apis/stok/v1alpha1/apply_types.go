@@ -7,9 +7,9 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Apply is the Schema for the applies API
+// Apply is the Schema for the applys API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=applies,scope=Namespaced
+// +kubebuilder:resource:path=applys,scope=Namespaced
 // +genclient
 type Apply struct {
 	metav1.TypeMeta   `json:",inline"`

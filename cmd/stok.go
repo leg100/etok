@@ -1,90 +1,69 @@
 package cmd
 
 import (
-	"os"
+	"fmt"
+	"os/exec"
 
 	"github.com/apex/log"
+	"github.com/leg100/stok/cmd/manager"
 	"github.com/leg100/stok/logging/handlers/cli"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 type stokCmd struct {
-	Config     string
-	Loglevel   string
-	KubeConfig string
-
-	cmd *cobra.Command
+	debug bool
+	cmd   *cobra.Command
+	exit  func(int)
 }
 
-func allCommands() []*cobra.Command {
-	return append(newTerraformCmds().getCommands(), workspaceCmd(), generateCmd())
+func Execute(args []string, exit func(int)) {
+	log.SetHandler(cli.Default)
+
+	newStokCmd(exit).Execute(args)
 }
 
-func Execute(args []string) error {
-	cc := newStokCmd()
-	cc.cmd.AddCommand(allCommands()...)
+func (cc *stokCmd) Execute(args []string) {
 	cc.cmd.SetArgs(args)
 
-	return cc.cmd.Execute()
+	if err := cc.cmd.Execute(); err != nil {
+		var code = 1
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			code = exiterr.ExitCode()
+		}
+		log.WithError(err).Error("")
+		cc.exit(code)
+	}
 }
 
-func newStokCmd() *stokCmd {
-	cc := &stokCmd{}
+func newStokCmd(exit func(int)) *stokCmd {
+	cc := &stokCmd{exit: exit}
 
 	cc.cmd = &cobra.Command{
 		Use:   "stok",
 		Short: "Supercharge terraform on kubernetes",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := cc.initConfig(); err != nil {
-				return err
+			if cc.debug {
+				log.SetLevel(log.DebugLevel)
+				log.Debug("debug logging enabled")
 			}
-
-			if err := unmarshalV(cc); err != nil {
-				return err
-			}
-
-			initLogging(cc)
-
 			return nil
 		},
-		SilenceUsage: true,
-		Version:      version.Version + " " + version.Commit,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Version:       fmt.Sprintf("%s\t%s", version.Version, version.Commit),
 	}
 
-	cc.cmd.PersistentFlags().StringVar(&cc.Config, "config", "", "config file (default is $HOME/.stok.yaml)")
-	cc.cmd.PersistentFlags().StringVar(&cc.Loglevel, "loglevel", "info", "logging verbosity level")
+	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
+
+	childCommands := append(
+		newTerraformCmds(),
+		workspaceCmd(),
+		generateCmd(),
+		newRunnerCmd(),
+		manager.NewOperatorCmd())
+
+	cc.cmd.AddCommand(childCommands...)
 
 	return cc
-}
-
-// initConfig reads in config file and ENV variables if set.
-func (cc *stokCmd) initConfig() error {
-	if cc.Config != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cc.Config)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-
-		// Search config in home directory with name ".stok" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".stok")
-	}
-
-	viper.SetEnvPrefix("stok")
-	viper.AutomaticEnv() // read in environment variables that match
-
-	viper.ReadInConfig()
-
-	return nil
-}
-
-func initLogging(cmd *stokCmd) {
-	log.SetHandler(cli.New(os.Stdout, os.Stderr))
-	log.SetLevelFromString(cmd.Loglevel)
 }

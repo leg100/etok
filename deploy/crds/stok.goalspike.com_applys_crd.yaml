@@ -3,20 +3,20 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: stok
-  name: imps.stok.goalspike.com
+  name: applys.stok.goalspike.com
 spec:
   group: stok.goalspike.com
   names:
-    kind: Imp
-    listKind: ImpList
-    plural: imps
-    singular: imp
+    kind: Apply
+    listKind: ApplyList
+    plural: applys
+    singular: apply
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Imp is the Schema for the imps API
+      description: Apply is the Schema for the applys API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

@@ -53,4 +53,6 @@ const (
 	ReasonPodRunningAndReady   status.ConditionReason = "PodRunningAndReady"
 	ReasonClientAttached       status.ConditionReason = "ClientAttached"
 	ReasonPodCompleted         status.ConditionReason = "PodCompleted"
+
+	CommandWaitAnnotationKey = "stok.goalspike.com/wait"
 )

@@ -11,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -19,25 +18,18 @@ import (
 )
 
 type CommandReconciler struct {
-	client     client.Client
-	gvk        schema.GroupVersionKind
-	scheme     *runtime.Scheme
-	entrypoint []string
-	plural     string
+	client  client.Client
+	c       command.Interface
+	wrapper func([]string) []string
+	scheme  *runtime.Scheme
 }
 
 func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	log := logf.Log.WithName("controller_" + r.gvk.Kind)
+	log := logf.Log.WithName("controller_" + r.c.GroupVersionKind().Kind)
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.V(1).Info("Reconciling " + r.gvk.Kind)
+	reqLogger.V(1).Info("Reconciling " + r.c.GroupVersionKind().Kind)
 
-	o, err := r.scheme.New(r.gvk)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	c := o.(command.Interface)
-
-	err = r.client.Get(context.TODO(), request.NamespacedName, c)
+	err := r.client.Get(context.TODO(), request.NamespacedName, r.c)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -50,21 +42,21 @@ func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Command completed, nothing more to be done
-	if c.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
+	if r.c.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
 		return reconcile.Result{}, nil
 	}
 
 	//TODO: we really shouldn't be using a label for this but a spec field instead
-	workspaceName, ok := c.GetLabels()["workspace"]
+	workspaceName, ok := r.c.GetLabels()["workspace"]
 	if !ok {
 		// Unrecoverable error, signal completion
-		c.GetConditions().SetCondition(operatorstatus.Condition{
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonWorkspaceUnspecified,
 			Message: "Error: Workspace label not set",
 		})
-		_ = r.client.Status().Update(context.TODO(), c)
+		_ = r.client.Status().Update(context.TODO(), r.c)
 		return reconcile.Result{}, nil
 	}
 
@@ -73,51 +65,51 @@ func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Resu
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: workspaceName, Namespace: request.Namespace}, workspace)
 	if errors.IsNotFound(err) {
 		// Workspace not found, unlikely to be temporary, signal completion
-		c.GetConditions().SetCondition(operatorstatus.Condition{
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonWorkspaceNotFound,
 			Message: fmt.Sprintf("Workspace '%s' not found", workspaceName),
 		})
-		_ = r.client.Status().Update(context.TODO(), c)
+		_ = r.client.Status().Update(context.TODO(), r.c)
 		return reconcile.Result{}, nil
 	}
 
 	// Check workspace queue position
-	pos := slice.StringIndex(workspace.Status.Queue, c.GetName())
+	pos := slice.StringIndex(workspace.Status.Queue, r.c.GetName())
 	// TODO: consider removing these status updates
 	if pos > 0 {
 		// Queued
-		c.GetConditions().SetCondition(operatorstatus.Condition{
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionAttachable,
 			Status:  corev1.ConditionFalse,
 			Reason:  v1alpha1.ReasonQueued,
 			Message: fmt.Sprintf("In workspace queue position %d", pos),
 		})
-		err = r.client.Status().Update(context.TODO(), c)
+		err = r.client.Status().Update(context.TODO(), r.c)
 		return reconcile.Result{}, err
 	}
 	if pos < 0 {
 		// Not yet queued
-		c.GetConditions().SetCondition(operatorstatus.Condition{
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionAttachable,
 			Status:  corev1.ConditionFalse,
 			Reason:  v1alpha1.ReasonUnscheduled,
 			Message: "Not yet scheduled by workspace",
 		})
-		err = r.client.Status().Update(context.TODO(), c)
+		err = r.client.Status().Update(context.TODO(), r.c)
 		return reconcile.Result{}, err
 	}
 
 	// Check if client has told us they're ready and set condition accordingly
-	if val, ok := c.GetAnnotations()["stok.goalspike.com/client"]; ok && val == "Ready" {
-		c.GetConditions().SetCondition(operatorstatus.Condition{
+	if val, ok := r.c.GetAnnotations()["stok.goalspike.com/client"]; ok && val == "Ready" {
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionClientReady,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonClientAttached,
 			Message: "Client has attached to pod TTY",
 		})
-		if err = r.client.Status().Update(context.TODO(), c); err != nil {
+		if err = r.client.Status().Update(context.TODO(), r.c); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -125,7 +117,7 @@ func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Resu
 	// Currently scheduled to run; get or create pod
 	pod := CommandPod{
 		CommandReconciler: r,
-		cmd:               c,
+		cmd:               r.c,
 		workspace:         workspace,
 	}
 	return pod.reconcile(request)

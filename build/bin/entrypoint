@@ -1,3 +1,3 @@
 #!/bin/sh -e
 
-exec ${OPERATOR} $@
+exec ${STOK_BIN} $@

@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"github.com/leg100/stok/constants"
-	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
@@ -136,7 +135,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	s := mgr.GetScheme()
 	apis.AddToScheme(s)
 	// Watch for changes to command resources and requeue the associated Workspace.
-	for _, crd := range crdinfo.Inventory {
+	for _, crd := range v1alpha1.Commands {
 		o, err := s.New(crd.GroupVersionKind())
 		if err != nil {
 			return err
@@ -291,7 +290,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
 	var cmdList []command.Interface
 	// Fetch and append each type of command to cmdList
-	for _, crd := range crdinfo.Inventory {
+	for _, crd := range v1alpha1.Commands {
 		ccList, err := r.scheme.New(crd.GroupVersionKindList())
 		if err != nil {
 			return reconcile.Result{}, err

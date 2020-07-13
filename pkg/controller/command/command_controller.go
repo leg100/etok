@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
@@ -24,7 +23,7 @@ func Add(mgr manager.Manager) error {
 	s := mgr.GetScheme()
 	apis.AddToScheme(s)
 
-	for crdname, crd := range crdinfo.Inventory {
+	for _, crd := range v1alpha1.Commands {
 		o, err := s.New(crd.GroupVersionKind())
 		if err != nil {
 			return err
@@ -36,14 +35,13 @@ func Add(mgr manager.Manager) error {
 		}
 
 		r := &CommandReconciler{
-			client:     mgr.GetClient(),
-			gvk:        crd.GroupVersionKind(),
-			entrypoint: crd.Entrypoint,
-			plural:     crd.APIPlural,
-			scheme:     s,
+			client:  mgr.GetClient(),
+			c:       o.(command.Interface),
+			scheme:  s,
+			wrapper: crd.Wrapper,
 		}
 
-		controllerName := fmt.Sprintf("%s-controller", crdname)
+		controllerName := fmt.Sprintf("%s-controller", string(crd))
 		c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 		if err != nil {
 			return err

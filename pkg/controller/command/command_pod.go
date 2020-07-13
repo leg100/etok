@@ -13,6 +13,7 @@ import (
 	"github.com/leg100/stok/constants"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
+	"github.com/leg100/stok/version"
 	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 )
 
@@ -129,27 +130,39 @@ func (r CommandPod) create(pod *corev1.Pod) (reconcile.Result, error) {
 }
 
 func (cp *CommandPod) construct(pod *corev1.Pod) error {
-	script, err := Script{
-		Resource:      cp.cmd.GetName(),
-		Tarball:       constants.Tarball,
-		Entrypoint:    cp.entrypoint,
-		Kind:          cp.plural,
-		Args:          cp.cmd.GetArgs(),
-		TimeoutClient: cp.cmd.GetTimeoutClient(),
-	}.generate()
-	if err != nil {
-		return err
-	}
+	args := append([]string{"--"}, cp.crd.Wrapper(cp.cmd.GetArgs())...)
 
 	pod.Spec = corev1.PodSpec{
 		ServiceAccountName: cp.serviceAccountName(),
 		Containers: []corev1.Container{
 			{
-				Name:                     "terraform",
-				Image:                    "leg100/terraform:latest",
-				ImagePullPolicy:          corev1.PullIfNotPresent,
-				Command:                  []string{"sh"},
-				Args:                     []string{"-o", "pipefail", "-ec", script},
+				Name:            "runner",
+				Image:           constants.ImageRepo + ":" + version.Version,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"stok", "runner"},
+				Args:            args,
+				Env: []corev1.EnvVar{
+					{
+						Name:  "STOK_TARBALL_PATH",
+						Value: filepath.Join("/tarball", constants.Tarball),
+					},
+					{
+						Name:  "STOK_TIMEOUT_CLIENT",
+						Value: cp.cmd.GetTimeoutClient(),
+					},
+					{
+						Name:  "STOK_KIND",
+						Value: cp.cmd.GetObjectKind().GroupVersionKind().Kind,
+					},
+					{
+						Name:  "STOK_NAME",
+						Value: cp.cmd.GetName(),
+					},
+					{
+						Name:  "STOK_NAMESPACE",
+						Value: cp.cmd.GetNamespace(),
+					},
+				},
 				Stdin:                    true,
 				TTY:                      true,
 				TerminationMessagePolicy: "FallbackToLogsOnError",

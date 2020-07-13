@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 
-	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/apis"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type listWorkspaceCmd struct {
@@ -36,7 +39,13 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 		return err
 	}
 
-	clientset, err := v1alpha1clientset.NewForConfig(config)
+	// Get built-in scheme
+	s := scheme.Scheme
+	// And add our CRDs
+	apis.AddToScheme(s)
+
+	// Controller-runtime client for constructing workspace resource
+	rc, err := client.New(config, client.Options{Scheme: s})
 	if err != nil {
 		return err
 	}
@@ -46,7 +55,7 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 		return err
 	}
 
-	err = t.listWorkspaces(clientset, currentNamespace, currentWorkspace, os.Stdout)
+	err = t.listWorkspaces(rc, currentNamespace, currentWorkspace, os.Stdout)
 	if err != nil {
 		return err
 	}
@@ -54,9 +63,10 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 	return nil
 }
 
-func (t *listWorkspaceCmd) listWorkspaces(clientset v1alpha1clientset.StokV1alpha1Interface, currentNamespace, currentWorkspace string, writer io.Writer) error {
-	workspaces, err := clientset.Workspaces("").List(metav1.ListOptions{})
-	if err != nil {
+func (t *listWorkspaceCmd) listWorkspaces(rc client.Client, currentNamespace, currentWorkspace string, writer io.Writer) error {
+	workspaces := v1alpha1.WorkspaceList{}
+	// List across all namespaces
+	if err := rc.List(context.TODO(), &workspaces); err != nil {
 		return err
 	}
 

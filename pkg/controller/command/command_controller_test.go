@@ -259,7 +259,10 @@ func TestReconcileCommand(t *testing.T) {
 
 			if tt.wantGoogleCredentials {
 				want := "/credentials/google-credentials.json"
-				got := pod.Spec.Containers[0].Env[0].Value
+				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "GOOGLE_APPLICATION_CREDENTIALS")
+				if !ok {
+					t.Errorf("Could not find env var with name GOOGLE_APPLICATION_CREDENTIALS")
+				}
 				if want != got {
 					t.Errorf("want %s got %s", want, got)
 				}
@@ -270,6 +273,15 @@ func TestReconcileCommand(t *testing.T) {
 			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionClientReady, tt.wantClientReadyCondition)
 		})
 	}
+}
+
+func getEnvValueForName(container *corev1.Container, name string) (string, bool) {
+	for _, env := range container.Env {
+		if env.Name == name {
+			return env.Value, true
+		}
+	}
+	return "", false
 }
 
 func assertCondition(t *testing.T, cmdstatus *v1alpha1.CommandStatus, ctype status.ConditionType, want corev1.ConditionStatus) {

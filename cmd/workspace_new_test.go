@@ -3,7 +3,9 @@ package cmd
 import (
 	"testing"
 
-	fakeStokClient "github.com/leg100/stok/pkg/client/clientset/fake"
+	"github.com/leg100/stok/pkg/apis"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestCreateWorkspace(t *testing.T) {
@@ -60,9 +62,13 @@ func TestCreateWorkspace(t *testing.T) {
 				CacheSize:      tt.cacheSize,
 			}
 
-			clientset := fakeStokClient.NewSimpleClientset()
+			s := scheme.Scheme
+			// adds CRD GVKs
+			apis.AddToScheme(s)
 
-			ws, err := nwc.createWorkspace(clientset.StokV1alpha1())
+			client := fake.NewFakeClientWithScheme(s)
+
+			ws, err := nwc.createWorkspace(client)
 			if err != nil {
 				t.Fatal(err)
 			}

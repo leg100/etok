@@ -7,16 +7,16 @@ metadata:
 spec:
   group: stok.goalspike.com
   names:
-    kind: Imp
-    listKind: ImpList
+    kind: Import
+    listKind: ImportList
     plural: imports
-    singular: imp
+    singular: import
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Imp is the Schema for the imports API
+      description: Import is the Schema for the imports API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

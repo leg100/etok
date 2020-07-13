@@ -7,11 +7,11 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Imp is the Schema for the imps API
+// Import is the Schema for the imports API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=imps,scope=Namespaced
+// +kubebuilder:resource:path=imports,scope=Namespaced
 // +genclient
-type Imp struct {
+type Import struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -21,13 +21,13 @@ type Imp struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ImpList contains a list of Imp
-type ImpList struct {
+// ImportList contains a list of Import
+type ImportList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Imp `json:"items"`
+	Items           []Import `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Imp{}, &ImpList{})
+	SchemeBuilder.Register(&Import{}, &ImportList{})
 }

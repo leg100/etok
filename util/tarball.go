@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 )
 
+//TODO: make breaking change to have these tar functions return and take byte arrays rather than
+// buffers
+
 // corollary of Extract
 func Create(dir string, filenames []string) (*bytes.Buffer, error) {
 	b := new(bytes.Buffer)

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/leg100/stok/pkg/apis"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	fakeStokClient "github.com/leg100/stok/pkg/client/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubectl/pkg/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestListWorkspaces(t *testing.T) {
@@ -24,13 +26,17 @@ func TestListWorkspaces(t *testing.T) {
 		},
 	}
 
-	clientset := fakeStokClient.NewSimpleClientset(ws1, ws2)
+	s := scheme.Scheme
+	// adds CRD GVKs
+	apis.AddToScheme(s)
+
+	client := fake.NewFakeClientWithScheme(s, ws1, ws2)
 
 	lwc := &listWorkspaceCmd{}
 
 	out := new(bytes.Buffer)
 
-	if err := lwc.listWorkspaces(clientset.StokV1alpha1(), "default", "workspace-1", out); err != nil {
+	if err := lwc.listWorkspaces(client, "default", "workspace-1", out); err != nil {
 		t.Fatal(err)
 	}
 

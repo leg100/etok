@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
@@ -24,12 +25,8 @@ type operatorCmd struct {
 	cmd *cobra.Command
 }
 
-const (
-	imageRepo = "leg100/stok-operator"
-)
-
 var (
-	defaultImage = imageRepo + ":" + version.Version
+	defaultImage = constants.ImageRepo + ":" + version.Version
 )
 
 func newOperatorCmd() *cobra.Command {
@@ -278,7 +275,8 @@ func (o *operatorCmd) deployment() *appsv1.Deployment {
 							Name:            "stok-operator",
 							Image:           o.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command:         []string{"stok-operator"},
+							Command:         []string{"stok"},
+							Args:            []string{"operator"},
 							Env: []corev1.EnvVar{
 								{
 									Name:  "WATCH_NAMESPACE",
@@ -297,6 +295,7 @@ func (o *operatorCmd) deployment() *appsv1.Deployment {
 									Value: "stok",
 								},
 							},
+							TerminationMessagePolicy: "FallbackToLogsOnError",
 						},
 					},
 				},

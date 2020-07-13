@@ -1,11 +1,10 @@
-package main
+package manager
 
 import (
 	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"runtime"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -22,7 +21,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/operator-framework/operator-sdk/pkg/metrics"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -46,17 +45,30 @@ func printVersion() {
 	log.Info(fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
 }
 
-func main() {
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
-	pflag.CommandLine.AddFlagSet(zap.FlagSet())
+type operatorCmd struct {
+	cmd *cobra.Command
+}
+
+func NewOperatorCmd() *cobra.Command {
+	c := &operatorCmd{}
+	c.cmd = &cobra.Command{
+		Use:   "operator",
+		Short: "Run the stok operator",
+		Args:  cobra.NoArgs,
+		RunE:  c.doOperatorCmd,
+	}
+
+	// Add the zap logger flag set to the CLI.
+	c.cmd.Flags().AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	c.cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
-	pflag.Parse()
+	return c.cmd
+}
 
+func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 	// Use a zap logr.Logger implementation. If none of the zap
 	// flags are configured (or if the zap flag set is not being
 	// used), this defaults to a production zap logger.
@@ -71,23 +83,20 @@ func main() {
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
-		os.Exit(1)
+		return fmt.Errorf("Failed to get watch namespace: %w", err)
 	}
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		return err
 	}
 
 	ctx := context.TODO()
 	// Become the leader before proceeding
 	err = leader.Become(ctx, "stok-operator-lock")
 	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		return err
 	}
 
 	// Create a new Cmd to provide shared dependencies and start components
@@ -96,22 +105,19 @@ func main() {
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 	})
 	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		return err
 	}
 
 	log.Info("Registering Components.")
 
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		return err
 	}
 
 	// Setup all Controllers
 	if err := controller.AddToManager(mgr); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
+		return err
 	}
 
 	// Add the Metrics Service
@@ -121,9 +127,10 @@ func main() {
 
 	// Start the Cmd
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "Manager exited non-zero")
-		os.Exit(1)
+		return fmt.Errorf("Manager exited non-zero: %w", err)
 	}
+
+	return nil
 }
 
 // addMetrics will create the Services and Service Monitors to allow the operator export the metrics by using

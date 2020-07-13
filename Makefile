@@ -2,7 +2,7 @@ VERSION = $(shell git describe --tags --dirty --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
 REPO = github.com/leg100/stok
 LOGLEVEL ?= info
-DOCKER_IMAGE = leg100/stok-operator:$(VERSION)
+DOCKER_IMAGE = leg100/stok:$(VERSION)
 OPERATOR_NAMESPACE ?= default
 OPERATOR_RELEASE ?= stok-operator
 WORKSPACE_NAMESPACE ?= default
@@ -10,7 +10,7 @@ ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
 GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
 KIND_CONTEXT ?= kind-kind
 GKE_CONTEXT ?= gke-stok
-CLI_BIN ?= build/_output/bin/stok
+BUILD_BIN ?= build/_output/bin/stok
 LD_FLAGS = " \
 	-X '$(REPO)/version.Version=$(VERSION)' \
 	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
@@ -23,15 +23,13 @@ LD_FLAGS = " \
 	clean delete-command-resources delete-crds \
 	unit \
 	install \
-	cli-unit cli-build cli-test cli-install \
-	operator-build operator-image operator-load-image operator-unit \
+	cli-unit build cli-test cli-install \
+	operator-build image kind-load-image operator-unit \
 	generate-all generate generate-deepcopy generate-crds
 
+local: export WATCH_NAMESPACE = ""
 local:
-	operator-sdk run --local \
-		--operator-flags "--zap-level $(LOGLEVEL)" \
-		--watch-namespace=default \
-		--verbose 2>&1 \
+	go run main.go operator --zap-level $(LOGLEVEL) \
 		| jq -R -r '. as $$line | try fromjson catch $$line'
 
 kind-context:
@@ -40,18 +38,18 @@ kind-context:
 gke-context:
 	kubectl config use-context $(GKE_CONTEXT)
 
-deploy-operator: cli-build
-	$(CLI_BIN) generate operator | kubectl apply -f -
+deploy-operator: build
+	$(BUILD_BIN) generate operator | kubectl apply -f -
 	kubectl rollout status deployment/stok-operator
 
-undeploy-operator: cli-build
-	$(CLI_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true
+undeploy-operator: build
+	$(BUILD_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true
 
-deploy-crds: cli-build
-	$(CLI_BIN) generate crds --local | kubectl create -f -
+deploy-crds: build
+	$(BUILD_BIN) generate crds --local | kubectl create -f -
 
-delete-crds: cli-build
-	$(CLI_BIN) generate crds --local | kubectl delete -f -
+delete-crds: build
+	$(BUILD_BIN) generate crds --local | kubectl delete -f -
 
 create-namespace:
 	kubectl get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || kubectl create ns $(NAMESPACE)
@@ -61,7 +59,7 @@ create-secret:
 		kubectl --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
 			--from-file=google-credentials.json=$(GOOGLE_APPLICATION_CREDENTIALS)
 
-e2e: cli-build operator-image operator-load-image kind-context deploy-crds \
+e2e: build image kind-load-image kind-context deploy-crds \
 	deploy-operator create-namespace create-secret e2e-run e2e-clean
 
 e2e-clean: delete-custom-resources undeploy-operator delete-crds
@@ -84,33 +82,26 @@ delete-command-resources:
 
 unit: operator-unit cli-unit
 
-build: cli-build operator-build
-
 cli-unit:
 	go test -v ./cmd
 
-cli-build:
-	go build -o $(CLI_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
+build:
+	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
 
-install: cli-install
-
-cli-install:
+install:
 	go install -ldflags $(LD_FLAGS) github.com/leg100/stok
 
-operator-build:
-	go build -o stok-operator -ldflags $(LD_FLAGS) github.com/leg100/stok/cmd/manager
-
-operator-image: operator-build
+image: build
 	docker build -f build/Dockerfile -t $(DOCKER_IMAGE) .
 
 # TODO: We should not be pushing to docker hub, which is for public consumption and should only be
 # for images that have been through the release process. Instead use a private Google Container
 # Registry specifically for GKE testing.
-operator-push: operator-image
+operator-push: image
 	docker push $(DOCKER_IMAGE) | tee push.out
-	grep -o 'sha256:[a-f0-9]*' push.out > stok-operator.digest
+	grep -o 'sha256:[a-f0-9]*' push.out > stok.digest
 
-operator-load-image:
+kind-load-image:
 	kind load docker-image $(DOCKER_IMAGE)
 
 operator-unit:

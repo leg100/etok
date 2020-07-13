@@ -11,7 +11,6 @@ import (
 	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	v1alpha1clientset "github.com/leg100/stok/pkg/client/clientset/typed/stok/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -42,25 +41,15 @@ type terraformCmd struct {
 	scheme *runtime.Scheme
 }
 
-type terraformCmds []*terraformCmd
-
-func (t terraformCmds) getCommands() []*cobra.Command {
+func newTerraformCmds() []*cobra.Command {
 	var cmds []*cobra.Command
-	for _, c := range t {
-		cmds = append(cmds, c.cmd)
-	}
-	return cmds
-}
 
-func newTerraformCmds() terraformCmds {
-	var cmds terraformCmds
-
-	for k := range crdinfo.Inventory {
+	for _, c := range v1alpha1.Commands {
 		cc := &terraformCmd{}
-		cc.Command = k
+		cc.Command = c
 		cc.cmd = &cobra.Command{
-			Use:   k,
-			Short: fmt.Sprintf("Run terraform %s", k),
+			Use:   c,
+			Short: fmt.Sprintf("Run %s", c),
 			RunE:  cc.doTerraformCmd,
 		}
 		cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "terraform config path")
@@ -72,7 +61,7 @@ func newTerraformCmds() terraformCmds {
 
 		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, if that does not exist, \"default\")")
 
-		cmds = append(cmds, cc)
+		cmds = append(cmds, cc.cmd)
 	}
 
 	return cmds
@@ -152,12 +141,6 @@ func (t *terraformCmd) run() error {
 		return err
 	}
 
-	// Generated clientset for checking health of workspace resource
-	gc, err := v1alpha1clientset.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
 	// client-go client for creating configmap resource
 	kc, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -172,8 +155,9 @@ func (t *terraformCmd) run() error {
 	log.WithFields(log.Fields{"namespace": t.Namespace}).Debug("resource checked")
 
 	// Check workspace resource exists and is healthy
-	ws, err := gc.Workspaces(t.Namespace).Get(t.Workspace, metav1.GetOptions{})
-	if err != nil {
+	ws := v1alpha1.Workspace{}
+	wsNamespacedName := types.NamespacedName{Name: t.Workspace, Namespace: t.Namespace}
+	if err := rc.Get(context.TODO(), wsNamespacedName, &ws); err != nil {
 		return err
 	}
 	log.WithFields(log.Fields{"workspace": t.Workspace, "namespace": t.Namespace}).Debug("resource checked")
