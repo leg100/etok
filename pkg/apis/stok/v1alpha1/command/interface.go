@@ -20,4 +20,6 @@ type Interface interface {
 	SetTimeoutClient(string)
 	GetTimeoutQueue() string
 	SetTimeoutQueue(string)
+	GetDebug() bool
+	SetDebug(bool)
 }

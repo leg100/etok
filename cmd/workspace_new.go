@@ -3,23 +3,21 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/rest"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 type newWorkspaceCmd struct {
@@ -34,10 +32,12 @@ type newWorkspaceCmd struct {
 	KubeConfigPath string
 	Timeout        time.Duration
 
-	cmd *cobra.Command
+	factory k8s.FactoryInterface
+	out     io.Writer
+	cmd     *cobra.Command
 }
 
-func newNewWorkspaceCmd() *cobra.Command {
+func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cc := &newWorkspaceCmd{}
 	cc.cmd = &cobra.Command{
 		Use:   "new <workspace>",
@@ -54,7 +54,10 @@ func newNewWorkspaceCmd() *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
-	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", time.Minute, "Time to wait for workspace to be healthy")
+	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
+
+	cc.factory = f
+	cc.out = out
 
 	return cc.cmd
 }
@@ -69,7 +72,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	t.Name = args[0]
 
-	config, err := configFromPath(t.KubeConfigPath)
+	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
 	if err != nil {
 		return err
 	}
@@ -80,14 +83,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	apis.AddToScheme(s)
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := client.New(config, client.Options{Scheme: s})
-	if err != nil {
-		return err
-	}
-
-	// Get REST Client for listwatch for watching command resource
-	gvk := v1alpha1.SchemeGroupVersion.WithKind("Workspace")
-	restclient, err := apiutil.RESTClientForGVK(gvk, config, serializer.NewCodecFactory(s))
+	rc, err := t.factory.NewClient(config, s)
 	if err != nil {
 		return err
 	}
@@ -97,10 +93,42 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	fmt.Printf("Created workspace '%s' in namespace '%s'\n", t.Name, t.Namespace)
+	log.WithFields(log.Fields{
+		"namespace": t.Namespace,
+		"workspace": t.Name,
+	}).Info("created workspace")
 
-	_, err = t.waitUntilWorkspaceHealthy(restclient, ws)
+	// Wait until Workspace's healthy condition is true
+	err = wait.Poll(100*time.Millisecond, t.Timeout, func() (bool, error) {
+		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: t.Namespace, Name: t.Name}, ws); err != nil {
+			return false, err
+		}
+		conditions := ws.Status.Conditions
+		if conditions == nil {
+			return false, nil
+		}
+		for i := range conditions {
+			if conditions[i].Type == v1alpha1.ConditionHealthy {
+				log.WithFields(log.Fields{
+					"workspace": ws.GetName(),
+					"namespace": ws.GetNamespace(),
+					"reason":    conditions[i].Reason,
+				}).Debug("Checking health")
+
+				if conditions[i].Status == corev1.ConditionTrue {
+					return true, nil
+				}
+				if conditions[i].Status == corev1.ConditionFalse {
+					return false, fmt.Errorf(conditions[i].Message)
+				}
+			}
+		}
+		return false, nil
+	})
 	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			return WorkspaceTimeoutErr
+		}
 		return err
 	}
 
@@ -110,6 +138,8 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	return nil
 }
+
+var WorkspaceTimeoutErr = fmt.Errorf("timed out waiting for workspace to be in a healthy condition")
 
 func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Workspace, error) {
 	ws := &v1alpha1types.Workspace{
@@ -141,43 +171,4 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 
 	err := rc.Create(context.TODO(), ws)
 	return ws, err
-}
-
-func (t *newWorkspaceCmd) waitUntilWorkspaceHealthy(rc rest.Interface, workspace *v1alpha1types.Workspace) (*v1alpha1types.Workspace, error) {
-	obj, err := waitUntil(rc, workspace, workspace.GetName(), workspace.GetNamespace(), "workspaces", workspaceHealthy, t.Timeout)
-	return obj.(*v1alpha1types.Workspace), err
-}
-
-// A watchtools.ConditionFunc that returns true when a Workspace resource's WorkspaceHealthy
-// condition is true; returns false otherwise, along with an error if WorkspaceHealthy is
-// false
-func workspaceHealthy(event watch.Event) (bool, error) {
-	switch event.Type {
-	case watch.Deleted:
-		return false, errors.NewNotFound(schema.GroupResource{Resource: "workspaces"}, "")
-	}
-	switch t := event.Object.(type) {
-	case *v1alpha1types.Workspace:
-		conditions := t.Status.Conditions
-		if conditions == nil {
-			return false, nil
-		}
-		for i := range conditions {
-			if conditions[i].Type == v1alpha1.ConditionHealthy {
-				log.WithFields(log.Fields{
-					"workspace": t.GetName(),
-					"namespace": t.GetNamespace(),
-					"reason":    conditions[i].Reason,
-				}).Debug("Checking health")
-
-				if conditions[i].Status == corev1.ConditionTrue {
-					return true, nil
-				}
-				if conditions[i].Status == corev1.ConditionFalse {
-					return false, fmt.Errorf(conditions[i].Message)
-				}
-			}
-		}
-	}
-	return false, nil
 }

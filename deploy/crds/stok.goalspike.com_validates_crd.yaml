@@ -41,6 +41,8 @@ spec:
               items:
                 type: string
               type: array
+            debug:
+              type: boolean
             timeoutclient:
               type: string
             timeoutqueue:

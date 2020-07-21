@@ -27,9 +27,10 @@ LD_FLAGS = " \
 	operator-build image kind-load-image operator-unit \
 	generate-all generate generate-deepcopy generate-crds
 
-local: export WATCH_NAMESPACE = ""
-local:
-	go run main.go operator --zap-level $(LOGLEVEL) \
+# Even though operator runs outside the cluster, it still creates pods. So an image still needs to
+# be built and loaded first.
+local: image kind-load-image
+	WATCH_NAMESPACE="" $(BUILD_BIN) operator --zap-level $(LOGLEVEL) \
 		| jq -R -r '. as $$line | try fromjson catch $$line'
 
 kind-context:
@@ -45,11 +46,11 @@ deploy-operator: build
 undeploy-operator: build
 	$(BUILD_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true
 
-deploy-crds: build
+deploy-crds: build generate-crds
 	$(BUILD_BIN) generate crds --local | kubectl create -f -
 
 delete-crds: build
-	$(BUILD_BIN) generate crds --local | kubectl delete -f -
+	$(BUILD_BIN) generate crds --local | kubectl delete -f - --ignore-not-found
 
 create-namespace:
 	kubectl get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || kubectl create ns $(NAMESPACE)

@@ -1,87 +1,131 @@
 package cmd
 
 import (
-	"bytes"
-	"io/ioutil"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/util"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-func TestRunner(t *testing.T) {
-	//var shell = v1alpha1.Shell{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      "stok-shell-xyz",
-	//		Namespace: "default",
-	//	},
-	//	CommandSpec: v1alpha1.CommandSpec{
-	//		Args: []string{"cow", "pig"},
-	//	},
-	//}
+func TestRunnerWithoutKind(t *testing.T) {
+	var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
 
-	path, err := ioutil.TempDir("", "test-path")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path)
+	code, err := cmd.Execute([]string{"runner"})
 
-	// Create test tarball
-	buf, err := util.Create("../util/fixtures/tarball", []string{"test1.tf", "test2.tf"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.EqualError(t, err, "missing flag: --kind <kind>")
+	require.Equal(t, 1, code)
+}
 
-	// Stick tarball in same dir as workspace
-	tarball := filepath.Join(path, "tarball.tar.gz")
-	if err := ioutil.WriteFile(tarball, buf.Bytes(), 0644); err != nil {
-		t.Fatal(err)
-	}
+func TestRunnerWithIncorrectKind(t *testing.T) {
+	var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
 
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "InvalidKind",
+		"--tarball", "bad-tarball-zzz.tar.gz",
+	})
+
+	require.EqualError(t, err, "invalid kind: InvalidKind")
+	require.Equal(t, 1, code)
+}
+
+func TestRunnerWithIncorrectTarball(t *testing.T) {
+	var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "Apply",
+		"--tarball", "bad-tarball-zzz.tar.gz",
+	})
+
+	require.EqualError(t, err, "open bad-tarball-zzz.tar.gz: no such file or directory")
+	require.Equal(t, 1, code)
+}
+
+func TestRunnerWithTarball(t *testing.T) {
+	tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
+	factory := fake.NewFactory(shell)
+	dest := createTempPath(t)
+
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "Shell",
+		"--name", "stok-shell-xyz",
+		"--namespace", "test",
+		"--tarball", tarball,
+		"--path", dest,
+		"--",
+		"/bin/ls", filepath.Join(dest, "test1.tf"),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+}
+
+func TestRunnerWithSpecificExitCode(t *testing.T) {
+	tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
+	factory := fake.NewFactory(shell)
+	dest := createTempPath(t)
+
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "Shell",
+		"--name", "stok-shell-xyz",
+		"--namespace", "test",
+		"--tarball", tarball,
+		"--path", dest,
+		"--",
+		"exit", "101",
+	})
+
+	require.EqualError(t, err, "exit status 101")
+	require.Equal(t, 101, code)
+}
+
+// Test interaction between launcher and client. Client sets annotation on command, runner waits for
+// annotation to be unset, client unsets annotation, runner returns without error.
+func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
+	shell.SetAnnotations(map[string]string{v1alpha1.CommandWaitAnnotationKey: "true"})
+	factory := fake.NewFactory(shell)
+
+	// Get built-in scheme
 	s := scheme.Scheme
-	// adds CRD GVKs
+	// And add our CRDs
 	apis.AddToScheme(s)
 
-	runner := &runnerCmd{
-		Kind:      "Shell",
-		Name:      "stok-shell-xyz",
-		Namespace: "default",
-		Path:      path,
-		Tarball:   tarball,
-		scheme:    s,
+	rc, err := factory.NewClient(&rest.Config{}, s)
+	require.NoError(t, err)
 
-		entrypoint: "/bin/echo",
-		args:       []string{"cow", "pig"},
-	}
+	done := make(chan error)
+	go func() {
+		done <- handleSemaphore(rc, s, "Shell", "stok-shell-xyz", "test", time.Second)
+	}()
 
-	// Fake controller-runtime client for retrieving command and configmap resources
-	// 	cr := fake.NewFakeClientWithScheme(s, &shell)
+	// Wait for runner to poll twice before unsetting annotation
+	wait.Poll(100*time.Millisecond, time.Second, func() (bool, error) {
+		if factory.Gets > 1 {
+			return true, nil
+		}
+		return false, nil
+	})
 
-	if err := runner.extractTarball(); err != nil {
-		t.Fatal(err)
-	}
+	// Unset wait annotation
+	shell.SetAnnotations(map[string]string{})
+	require.NoError(t, factory.Client.Update(context.TODO(), shell))
 
-	// Test tarball extraction
-	if _, err = os.Stat(filepath.Join(path, "test1.tf", "/")); err != nil {
-		t.Error(err)
-	}
-	if _, err = os.Stat(filepath.Join(path, "test2.tf", "/")); err != nil {
-		t.Error(err)
-	}
-
-	out := new(bytes.Buffer)
-	errout := new(bytes.Buffer)
-	// Test running the specified program
-	if err := runner.run(out, errout); err != nil {
-		t.Fatal(err)
-	}
-	// Test console output
-	want := "cow pig\n"
-	got := out.String()
-	if want != got {
-		t.Errorf("want %#v got %#v", want, got)
-	}
+	require.NoError(t, <-done)
 }

@@ -5,13 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	kubeFake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -94,7 +92,7 @@ func TestCreateCommand(t *testing.T) {
 	apis.AddToScheme(s)
 
 	tc := &terraformCmd{
-		Command:       "plan",
+		Kind:          "Plan",
 		Namespace:     "default",
 		Workspace:     "default",
 		Args:          []string{},
@@ -103,14 +101,9 @@ func TestCreateCommand(t *testing.T) {
 		scheme:        s,
 	}
 
-	crd, ok := crdinfo.Inventory[tc.Command]
-	if !ok {
-		t.Fatalf("Could not find Custom Resource Definition '%s'", tc.Command)
-	}
-
 	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
 
-	plan, err := tc.createCommand(client, crd)
+	plan, err := tc.createCommand(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,12 +120,12 @@ func TestCreateConfigMap(t *testing.T) {
 	apis.AddToScheme(s)
 
 	tc := &terraformCmd{
-		Command:   "plan",
+		Kind:      "Plan",
 		Namespace: "default",
 		Workspace: "default",
 	}
 
-	client := kubeFake.NewSimpleClientset()
+	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
 
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")

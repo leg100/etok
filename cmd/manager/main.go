@@ -85,6 +85,7 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to get watch namespace: %w", err)
 	}
+	log.Info("Watching", "namespace", namespace)
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()

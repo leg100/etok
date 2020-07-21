@@ -18,16 +18,16 @@ import (
 )
 
 type CommandReconciler struct {
-	client  client.Client
-	c       command.Interface
-	wrapper func([]string) []string
-	scheme  *runtime.Scheme
+	client       client.Client
+	c            command.Interface
+	resourceType string
+	scheme       *runtime.Scheme
 }
 
 func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	log := logf.Log.WithName("controller_" + r.c.GroupVersionKind().Kind)
+	log := logf.Log.WithName("controller_" + r.resourceType)
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.V(1).Info("Reconciling " + r.c.GroupVersionKind().Kind)
+	reqLogger.V(0).Info("Reconciling " + r.resourceType)
 
 	err := r.client.Get(context.TODO(), request.NamespacedName, r.c)
 	if err != nil {
@@ -115,10 +115,12 @@ func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Currently scheduled to run; get or create pod
-	pod := CommandPod{
-		CommandReconciler: r,
-		cmd:               r.c,
-		workspace:         workspace,
+	opts := podOpts{
+		workspaceName:      workspace.GetName(),
+		serviceAccountName: workspace.Spec.ServiceAccountName,
+		secretName:         workspace.Spec.SecretName,
+		pvcName:            workspace.GetName(),
+		configMapName:      r.c.GetName(),
 	}
-	return pod.reconcile(request)
+	return r.reconcilePod(request, &opts)
 }

@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis"
 	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubectl/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestListWorkspaces(t *testing.T) {
@@ -18,7 +17,6 @@ func TestListWorkspaces(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-
 	ws2 := &v1alpha1types.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "workspace-2",
@@ -26,23 +24,20 @@ func TestListWorkspaces(t *testing.T) {
 		},
 	}
 
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
+	var factory = fake.NewFactory(ws1, ws2)
+	var out = new(bytes.Buffer)
+	var cmd = newStokCmd(factory, out, out)
 
-	client := fake.NewFakeClientWithScheme(s, ws1, ws2)
+	path := createTempPath(t)
+	err := writeEnvironmentFile(path, "default", "workspace-1")
+	require.NoError(t, err)
 
-	lwc := &listWorkspaceCmd{}
-
-	out := new(bytes.Buffer)
-
-	if err := lwc.listWorkspaces(client, "default", "workspace-1", out); err != nil {
-		t.Fatal(err)
-	}
-
-	want := "*\tdefault/workspace-1\n\tdev/workspace-2\n"
-	got := out.String()
-	if want != got {
-		t.Errorf("want %s got %s", want, got)
-	}
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"list",
+		"--path", path,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+	require.Equal(t, "*\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
 }

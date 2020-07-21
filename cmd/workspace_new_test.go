@@ -1,113 +1,111 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis"
-	"k8s.io/kubectl/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCreateWorkspace(t *testing.T) {
-	tests := []struct {
-		name           string
-		namespace      string
-		serviceAccount string
-		secret         string
-		noSecret       bool
-		storageClass   string
-		cacheSize      string
-	}{
-		{
-			name:           "service-account-and-secret",
-			namespace:      "default",
-			serviceAccount: "stok",
-			secret:         "stok",
-		},
-		{
-			name:           "no-secret",
-			namespace:      "default",
-			serviceAccount: "stok",
-			noSecret:       true,
-		},
-		{
-			name:      "no-service-account",
-			namespace: "default",
-			noSecret:  true,
-		},
-		{
-			name:           "storage-class",
-			namespace:      "default",
-			serviceAccount: "stok",
-			noSecret:       true,
-			storageClass:   "a-storage-class",
-		},
-		{
-			name:           "cache-size",
-			namespace:      "default",
-			serviceAccount: "stok",
-			noSecret:       true,
-			cacheSize:      "3Gi",
-		},
-	}
+func TestNewWorkspaceWithoutArgs(t *testing.T) {
+	var cmd = newStokCmd(fake.NewFactory(), os.Stdout, os.Stderr)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			nwc := &newWorkspaceCmd{
-				Name:           tt.name,
-				Namespace:      tt.namespace,
-				ServiceAccount: tt.serviceAccount,
-				Secret:         tt.secret,
-				StorageClass:   tt.storageClass,
-				CacheSize:      tt.cacheSize,
-			}
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+	})
 
-			s := scheme.Scheme
-			// adds CRD GVKs
-			apis.AddToScheme(s)
-
-			client := fake.NewFakeClientWithScheme(s)
-
-			ws, err := nwc.createWorkspace(client)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if ws.GetName() != tt.name {
-				t.Errorf("want %s got %s", tt.name, ws.GetName())
-			}
-
-			if ws.GetNamespace() != tt.namespace {
-				t.Errorf("want %s got %s", tt.namespace, ws.GetNamespace())
-			}
-
-			if tt.serviceAccount != "" {
-				if ws.Spec.ServiceAccountName != tt.serviceAccount {
-					t.Errorf("want %s got %s", tt.serviceAccount, ws.Spec.ServiceAccountName)
-				}
-			} else {
-				if ws.Spec.ServiceAccountName != "" {
-					t.Errorf("want '' got %s", ws.Spec.ServiceAccountName)
-				}
-			}
-
-			if tt.noSecret {
-				if ws.Spec.SecretName != "" {
-					t.Errorf("want '' got %s", ws.Spec.SecretName)
-				}
-			} else {
-				if ws.Spec.SecretName != tt.secret {
-					t.Errorf("want %s got %s", tt.secret, ws.Spec.SecretName)
-				}
-			}
-
-			if ws.Spec.Cache.StorageClass != tt.storageClass {
-				t.Errorf("want %s got %s", tt.storageClass, ws.Spec.Cache.StorageClass)
-			}
-
-			if ws.Spec.Cache.Size != tt.cacheSize {
-				t.Errorf("want %s got %s", tt.cacheSize, ws.Spec.Cache.Size)
-			}
-		})
-	}
+	require.EqualError(t, err, "accepts 1 arg(s), received 0")
+	require.Equal(t, 1, code)
 }
+
+func TestNewWorkspaceWithoutFlags(t *testing.T) {
+	factory := fake.NewFactory()
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+
+	ws := factory.Objs[0].(*v1alpha1.Workspace)
+	require.NoError(t, err)
+	require.Equal(t, "", ws.Spec.ServiceAccountName)
+	require.Equal(t, "stok", ws.Spec.SecretName)
+}
+
+func TestNewWorkspaceWithSpecificNamespace(t *testing.T) {
+	factory := fake.NewFactory()
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+		"--namespace", "test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+
+	ws := factory.Objs[0].(*v1alpha1.Workspace)
+	require.NoError(t, err)
+	require.Equal(t, "test", ws.GetNamespace())
+}
+
+func TestNewWorkspaceWithNoSecret(t *testing.T) {
+	factory := fake.NewFactory()
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+		"--no-secret",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+
+	ws := factory.Objs[0].(*v1alpha1.Workspace)
+	require.NoError(t, err)
+	require.Equal(t, "", ws.Spec.SecretName)
+}
+
+func TestNewWorkspaceWithCacheSettings(t *testing.T) {
+	factory := fake.NewFactory()
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+		"--size", "999Gi",
+		"--storage-class", "lumpen-proletariat",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+
+	ws := factory.Objs[0].(*v1alpha1.Workspace)
+	require.NoError(t, err)
+	require.Equal(t, "999Gi", ws.Spec.Cache.Size)
+	require.Equal(t, "lumpen-proletariat", ws.Spec.Cache.StorageClass)
+}
+
+//func TestNewWorkspaceWithTimeoutError(t *testing.T) {
+//	factory := fake.NewFactory()
+//	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+//
+//	code, err := cmd.Execute([]string{
+//		"workspace",
+//		"new",
+//		"foo",
+//		"--service-account", "non-existent",
+//	})
+//	require.Equal(t, 1, code)
+//	require.Error(t, err)
+//	require.Equal(t, WorkspaceTimeoutErr, err)
+//}

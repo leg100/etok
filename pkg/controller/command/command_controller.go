@@ -23,25 +23,27 @@ func Add(mgr manager.Manager) error {
 	s := mgr.GetScheme()
 	apis.AddToScheme(s)
 
-	for _, crd := range v1alpha1.Commands {
-		o, err := s.New(crd.GroupVersionKind())
+	for _, kind := range v1alpha1.CommandKinds {
+		gvk := v1alpha1.SchemeGroupVersion.WithKind(kind)
+		o, err := s.New(gvk)
 		if err != nil {
 			return err
 		}
 
-		oList, err := s.New(crd.GroupVersionKindList())
+		oList, err := s.New(v1alpha1.SchemeGroupVersion.WithKind(v1alpha1.CollectionKind(kind)))
 		if err != nil {
 			return err
 		}
 
 		r := &CommandReconciler{
-			client:  mgr.GetClient(),
-			c:       o.(command.Interface),
-			scheme:  s,
-			wrapper: crd.Wrapper,
+			client: mgr.GetClient(),
+			// TODO: rename to c to something less silly, like cmd
+			c:            o.(command.Interface),
+			resourceType: v1alpha1.CommandKindToType(kind),
+			scheme:       s,
 		}
 
-		controllerName := fmt.Sprintf("%s-controller", string(crd))
+		controllerName := fmt.Sprintf("%s-controller", v1alpha1.CommandKindToType(kind))
 		c, err := controller.New(controllerName, mgr, controller.Options{Reconciler: r})
 		if err != nil {
 			return err

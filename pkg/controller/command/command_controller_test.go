@@ -6,6 +6,7 @@ import (
 
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -228,7 +229,14 @@ func TestReconcileCommand(t *testing.T) {
 					Namespace: plan.GetNamespace(),
 				},
 			}
-			r := &CommandReconciler{client: cl, scheme: s, gvk: plan.GroupVersionKind(), entrypoint: []string{"terraform", "plan"}, plural: "plans"}
+
+			gvk := v1alpha1.SchemeGroupVersion.WithKind("Plan")
+			c, err := s.New(gvk)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			r := &CommandReconciler{c: c.(command.Interface), client: cl, scheme: s, resourceType: "plans"}
 
 			res, err := r.Reconcile(req)
 			if err != nil {

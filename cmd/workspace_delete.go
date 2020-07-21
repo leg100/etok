@@ -6,7 +6,9 @@ import (
 	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -17,10 +19,11 @@ type deleteWorkspaceCmd struct {
 	Path           string
 	KubeConfigPath string
 
-	cmd *cobra.Command
+	factory k8s.FactoryInterface
+	cmd     *cobra.Command
 }
 
-func newDeleteWorkspaceCmd() *cobra.Command {
+func newDeleteWorkspaceCmd(f k8s.FactoryInterface) *cobra.Command {
 	cc := &deleteWorkspaceCmd{}
 	cc.cmd = &cobra.Command{
 		Use:   "delete <namespace/workspace>",
@@ -31,6 +34,8 @@ func newDeleteWorkspaceCmd() *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
 	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
+
+	cc.factory = f
 
 	return cc.cmd
 }
@@ -44,7 +49,7 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 
 	t.Name = args[0]
 
-	config, err := configFromPath(t.KubeConfigPath)
+	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
 	if err != nil {
 		return err
 	}
@@ -55,7 +60,7 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 	apis.AddToScheme(s)
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := client.New(config, client.Options{Scheme: s})
+	rc, err := t.factory.NewClient(config, s)
 	if err != nil {
 		return err
 	}
@@ -73,8 +78,10 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 }
 
 func (t *deleteWorkspaceCmd) deleteWorkspace(rc client.Client) error {
-	ws := v1alpha1.Workspace{}
-	ws.SetName(t.Name)
-	ws.SetNamespace(t.Namespace)
-	return rc.Delete(context.TODO(), &ws)
+	return rc.Delete(context.TODO(), &v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.Name,
+			Namespace: t.Namespace,
+		},
+	})
 }

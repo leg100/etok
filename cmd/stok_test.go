@@ -2,38 +2,28 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
+	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/leg100/stok/version"
 	"github.com/stretchr/testify/require"
 )
 
-type exitMock struct {
-	code int
-}
-
-func (e *exitMock) Exit(code int) {
-	e.code = code
-}
-
 func TestStokNoArgs(t *testing.T) {
-	var e = &exitMock{}
-	Execute([]string{""}, e.Exit)
-
-	require.Equal(t, 0, e.code)
+	require.Equal(t, 0, Execute([]string{""}))
 }
 
 func TestStokHelp(t *testing.T) {
 	var out bytes.Buffer
-	var e = &exitMock{}
-	var cmd = newStokCmd(e.Exit).cmd
+	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
 
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"-h"})
+	cmd.cmd.SetOut(&out)
+	code, err := cmd.Execute([]string{"-h"})
 
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, err)
 	require.Regexp(t, "^Supercharge terraform on kubernetes\n", out.String())
-	require.Equal(t, 0, e.code)
+	require.Equal(t, 0, code)
 }
 
 func TestStokVersion(t *testing.T) {
@@ -41,25 +31,30 @@ func TestStokVersion(t *testing.T) {
 	version.Commit = "xyz"
 
 	var out bytes.Buffer
-	var e = &exitMock{}
-	var cmd = newStokCmd(e.Exit).cmd
+	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
 
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"-v"})
+	cmd.cmd.SetOut(&out)
+	code, err := cmd.Execute([]string{"-v"})
 
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, err)
 	require.Equal(t, "stok version 123\txyz\n", out.String())
-	require.Equal(t, 0, e.code)
+	require.Equal(t, 0, code)
 }
 
 func TestStokDebug(t *testing.T) {
-	var out bytes.Buffer
-	var e = &exitMock{}
-	var cmd = newStokCmd(e.Exit).cmd
+	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
 
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"--debug"})
+	code, err := cmd.Execute([]string{"--debug"})
 
-	require.NoError(t, cmd.Execute())
-	require.Equal(t, 0, e.code)
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+}
+
+func TestStokInvalidCommand(t *testing.T) {
+	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{"invalid"})
+
+	require.Error(t, err)
+	require.Equal(t, 1, code)
 }

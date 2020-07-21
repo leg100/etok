@@ -1,31 +1,17 @@
 package cmd
 
 import (
-	"io/ioutil"
-	"os"
-	"path"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestWriteEnvironmentFile(t *testing.T) {
-	dest, err := ioutil.TempDir("", "workspace-new-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dest)
+func TestEnvironmentFile(t *testing.T) {
+	dest := createTempPath(t)
+	require.NoError(t, writeEnvironmentFile(dest, "default", "test-env"))
 
-	if err := writeEnvironmentFile(dest, "default", "test-env"); err != nil {
-		t.Fatal(err)
-	}
-
-	wantEnvFile := path.Join(dest, ".terraform", "environment")
-	gotEnv, err := ioutil.ReadFile(wantEnvFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := "default/test-env"
-	if string(gotEnv) != want {
-		t.Errorf("want %s got %s", want, string(gotEnv))
-	}
+	namespace, workspace, err := readEnvironmentFile(dest)
+	require.NoError(t, err)
+	require.Equal(t, "default", namespace)
+	require.Equal(t, "test-env", workspace)
 }

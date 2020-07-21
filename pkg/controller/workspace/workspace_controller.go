@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/go-logr/logr"
 	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -135,8 +137,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	s := mgr.GetScheme()
 	apis.AddToScheme(s)
 	// Watch for changes to command resources and requeue the associated Workspace.
-	for _, crd := range v1alpha1.Commands {
-		o, err := s.New(crd.GroupVersionKind())
+	for _, kind := range v1alpha1.CommandKinds {
+		o, err := s.New(v1alpha1.SchemeGroupVersion.WithKind(kind))
 		if err != nil {
 			return err
 		}
@@ -183,7 +185,7 @@ type ReconcileWorkspace struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.V(1).Info("Reconciling Workspace")
+	reqLogger.V(0).Info("Reconciling Workspace")
 
 	// Fetch the Workspace instance
 	instance := &v1alpha1.Workspace{}
@@ -253,6 +255,7 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// Set Healthy Condition since all pre-requisities satisfied
+	// TODO: only set this after confirming PVC (see below) is present
 	instance.Status.Conditions.SetCondition(status.Condition{
 		Type:    v1alpha1.ConditionHealthy,
 		Status:  corev1.ConditionTrue,
@@ -263,35 +266,29 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
 	}
 
+	// Manage PVC for workspace cache dir
 	pvc := newPVCForCR(instance)
-
-	// Set Workspace instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
-		reqLogger.Error(err, "Error setting controller reference on PVC")
+	if err := r.manageControllee(instance, reqLogger, pvc); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check if this PVC already exists
-	// NOTE: Once created, changes to the PVC, such as the size or the storage class name, are
-	// ignored. The PVC has to be manually deleted and then let the controller re-create it.
-	found := &corev1.PersistentVolumeClaim{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
-	if errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new PVC", "PVC.Namespace", pvc.Namespace, "PVC.Name", pvc.Name)
-		if err = r.client.Create(context.TODO(), pvc); err != nil {
-			reqLogger.Error(err, "Error creating PVC")
-			return reconcile.Result{}, err
-		}
-	} else if err != nil {
-		reqLogger.Error(err, "Error retrieving PVC")
+	// Manage Role for workspace
+	role := newRoleForCR(instance)
+	if err := r.manageControllee(instance, reqLogger, role); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Manage RoleBinding for workspace
+	binding := newRoleBindingForCR(instance, role)
+	if err := r.manageControllee(instance, reqLogger, binding); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
 	var cmdList []command.Interface
 	// Fetch and append each type of command to cmdList
-	for _, crd := range v1alpha1.Commands {
-		ccList, err := r.scheme.New(crd.GroupVersionKindList())
+	for _, kind := range v1alpha1.CommandKinds {
+		ccList, err := r.scheme.New(v1alpha1.SchemeGroupVersion.WithKind(v1alpha1.CollectionKind(kind)))
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -345,7 +342,36 @@ func (r *ReconcileWorkspace) Reconcile(request reconcile.Request) (reconcile.Res
 	return reconcile.Result{}, nil
 }
 
-func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
+func (r *ReconcileWorkspace) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee v1alpha1.Object) error {
+	log := logger.WithValues("Controllee.Kind", controllee.GetObjectKind().GroupVersionKind().Kind)
+
+	// Set Workspace instance as the owner and controller
+	if err := controllerutil.SetControllerReference(ws, controllee, r.scheme); err != nil {
+		log.Error(err, "Unable to set controller reference")
+		return err
+	}
+
+	controlleeKey, err := client.ObjectKeyFromObject(controllee)
+	if err != nil {
+		return err
+	}
+
+	err = r.client.Get(context.TODO(), controlleeKey, controllee)
+	if errors.IsNotFound(err) {
+		if err = r.client.Create(context.TODO(), controllee); err != nil {
+			log.Error(err, "Failed to create controllee", "Controllee.Name", controllee.GetName())
+			return err
+		}
+	} else if err != nil {
+		log.Error(err, "Error retrieving PVC")
+		return err
+	}
+
+	log.Info("Created controllee", "Controllee.Name", controllee.GetName())
+	return nil
+}
+
+func newPVCForCR(cr *v1alpha1.Workspace) v1alpha1.Object {
 	labels := map[string]string{
 		"app": cr.Name,
 	}
@@ -354,6 +380,10 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 		size = cr.Spec.Cache.Size
 	}
 	pvc := corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "PersistentVolumeClaim",
+			APIVersion: "",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
@@ -376,6 +406,74 @@ func newPVCForCR(cr *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	}
 
 	return &pvc
+}
+
+func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
+	// Need TypeMeta in order to extract Kind in manageControllee()
+	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Role",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stok-workspace-" + cr.GetName(),
+			Namespace: cr.GetNamespace(),
+			Labels: map[string]string{
+				"app.kubernetes.io/component": "workspace",
+				"workspace":                   cr.GetName(),
+			},
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"stok.goalspike.com"},
+				Resources: []string{"*"},
+				Verbs:     []string{"get"},
+			},
+		},
+	}
+}
+
+func newRoleBindingForCR(cr *v1alpha1.Workspace, role *rbacv1.Role) *rbacv1.RoleBinding {
+	// Need TypeMeta in order to extract Kind in manageControllee()
+	binding := rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleBinding",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stok-workspace-" + cr.GetName(),
+			Namespace: cr.GetNamespace(),
+			Labels: map[string]string{
+				"app.kubernetes.io/component": "workspace",
+				"workspace":                   cr.GetName(),
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "Role",
+			Name:     role.GetName(),
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+
+	if cr.Spec.ServiceAccountName != "" {
+		binding.Subjects = []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      cr.Spec.ServiceAccountName,
+				Namespace: cr.GetNamespace(),
+			},
+		}
+	} else {
+		binding.Subjects = []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "default",
+				Namespace: cr.GetNamespace(),
+			},
+		}
+	}
+
+	return &binding
 }
 
 func cmdListMatchingName(cmdList []command.Interface, name string) int {

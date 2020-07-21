@@ -52,8 +52,6 @@ func (o *operatorCmd) generate(out io.Writer) error {
 		o.serviceAccount(),
 		o.clusterRole(),
 		o.clusterRoleBinding(),
-		o.clusterRoleCommands(),
-		o.clusterRoleBindingCommands(),
 	}
 
 	var sb strings.Builder
@@ -77,6 +75,11 @@ func (o *operatorCmd) generate(out io.Writer) error {
 // * services: c/d/g/l/p/u/w
 // * deployments: g
 // * replicasets: g
+//
+// The workspace controller manages:
+// * roles
+// * rolebindings
+// * pvcs
 func (o *operatorCmd) clusterRole() *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{
@@ -122,8 +125,11 @@ func (o *operatorCmd) clusterRole() *rbacv1.ClusterRole {
 				},
 			},
 			{
-				APIGroups: []string{"stok.goalspike.com"},
-				Resources: []string{"*"},
+				APIGroups: []string{"rbac.authorization.k8s.io"},
+				Resources: []string{
+					"roles",
+					"rolebindings",
+				},
 				Verbs: []string{
 					"create",
 					"delete",
@@ -134,30 +140,16 @@ func (o *operatorCmd) clusterRole() *rbacv1.ClusterRole {
 					"watch",
 				},
 			},
-		},
-	}
-}
-
-func (o *operatorCmd) clusterRoleCommands() *rbacv1.ClusterRole {
-	return &rbacv1.ClusterRole{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterRole",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: o.Name + "-commands",
-			Labels: map[string]string{
-				"app.kubernetes.io/component": "operator",
-				"app.kubernetes.io/name":      o.Name,
-			},
-		},
-		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"stok.goalspike.com"},
 				Resources: []string{"*"},
 				Verbs: []string{
+					"create",
+					"delete",
 					"get",
 					"list",
+					"patch",
+					"update",
 					"watch",
 				},
 			},
@@ -188,39 +180,6 @@ func (o *operatorCmd) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
 		RoleRef: rbacv1.RoleRef{
 			Kind:     "ClusterRole",
 			Name:     o.Name,
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-	}
-}
-
-func (o *operatorCmd) clusterRoleBindingCommands() *rbacv1.ClusterRoleBinding {
-	return &rbacv1.ClusterRoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterRoleBinding",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: o.Name + "-commands",
-			Labels: map[string]string{
-				"app.kubernetes.io/component": "operator",
-				"app.kubernetes.io/name":      o.Name,
-			},
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:     "Group",
-				Name:     "system:authenticated",
-				APIGroup: "rbac.authorization.k8s.io",
-			},
-			{
-				Kind:     "Group",
-				Name:     "system:unauthenticated",
-				APIGroup: "rbac.authorization.k8s.io",
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "ClusterRole",
-			Name:     o.Name + "-commands",
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}

@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/spf13/cobra"
 )
 
@@ -14,12 +16,12 @@ const (
 	environmentFile = ".terraform/environment"
 )
 
-func workspaceCmd() *cobra.Command {
+func workspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
 		Short: "Stok workspace management",
 	}
-	cmd.AddCommand(newNewWorkspaceCmd(), newListWorkspaceCmd(), newDeleteWorkspaceCmd(), newSelectWorkspaceCmd(), newShowWorkspaceCmd())
+	cmd.AddCommand(newNewWorkspaceCmd(f, out), newListWorkspaceCmd(f, out), newDeleteWorkspaceCmd(f), newSelectWorkspaceCmd(), newShowWorkspaceCmd())
 
 	return cmd
 }

@@ -12,56 +12,37 @@ import (
 
 	"github.com/leg100/stok/constants"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
 	"github.com/leg100/stok/version"
 	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 )
 
-type CommandPod struct {
-	*CommandReconciler
-	cmd       command.Interface
-	workspace *v1alpha1.Workspace
+type podOpts struct {
+	workspaceName      string
+	secretName         string
+	serviceAccountName string
+	pvcName            string
+	configMapName      string
 }
 
-func (cp *CommandPod) secretName() string {
-	// TODO: add method to workspace type
-	return cp.workspace.Spec.SecretName
-}
-
-func (cp *CommandPod) serviceAccountName() string {
-	// TODO: add method to workspace type
-	return cp.workspace.Spec.ServiceAccountName
-}
-
-func (cp *CommandPod) pvcName() string {
-	// TODO: add method to workspace type
-	return cp.workspace.GetName()
-}
-
-func (cp *CommandPod) configMap() string {
-	// TODO: add method to command type
-	return cp.cmd.GetName()
-}
-
-func (cp *CommandPod) reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *CommandReconciler) reconcilePod(request reconcile.Request, opts *podOpts) (reconcile.Result, error) {
 	// Check if pod exists already
 	pod := &corev1.Pod{}
-	err := cp.client.Get(context.TODO(), request.NamespacedName, pod)
+	err := r.client.Get(context.TODO(), request.NamespacedName, pod)
 	if errors.IsNotFound(err) {
-		return cp.create(pod)
+		return r.create(pod, opts)
 	}
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	return cp.updateStatus(pod)
+	return r.updateStatus(pod)
 }
 
-func (cp *CommandPod) updateStatus(pod *corev1.Pod) (reconcile.Result, error) {
+func (r *CommandReconciler) updateStatus(pod *corev1.Pod) (reconcile.Result, error) {
 	// Signal pod completion to workspace
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
-		cp.cmd.GetConditions().SetCondition(operatorstatus.Condition{
+		r.c.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonPodCompleted,
@@ -73,7 +54,7 @@ func (cp *CommandPod) updateStatus(pod *corev1.Pod) (reconcile.Result, error) {
 			for i := range conditions {
 				if conditions[i].Type == corev1.PodReady &&
 					conditions[i].Status == corev1.ConditionTrue {
-					cp.cmd.GetConditions().SetCondition(operatorstatus.Condition{
+					r.c.GetConditions().SetCondition(operatorstatus.Condition{
 						Type:    v1alpha1.ConditionAttachable,
 						Status:  corev1.ConditionTrue,
 						Reason:  v1alpha1.ReasonPodRunningAndReady,
@@ -92,28 +73,29 @@ func (cp *CommandPod) updateStatus(pod *corev1.Pod) (reconcile.Result, error) {
 		return reconcile.Result{}, fmt.Errorf("Unknown pod phase: %s", pod.Status.Phase)
 	}
 
-	err := cp.client.Status().Update(context.TODO(), cp.cmd)
+	err := r.client.Status().Update(context.TODO(), r.c)
 	return reconcile.Result{}, err
 }
 
 // Create pod
-func (r CommandPod) create(pod *corev1.Pod) (reconcile.Result, error) {
+func (r CommandReconciler) create(pod *corev1.Pod, opts *podOpts) (reconcile.Result, error) {
 	// TODO: move to a global variable or dedicated package
 	labels := map[string]string{
 		"app":       "stok",
-		"command":   r.cmd.GetName(),
-		"workspace": r.workspace.Name,
+		"command":   v1alpha1.CommandKindToCLI(r.c.GroupVersionKind().Kind),
+		"workspace": opts.workspaceName,
+		"version":   version.Version,
 	}
 	// Use same name as command
-	pod.SetName(r.cmd.GetName())
-	pod.SetNamespace(r.cmd.GetNamespace())
+	pod.SetName(r.c.GetName())
+	pod.SetNamespace(r.c.GetNamespace())
 	pod.SetLabels(labels)
 
-	if err := r.construct(pod); err != nil {
+	if err := r.construct(pod, opts); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(r.cmd, pod, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(r.c, pod, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -129,40 +111,31 @@ func (r CommandPod) create(pod *corev1.Pod) (reconcile.Result, error) {
 	return reconcile.Result{Requeue: true}, nil
 }
 
-func (cp *CommandPod) construct(pod *corev1.Pod) error {
-	args := append([]string{"--"}, cp.crd.Wrapper(cp.cmd.GetArgs())...)
+func (r *CommandReconciler) runnerArgs() []string {
+	var args []string
+	if r.c.GetDebug() {
+		args = append(args, "--debug")
+	}
+	args = append(args, "--tarball", filepath.Join("/tarball", constants.Tarball))
+	args = append(args, "--timeout", r.c.GetTimeoutClient())
+	args = append(args, "--path", ".")
+	args = append(args, "--kind", r.c.GetObjectKind().GroupVersionKind().Kind)
+	args = append(args, "--name", r.c.GetName())
+	args = append(args, "--namespace", r.c.GetNamespace())
+	args = append(args, "--")
+	args = append(args, r.c.GetArgs()...)
+	return args
+}
 
+func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
 	pod.Spec = corev1.PodSpec{
-		ServiceAccountName: cp.serviceAccountName(),
 		Containers: []corev1.Container{
 			{
-				Name:            "runner",
-				Image:           constants.ImageRepo + ":" + version.Version,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"stok", "runner"},
-				Args:            args,
-				Env: []corev1.EnvVar{
-					{
-						Name:  "STOK_TARBALL_PATH",
-						Value: filepath.Join("/tarball", constants.Tarball),
-					},
-					{
-						Name:  "STOK_TIMEOUT_CLIENT",
-						Value: cp.cmd.GetTimeoutClient(),
-					},
-					{
-						Name:  "STOK_KIND",
-						Value: cp.cmd.GetObjectKind().GroupVersionKind().Kind,
-					},
-					{
-						Name:  "STOK_NAME",
-						Value: cp.cmd.GetName(),
-					},
-					{
-						Name:  "STOK_NAMESPACE",
-						Value: cp.cmd.GetNamespace(),
-					},
-				},
+				Name:                     "runner",
+				Image:                    constants.ImageRepo + ":" + version.Version,
+				ImagePullPolicy:          corev1.PullIfNotPresent,
+				Command:                  []string{"stok", "runner"},
+				Args:                     r.runnerArgs(),
 				Stdin:                    true,
 				TTY:                      true,
 				TerminationMessagePolicy: "FallbackToLogsOnError",
@@ -189,7 +162,7 @@ func (cp *CommandPod) construct(pod *corev1.Pod) error {
 				Name: "cache",
 				VolumeSource: corev1.VolumeSource{
 					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: cp.pvcName(),
+						ClaimName: opts.pvcName,
 					},
 				},
 			},
@@ -204,7 +177,7 @@ func (cp *CommandPod) construct(pod *corev1.Pod) error {
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: cp.configMap(),
+							Name: opts.configMapName,
 						},
 					},
 				},
@@ -213,8 +186,12 @@ func (cp *CommandPod) construct(pod *corev1.Pod) error {
 		RestartPolicy: corev1.RestartPolicyNever,
 	}
 
-	if cp.secretName() != "" {
-		cp.mountCredentials(pod)
+	if opts.serviceAccountName != "" {
+		pod.Spec.ServiceAccountName = opts.serviceAccountName
+	}
+
+	if opts.secretName != "" {
+		r.mountCredentials(pod, opts)
 	}
 
 	return nil
@@ -223,12 +200,12 @@ func (cp *CommandPod) construct(pod *corev1.Pod) error {
 // Mount secret into a volume and set GOOGLE_APPLICATION_CREDENTIALS to
 // the hardcoded google credentials file (whether it exists or not). Also
 // expose the secret data via environment variables.
-func (cp *CommandPod) mountCredentials(pod *corev1.Pod) {
+func (r *CommandReconciler) mountCredentials(pod *corev1.Pod, opts *podOpts) {
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
 		Name: "credentials",
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
-				SecretName: cp.secretName(),
+				SecretName: opts.secretName,
 			},
 		},
 	})
@@ -251,7 +228,7 @@ func (cp *CommandPod) mountCredentials(pod *corev1.Pod) {
 		corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: cp.secretName(),
+					Name: opts.secretName,
 				},
 			},
 		})

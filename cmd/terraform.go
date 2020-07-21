@@ -8,18 +8,15 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/crdinfo"
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +27,7 @@ type terraformCmd struct {
 	Namespace      string
 	Path           string
 	Args           []string
-	Command        string
+	Kind           string
 	TimeoutClient  time.Duration
 	TimeoutPod     time.Duration
 	TimeoutQueue   time.Duration
@@ -38,18 +35,20 @@ type terraformCmd struct {
 
 	cmd *cobra.Command
 
-	scheme *runtime.Scheme
+	debug   bool
+	factory k8s.FactoryInterface
+	scheme  *runtime.Scheme
 }
 
-func newTerraformCmds() []*cobra.Command {
+func newTerraformCmds(f k8s.FactoryInterface) []*cobra.Command {
 	var cmds []*cobra.Command
 
-	for _, c := range v1alpha1.Commands {
+	for _, kind := range v1alpha1.CommandKinds {
 		cc := &terraformCmd{}
-		cc.Command = c
+		cc.Kind = kind
 		cc.cmd = &cobra.Command{
-			Use:   c,
-			Short: fmt.Sprintf("Run %s", c),
+			Use:   v1alpha1.CommandKindToCLI(kind),
+			Short: fmt.Sprintf("Run %s", v1alpha1.CommandKindToCLI(kind)),
 			RunE:  cc.doTerraformCmd,
 		}
 		cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "terraform config path")
@@ -57,9 +56,11 @@ func newTerraformCmds() []*cobra.Command {
 		cc.cmd.Flags().DurationVar(&cc.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
 		cc.cmd.Flags().DurationVar(&cc.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
 		cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
-		cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "", "Kubernetes namespace of workspace (defaults to namespace set in .terraform/environment, or if that does not exist, \"default\")")
+		cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "", "Kubernetes namespace of workspace (defaults to namespace set in .terraform/environment, or \"default\")")
 
-		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, if that does not exist, \"default\")")
+		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, \"default\")")
+
+		cc.factory = f
 
 		cmds = append(cmds, cc.cmd)
 	}
@@ -68,15 +69,18 @@ func newTerraformCmds() []*cobra.Command {
 }
 
 func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
+	debug, err := cmd.InheritedFlags().GetBool("debug")
+	if err != nil {
+		return err
+	}
+	t.debug = debug
+
+	// TODO: remove
 	if err := unmarshalV(t); err != nil {
 		return err
 	}
 
-	if t.Command == "shell" {
-		t.Args = shellWrapArgs(args)
-	} else {
-		t.Args = args
-	}
+	t.Args = args
 
 	// Workspace config precedence:
 	// 1. Flag
@@ -125,31 +129,20 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // get pod logs stream
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
-	crd, ok := crdinfo.Inventory[t.Command]
-	if !ok {
-		return fmt.Errorf("Could not find Custom Resource Definition '%s'", t.Command)
-	}
-
-	config, err := configFromPath(t.KubeConfigPath)
+	// TODO: leverage controller-runtime's config finding code (config.GetConfig())
+	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
 	if err != nil {
 		return err
 	}
 
-	// Controller-runtime client for constructing command resource
-	rc, err := client.New(config, client.Options{Scheme: t.scheme})
-	if err != nil {
-		return err
-	}
-
-	// client-go client for creating configmap resource
-	kc, err := kubernetes.NewForConfig(config)
+	// Get client from factory. Embeds controller-runtime client
+	rc, err := t.factory.NewClient(config, t.scheme)
 	if err != nil {
 		return err
 	}
 
 	// Check namespace exists
-	_, err = kc.CoreV1().Namespaces().Get(t.Namespace, metav1.GetOptions{})
-	if err != nil {
+	if err := rc.Get(context.TODO(), types.NamespacedName{Name: t.Namespace}, &corev1.Namespace{}); err != nil {
 		return err
 	}
 	log.WithFields(log.Fields{"namespace": t.Namespace}).Debug("resource checked")
@@ -171,7 +164,7 @@ func (t *terraformCmd) run() error {
 	}
 
 	// Construct and deploy command resource
-	cmdRes, err := t.createCommand(rc, crd)
+	cmdRes, err := t.createCommand(rc)
 	if err != nil {
 		return err
 	}
@@ -188,7 +181,7 @@ func (t *terraformCmd) run() error {
 	}
 
 	// Construct and deploy ConfigMap resource
-	_, err = t.createConfigMap(kc, cmdRes, tarball)
+	_, err = t.createConfigMap(rc, cmdRes, tarball)
 	if err != nil {
 		return err
 	}
@@ -197,7 +190,7 @@ func (t *terraformCmd) run() error {
 		"pod":       cmdRes.GetName(),
 		"namespace": t.Namespace,
 	}).Debug("awaiting readiness")
-	pod, err := t.waitUntilPodRunningAndReady(kc, &corev1.Pod{}, cmdRes.GetName(), t.Namespace)
+	pod, err := t.waitUntilPodRunningAndReady(rc, &corev1.Pod{}, cmdRes.GetName())
 	if err != nil {
 		return err
 	}
@@ -206,8 +199,7 @@ func (t *terraformCmd) run() error {
 		"pod":       cmdRes.GetName(),
 		"namespace": t.Namespace,
 	}).Debug("retrieve log stream")
-	req := kc.CoreV1().Pods(t.Namespace).GetLogs(cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
-	logs, err := req.Stream()
+	logs, err := rc.GetLogs(t.Namespace, cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
 	if err != nil {
 		return err
 	}
@@ -222,7 +214,7 @@ func (t *terraformCmd) run() error {
 
 		drawDivider()
 
-		err := t.handleAttachPod(*config, pod)
+		err := rc.Attach(pod)
 		if err != nil {
 			// TODO: use log fields
 			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
@@ -240,11 +232,9 @@ func (t *terraformCmd) run() error {
 		if err != nil {
 			done <- err
 		} else {
+			// Delete annotation CommandWaitAnnotationKey, giving the runner the signal to start
 			annotations := cmdRes.GetAnnotations()
-			if annotations == nil {
-				annotations = make(map[string]string)
-			}
-			annotations["stok.goalspike.com/client"] = "Ready"
+			delete(annotations, v1alpha1.CommandWaitAnnotationKey)
 			cmdRes.SetAnnotations(annotations)
 
 			return rc.Update(context.TODO(), cmdRes, &client.UpdateOptions{})
@@ -255,9 +245,17 @@ func (t *terraformCmd) run() error {
 	return <-done
 }
 
-func (t *terraformCmd) waitUntilPodRunningAndReady(client kubernetes.Interface, pod *corev1.Pod, name, namespace string) (*corev1.Pod, error) {
-	obj, err := waitUntil(client.CoreV1().RESTClient(), pod, name, namespace, "pods", podRunningAndReady, t.TimeoutPod)
-	return obj.(*corev1.Pod), err
+func (t *terraformCmd) waitUntilPodRunningAndReady(rc k8s.Client, pod *corev1.Pod, name string) (*corev1.Pod, error) {
+	err := wait.Poll(100*time.Millisecond, t.TimeoutPod, func() (bool, error) {
+		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: t.Namespace, Name: name}, pod); err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return podRunningAndReady(pod)
+	})
+	return pod, err
 }
 
 // ErrPodCompleted is returned by PodRunning or PodContainerRunning to indicate that
@@ -267,28 +265,21 @@ var ErrPodCompleted = fmt.Errorf("pod ran to completion")
 // podRunningAndReady returns true if the pod is running and ready, false if the pod has not
 // yet reached those states, returns ErrPodCompleted if the pod has run to completion, or
 // an error in any other case.
-func podRunningAndReady(event watch.Event) (bool, error) {
-	switch event.Type {
-	case watch.Deleted:
-		return false, errors.NewNotFound(schema.GroupResource{Resource: "pods"}, "")
-	}
-	switch t := event.Object.(type) {
-	case *corev1.Pod:
-		switch t.Status.Phase {
-		case corev1.PodSucceeded:
-			return false, ErrPodCompleted
-		case corev1.PodFailed:
-			return false, fmt.Errorf(t.Status.ContainerStatuses[0].State.Terminated.Message)
-		case corev1.PodRunning:
-			conditions := t.Status.Conditions
-			if conditions == nil {
-				return false, nil
-			}
-			for i := range conditions {
-				if conditions[i].Type == corev1.PodReady &&
-					conditions[i].Status == corev1.ConditionTrue {
-					return true, nil
-				}
+func podRunningAndReady(pod *corev1.Pod) (bool, error) {
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded:
+		return false, ErrPodCompleted
+	case corev1.PodFailed:
+		return false, fmt.Errorf(pod.Status.ContainerStatuses[0].State.Terminated.Message)
+	case corev1.PodRunning:
+		conditions := pod.Status.Conditions
+		if conditions == nil {
+			return false, nil
+		}
+		for i := range conditions {
+			if conditions[i].Type == corev1.PodReady &&
+				conditions[i].Status == corev1.ConditionTrue {
+				return true, nil
 			}
 		}
 	}

@@ -107,21 +107,21 @@ func TestStok(t *testing.T) {
 			name:            "stok version",
 			args:            []string{"-v"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`^stok version v.+ [a-f0-9]+`),
+			wantStdoutRegex: regexp.MustCompile(`^stok version v.+\t[a-f0-9]+`),
 			pty:             false,
 		},
 		{
 			name:            "new workspace",
 			args:            []string{"workspace", "new", wsName, "--timeout", "5s"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("Created workspace '%s' in namespace '%s'", wsName, wsNamespace)),
+			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "second new workspace",
 			args:            []string{"workspace", "new", wsName2, "--timeout", "5s"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("Created workspace '%s' in namespace '%s'", wsName2, wsNamespace)),
+			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
@@ -155,7 +155,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok plan",
-			args:            []string{"plan", "--", "-no-color", "-input=false", "-var 'suffix=foo'"},
+			args:            []string{"plan", "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
@@ -187,7 +187,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok queuing",
-			args:            []string{"shell", "--", "\"uname; sleep 5\""},
+			args:            []string{"shell", "--", "uname;", "sleep 5"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             false,
@@ -195,7 +195,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok destroy with pty",
-			args:            []string{"destroy", "--", "-input=true", "-var 'suffix=foo'"},
+			args:            []string{"destroy", "--", "-input=true", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             true,

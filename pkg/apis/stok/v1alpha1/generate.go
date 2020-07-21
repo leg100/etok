@@ -13,7 +13,7 @@ import (
 //go:generate go run generate.go
 
 func main() {
-	for _, c := range Commands {
+	for _, c := range CommandKinds {
 		// create the file
 		f, err := os.Create(fmt.Sprintf("%s_types.go", strings.ReplaceAll(string(c), "-", "_")))
 		if err != nil {
@@ -26,11 +26,11 @@ func main() {
 
 		// parse and render template
 		template.Must(template.New("").Parse(contents)).Execute(f, struct {
-			Plural string
-			Kind   string
+			ResourceType string
+			Kind         string
 		}{
-			Plural: c.Plural(),
-			Kind:   c.Kind(),
+			ResourceType: CommandKindToType(c),
+			Kind:         c,
 		})
 	}
 }
@@ -46,9 +46,9 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// {{ .Kind }} is the Schema for the {{ .Plural }} API
+// {{ .Kind }} is the Schema for the {{ .ResourceType }} API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path={{ .Plural }},scope=Namespaced
+// +kubebuilder:resource:path={{ .ResourceType }},scope=Namespaced
 // +genclient
 type {{ .Kind }} struct {
 	metav1.TypeMeta   <backtick>json:",inline"<backtick>
