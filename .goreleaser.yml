@@ -1,6 +1,6 @@
 before:
   hooks:
-    - go test ./cmd ./pkg/...
+    - make unit
 builds:
   - id: stok
     env:
