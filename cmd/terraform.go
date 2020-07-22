@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -20,18 +21,18 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type terraformCmd struct {
-	Workspace      string
-	Namespace      string
-	Path           string
-	Args           []string
-	Kind           string
-	TimeoutClient  time.Duration
-	TimeoutPod     time.Duration
-	TimeoutQueue   time.Duration
-	KubeConfigPath string
+	Workspace     string
+	Namespace     string
+	Path          string
+	Args          []string
+	Kind          string
+	TimeoutClient time.Duration
+	TimeoutPod    time.Duration
+	TimeoutQueue  time.Duration
 
 	cmd *cobra.Command
 
@@ -55,10 +56,12 @@ func newTerraformCmds(f k8s.FactoryInterface) []*cobra.Command {
 		cc.cmd.Flags().DurationVar(&cc.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 		cc.cmd.Flags().DurationVar(&cc.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
 		cc.cmd.Flags().DurationVar(&cc.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
-		cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
 		cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "", "Kubernetes namespace of workspace (defaults to namespace set in .terraform/environment, or \"default\")")
 
 		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, \"default\")")
+
+		// Add flags registered by imported packages (controller-runtime)
+		cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
 		cc.factory = f
 
@@ -129,8 +132,7 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // get pod logs stream
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
-	// TODO: leverage controller-runtime's config finding code (config.GetConfig())
-	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
+	config, err := config.GetConfig()
 	if err != nil {
 		return err
 	}

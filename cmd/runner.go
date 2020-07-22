@@ -20,9 +20,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type runnerCmd struct {
@@ -99,13 +99,9 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	// And add our CRDs
 	apis.AddToScheme(s)
 
-	config, err := rest.InClusterConfig()
-	if err == rest.ErrNotInCluster {
-		log.Warn("Not running on k8s cluster")
-		config, err = k8s.ConfigFromPath("")
-		if err != nil {
-			return err
-		}
+	config, err := config.GetConfig()
+	if err != nil {
+		return err
 	}
 
 	rc, err := r.factory.NewClient(config, s)

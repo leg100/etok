@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type newWorkspaceCmd struct {
@@ -29,7 +31,6 @@ type newWorkspaceCmd struct {
 	NoSecret       bool
 	Secret         string
 	ServiceAccount string
-	KubeConfigPath string
 	Timeout        time.Duration
 
 	factory k8s.FactoryInterface
@@ -53,8 +54,10 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cc.cmd.Flags().BoolVar(&cc.NoSecret, "no-secret", false, "Don't reference a Secret resource")
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
-	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
 	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
+
+	// Add flags registered by imported packages (controller-runtime)
+	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
 	cc.factory = f
 	cc.out = out
@@ -72,7 +75,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	t.Name = args[0]
 
-	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
+	config, err := config.GetConfig()
 	if err != nil {
 		return err
 	}

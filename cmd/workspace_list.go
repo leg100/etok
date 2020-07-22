@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 
@@ -11,11 +12,11 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type listWorkspaceCmd struct {
-	Path           string
-	KubeConfigPath string
+	Path string
 
 	out     io.Writer
 	factory k8s.FactoryInterface
@@ -30,7 +31,9 @@ func newListWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 		RunE:  cc.doListWorkspace,
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
-	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
+
+	// Add flags registered by imported packages (controller-runtime)
+	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
 	cc.out = out
 	cc.factory = f
@@ -39,7 +42,7 @@ func newListWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 }
 
 func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) error {
-	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
+	config, err := config.GetConfig()
 	if err != nil {
 		return err
 	}
@@ -49,7 +52,7 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 	// And add our CRDs
 	apis.AddToScheme(s)
 
-	// Controller-runtime client for constructing workspace resource
+	// Controller-runtime client for listing workspace resources
 	rc, err := t.factory.NewClient(config, s)
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/pkg/apis"
@@ -11,13 +12,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type deleteWorkspaceCmd struct {
-	Name           string
-	Namespace      string
-	Path           string
-	KubeConfigPath string
+	Name      string
+	Namespace string
+	Path      string
 
 	factory k8s.FactoryInterface
 	cmd     *cobra.Command
@@ -32,8 +33,10 @@ func newDeleteWorkspaceCmd(f k8s.FactoryInterface) *cobra.Command {
 		RunE:  cc.doDeleteWorkspace,
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
-	cc.cmd.Flags().StringVar(&cc.KubeConfigPath, "kubeconfig", "", "absolute path to kubeconfig file (default is $HOME/.kube/config)")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
+
+	// Add flags registered by imported packages (controller-runtime)
+	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
 	cc.factory = f
 
@@ -49,7 +52,7 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 
 	t.Name = args[0]
 
-	config, err := k8s.ConfigFromPath(t.KubeConfigPath)
+	config, err := config.GetConfig()
 	if err != nil {
 		return err
 	}
