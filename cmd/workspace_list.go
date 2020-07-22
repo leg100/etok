@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type listWorkspaceCmd struct {
@@ -42,18 +41,13 @@ func newListWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 }
 
 func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) error {
-	config, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
 	// Get built-in scheme
 	s := scheme.Scheme
 	// And add our CRDs
 	apis.AddToScheme(s)
 
 	// Controller-runtime client for listing workspace resources
-	rc, err := t.factory.NewClient(config, s)
+	rc, err := t.factory.NewClient(s)
 	if err != nil {
 		return err
 	}

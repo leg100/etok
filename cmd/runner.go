@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type runnerCmd struct {
@@ -99,12 +98,7 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	// And add our CRDs
 	apis.AddToScheme(s)
 
-	config, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
-	rc, err := r.factory.NewClient(config, s)
+	rc, err := r.factory.NewClient(s)
 	if err != nil {
 		return err
 	}

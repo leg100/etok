@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type newWorkspaceCmd struct {
@@ -75,18 +74,13 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	t.Name = args[0]
 
-	config, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
 	// Get built-in scheme
 	s := scheme.Scheme
 	// And add our CRDs
 	apis.AddToScheme(s)
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(config, s)
+	rc, err := t.factory.NewClient(s)
 	if err != nil {
 		return err
 	}

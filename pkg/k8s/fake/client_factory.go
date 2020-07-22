@@ -14,7 +14,6 @@ import (
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -33,15 +32,14 @@ func NewFactory(objs ...runtime.Object) *Factory {
 
 type client struct {
 	runtimeclient.Client
-	config  *rest.Config
 	factory *Factory
 }
 
-func (f *Factory) NewClient(config *rest.Config, s *runtime.Scheme) (k8s.Client, error) {
+func (f *Factory) NewClient(s *runtime.Scheme) (k8s.Client, error) {
 	rc := runtimefake.NewFakeClientWithScheme(s, f.Objs...)
 	f.Client = rc
 
-	return &client{factory: f, Client: rc, config: config}, nil
+	return &client{factory: f, Client: rc}, nil
 }
 
 // No-op attach method to keep tests passing

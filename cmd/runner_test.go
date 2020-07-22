@@ -13,7 +13,6 @@ import (
 	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
@@ -107,7 +106,7 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 	// And add our CRDs
 	apis.AddToScheme(s)
 
-	rc, err := factory.NewClient(&rest.Config{}, s)
+	rc, err := factory.NewClient(s)
 	require.NoError(t, err)
 
 	done := make(chan error)

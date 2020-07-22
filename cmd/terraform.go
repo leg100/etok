@@ -21,7 +21,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type terraformCmd struct {
@@ -132,13 +131,8 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // get pod logs stream
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
-	config, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
 	// Get client from factory. Embeds controller-runtime client
-	rc, err := t.factory.NewClient(config, t.scheme)
+	rc, err := t.factory.NewClient(t.scheme)
 	if err != nil {
 		return err
 	}

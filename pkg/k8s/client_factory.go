@@ -17,10 +17,11 @@ import (
 	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type FactoryInterface interface {
-	NewClient(*rest.Config, *runtime.Scheme) (Client, error)
+	NewClient(*runtime.Scheme) (Client, error)
 }
 
 type Factory struct{}
@@ -39,7 +40,12 @@ type client struct {
 	config *rest.Config
 }
 
-func (f *Factory) NewClient(config *rest.Config, s *runtime.Scheme) (Client, error) {
+func (f *Factory) NewClient(s *runtime.Scheme) (Client, error) {
+	config, err := config.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	rc, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
 	if err != nil {
 		return nil, err
