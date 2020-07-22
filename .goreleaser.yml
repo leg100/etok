@@ -5,36 +5,25 @@ builds:
   - id: stok
     env:
     - CGO_ENABLED=0
-  - id: stok-operator
-    binary: stok-operator
-    env:
-    - CGO_ENABLED=0
     ldflags:
     - '-X "github.com/leg100/stok/version.Version={{ .Version }}"'
-    main: ./cmd/manager/main.go
+    - '-X "github.com/leg100/stok/version.Commit={{ .Commit }}"'
     targets:
     - linux_amd64
+    - darwin_amd64
 archives:
-- replacements:
-    darwin: Darwin
-    linux: Linux
-    windows: Windows
-    386: i386
-    amd64: x86_64
+- format: binary
 dockers:
-- builds:
-  - stok-operator
-  binaries:
-  - stok-operator
-  goos: linux
+- goos: linux
   goarch: amd64
   image_templates:
-  - "leg100/stok-operator:latest"
-  - "leg100/stok-operator:{{ .Tag }}"
+  - "leg100/stok:latest"
+  - "leg100/stok:{{ .Tag }}"
   skip_push: auto
   dockerfile: build/Dockerfile
   extra_files:
     - build/bin
+    - build/_output/bin
 checksum:
   name_template: 'checksums.txt'
 snapshot:
