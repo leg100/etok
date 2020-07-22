@@ -10,7 +10,7 @@ ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
 GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
 KIND_CONTEXT ?= kind-kind
 GKE_CONTEXT ?= gke-stok
-BUILD_BIN ?= build/_output/bin/stok
+BUILD_BIN ?= ./stok
 LD_FLAGS = " \
 	-X '$(REPO)/version.Version=$(VERSION)' \
 	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
@@ -41,7 +41,7 @@ gke-context:
 
 deploy-operator: build
 	$(BUILD_BIN) generate operator | kubectl apply -f -
-	kubectl rollout status deployment/stok-operator
+	kubectl rollout status --timeout=10s deployment/stok-operator
 
 undeploy-operator: build
 	$(BUILD_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true

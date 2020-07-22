@@ -15,9 +15,11 @@ RUN apk add curl && \
     rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     rm terraform_${TERRAFORM_VERSION}_SHA256SUMS
 
-# install operator binary
-COPY build/_output/bin/stok ${STOK_BIN}
+# Stok binary is expected to be copied from the PWD because that is where goreleaser builds it and
+# there does not appear to be a way to customise a different location
+COPY stok ${STOK_BIN}
 
+# Copy over adjunct scripts, i.e. entrypoint and user_setup
 COPY build/bin /usr/local/bin
 RUN  /usr/local/bin/user_setup
 

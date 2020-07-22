@@ -23,7 +23,6 @@ dockers:
   dockerfile: build/Dockerfile
   extra_files:
     - build/bin
-    - build/_output/bin
 checksum:
   name_template: 'checksums.txt'
 snapshot:

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	buildPath     = "../../../build/_output/bin/stok"
+	buildPath     = "../../../stok"
 	workspacePath = "./test/e2e/workspace"
 	backendBucket = "automatize-tfstate"
 	backendPrefix = "e2e"
