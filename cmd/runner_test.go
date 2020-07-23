@@ -115,7 +115,7 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 	}()
 
 	// Wait for runner to poll twice before unsetting annotation
-	wait.Poll(100*time.Millisecond, time.Second, func() (bool, error) {
+	wait.Poll(100*time.Millisecond, 2*time.Second, func() (bool, error) {
 		if factory.Gets > 1 {
 			return true, nil
 		}
