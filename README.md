@@ -87,19 +87,30 @@ Use "stok [command] --help" for more information about a command.
 
 Commands such as `terraform fmt` or `terraform console` have been left out because there is no purpose to running them on kubernetes.
 
+# RBAC
+
+TODO
+
+# Identity
+
+[GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
+[AWS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
+
 # Credentials
 
-Create a kubernetes secret containing any necessary credentials.
+Place any credentials inside a kubernetes secret named `stok`. The contents will be made available as environment variables to terraform commands. For example, to set AWS credentials:
 
-Google:
+```
+kubectl create secret generic stok \
+  --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"  \
+  --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
+```
+
+Specific support is provided for GCP credentials. The environment variable `GOOGLE_APPLICATION_CREDENTIALS` is set to the path `google-credentials.json` if a secret is created like so:
 
 ```
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
 ```
 
-AWS:
+These credentials can then be used by the [terraform google provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference)
 
-```
-kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"
---from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
-```
