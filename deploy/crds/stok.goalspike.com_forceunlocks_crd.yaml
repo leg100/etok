@@ -41,6 +41,10 @@ spec:
               items:
                 type: string
               type: array
+            configmap:
+              type: string
+            configmapkey:
+              type: string
             debug:
               type: boolean
             timeoutclient:
@@ -48,6 +52,8 @@ spec:
             timeoutqueue:
               type: string
           required:
+          - configmap
+          - configmapkey
           - timeoutclient
           - timeoutqueue
           type: object

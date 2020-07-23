@@ -120,7 +120,8 @@ func (r *CommandReconciler) Reconcile(request reconcile.Request) (reconcile.Resu
 		serviceAccountName: workspace.Spec.ServiceAccountName,
 		secretName:         workspace.Spec.SecretName,
 		pvcName:            workspace.GetName(),
-		configMapName:      r.c.GetName(),
+		configMapName:      r.c.GetConfigMap(),
+		configMapKey:       r.c.GetConfigMapKey(),
 	}
 	return r.reconcilePod(request, &opts)
 }

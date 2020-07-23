@@ -22,4 +22,10 @@ type Interface interface {
 	SetTimeoutQueue(string)
 	GetDebug() bool
 	SetDebug(bool)
+	GetConfigMap() string
+	SetConfigMap(string)
+	GetConfigMapKey() string
+	SetConfigMapKey(string)
+
+	SetGenerateName(string)
 }

@@ -3,11 +3,8 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func (t *terraformCmd) createCommand(rc client.Client) (command.Interface, error) {
+func (t *terraformCmd) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
 	obj, err := t.scheme.New(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
 	if err != nil {
 		return nil, err
@@ -28,12 +25,7 @@ func (t *terraformCmd) createCommand(rc client.Client) (command.Interface, error
 	// TODO: Why is this necessary after having used scheme.New? If so, leave comment explaining why
 	cmd.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
 	cmd.SetNamespace(t.Namespace)
-
-	// TODO: Generate our own unique suffix. Currently we rely on k8s to generate one, and then
-	// reuse it for the configmap, which means the configmap has to be created *afterwards*. If we
-	// generated our own suffix, then we could create the configmap in parallel, speeding up
-	// deployment (the configmap could contain up to 1Mb of data to upload).
-	cmd.SetGenerateName(fmt.Sprintf("stok-%s-", strings.ToLower(t.Kind)))
+	cmd.SetName(name)
 	cmd.SetLabels(map[string]string{
 		"app":       "stok",
 		"workspace": t.Workspace,
@@ -45,6 +37,8 @@ func (t *terraformCmd) createCommand(rc client.Client) (command.Interface, error
 	cmd.SetTimeoutClient(t.TimeoutClient.String())
 	cmd.SetArgs(t.Args)
 	cmd.SetDebug(t.debug)
+	cmd.SetConfigMap(configMapName)
+	cmd.SetConfigMapKey(v1alpha1.CommandDefaultConfigMapKey)
 
 	err = rc.Create(context.TODO(), cmd)
 	if err != nil {
@@ -60,10 +54,10 @@ func (t *terraformCmd) createCommand(rc client.Client) (command.Interface, error
 	return cmd, nil
 }
 
-func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, tarball *bytes.Buffer) (*corev1.ConfigMap, error) {
+func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, tarball *bytes.Buffer, name, keyName string) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      command.GetName(),
+			Name:      name,
 			Namespace: t.Namespace,
 			Labels: map[string]string{
 				"app":       "stok",
@@ -72,7 +66,7 @@ func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, 
 			},
 		},
 		BinaryData: map[string][]byte{
-			constants.Tarball: tarball.Bytes(),
+			keyName: tarball.Bytes(),
 		},
 	}
 

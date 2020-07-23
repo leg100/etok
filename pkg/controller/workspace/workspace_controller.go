@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/pkg/apis"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
@@ -375,10 +374,12 @@ func newPVCForCR(cr *v1alpha1.Workspace) v1alpha1.Object {
 	labels := map[string]string{
 		"app": cr.Name,
 	}
-	size := constants.WorkspaceCacheSize
+
+	size := v1alpha1.WorkspaceDefaultCacheSize
 	if cr.Spec.Cache.Size != "" {
 		size = cr.Spec.Cache.Size
 	}
+
 	pvc := corev1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "PersistentVolumeClaim",

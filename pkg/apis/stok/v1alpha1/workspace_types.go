@@ -37,6 +37,8 @@ const (
 
 	ReasonAllResourcesFound status.ConditionReason = "AllResourcesFound"
 	ReasonMissingResource   status.ConditionReason = "MissingResource"
+
+	WorkspaceDefaultCacheSize = "1Gi"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

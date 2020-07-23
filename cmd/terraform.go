@@ -159,13 +159,19 @@ func (t *terraformCmd) run() error {
 		return fmt.Errorf("Workspace %s is unhealthy; %s", t.Workspace, wsHealth.Message)
 	}
 
+	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
+	// pod with this name, too)
+	name := v1alpha1.GenerateName(t.Kind)
+
 	// Construct and deploy command resource
-	cmdRes, err := t.createCommand(rc)
+	cmdRes, err := t.createCommand(rc, name, name)
 	if err != nil {
 		return err
 	}
 
-	// Delete command resource upon program termination
+	// Delete command resource upon program termination. This will take care of deleting the
+	// configmap below too because the configmap is 'owned' by the command resource and k8s will
+	// therefore delete it automatically.
 	defer func() {
 		rc.Delete(context.TODO(), cmdRes)
 	}()
@@ -177,25 +183,27 @@ func (t *terraformCmd) run() error {
 	}
 
 	// Construct and deploy ConfigMap resource
-	_, err = t.createConfigMap(rc, cmdRes, tarball)
+	// TODO: perform this task in parallel to constructing and deploying command resource above to
+	// increase performance
+	_, err = t.createConfigMap(rc, cmdRes, tarball, name, v1alpha1.CommandDefaultConfigMapKey)
 	if err != nil {
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"pod":       cmdRes.GetName(),
+		"pod":       name,
 		"namespace": t.Namespace,
 	}).Debug("awaiting readiness")
-	pod, err := t.waitUntilPodRunningAndReady(rc, &corev1.Pod{}, cmdRes.GetName())
+	pod, err := t.waitUntilPodRunningAndReady(rc, &corev1.Pod{}, name)
 	if err != nil {
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"pod":       cmdRes.GetName(),
+		"pod":       name,
 		"namespace": t.Namespace,
 	}).Debug("retrieve log stream")
-	logs, err := rc.GetLogs(t.Namespace, cmdRes.GetName(), &corev1.PodLogOptions{Follow: true})
+	logs, err := rc.GetLogs(t.Namespace, name, &corev1.PodLogOptions{Follow: true})
 	if err != nil {
 		return err
 	}
@@ -205,7 +213,7 @@ func (t *terraformCmd) run() error {
 	done := make(chan error)
 	go func() {
 		log.WithFields(log.Fields{
-			"pod": cmdRes.GetName(),
+			"pod": name,
 		}).Debug("attaching")
 
 		drawDivider()
@@ -223,7 +231,7 @@ func (t *terraformCmd) run() error {
 
 	// Let operator know we're now streaming logs
 	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		objKey := types.NamespacedName{Name: cmdRes.GetName(), Namespace: t.Namespace}
+		objKey := types.NamespacedName{Name: name, Namespace: t.Namespace}
 		err = rc.Get(context.TODO(), objKey, cmdRes)
 		if err != nil {
 			done <- err

@@ -22,6 +22,7 @@ type podOpts struct {
 	serviceAccountName string
 	pvcName            string
 	configMapName      string
+	configMapKey       string
 }
 
 func (r *CommandReconciler) reconcilePod(request reconcile.Request, opts *podOpts) (reconcile.Result, error) {
@@ -111,12 +112,12 @@ func (r CommandReconciler) create(pod *corev1.Pod, opts *podOpts) (reconcile.Res
 	return reconcile.Result{Requeue: true}, nil
 }
 
-func (r *CommandReconciler) runnerArgs() []string {
+func (r *CommandReconciler) runnerArgs(opts *podOpts) []string {
 	var args []string
 	if r.c.GetDebug() {
 		args = append(args, "--debug")
 	}
-	args = append(args, "--tarball", filepath.Join("/tarball", constants.Tarball))
+	args = append(args, "--tarball", filepath.Join("/tarball", opts.configMapKey))
 	args = append(args, "--timeout", r.c.GetTimeoutClient())
 	args = append(args, "--path", ".")
 	args = append(args, "--kind", r.c.GetObjectKind().GroupVersionKind().Kind)
@@ -135,7 +136,7 @@ func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
 				Image:                    constants.ImageRepo + ":" + version.Version,
 				ImagePullPolicy:          corev1.PullIfNotPresent,
 				Command:                  []string{"stok", "runner"},
-				Args:                     r.runnerArgs(),
+				Args:                     r.runnerArgs(opts),
 				Stdin:                    true,
 				TTY:                      true,
 				TerminationMessagePolicy: "FallbackToLogsOnError",
@@ -150,8 +151,8 @@ func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
 					},
 					{
 						Name:      "tarball",
-						MountPath: filepath.Join("/tarball", constants.Tarball),
-						SubPath:   constants.Tarball,
+						MountPath: filepath.Join("/tarball", opts.configMapKey),
+						SubPath:   opts.configMapKey,
 					},
 				},
 				WorkingDir: "/workspace",

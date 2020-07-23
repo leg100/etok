@@ -7,6 +7,7 @@ import (
 
 	"github.com/leg100/stok/pkg/apis"
 	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +27,7 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 
 var plan = v1alpha1.Plan{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-xxxx",
+		Name:      "stok-plan-12345",
 		Namespace: "default",
 		Labels: map[string]string{
 			"app":       "stok",
@@ -37,7 +38,7 @@ var plan = v1alpha1.Plan{
 
 var pod = v1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-xxxx",
+		Name:      "stok-plan-12345",
 		Namespace: "default",
 	},
 	Spec: v1.PodSpec{
@@ -103,14 +104,12 @@ func TestCreateCommand(t *testing.T) {
 
 	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
 
-	plan, err := tc.createCommand(client)
+	plan, err := tc.createCommand(client, "stok-plan-12345", "stok-plan-12345")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(plan.GetArgs()) != 0 {
-		t.Fatalf("want one arg, got %d\n", len(plan.GetArgs()))
-	}
+	require.Equal(t, 0, len(plan.GetArgs()))
 }
 
 func TestCreateConfigMap(t *testing.T) {
@@ -129,22 +128,19 @@ func TestCreateConfigMap(t *testing.T) {
 
 	// TODO: create real tarball
 	tarball := bytes.NewBufferString("foo")
-	configMap, err := tc.createConfigMap(client, &plan, tarball)
+	configMap, err := tc.createConfigMap(client, &plan, tarball, "stok-plan-12345", "config.tar.gz")
 	if err != nil {
 		t.Error(err)
 	}
-	if configMap.Name != "stok-xxxx" {
-		t.Errorf("want stok-xxxx, got %s\n", configMap.Name)
+	if configMap.Name != "stok-plan-12345" {
+		t.Errorf("want stok-plan-12345, got %s\n", configMap.Name)
 	}
 
 	ownerRefs := configMap.GetOwnerReferences()
 	if len(ownerRefs) != 1 {
 		t.Fatal("want one ownerref, got none")
 	}
-	if ownerRefs[0].Kind != "Plan" {
-		t.Errorf("want ownerref controller kind Plan, got %s\n", ownerRefs[0].Kind)
-	}
-	if ownerRefs[0].Name != "stok-xxxx" {
-		t.Errorf("want ownerref controller name stok-xxxx got %s\n", ownerRefs[0].Name)
-	}
+
+	require.Equal(t, "Plan", ownerRefs[0].Kind)
+	require.Equal(t, "stok-plan-12345", ownerRefs[0].Name)
 }

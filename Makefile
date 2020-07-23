@@ -23,8 +23,8 @@ LD_FLAGS = " \
 	clean delete-command-resources delete-crds \
 	unit \
 	install \
-	cli-unit build cli-test cli-install \
-	operator-build image kind-load-image operator-unit \
+	build cli-test cli-install \
+	operator-build image kind-load-image \
 	generate-all generate generate-deepcopy generate-crds
 
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
@@ -81,10 +81,8 @@ delete-command-resources:
 		--api-group=stok.goalspike.com -o name | grep -v workspaces \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
-unit: operator-unit cli-unit
-
-cli-unit:
-	go test -v ./cmd
+unit:
+	go test -v ./cmd ./pkg/... ./util
 
 build:
 	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
@@ -104,9 +102,6 @@ operator-push: image
 
 kind-load-image:
 	kind load docker-image $(DOCKER_IMAGE)
-
-operator-unit:
-	go test -v ./pkg/...
 
 # TODO: parallelize generate-crds and generate-deepcopy
 generate-all: generate generate-crds generate-deepcopy
