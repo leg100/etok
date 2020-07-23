@@ -1,6 +1,6 @@
 # Stok
 
-**S**upercharge **T**erraform **O**n **K**ubernetes (or, more accurately, a poor man's Terraform Enterprise)
+**S**upercharge **T**erraform **O**n **K**ubernetes (or more accurately, a poor man's Terraform Enterprise)
 
 ## Requirements
 
