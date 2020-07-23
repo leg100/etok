@@ -13,24 +13,36 @@ Download and install the CLI from [releases](https://github.com/leg100/stok/rele
 Deploy
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and the operator to your cluster:
 
-```
+```bash
 stok generate crds | kubectl create -f -
 stok generate operator | kubectl apply -f -
 ```
 
-Create a kubernetes secret containing the credentials you need for terraform.
+## First run
 
-Google:
+Ensure you have some terraform configuration to work with:
 
+```bash
+cat > random.tf <<EOF
+resource "random_id" "test" {
+  byte_length = 2
+}
+EOF
 ```
-kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
+
+Create a workspace:
+
+```bash
+stok workspace new default
 ```
 
-AWS:
+Run terraform commands:
 
-```
-kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"
---from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
+```bash
+stok init
+stok validate
+stok plan
+stok apply
 ```
 
 ## Usage
@@ -74,3 +86,20 @@ Use "stok [command] --help" for more information about a command.
 ```
 
 Commands such as `terraform fmt` or `terraform console` have been left out because there is no purpose to running them on kubernetes.
+
+# Credentials
+
+Create a kubernetes secret containing any necessary credentials.
+
+Google:
+
+```
+kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
+```
+
+AWS:
+
+```
+kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"
+--from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
+```
