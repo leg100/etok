@@ -2,18 +2,22 @@
 
 **S**upercharge **T**erraform **O**n **K**ubernetes (or, more accurately, a poor man's Terraform Enterprise)
 
+## Requirements
+
+* A kubernetes cluster
+
 ## Install
 
 Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
 
-Deploy the
+Deploy the Stok
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) to your cluster:
 
 ```
 stok generate crds | kubectl create -f -
 ```
 
-Deploy the operator to your cluster:
+Deploy the Stok operator to your cluster:
 
 ```
 stok generate operator | kubectl apply -f -
