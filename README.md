@@ -86,16 +86,16 @@ Use "stok [command] --help" for more information about a command.
 
 Commands such as `terraform fmt` or `terraform console` have been left out because there is no purpose to running them on kubernetes.
 
-# RBAC
+## RBAC
 
 TODO
 
-# Identity
+## Identity
 
 * [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
 * [AWS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
 
-# Credentials
+## Credentials
 
 Place any credentials inside a kubernetes secret named `stok`. For example, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
 
