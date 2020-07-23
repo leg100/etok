@@ -93,8 +93,8 @@ TODO
 
 # Identity
 
-[GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
-[AWS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
+* [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
+* [AWS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
 
 # Credentials
 
@@ -112,5 +112,5 @@ Specific support is provided for GCP credentials. The environment variable `GOOG
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
 ```
 
-These credentials can then be used by the [terraform google provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference)
+These credentials can then be used by the [terraform google provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference).
 
