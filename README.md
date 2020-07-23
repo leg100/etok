@@ -20,14 +20,13 @@ stok generate operator | kubectl apply -f -
 
 ## First run
 
-Ensure you have some terraform configuration to work with:
+Ensure you're in a directory containing terraform configuration:
 
 ```bash
-cat > random.tf <<EOF
+$ cat random.tf
 resource "random_id" "test" {
   byte_length = 2
 }
-EOF
 ```
 
 Create a workspace:
