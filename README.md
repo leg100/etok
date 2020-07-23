@@ -1,8 +1,8 @@
-# stok
+# Stok
 
-**s**upercharge **t**erraform **o**n **k**ubernetes (or, more accurately, a poor man's Terraform Enterprise)
+**S**upercharge **T**erraform **O**n **K**ubernetes (or, more accurately, a poor man's Terraform Enterprise)
 
-## install
+## Install
 
 Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
 
@@ -34,7 +34,7 @@ kubectl create secret generic stok --from-literal=AWS_ACCESS_KEY_ID="youraccessk
 --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
 ```
 
-## usage
+## Usage
 
 Usage is similar to the terraform CLI:
 
