@@ -111,7 +111,7 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 
 	done := make(chan error)
 	go func() {
-		done <- handleSemaphore(rc, s, "Shell", "stok-shell-xyz", "test", time.Second)
+		done <- handleSemaphore(rc, s, "Shell", "stok-shell-xyz", "test", 5*time.Second)
 	}()
 
 	// Wait for runner to poll twice before unsetting annotation.
