@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
@@ -127,7 +126,8 @@ func TestCreateConfigMap(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
 
 	// TODO: create real tarball
-	tarball := bytes.NewBufferString("foo")
+	tarball := make([]byte, 1024)
+
 	configMap, err := tc.createConfigMap(client, &plan, tarball, "stok-plan-12345", "config.tar.gz")
 	if err != nil {
 		t.Error(err)

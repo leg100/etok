@@ -24,12 +24,12 @@ func createTarballWithFiles(t *testing.T, filenames ...string) string {
 	}
 
 	// Create test tarball
-	buf, err := util.Create(path, filenames)
+	tar, err := util.Create(path, filenames)
 	require.NoError(t, err)
 
 	// Write tarball to known path
 	tarball := filepath.Join(path, "tarball.tar.gz")
-	err = ioutil.WriteFile(tarball, buf.Bytes(), 0644)
+	err = ioutil.WriteFile(tarball, tar, 0644)
 	require.NoError(t, err)
 
 	return tarball

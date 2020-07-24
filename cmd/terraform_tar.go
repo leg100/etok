@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 
@@ -13,7 +12,7 @@ import (
 // TODO: unit test
 // TODO: skip this (and the config file it's embedded in) if command
 // doesn't need *.tf files (e.g. terraform import)
-func (t *terraformCmd) createTar() (*bytes.Buffer, error) {
+func (t *terraformCmd) createTar() ([]byte, error) {
 	if err := os.Chdir(t.Path); err != nil {
 		return nil, err
 	}
@@ -34,7 +33,7 @@ func (t *terraformCmd) createTar() (*bytes.Buffer, error) {
 
 	log.WithFields(log.Fields{
 		"files": filenames,
-		"bytes": tar.Len(),
+		"bytes": len(tar),
 	}).Debug("archive created")
 
 	return tar, nil

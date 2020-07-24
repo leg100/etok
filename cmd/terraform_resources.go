@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/apex/log"
@@ -54,7 +53,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 	return cmd, nil
 }
 
-func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, tarball *bytes.Buffer, name, keyName string) (*corev1.ConfigMap, error) {
+func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -66,7 +65,7 @@ func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, 
 			},
 		},
 		BinaryData: map[string][]byte{
-			keyName: tarball.Bytes(),
+			keyName: tarball,
 		},
 	}
 
