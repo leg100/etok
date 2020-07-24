@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/leg100/stok/constants"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
@@ -26,7 +25,7 @@ type operatorCmd struct {
 }
 
 var (
-	defaultImage = constants.ImageRepo + ":" + version.Version
+	defaultImage = "leg100/stok:" + version.Version
 )
 
 func newOperatorCmd() *cobra.Command {

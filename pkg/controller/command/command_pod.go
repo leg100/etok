@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/leg100/stok/constants"
 	v1alpha1 "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"github.com/leg100/stok/version"
 	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
@@ -133,7 +132,7 @@ func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
 		Containers: []corev1.Container{
 			{
 				Name:                     "runner",
-				Image:                    constants.ImageRepo + ":" + version.Version,
+				Image:                    "leg100/stok:" + version.Version,
 				ImagePullPolicy:          corev1.PullIfNotPresent,
 				Command:                  []string{"stok", "runner"},
 				Args:                     r.runnerArgs(opts),
