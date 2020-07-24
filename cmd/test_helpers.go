@@ -38,7 +38,6 @@ func createTarballWithFiles(t *testing.T, filenames ...string) string {
 // Create workspace directory and make it the current working dir. Switch back to previous CWD
 // when test finishes
 func setupEnvironment(t *testing.T, namespace, workspace string) {
-	// when test finishes.
 	path := createTempPath(t)
 	previous, err := os.Getwd()
 	require.NoError(t, err)

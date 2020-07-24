@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -72,6 +74,32 @@ func TestTerraform(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
+
+		plan := factory.Objs[2].(*v1alpha1.Plan)
+		require.Equal(t, []string{"-input", "false"}, plan.GetArgs())
+	})
+
+	t.Run("PlanWithConfigExceedingMaxSize", func(t *testing.T) {
+		setupEnvironment(t, "default", "default")
+
+		randBytes := make([]byte, v1alpha1.MaxConfigSize+1)
+		_, err := rand.Read(randBytes)
+		require.NoError(t, err)
+
+		err = ioutil.WriteFile("toobig.tf", randBytes, 0644)
+		require.NoError(t, err)
+
+		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default"))
+		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+		code, err := cmd.Execute([]string{
+			"plan",
+			"--",
+			"-input", "false",
+		})
+
+		require.Error(t, err)
+		require.Equal(t, 1, code)
 
 		plan := factory.Objs[2].(*v1alpha1.Plan)
 		require.Equal(t, []string{"-input", "false"}, plan.GetArgs())

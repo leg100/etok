@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/cmd/manager"
@@ -18,16 +20,6 @@ type stokCmd struct {
 	cmd   *cobra.Command
 }
 
-type componentError struct {
-	err       error
-	component string
-	code      int
-}
-
-func (c *componentError) Error() string {
-	return c.err.Error()
-}
-
 func Execute(args []string) int {
 	code, _ := newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr).Execute(args)
 	return code
@@ -38,11 +30,12 @@ func (cc *stokCmd) Execute(args []string) (int, error) {
 	cc.cmd.SetArgs(args)
 
 	if err := cc.cmd.Execute(); err != nil {
-		if comperr, ok := err.(*componentError); ok {
-			log.WithField("component", comperr.component).WithError(err).Error("")
-			return comperr.code, err
+		log.WithError(err).Error("Fatal error")
+
+		var exiterr *exec.ExitError
+		if errors.As(err, &exiterr) {
+			return exiterr.ExitCode(), err
 		}
-		log.WithError(err).Error("")
 		return 1, err
 	}
 	return 0, nil

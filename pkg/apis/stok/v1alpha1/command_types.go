@@ -152,4 +152,9 @@ const (
 	CommandWaitAnnotationKey = "stok.goalspike.com/wait"
 
 	CommandDefaultConfigMapKey = "config.tar.gz"
+
+	// ConfigMap/etcd only supports data payload of up to 1MB, which limits the size of
+	// tf config that can be uploaded (after compression).
+	// thttps://github.com/kubernetes/kubernetes/issues/19781
+	MaxConfigSize = 1024 * 1024
 )

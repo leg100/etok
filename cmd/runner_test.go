@@ -21,7 +21,7 @@ func TestRunnerWithoutKind(t *testing.T) {
 
 	code, err := cmd.Execute([]string{"runner"})
 
-	require.EqualError(t, err, "missing flag: --kind <kind>")
+	require.EqualError(t, err, "runner: missing flag: --kind <kind>")
 	require.Equal(t, 1, code)
 }
 
@@ -34,7 +34,7 @@ func TestRunnerWithIncorrectKind(t *testing.T) {
 		"--tarball", "bad-tarball-zzz.tar.gz",
 	})
 
-	require.EqualError(t, err, "invalid kind: InvalidKind")
+	require.EqualError(t, err, "runner: invalid kind: InvalidKind")
 	require.Equal(t, 1, code)
 }
 
@@ -47,7 +47,7 @@ func TestRunnerWithIncorrectTarball(t *testing.T) {
 		"--tarball", "bad-tarball-zzz.tar.gz",
 	})
 
-	require.EqualError(t, err, "open bad-tarball-zzz.tar.gz: no such file or directory")
+	require.EqualError(t, err, "runner: open bad-tarball-zzz.tar.gz: no such file or directory")
 	require.Equal(t, 1, code)
 }
 
@@ -91,7 +91,7 @@ func TestRunnerWithSpecificExitCode(t *testing.T) {
 		"exit", "101",
 	})
 
-	require.EqualError(t, err, "exit status 101")
+	require.EqualError(t, err, "runner: exit status 101")
 	require.Equal(t, 101, code)
 }
 

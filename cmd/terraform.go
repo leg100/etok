@@ -182,6 +182,10 @@ func (t *terraformCmd) run() error {
 		return err
 	}
 
+	if len(tarball) > v1alpha1.MaxConfigSize {
+		return fmt.Errorf("max config size exceeded; current=%d; max=%d", len(tarball), v1alpha1.MaxConfigSize)
+	}
+
 	// Construct and deploy ConfigMap resource
 	// TODO: perform this task in parallel to constructing and deploying command resource above to
 	// increase performance

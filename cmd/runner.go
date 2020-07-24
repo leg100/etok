@@ -38,6 +38,23 @@ type runnerCmd struct {
 	cmd     *cobra.Command
 }
 
+type runnerError struct {
+	err       error
+	component string
+}
+
+func newRunnerError(err error) error {
+	return &runnerError{err, "runner"}
+}
+
+func (re *runnerError) Unwrap() error {
+	return re.err
+}
+
+func (re *runnerError) Error() string {
+	return fmt.Sprintf("runner: %s", re.err.Error())
+}
+
 func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 	runner := &runnerCmd{}
 
@@ -49,20 +66,8 @@ func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := runner.doRunnerCmd(args)
-			if exiterr, ok := err.(*exec.ExitError); ok {
-				return &componentError{
-					err:       err,
-					component: "runner",
-					code:      exiterr.ExitCode(),
-				}
-			}
-			if err != nil {
-				return &componentError{
-					err:       err,
-					component: "runner",
-					code:      1,
-				}
+			if err := runner.doRunnerCmd(args); err != nil {
+				return newRunnerError(err)
 			}
 			return nil
 		},
@@ -170,7 +175,7 @@ func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace 
 func (r *runnerCmd) run(out, errout io.Writer) error {
 	args := v1alpha1.RunnerArgsForKind(r.Kind, r.args)
 
-	log.WithFields(log.Fields{"command": args[0], "args": fmt.Sprintf("%#v", args[1:])}).Debug("running command")
+	log.WithFields(log.Fields{"command": args[0], "args": args[1:]}).Debug("running command")
 
 	exe := exec.Command(args[0], args[1:]...)
 	exe.Dir = r.Path
