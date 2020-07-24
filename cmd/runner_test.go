@@ -114,8 +114,10 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 		done <- handleSemaphore(rc, s, "Shell", "stok-shell-xyz", "test", time.Second)
 	}()
 
-	// Wait for runner to poll twice before unsetting annotation
-	wait.Poll(100*time.Millisecond, 2*time.Second, func() (bool, error) {
+	// Wait for runner to poll twice before unsetting annotation.
+	// The runner will take 1000ms to poll twice (500ms * 2), so the test is given plenty of time to
+	// check this (500ms * 6) before timing out.
+	wait.Poll(500*time.Millisecond, 6*time.Second, func() (bool, error) {
 		if factory.Gets > 1 {
 			return true, nil
 		}
