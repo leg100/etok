@@ -38,23 +38,6 @@ type runnerCmd struct {
 	cmd     *cobra.Command
 }
 
-type runnerError struct {
-	err       error
-	component string
-}
-
-func newRunnerError(err error) error {
-	return &runnerError{err, "runner"}
-}
-
-func (re *runnerError) Unwrap() error {
-	return re.err
-}
-
-func (re *runnerError) Error() string {
-	return fmt.Sprintf("runner: %s", re.err.Error())
-}
-
 func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 	runner := &runnerCmd{}
 
@@ -67,7 +50,7 @@ func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := runner.doRunnerCmd(args); err != nil {
-				return newRunnerError(err)
+				return fmt.Errorf("runner: %w", err)
 			}
 			return nil
 		},
