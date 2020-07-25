@@ -90,6 +90,13 @@ build:
 install:
 	go install -ldflags $(LD_FLAGS) github.com/leg100/stok
 
+install-latest-release:
+	curl -s https://api.github.com/repos/leg100/stok/releases/latest \
+		| jq -r '.assets[] | select(.name | test(".*_linux_amd64$$")) | .browser_download_url' \
+		| xargs -I{} curl -Lo /tmp/stok {}
+	chmod +x /tmp/stok
+	mv /tmp/stok ~/go/bin/
+
 image: build
 	docker build -f build/Dockerfile -t $(DOCKER_IMAGE) .
 
