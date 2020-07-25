@@ -132,7 +132,7 @@ func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
 		Containers: []corev1.Container{
 			{
 				Name:                     "runner",
-				Image:                    "leg100/stok:" + version.Version,
+				Image:                    version.Image,
 				ImagePullPolicy:          corev1.PullIfNotPresent,
 				Command:                  []string{"stok", "runner"},
 				Args:                     r.runnerArgs(opts),

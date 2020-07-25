@@ -24,10 +24,6 @@ type operatorCmd struct {
 	cmd *cobra.Command
 }
 
-var (
-	defaultImage = "leg100/stok:" + version.Version
-)
-
 func newOperatorCmd() *cobra.Command {
 	cc := &operatorCmd{}
 	cc.cmd = &cobra.Command{
@@ -40,7 +36,7 @@ func newOperatorCmd() *cobra.Command {
 
 	cc.cmd.Flags().StringVar(&cc.Name, "name", "stok-operator", "Name for kubernetes resources")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace for resources")
-	cc.cmd.Flags().StringVar(&cc.Image, "image", defaultImage, "Docker image name (including tag)")
+	cc.cmd.Flags().StringVar(&cc.Image, "image", version.Image, "Docker image name (including tag)")
 
 	return cc.cmd
 }

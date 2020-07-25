@@ -18,7 +18,7 @@ dockers:
   goarch: amd64
   image_templates:
   - "leg100/stok:latest"
-  - "leg100/stok:{{ .Tag }}"
+  - "leg100/stok:{{ .Version }}"
   skip_push: auto
   dockerfile: build/Dockerfile
   extra_files:
