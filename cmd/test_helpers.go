@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/util"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"

@@ -6,20 +6,21 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTerraform(t *testing.T) {
-	for _, kind := range v1alpha1.CommandKinds {
+	for _, kind := range command.CommandKinds {
 		t.Run(kind+"WithDefaults", func(t *testing.T) {
 			setupEnvironment(t, "default", "default")
 			var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default"))
 			var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 			code, err := cmd.Execute([]string{
-				v1alpha1.CommandKindToCLI(kind),
+				command.CommandKindToCLI(kind),
 			})
 
 			require.NoError(t, err)

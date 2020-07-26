@@ -4,13 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -87,10 +86,6 @@ var podFailed = v1.Pod{
 }
 
 func TestCreateCommand(t *testing.T) {
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
-
 	tc := &terraformCmd{
 		Kind:          "Plan",
 		Namespace:     "default",
@@ -98,10 +93,9 @@ func TestCreateCommand(t *testing.T) {
 		Args:          []string{},
 		TimeoutClient: time.Minute,
 		TimeoutQueue:  time.Minute,
-		scheme:        s,
 	}
 
-	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
+	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
 
 	plan, err := tc.createCommand(client, "stok-plan-12345", "stok-plan-12345")
 	if err != nil {
@@ -112,18 +106,13 @@ func TestCreateCommand(t *testing.T) {
 }
 
 func TestCreateConfigMap(t *testing.T) {
-	// adds core GVKs
-	s := scheme.Scheme
-	// adds CRD GVKs
-	apis.AddToScheme(s)
-
 	tc := &terraformCmd{
 		Kind:      "Plan",
 		Namespace: "default",
 		Workspace: "default",
 	}
 
-	client := fake.NewFakeClientWithScheme(s, runtime.Object(&workspaceEmptyQueue))
+	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
 
 	// TODO: create real tarball
 	tarball := make([]byte, 1024)

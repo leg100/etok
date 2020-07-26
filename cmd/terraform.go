@@ -9,17 +9,16 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,18 +36,17 @@ type terraformCmd struct {
 
 	debug   bool
 	factory k8s.FactoryInterface
-	scheme  *runtime.Scheme
 }
 
 func newTerraformCmds(f k8s.FactoryInterface) []*cobra.Command {
 	var cmds []*cobra.Command
 
-	for _, kind := range v1alpha1.CommandKinds {
+	for _, kind := range command.CommandKinds {
 		cc := &terraformCmd{}
 		cc.Kind = kind
 		cc.cmd = &cobra.Command{
-			Use:   v1alpha1.CommandKindToCLI(kind),
-			Short: fmt.Sprintf("Run %s", v1alpha1.CommandKindToCLI(kind)),
+			Use:   command.CommandKindToCLI(kind),
+			Short: fmt.Sprintf("Run %s", command.CommandKindToCLI(kind)),
 			RunE:  cc.doTerraformCmd,
 		}
 		cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "terraform config path")
@@ -112,11 +110,6 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 		t.Namespace = namespace
 	}
 
-	// Get built-in scheme
-	t.scheme = scheme.Scheme
-	// And add our CRDs
-	apis.AddToScheme(t.scheme)
-
 	return t.run()
 }
 
@@ -132,7 +125,7 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
 	// Get client from factory. Embeds controller-runtime client
-	rc, err := t.factory.NewClient(t.scheme)
+	rc, err := t.factory.NewClient(scheme.Scheme)
 	if err != nil {
 		return err
 	}
@@ -161,7 +154,7 @@ func (t *terraformCmd) run() error {
 
 	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
 	// pod with this name, too)
-	name := v1alpha1.GenerateName(t.Kind)
+	name := command.GenerateName(t.Kind)
 
 	// Construct and deploy command resource
 	cmdRes, err := t.createCommand(rc, name, name)

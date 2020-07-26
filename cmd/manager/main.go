@@ -1,42 +1,26 @@
 package manager
 
 import (
-	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"runtime"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/controller"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/controllers"
+	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
 
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
-	"github.com/operator-framework/operator-sdk/pkg/leader"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
-	"github.com/operator-framework/operator-sdk/pkg/metrics"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-// Change below variables to serve metrics on different host or port.
-var (
-	metricsHost               = "0.0.0.0"
-	metricsPort         int32 = 8383
-	operatorMetricsPort int32 = 8686
-)
-var log = logf.Log.WithName("cmd")
+var log = ctrl.Log.WithName("setup")
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
@@ -46,6 +30,9 @@ func printVersion() {
 }
 
 type operatorCmd struct {
+	metricsAddr          string
+	enableLeaderElection bool
+
 	cmd *cobra.Command
 }
 
@@ -57,9 +44,10 @@ func NewOperatorCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  c.doOperatorCmd,
 	}
-
-	// Add the zap logger flag set to the CLI.
-	c.cmd.Flags().AddFlagSet(zap.FlagSet())
+	c.cmd.Flags().StringVar(&c.metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	c.cmd.Flags().BoolVar(&c.enableLeaderElection, "enable-leader-election", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -77,120 +65,55 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 	// implementing the logr.Logger interface. This logger will
 	// be propagated through the whole operator, generating
 	// uniform and structured logs.
-	logf.SetLogger(zap.Logger())
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	printVersion()
 
-	namespace, err := k8sutil.GetWatchNamespace()
-	if err != nil {
-		return fmt.Errorf("Failed to get watch namespace: %w", err)
-	}
-	log.Info("Watching", "namespace", namespace)
-
-	// Get a config to talk to the apiserver
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
-	ctx := context.TODO()
-	// Become the leader before proceeding
-	err = leader.Become(ctx, "stok-operator-lock")
-	if err != nil {
-		return err
-	}
-
-	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, manager.Options{
-		Namespace:          namespace,
-		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             scheme.Scheme,
+		MetricsBindAddress: c.metricsAddr,
+		Port:               9443,
+		LeaderElection:     c.enableLeaderElection,
+		LeaderElectionID:   "688c905b.goalspike.com",
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
-	log.Info("Registering Components.")
-
-	// Setup Scheme for all resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		return err
+	// Setup workspace ctrl with mgr
+	if err = (&controllers.WorkspaceReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Workspace"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create workspace controller: %w", err)
 	}
 
-	// Setup all Controllers
-	if err := controller.AddToManager(mgr); err != nil {
-		return err
-	}
-
-	// Add the Metrics Service
-	addMetrics(ctx, cfg, namespace)
-
-	log.Info("Starting the Cmd.")
-
-	// Start the Cmd
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		return fmt.Errorf("Manager exited non-zero: %w", err)
-	}
-
-	return nil
-}
-
-// addMetrics will create the Services and Service Monitors to allow the operator export the metrics by using
-// the Prometheus operator
-func addMetrics(ctx context.Context, cfg *rest.Config, namespace string) {
-	if err := serveCRMetrics(cfg); err != nil {
-		if errors.Is(err, k8sutil.ErrRunLocal) {
-			log.Info("Skipping CR metrics server creation; not running in a cluster.")
-			return
+	// Setup each command ctrl with mgr
+	for _, kind := range command.CommandKinds {
+		o, err := scheme.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(kind))
+		if err != nil {
+			return err
 		}
-		log.Info("Could not generate and serve custom resource metrics", "error", err.Error())
-	}
 
-	// Add to the below struct any other metrics ports you want to expose.
-	servicePorts := []v1.ServicePort{
-		{Port: metricsPort, Name: metrics.OperatorPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: metricsPort}},
-		{Port: operatorMetricsPort, Name: metrics.CRPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: operatorMetricsPort}},
-	}
-
-	// Create Service object to expose the metrics port(s).
-	service, err := metrics.CreateMetricsService(ctx, cfg, servicePorts)
-	if err != nil {
-		log.Info("Could not create metrics Service", "error", err.Error())
-	}
-
-	// CreateServiceMonitors will automatically create the prometheus-operator ServiceMonitor resources
-	// necessary to configure Prometheus to scrape metrics from this operator.
-	services := []*v1.Service{service}
-	_, err = metrics.CreateServiceMonitors(cfg, namespace, services)
-	if err != nil {
-		log.Info("Could not create ServiceMonitor object", "error", err.Error())
-		// If this operator is deployed to a cluster without the prometheus-operator running, it will return
-		// ErrServiceMonitorNotPresent, which can be used to safely skip ServiceMonitor creation.
-		if err == metrics.ErrServiceMonitorNotPresent {
-			log.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects", "error", err.Error())
+		if err = (&controllers.CommandReconciler{
+			Client: mgr.GetClient(),
+			// TODO: rename to c to something less silly, like cmd
+			C:            o.(command.Interface),
+			Log:          ctrl.Log.WithName("controllers").WithName(kind),
+			Kind:         kind,
+			ResourceType: command.CommandKindToType(kind),
+			Scheme:       mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("unable to create %s controller: %w", command.CommandKindToCLI(kind), err)
 		}
-	}
-}
 
-// serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.
-// It serves those metrics on "http://metricsHost:operatorMetricsPort".
-func serveCRMetrics(cfg *rest.Config) error {
-	// Below function returns filtered operator/CustomResource specific GVKs.
-	// For more control override the below GVK list with your own custom logic.
-	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(apis.AddToScheme)
-	if err != nil {
-		return err
 	}
-	// Get the namespace the operator is currently deployed in.
-	operatorNs, err := k8sutil.GetOperatorNamespace()
-	if err != nil {
-		return err
+
+	log.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		return fmt.Errorf("problem running manager: %w", err)
 	}
-	// To generate metrics in other namespaces, add the values below.
-	ns := []string{operatorNs}
-	// Generate and serve custom resource specific metrics.
-	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
-	if err != nil {
-		return err
-	}
+
 	return nil
 }

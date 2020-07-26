@@ -4,17 +4,17 @@ import (
 	"context"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/scheme"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func (t *terraformCmd) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
-	obj, err := t.scheme.New(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
+	obj, err := scheme.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
 	if err != nil {
 		return nil, err
 	}

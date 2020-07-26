@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubectl/pkg/scheme"
 )
 
 func TestRunnerWithoutKind(t *testing.T) {
@@ -101,17 +100,12 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 	shell.SetAnnotations(map[string]string{v1alpha1.CommandWaitAnnotationKey: "true"})
 	factory := fake.NewFactory(shell)
 
-	// Get built-in scheme
-	s := scheme.Scheme
-	// And add our CRDs
-	apis.AddToScheme(s)
-
-	rc, err := factory.NewClient(s)
+	rc, err := factory.NewClient(scheme.Scheme)
 	require.NoError(t, err)
 
 	done := make(chan error)
 	go func() {
-		done <- handleSemaphore(rc, s, "Shell", "stok-shell-xyz", "test", 5*time.Second)
+		done <- handleSemaphore(rc, scheme.Scheme, "Shell", "stok-shell-xyz", "test", 5*time.Second)
 	}()
 
 	// Wait for runner to poll twice before unsetting annotation.
