@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -81,17 +81,12 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	}
 	log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
 
-	// Get built-in scheme
-	s := scheme.Scheme
-	// And add our CRDs
-	apis.AddToScheme(s)
-
-	rc, err := r.factory.NewClient(s)
+	rc, err := r.factory.NewClient(scheme.Scheme)
 	if err != nil {
 		return err
 	}
 
-	if err := handleSemaphore(rc, s, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
+	if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
 		return err
 	}
 
@@ -107,7 +102,7 @@ func (r *runnerCmd) validate() error {
 		return fmt.Errorf("missing flag: --kind <kind>")
 	}
 
-	if !slice.ContainsString(v1alpha1.CommandKinds, r.Kind) {
+	if !slice.ContainsString(command.CommandKinds, r.Kind) {
 		return fmt.Errorf("invalid kind: %s", r.Kind)
 	}
 
@@ -136,7 +131,7 @@ func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace 
 
 	// Wait until CommandWaitAnnotation is unset, or return error if timeout or other error occurs
 	err := wait.Poll(500*time.Millisecond, timeout, func() (bool, error) {
-		cmd, err := v1alpha1.NewCommandFromGVK(s, gvk)
+		cmd, err := command.NewCommandFromGVK(s, gvk)
 		if err != nil {
 			return false, err
 		}
@@ -156,7 +151,7 @@ func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace 
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the
 // working directory of the executable; out and errout set stdout and stderr of executable.
 func (r *runnerCmd) run(out, errout io.Writer) error {
-	args := v1alpha1.RunnerArgsForKind(r.Kind, r.args)
+	args := command.RunnerArgsForKind(r.Kind, r.args)
 
 	log.WithFields(log.Fields{"command": args[0], "args": args[1:]}).Debug("running command")
 

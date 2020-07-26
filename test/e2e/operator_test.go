@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"bytes"
-	"context"
 	goctx "context"
 	"fmt"
 	"io"
@@ -15,16 +14,12 @@ import (
 	"cloud.google.com/go/storage"
 
 	"github.com/kr/pty"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
 	"golang.org/x/sys/unix"
-
-	framework "github.com/operator-framework/operator-sdk/pkg/test"
-	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 )
 
 const (
 	buildPath     = "../../../stok"
-	workspacePath = "./test/e2e/workspace"
+	workspacePath = "./workspace"
 	backendBucket = "automatize-tfstate"
 	backendPrefix = "e2e"
 
@@ -48,22 +43,6 @@ var (
 
 // End-to-end tests
 func TestStok(t *testing.T) {
-	ctx := framework.NewTestCtx(t)
-	defer ctx.Cleanup()
-
-	// get namespace
-	namespace, err := ctx.GetOperatorNamespace()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// get global framework variables
-	f := framework.Global
-	// wait for stok-operator to be ready
-	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "stok-operator", 1, time.Second*5, time.Second*30)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// we want a clean backend beforehand
 	sclient, err := storage.NewClient(goctx.Background())
 	if err != nil {
@@ -73,17 +52,6 @@ func TestStok(t *testing.T) {
 	// ignore errors
 	bkt.Object(backendPrefix + "/default.tfstate").Delete(goctx.Background())
 	bkt.Object(backendPrefix + "/default.tflock").Delete(goctx.Background())
-
-	// Clean up workspaces that are created as part of e2e tests below
-	ws := &v1alpha1.Workspace{}
-	ws.SetName(wsName)
-	ws.SetNamespace(wsNamespace)
-	defer f.Client.Delete(context.TODO(), ws)
-
-	ws2 := &v1alpha1.Workspace{}
-	ws2.SetName(wsName2)
-	ws2.SetNamespace(wsNamespace)
-	defer f.Client.Delete(context.TODO(), ws2)
 
 	tests := []struct {
 		name            string

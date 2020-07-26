@@ -6,7 +6,7 @@ DOCKER_IMAGE = leg100/stok:$(VERSION)
 OPERATOR_NAMESPACE ?= default
 OPERATOR_RELEASE ?= stok-operator
 WORKSPACE_NAMESPACE ?= default
-ALL_CRD = ./deploy/crds/stok.goalspike.com_all_crd.yaml
+ALL_CRD = ./config/crd/bases/stok.goalspike.com_all.yaml
 GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
 KIND_CONTEXT ?= kind-kind
 GKE_CONTEXT ?= gke-stok
@@ -16,16 +16,29 @@ LD_FLAGS = " \
 	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
 	" \
 
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
 .PHONY: local kind-deploy kind-context deploy-crds undeploy \
 	create-namespace create-secret \
 	e2e e2e-run \
-	gcp-deploy \
 	clean delete-command-resources delete-crds \
 	unit \
 	install \
 	build cli-test cli-install \
 	operator-build image kind-load-image \
-	generate-all generate generate-deepcopy generate-crds
+	manifests \
+	generate generate-apis \
+	controller-gen \
+	fmt vet \
+	kustomize
 
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
 # be built and loaded first.
@@ -46,7 +59,7 @@ deploy-operator: build
 undeploy-operator: build
 	$(BUILD_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true
 
-deploy-crds: build generate-crds
+deploy-crds: build manifests
 	$(BUILD_BIN) generate crds --local | kubectl create -f -
 
 delete-crds: build
@@ -66,8 +79,7 @@ e2e: build image kind-load-image kind-context deploy-crds \
 e2e-clean: delete-custom-resources undeploy-operator delete-crds
 
 e2e-run:
-	operator-sdk test local --operator-namespace $(OPERATOR_NAMESPACE) --verbose \
-		--no-setup ./test/e2e
+	go test -v ./test/e2e
 
 # delete all stok custom resources
 delete-custom-resources:
@@ -82,7 +94,7 @@ delete-command-resources:
 		| tr '\n' ',' | sed 's/.$$//') || true
 
 unit:
-	go test -v ./cmd ./pkg/... ./util
+	go test -v ./api/... ./cmd ./controllers ./pkg/k8s/... ./util
 
 build:
 	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
@@ -110,21 +122,63 @@ operator-push: image
 kind-load-image:
 	kind load docker-image $(DOCKER_IMAGE)
 
-# TODO: parallelize generate-crds and generate-deepcopy
-generate-all: generate generate-crds generate-deepcopy
+# Generate structs for each command
+generate-apis:
+	go generate ./api/generate.go
 
-generate:
-	go generate ./...
+# Generate manifests e.g. CRD, RBAC etc.
+# add app=stok label to each crd
+# combine crd yamls into one
+manifests: controller-gen
+	@{ \
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
+	for f in ./config/crd/bases/*.yaml; do \
+ 		kubectl label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml;\
+ 		mv crd_with_label.yaml $$f;\
+ 	done;\
+ 	sed -se '$$s/$$/\n---/' ./config/crd/bases/*.yaml | head -n-1 > $(ALL_CRD);\
+	}
 
-generate-deepcopy:
-	operator-sdk generate k8s
+# Run go fmt against code
+fmt:
+	go fmt ./...
 
-generate-crds:
-	operator-sdk generate crds
-	# add app=stok label to each crd
-	@for f in ./deploy/crds/*_crd.yaml; do \
-		kubectl label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml; \
-		mv crd_with_label.yaml $$f; \
-	done
-	# combine crd yamls into one
-	sed -se '$$s/$$/\n---/' ./deploy/crds/*_crd.yaml | head -n-1 > $(ALL_CRD)
+# Run go vet against code
+vet:
+	go vet ./...
+
+# Generate code (deep-copy funcs)
+generate: controller-gen
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+# find or download controller-gen
+# download controller-gen if necessary
+controller-gen:
+ifeq (, $(shell which controller-gen))
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0 ;\
+	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	}
+CONTROLLER_GEN=$(GOBIN)/controller-gen
+else
+CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+kustomize:
+ifeq (, $(shell which kustomize))
+	@{ \
+	set -e ;\
+	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4 ;\
+	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
+	}
+KUSTOMIZE=$(GOBIN)/kustomize
+else
+KUSTOMIZE=$(shell which kustomize)
+endif

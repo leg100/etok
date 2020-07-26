@@ -9,8 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1/command"
+	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"k8s.io/apimachinery/pkg/runtime"

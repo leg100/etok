@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -61,7 +62,7 @@ func (f *Factory) NewClient(s *runtime.Scheme) (Client, error) {
 
 func (c *client) GetLogs(namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
 	req := c.kc.CoreV1().Pods(namespace).GetLogs(name, opts)
-	return req.Stream()
+	return req.Stream(context.TODO())
 }
 
 // TODO: need to unit test the body of this method

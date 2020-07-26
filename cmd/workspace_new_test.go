@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/stretchr/testify/require"
 )

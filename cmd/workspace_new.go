@@ -8,16 +8,15 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/pkg/apis"
-	"github.com/leg100/stok/pkg/apis/stok/v1alpha1"
-	v1alpha1types "github.com/leg100/stok/pkg/apis/stok/v1alpha1"
+	"github.com/leg100/stok/api/v1alpha1"
+	v1alpha1types "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -74,13 +73,8 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	t.Name = args[0]
 
-	// Get built-in scheme
-	s := scheme.Scheme
-	// And add our CRDs
-	apis.AddToScheme(s)
-
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(s)
+	rc, err := t.factory.NewClient(scheme.Scheme)
 	if err != nil {
 		return err
 	}

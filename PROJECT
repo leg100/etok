@@ -1,0 +1,10 @@
+domain: goalspike.com
+layout: go.kubebuilder.io/v2
+repo: github.com/leg100/stok
+resources:
+- group: stok
+  kind: Workspace
+  version: v1alpha1
+version: 3-alpha
+plugins:
+  go.operator-sdk.io/v2-alpha: {}
