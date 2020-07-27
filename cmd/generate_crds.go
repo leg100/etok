@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -19,17 +18,17 @@ type crdsCmd struct {
 }
 
 const (
-	allCrdsPath = "deploy/crds/stok.goalspike.com_all_crd.yaml"
+	allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
 	allCrdsURL  = "https://raw.githubusercontent.com/leg100/stok/master/" + allCrdsPath
 )
 
-func newCrdsCmd() *cobra.Command {
+func newCrdsCmd(out io.Writer) *cobra.Command {
 	cc := &crdsCmd{}
 	cc.cmd = &cobra.Command{
 		Use:   "crds",
 		Short: "Generate stok CRDs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cc.generate(os.Stdout)
+			return cc.generate(out)
 		},
 	}
 
