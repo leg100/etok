@@ -66,7 +66,7 @@ func newStokCmd(f k8s.FactoryInterface, out, errout io.Writer) *stokCmd {
 	childCommands := append(
 		newTerraformCmds(f),
 		workspaceCmd(f, out),
-		generateCmd(),
+		generateCmd(out),
 		newRunnerCmd(f),
 		manager.NewOperatorCmd())
 

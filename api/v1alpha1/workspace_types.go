@@ -39,6 +39,9 @@ const (
 	ReasonMissingResource   status.ConditionReason = "MissingResource"
 
 	WorkspaceDefaultCacheSize = "1Gi"
+
+	WorkspaceDefaultSecretName         = "stok"
+	WorkspaceDefaultServiceAccountName = "stok"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -14,7 +14,9 @@ import (
 	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,8 +50,7 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
 	cc.cmd.Flags().StringVar(&cc.ServiceAccount, "service-account", "", "Name of ServiceAccount")
-	cc.cmd.Flags().StringVar(&cc.Secret, "secret", "stok", "Name of Secret containing credentials")
-	cc.cmd.Flags().BoolVar(&cc.NoSecret, "no-secret", false, "Don't reference a Secret resource")
+	cc.cmd.Flags().StringVar(&cc.Secret, "secret", "", "Name of Secret containing credentials")
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
@@ -63,9 +64,22 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	return cc.cmd
 }
 
-// 1. Wait til Workspace resource is healthy
-// 2. Run init command
-// 3. Write .terraform/environment
+func CheckResourceExists(rc client.Client, name, namespace string, obj runtime.Object) (bool, error) {
+	nn := types.NamespacedName{Name: name, Namespace: namespace}
+	if err := rc.Get(context.TODO(), nn, obj); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// Create new workspace. First check values of secret and service account flags, if either are empty
+// then search for respective resources named "stok" and if they exist, set in the workspace spec
+// accordingly. Otherwise use user-supplied values and check they exist. Only then create the
+// workspace resource and wait until it is reporting it is healthy, or the timeout expires.
 func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) error {
 	if err := unmarshalV(t); err != nil {
 		return err
@@ -77,6 +91,48 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	rc, err := t.factory.NewClient(scheme.Scheme)
 	if err != nil {
 		return err
+	}
+
+	if t.Secret != "" {
+		// Secret specified; check that it exists and if not found then error
+		found, err := CheckResourceExists(rc, t.Secret, t.Namespace, &corev1.Secret{})
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("secret '%s' not found", t.Secret)
+		}
+	} else {
+		// Secret unspecified, check if resource called 'stok' exists and if so, use that
+		found, err := CheckResourceExists(rc, "stok", t.Namespace, &corev1.Secret{})
+		if err != nil {
+			return err
+		}
+		if found {
+			t.Secret = "stok"
+			log.Info("Found default secret...")
+		}
+	}
+
+	if t.ServiceAccount != "" {
+		// Service account specified; check that it exists and if not found then error
+		found, err := CheckResourceExists(rc, t.ServiceAccount, t.Namespace, &corev1.ServiceAccount{})
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("service account '%s' not found", t.ServiceAccount)
+		}
+	} else {
+		// Service account unspecified, check if resource called 'stok' exists and if so, use that
+		found, err := CheckResourceExists(rc, "stok", t.Namespace, &corev1.ServiceAccount{})
+		if err != nil {
+			return err
+		}
+		if found {
+			t.ServiceAccount = "stok"
+			log.Info("Found default service account...")
+		}
 	}
 
 	ws, err := t.createWorkspace(rc)
