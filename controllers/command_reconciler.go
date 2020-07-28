@@ -28,6 +28,7 @@ type CommandReconciler struct {
 	ResourceType string
 	Scheme       *runtime.Scheme
 	Log          logr.Logger
+	RunnerImage  string
 }
 
 func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {

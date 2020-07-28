@@ -36,7 +36,7 @@ func newOperatorCmd() *cobra.Command {
 
 	cc.cmd.Flags().StringVar(&cc.Name, "name", "stok-operator", "Name for kubernetes resources")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace for resources")
-	cc.cmd.Flags().StringVar(&cc.Image, "image", version.Image, "Docker image name (including tag)")
+	cc.cmd.Flags().StringVar(&cc.Image, "image", version.Image, "Docker image used for both the operator and the runner")
 
 	return cc.cmd
 }
@@ -247,6 +247,10 @@ func (o *operatorCmd) deployment() *appsv1.Deployment {
 								{
 									Name:  "OPERATOR_NAME",
 									Value: "stok",
+								},
+								{
+									Name:  "RUNNER_IMAGE",
+									Value: o.Image,
 								},
 							},
 							TerminationMessagePolicy: "FallbackToLogsOnError",

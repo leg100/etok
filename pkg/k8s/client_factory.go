@@ -22,7 +22,7 @@ import (
 )
 
 type FactoryInterface interface {
-	NewClient(*runtime.Scheme) (Client, error)
+	NewClient(*runtime.Scheme, string) (Client, error)
 }
 
 type Factory struct{}
@@ -41,8 +41,8 @@ type client struct {
 	config *rest.Config
 }
 
-func (f *Factory) NewClient(s *runtime.Scheme) (Client, error) {
-	config, err := config.GetConfig()
+func (f *Factory) NewClient(s *runtime.Scheme, context string) (Client, error) {
+	config, err := config.GetConfigWithContext(context)
 	if err != nil {
 		return nil, err
 	}

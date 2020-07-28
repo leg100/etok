@@ -100,7 +100,7 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 	shell.SetAnnotations(map[string]string{v1alpha1.CommandWaitAnnotationKey: "true"})
 	factory := fake.NewFactory(shell)
 
-	rc, err := factory.NewClient(scheme.Scheme)
+	rc, err := factory.NewClient(scheme.Scheme, "")
 	require.NoError(t, err)
 
 	done := make(chan error)

@@ -1,20 +1,23 @@
 VERSION = $(shell git describe --tags --dirty --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
 REPO = github.com/leg100/stok
-LOGLEVEL ?= info
-DOCKER_IMAGE = leg100/stok:$(VERSION)
-OPERATOR_NAMESPACE ?= default
-OPERATOR_RELEASE ?= stok-operator
+RANDOM_SUFFIX := $(shell cat /dev/urandom | tr -dc 'a-z0-9' | head -c5)
 WORKSPACE_NAMESPACE ?= default
 ALL_CRD = ./config/crd/bases/stok.goalspike.com_all.yaml
-GCP_SVC_ACC ?= terraform@automatize-admin.iam.gserviceaccount.com
-KIND_CONTEXT ?= kind-kind
-GKE_CONTEXT ?= gke-stok
 BUILD_BIN ?= ./stok
+KUBECTL = kubectl --context=$(KUBECTX)
 LD_FLAGS = " \
 	-X '$(REPO)/version.Version=$(VERSION)' \
 	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
 	" \
+
+ifeq ($(ENV),gke)
+KUBECTX=gke_automatize-admin_europe-west2-a_cluster-1
+IMG=eu.gcr.io/automatize-admin/stok:$(VERSION)-$(RANDOM_SUFFIX)
+else
+KUBECTX=kind-kind
+IMG=leg100/stok:$(VERSION)
+endif
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
@@ -26,14 +29,14 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-.PHONY: local kind-deploy kind-context deploy-crds undeploy \
+.PHONY: local kind-deploy kind-context deploy-crds delete \
 	create-namespace create-secret \
 	e2e e2e-run \
 	clean delete-command-resources delete-crds \
 	unit \
-	install \
+	install install-latest-release \
 	build cli-test cli-install \
-	operator-build image kind-load-image \
+	operator-build image push \
 	manifests \
 	generate generate-apis \
 	controller-gen \
@@ -42,54 +45,46 @@ endif
 
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
 # be built and loaded first.
-local: image kind-load-image
-	WATCH_NAMESPACE="" $(BUILD_BIN) operator --zap-level $(LOGLEVEL) \
-		| jq -R -r '. as $$line | try fromjson catch $$line'
-
-kind-context:
-	kubectl config use-context $(KIND_CONTEXT)
-
-gke-context:
-	kubectl config use-context $(GKE_CONTEXT)
+local: image push
+	$(BUILD_BIN) operator
 
 deploy-operator: build
-	$(BUILD_BIN) generate operator | kubectl apply -f -
-	kubectl rollout status --timeout=10s deployment/stok-operator
+	$(BUILD_BIN) generate operator --image $(IMG) | $(KUBECTL) apply -f -
+	$(KUBECTL) rollout status --timeout=10s deployment/stok-operator
 
-undeploy-operator: build
-	$(BUILD_BIN) generate operator | kubectl delete -f - --wait --ignore-not-found=true
+delete-operator: build
+	$(BUILD_BIN) generate operator | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
 deploy-crds: build manifests
-	$(BUILD_BIN) generate crds --local | kubectl create -f -
+	$(BUILD_BIN) generate crds --local | $(KUBECTL) create -f -
 
 delete-crds: build
-	$(BUILD_BIN) generate crds --local | kubectl delete -f - --ignore-not-found
+	$(BUILD_BIN) generate crds --local | $(KUBECTL) delete -f - --ignore-not-found
 
 create-namespace:
-	kubectl get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || kubectl create ns $(NAMESPACE)
+	$(KUBECTL) get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || $(KUBECTL) create ns $(NAMESPACE)
 
 create-secret:
-	kubectl --namespace $(WORKSPACE_NAMESPACE) get secret stok || \
-		kubectl --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
+	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret stok || \
+		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
 			--from-file=google-credentials.json=$(GOOGLE_APPLICATION_CREDENTIALS)
 
-e2e: build image kind-load-image kind-context deploy-crds \
-	deploy-operator create-namespace create-secret e2e-run e2e-clean
+e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
 
-e2e-clean: delete-custom-resources undeploy-operator delete-crds
+e2e-clean: delete-custom-resources delete-operator delete-crds
 
 e2e-run:
-	go test -v ./test/e2e
+	go test -v ./test/e2e -context $(KUBECTX)
 
 # delete all stok custom resources
 delete-custom-resources:
-	kubectl delete -n $(WORKSPACE_NAMESPACE) --all $$(kubectl api-resources \
+	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all $$($(KUBECTL) api-resources \
 		--api-group=stok.goalspike.com -o name \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
 # delete all stok custom resources except workspace
 delete-command-resources:
-	kubectl delete -n $(WORKSPACE_NAMESPACE) --all $$(kubectl api-resources \
+	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all $$($(KUBECTL) api-resources \
 		--api-group=stok.goalspike.com -o name | grep -v workspaces \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
@@ -110,17 +105,14 @@ install-latest-release:
 	mv /tmp/stok ~/go/bin/
 
 image: build
-	docker build -f build/Dockerfile -t $(DOCKER_IMAGE) .
+	docker build -f build/Dockerfile -t $(IMG) .
 
-# TODO: We should not be pushing to docker hub, which is for public consumption and should only be
-# for images that have been through the release process. Instead use a private Google Container
-# Registry specifically for GKE testing.
-operator-push: image
-	docker push $(DOCKER_IMAGE) | tee push.out
-	grep -o 'sha256:[a-f0-9]*' push.out > stok.digest
-
-kind-load-image:
-	kind load docker-image $(DOCKER_IMAGE)
+push:
+ifeq ($(ENV),gke)
+	docker push $(IMG)
+else
+	kind load docker-image $(IMG)
+endif
 
 # Generate structs for each command
 generate-apis:
@@ -133,7 +125,7 @@ manifests: controller-gen
 	@{ \
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
 	for f in ./config/crd/bases/*.yaml; do \
- 		kubectl label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml;\
+		$(KUBECTL) label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml;\
  		mv crd_with_label.yaml $$f;\
  	done;\
  	sed -se '$$s/$$/\n---/' ./config/crd/bases/*.yaml | head -n-1 > $(ALL_CRD);\

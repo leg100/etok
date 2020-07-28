@@ -25,6 +25,7 @@ import (
 type terraformCmd struct {
 	Workspace     string
 	Namespace     string
+	Context       string
 	Path          string
 	Args          []string
 	Kind          string
@@ -56,6 +57,7 @@ func newTerraformCmds(f k8s.FactoryInterface) []*cobra.Command {
 		cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "", "Kubernetes namespace of workspace (defaults to namespace set in .terraform/environment, or \"default\")")
 
 		cc.cmd.Flags().StringVar(&cc.Workspace, "workspace", "", "Workspace name (defaults to workspace set in .terraform/environment or, \"default\")")
+		cc.cmd.Flags().StringVar(&cc.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
 		// Add flags registered by imported packages (controller-runtime)
 		cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -125,7 +127,7 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
 	// Get client from factory. Embeds controller-runtime client
-	rc, err := t.factory.NewClient(scheme.Scheme)
+	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
 	if err != nil {
 		return err
 	}

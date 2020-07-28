@@ -141,6 +141,21 @@ func TestNewWorkspaceWithCacheSettings(t *testing.T) {
 	require.Equal(t, "lumpen-proletariat", ws.Spec.Cache.StorageClass)
 }
 
+func TestNewWorkspaceWithContextFlag(t *testing.T) {
+	factory := fake.NewFactory()
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+		"--context", "oz-cluster",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+	require.Equal(t, "oz-cluster", factory.Context)
+}
+
 //func TestNewWorkspaceWithTimeoutError(t *testing.T) {
 //	factory := fake.NewFactory()
 //	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)

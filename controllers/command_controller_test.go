@@ -240,6 +240,7 @@ func TestReconcileCommand(t *testing.T) {
 				Scheme:       scheme.Scheme,
 				ResourceType: "plans",
 				Log:          ctrl.Log.WithName("controllers").WithName("plan"),
+				RunnerImage:  "a.b.c/d:v1",
 			}
 
 			res, err := r.Reconcile(req)
@@ -279,6 +280,11 @@ func TestReconcileCommand(t *testing.T) {
 					t.Errorf("want %s got %s", want, got)
 				}
 			}
+
+			//TODO: find a way to test presence of image (whilst handling cases where no pod was
+			//found)
+			//
+			//require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
 
 			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionCompleted, tt.wantCompletedCondition)
 			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionAttachable, tt.wantAttachableCondition)
