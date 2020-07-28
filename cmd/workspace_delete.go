@@ -17,6 +17,7 @@ type deleteWorkspaceCmd struct {
 	Name      string
 	Namespace string
 	Path      string
+	Context   string
 
 	factory k8s.FactoryInterface
 	cmd     *cobra.Command
@@ -32,6 +33,7 @@ func newDeleteWorkspaceCmd(f k8s.FactoryInterface) *cobra.Command {
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
+	cc.cmd.Flags().StringVar(&cc.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
 	// Add flags registered by imported packages (controller-runtime)
 	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -51,7 +53,7 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 	t.Name = args[0]
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(scheme.Scheme)
+	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
 	if err != nil {
 		return err
 	}

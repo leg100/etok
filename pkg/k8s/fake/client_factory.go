@@ -19,9 +19,10 @@ import (
 )
 
 type Factory struct {
-	Objs   []runtime.Object
-	Client runtimeclient.Client
-	Gets   int
+	Objs    []runtime.Object
+	Client  runtimeclient.Client
+	Gets    int
+	Context string
 }
 
 var _ k8s.FactoryInterface = &Factory{}
@@ -35,9 +36,10 @@ type client struct {
 	factory *Factory
 }
 
-func (f *Factory) NewClient(s *runtime.Scheme) (k8s.Client, error) {
+func (f *Factory) NewClient(s *runtime.Scheme, context string) (k8s.Client, error) {
 	rc := runtimefake.NewFakeClientWithScheme(s, f.Objs...)
 	f.Client = rc
+	f.Context = context
 
 	return &client{factory: f, Client: rc}, nil
 }

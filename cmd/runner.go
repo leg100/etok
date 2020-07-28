@@ -32,6 +32,7 @@ type runnerCmd struct {
 	Namespace string
 	Kind      string
 	Timeout   time.Duration
+	Context   string
 
 	factory k8s.FactoryInterface
 	args    []string
@@ -61,6 +62,7 @@ func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 	cmd.Flags().StringVar(&runner.Name, "name", "", "Name of command resource")
 	cmd.Flags().StringVar(&runner.Namespace, "namespace", "default", "Namespace of command resource")
 	cmd.Flags().StringVar(&runner.Kind, "kind", "", "Kind of command resource")
+	cmd.Flags().StringVar(&runner.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
 	cmd.Flags().DurationVar(&runner.Timeout, "timeout", 10*time.Second, "Timeout on waiting for client to confirm readiness")
 
 	runner.factory = f
@@ -81,7 +83,7 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	}
 	log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
 
-	rc, err := r.factory.NewClient(scheme.Scheme)
+	rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
 	if err != nil {
 		return err
 	}

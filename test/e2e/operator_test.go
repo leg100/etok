@@ -3,13 +3,13 @@ package e2e
 import (
 	"bytes"
 	goctx "context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"testing"
-	"time"
 
 	"cloud.google.com/go/storage"
 
@@ -34,15 +34,12 @@ const (
 	wsName2 = "bar"
 )
 
-var (
-	retryInterval        = time.Second * 5
-	timeout              = time.Second * 60
-	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Second * 5
-)
+var kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
 
 // End-to-end tests
 func TestStok(t *testing.T) {
+	fmt.Printf("Kubernetes context set to: %s\n", *kubectx)
+
 	// we want a clean backend beforehand
 	sclient, err := storage.NewClient(goctx.Background())
 	if err != nil {
@@ -80,21 +77,21 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "new workspace",
-			args:            []string{"workspace", "new", wsName, "--timeout", "5s"},
+			args:            []string{"workspace", "new", wsName, "--timeout", "5s", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "second new workspace",
-			args:            []string{"workspace", "new", wsName2, "--timeout", "5s"},
+			args:            []string{"workspace", "new", wsName2, "--timeout", "5s", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "list workspaces",
-			args:            []string{"workspace", "list"},
+			args:            []string{"workspace", "list", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s/%s\n\t%s/%s", wsNamespace, wsName2, wsNamespace, wsName)),
 			pty:             false,
@@ -115,7 +112,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok init",
-			args:            []string{"init", "--", "-no-color", "-input=false"},
+			args:            []string{"init", "--context", *kubectx, "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
 			pty:             false,
@@ -123,7 +120,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok plan",
-			args:            []string{"plan", "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
+			args:            []string{"plan", "--context", *kubectx, "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
@@ -131,7 +128,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok plan with pty",
-			args:            []string{"plan", "--", "-no-color", "-input=true"},
+			args:            []string{"plan", "--context", *kubectx, "--", "-no-color", "-input=true"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`(?s)var\.suffix.*Enter a value:.*Refreshing Terraform state in-memory prior to plan`),
 			pty:             true,
@@ -139,7 +136,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok apply with pty",
-			args:            []string{"apply", "--", "-no-color", "-input=true"},
+			args:            []string{"apply", "--context", *kubectx, "--", "-no-color", "-input=true"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`),
 			pty:             true,
@@ -147,7 +144,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok shell",
-			args:            []string{"shell"},
+			args:            []string{"shell", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             true,
@@ -155,7 +152,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok queuing",
-			args:            []string{"shell", "--", "uname;", "sleep 5"},
+			args:            []string{"shell", "--context", *kubectx, "--", "uname;", "sleep 5"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             false,
@@ -163,7 +160,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok destroy with pty",
-			args:            []string{"destroy", "--", "-input=true", "-var", "suffix=foo"},
+			args:            []string{"destroy", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             true,
@@ -171,7 +168,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "delete workspace",
-			args:            []string{"workspace", "delete", wsName},
+			args:            []string{"workspace", "delete", wsName, "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,

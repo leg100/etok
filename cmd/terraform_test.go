@@ -105,4 +105,19 @@ func TestTerraform(t *testing.T) {
 		plan := factory.Objs[2].(*v1alpha1.Plan)
 		require.Equal(t, []string{"-input", "false"}, plan.GetArgs())
 	})
+
+	t.Run("PlanWithContextFlag", func(t *testing.T) {
+		setupEnvironment(t, "default", "default")
+		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default"))
+		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+		code, err := cmd.Execute([]string{
+			"plan",
+			"--context", "oz-cluster",
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, code)
+		require.Equal(t, "oz-cluster", factory.Context)
+	})
 }

@@ -3,6 +3,7 @@ package manager
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -57,14 +58,6 @@ func NewOperatorCmd() *cobra.Command {
 }
 
 func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
-	// Use a zap logr.Logger implementation. If none of the zap
-	// flags are configured (or if the zap flag set is not being
-	// used), this defaults to a production zap logger.
-	//
-	// The logger instantiated here can be changed to any logger
-	// implementing the logr.Logger interface. This logger will
-	// be propagated through the whole operator, generating
-	// uniform and structured logs.
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	printVersion()
@@ -78,6 +71,11 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("unable to start manager: %w", err)
+	}
+
+	runnerImage := os.Getenv("RUNNER_IMAGE")
+	if runnerImage == "" {
+		return fmt.Errorf("RUNNER_IMAGE needs to be defined")
 	}
 
 	// Setup workspace ctrl with mgr
@@ -104,6 +102,7 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 			Kind:         kind,
 			ResourceType: command.CommandKindToType(kind),
 			Scheme:       mgr.GetScheme(),
+			RunnerImage:  runnerImage,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("unable to create %s controller: %w", command.CommandKindToCLI(kind), err)
 		}

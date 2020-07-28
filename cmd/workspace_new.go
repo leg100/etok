@@ -32,6 +32,7 @@ type newWorkspaceCmd struct {
 	Secret         string
 	ServiceAccount string
 	Timeout        time.Duration
+	Context        string
 
 	factory k8s.FactoryInterface
 	out     io.Writer
@@ -54,6 +55,7 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
+	cc.cmd.Flags().StringVar(&cc.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
 	// Add flags registered by imported packages (controller-runtime)
 	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -88,7 +90,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	t.Name = args[0]
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(scheme.Scheme)
+	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
 	if err != nil {
 		return err
 	}

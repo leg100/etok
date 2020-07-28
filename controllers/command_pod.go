@@ -129,11 +129,17 @@ func (r *CommandReconciler) runnerArgs(opts *podOpts) []string {
 }
 
 func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
+	fsgroup := new(int64)
+	*fsgroup = 2000
+
 	pod.Spec = corev1.PodSpec{
+		SecurityContext: &corev1.PodSecurityContext{
+			FSGroup: fsgroup,
+		},
 		Containers: []corev1.Container{
 			{
 				Name:                     "runner",
-				Image:                    version.Image,
+				Image:                    r.RunnerImage,
 				ImagePullPolicy:          corev1.PullIfNotPresent,
 				Command:                  []string{"stok", "runner"},
 				Args:                     r.runnerArgs(opts),
