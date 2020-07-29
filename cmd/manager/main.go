@@ -75,7 +75,8 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 
 	runnerImage := os.Getenv("RUNNER_IMAGE")
 	if runnerImage == "" {
-		return fmt.Errorf("RUNNER_IMAGE needs to be defined")
+		// Default to image version (typically set via an LD flag when building the bin)
+		runnerImage = version.Image
 	}
 
 	// Setup workspace ctrl with mgr
