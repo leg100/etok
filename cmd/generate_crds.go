@@ -20,7 +20,10 @@ type crdsCmd struct {
 
 const (
 	allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
-	allCrdsURL  = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
+)
+
+var (
+	allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
 )
 
 func newCrdsCmd(out io.Writer) *cobra.Command {
