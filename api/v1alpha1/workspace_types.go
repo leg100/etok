@@ -61,7 +61,7 @@ type WorkspaceSpec struct {
 	ServiceAccountName string             `json:"serviceAccountName,omitempty"`
 	Cache              WorkspaceCacheSpec `json:"cache,omitempty"`
 	Backend            BackendSpec        `json:"backend"`
-	TimeoutClient      string             `json:"timeoutclient"`
+	TimeoutClient      string             `json:"timeoutClient"`
 	Debug              bool               `json:"debug,omitempty"`
 }
 

@@ -44,23 +44,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -295,23 +295,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -422,23 +422,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -549,23 +549,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -676,23 +676,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -803,23 +803,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -930,23 +930,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1057,23 +1057,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1184,23 +1184,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1435,23 +1435,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1562,23 +1562,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1689,23 +1689,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1816,23 +1816,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -1943,23 +1943,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -2070,23 +2070,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
@@ -2234,11 +2234,11 @@ spec:
               type: string
             serviceAccountName:
               type: string
-            timeoutclient:
+            timeoutClient:
               type: string
           required:
           - backend
-          - timeoutclient
+          - timeoutClient
           type: object
         status:
           description: WorkspaceStatus defines the observed state of Workspace

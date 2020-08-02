@@ -11,11 +11,11 @@ type CommandSpec struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
 	Args          []string `json:"args,omitempty"`
-	TimeoutClient string   `json:"timeoutclient"`
-	TimeoutQueue  string   `json:"timeoutqueue"`
+	TimeoutClient string   `json:"timeoutClient"`
+	TimeoutQueue  string   `json:"timeoutQueue"`
 	Debug         bool     `json:"debug,omitempty"`
-	ConfigMap     string   `json:"configmap"`
-	ConfigMapKey  string   `json:"configmapkey"`
+	ConfigMap     string   `json:"configMap"`
+	ConfigMapKey  string   `json:"configMapKey"`
 	Workspace     string   `json:"workspace"`
 }
 

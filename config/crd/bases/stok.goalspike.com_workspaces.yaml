@@ -81,11 +81,11 @@ spec:
               type: string
             serviceAccountName:
               type: string
-            timeoutclient:
+            timeoutClient:
               type: string
           required:
           - backend
-          - timeoutclient
+          - timeoutClient
           type: object
         status:
           description: WorkspaceStatus defines the observed state of Workspace

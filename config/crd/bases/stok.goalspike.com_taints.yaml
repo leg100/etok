@@ -44,23 +44,23 @@ spec:
               items:
                 type: string
               type: array
-            configmap:
+            configMap:
               type: string
-            configmapkey:
+            configMapKey:
               type: string
             debug:
               type: boolean
-            timeoutclient:
+            timeoutClient:
               type: string
-            timeoutqueue:
+            timeoutQueue:
               type: string
             workspace:
               type: string
           required:
-          - configmap
-          - configmapkey
-          - timeoutclient
-          - timeoutqueue
+          - configMap
+          - configMapKey
+          - timeoutClient
+          - timeoutQueue
           - workspace
           type: object
         status:
