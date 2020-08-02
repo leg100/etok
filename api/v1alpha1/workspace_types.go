@@ -2,9 +2,9 @@ package v1alpha1
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
-	"github.com/leg100/stok/util/maps"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,10 +30,19 @@ func BackendEmptyConfig(backendType string) string {
 `, backendType)
 }
 
+// Return a terraform backend configuration file (similar to an INI file)
 func BackendConfig(cfg map[string]string) string {
+	// Sort keys into a slice, otherwise tests occasionally fail as a result of go's random iteration
+	// of maps
+	keys := make([]string, 0, len(cfg))
+	for k := range cfg {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var b strings.Builder
-	for k, v := range maps.SortStrings(cfg) {
-		fmt.Fprintf(&b, "%s\t= \"%s\"\n", k, v)
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s\t= \"%s\"\n", k, cfg[k])
 	}
 	return b.String()
 }
