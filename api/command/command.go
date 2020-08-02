@@ -78,6 +78,8 @@ func RunnerArgsForKind(kind string, args []string) []string {
 		} else {
 			return []string{"/bin/sh"}
 		}
+	case "Workspace":
+		return append([]string{"terraform", "init"}, args...)
 	default:
 		// All other kinds are run as a terraform command, and the stok CLI name translates directly
 		// to the terraform command name (e.g. stok plan -> terraform plan)

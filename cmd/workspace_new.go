@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/apex/log"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -32,9 +34,13 @@ type newWorkspaceCmd struct {
 	Secret         string
 	ServiceAccount string
 	Timeout        time.Duration
+	TimeoutClient  time.Duration
+	TimeoutPod     time.Duration
 	Context        string
+	Backend        v1alpha1.BackendSpec
 
 	factory k8s.FactoryInterface
+	debug   bool
 	out     io.Writer
 	cmd     *cobra.Command
 }
@@ -55,7 +61,12 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
 	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
+	cc.cmd.Flags().DurationVar(&cc.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
+	cc.cmd.Flags().DurationVar(&cc.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 	cc.cmd.Flags().StringVar(&cc.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
+
+	cc.cmd.Flags().StringVar(&cc.Backend.Type, "backend-type", "local", "Set backend type")
+	cc.cmd.Flags().StringToStringVar(&cc.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
 
 	// Add flags registered by imported packages (controller-runtime)
 	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -83,6 +94,12 @@ func CheckResourceExists(rc client.Client, name, namespace string, obj runtime.O
 // accordingly. Otherwise use user-supplied values and check they exist. Only then create the
 // workspace resource and wait until it is reporting it is healthy, or the timeout expires.
 func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) error {
+	debug, err := cmd.InheritedFlags().GetBool("debug")
+	if err != nil {
+		return err
+	}
+	t.debug = debug
+
 	if err := unmarshalV(t); err != nil {
 		return err
 	}
@@ -181,6 +198,67 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
+	log.WithFields(log.Fields{
+		"pod":       ws.PodName(),
+		"namespace": t.Namespace,
+	}).Debug("awaiting readiness")
+	pod, err := waitUntilPodInitialisedAndRunning(rc, &corev1.Pod{}, t.Namespace, ws.PodName(), t.TimeoutPod)
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"pod":       ws.PodName(),
+		"namespace": t.Namespace,
+	}).Debug("retrieve log stream")
+	logs, err := rc.GetLogs(t.Namespace, ws.PodName(), &corev1.PodLogOptions{Follow: true, Container: "runner"})
+	if err != nil {
+		return err
+	}
+	defer logs.Close()
+
+	// Attach to pod tty
+	done := make(chan error)
+	go func() {
+		log.WithFields(log.Fields{
+			"pod": ws.PodName(),
+		}).Debug("attaching")
+
+		drawDivider()
+
+		err := rc.Attach(pod)
+		if err != nil {
+			// TODO: use log fields
+			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
+			_, err = io.Copy(os.Stdout, logs)
+			done <- err
+		} else {
+			done <- nil
+		}
+	}()
+
+	// Let operator know we're now streaming logs
+	retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		objKey := types.NamespacedName{Name: ws.GetName(), Namespace: t.Namespace}
+		err = rc.Get(context.TODO(), objKey, ws)
+		if err != nil {
+			done <- err
+		} else {
+			// Delete annotation WaitAnnotationKey, giving the runner the signal to start
+			annotations := ws.GetAnnotations()
+			delete(annotations, v1alpha1.WaitAnnotationKey)
+			ws.SetAnnotations(annotations)
+
+			return rc.Update(context.TODO(), ws, &client.UpdateOptions{})
+		}
+		return nil
+	})
+
+	err = <-done
+	if err != nil {
+		return err
+	}
+
 	if err := writeEnvironmentFile(t.Path, t.Namespace, t.Name); err != nil {
 		return err
 	}
@@ -199,8 +277,14 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 				"app": "stok",
 			},
 		},
-		Spec: v1alpha1types.WorkspaceSpec{},
+		Spec: v1alpha1types.WorkspaceSpec{
+			Backend:       t.Backend,
+			TimeoutClient: t.TimeoutClient.String(),
+		},
 	}
+
+	ws.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
+	ws.SetDebug(t.debug)
 
 	if !t.NoSecret {
 		ws.Spec.SecretName = t.Secret
@@ -220,4 +304,29 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 
 	err := rc.Create(context.TODO(), ws)
 	return ws, err
+}
+
+func waitUntilPodInitialisedAndRunning(rc k8s.Client, pod *corev1.Pod, namespace, name string, timeout time.Duration) (*corev1.Pod, error) {
+	err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return podInitialisedAndRunning(pod)
+	})
+	return pod, err
+}
+
+// podRunningAndReady returns true if the pod is running and ready, false if the pod has not
+// yet reached those states, returns ErrPodCompleted if the pod has run to completion, or
+// an error in any other case.
+func podInitialisedAndRunning(pod *corev1.Pod) (bool, error) {
+	if len(pod.Status.InitContainerStatuses) > 0 {
+		if pod.Status.InitContainerStatuses[0].State.Running != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }

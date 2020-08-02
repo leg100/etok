@@ -1,6 +1,10 @@
 package v1alpha1
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/leg100/stok/util/maps"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -9,25 +13,59 @@ import (
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
 type WorkspaceCacheSpec struct {
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	StorageClass string `json:"storageClass,omitempty"`
 	Size         string `json:"size,omitempty"`
 }
 
+type BackendSpec struct {
+	// +kubebuilder:validation:Enum=local;remote;artifactory;azurerm;consul;cos;etcd;etcdv3;gcs;http;manta;oss;pg;s3;swift
+	Type   string            `json:"type,omitempty"`
+	Config map[string]string `json:"config,omitempty"`
+}
+
+func BackendEmptyConfig(backendType string) string {
+	return fmt.Sprintf(`terraform {
+  backend "%s" {}
+}
+`, backendType)
+}
+
+func BackendConfig(cfg map[string]string) string {
+	var b strings.Builder
+	for k, v := range maps.SortStrings(cfg) {
+		fmt.Fprintf(&b, "%s\t= \"%s\"\n", k, v)
+	}
+	return b.String()
+}
+
+func BackendConfigMapName(workspace string) string {
+	return "workspace-" + workspace
+}
+
+func (ws *Workspace) PodName() string {
+	return "workspace-" + ws.GetName()
+}
+
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	SecretName         string             `json:"secretName,omitempty"`
 	ServiceAccountName string             `json:"serviceAccountName,omitempty"`
 	Cache              WorkspaceCacheSpec `json:"cache,omitempty"`
+	Backend            BackendSpec        `json:"backend"`
+	TimeoutClient      string             `json:"timeoutclient"`
+	Debug              bool               `json:"debug,omitempty"`
 }
+
+// Get/Set TimeoutQueue functions
+func (ws *Workspace) GetTimeoutClient() string        { return ws.Spec.TimeoutClient }
+func (ws *Workspace) SetTimeoutClient(timeout string) { ws.Spec.TimeoutClient = timeout }
+
+// Get/Set Debug functions
+func (ws *Workspace) GetDebug() bool      { return ws.Spec.Debug }
+func (ws *Workspace) SetDebug(debug bool) { ws.Spec.Debug = debug }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	Queue      []string          `json:"queue"`
 	Conditions status.Conditions `json:"conditions,omitempty"`
 }
@@ -42,6 +80,9 @@ const (
 
 	WorkspaceDefaultSecretName         = "stok"
 	WorkspaceDefaultServiceAccountName = "stok"
+
+	BackendTypeFilename   = "backend.tf"
+	BackendConfigFilename = "backend.ini"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

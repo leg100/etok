@@ -76,11 +76,12 @@ func (c *client) Attach(pod *corev1.Pod) error {
 	opts := &attach.AttachOptions{
 		StreamOptions: exec.StreamOptions{
 			// TODO: not sure how this has worked all this time for non-default namespaces?
-			Namespace: "default",
-			PodName:   pod.GetName(),
-			Stdin:     true,
-			TTY:       true,
-			Quiet:     true,
+			Namespace:     "default",
+			PodName:       pod.GetName(),
+			ContainerName: "runner",
+			Stdin:         true,
+			TTY:           true,
+			Quiet:         true,
 			IOStreams: genericclioptions.IOStreams{
 				In:     os.Stdin,
 				Out:    os.Stdout,

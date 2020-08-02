@@ -67,7 +67,7 @@ const (
 	ReasonClientAttached       status.ConditionReason = "ClientAttached"
 	ReasonPodCompleted         status.ConditionReason = "PodCompleted"
 
-	CommandWaitAnnotationKey = "stok.goalspike.com/wait"
+	WaitAnnotationKey = "stok.goalspike.com/wait"
 
 	CommandDefaultConfigMapKey = "config.tar.gz"
 

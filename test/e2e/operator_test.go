@@ -77,14 +77,14 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "new workspace",
-			args:            []string{"workspace", "new", wsName, "--timeout", "5s", "--context", *kubectx},
+			args:            []string{"workspace", "new", wsName, "--timeout", "5s", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "second new workspace",
-			args:            []string{"workspace", "new", wsName2, "--timeout", "5s", "--context", *kubectx},
+			args:            []string{"workspace", "new", wsName2, "--timeout", "5s", "--timeout-pod", "60s", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,

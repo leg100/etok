@@ -30,7 +30,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 		"workspace": t.Workspace,
 	})
 
-	cmd.SetAnnotations(map[string]string{v1alpha1.CommandWaitAnnotationKey: "true"})
+	cmd.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 
 	cmd.SetTimeoutQueue(t.TimeoutQueue.String())
 	cmd.SetTimeoutClient(t.TimeoutClient.String())

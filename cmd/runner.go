@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
@@ -57,7 +58,7 @@ func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&runner.Path, "path", ".", "Workspace config path")
-	cmd.Flags().StringVar(&runner.Tarball, "tarball", "/tarball/tarball.tar.gz", "Extract specified tarball file to workspace path")
+	cmd.Flags().StringVar(&runner.Tarball, "tarball", "", "Extract specified tarball file to workspace path")
 
 	cmd.Flags().StringVar(&runner.Name, "name", "", "Name of command resource")
 	cmd.Flags().StringVar(&runner.Namespace, "namespace", "default", "Namespace of command resource")
@@ -77,11 +78,13 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 
 	r.args = args
 
-	files, err := extractTarball(r.Tarball, r.Path)
-	if err != nil {
-		return err
+	if r.Tarball != "" {
+		files, err := extractTarball(r.Tarball, r.Path)
+		if err != nil {
+			return err
+		}
+		log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
 	}
-	log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
 
 	rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
 	if err != nil {
@@ -104,7 +107,7 @@ func (r *runnerCmd) validate() error {
 		return fmt.Errorf("missing flag: --kind <kind>")
 	}
 
-	if !slice.ContainsString(command.CommandKinds, r.Kind) {
+	if !slice.ContainsString(append(command.CommandKinds, "Workspace"), r.Kind) {
 		return fmt.Errorf("invalid kind: %s", r.Kind)
 	}
 
@@ -128,19 +131,19 @@ func extractTarball(src, dst string) (int, error) {
 }
 
 func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace string, timeout time.Duration) error {
-	// Get REST Client for listwatch for watching command resource
+	// Get REST Client for listwatch for watching resource
 	gvk := v1alpha1.SchemeGroupVersion.WithKind(kind)
 
-	// Wait until CommandWaitAnnotation is unset, or return error if timeout or other error occurs
+	// Wait until WaitAnnotation is unset, or return error if timeout or other error occurs
 	err := wait.Poll(500*time.Millisecond, timeout, func() (bool, error) {
-		cmd, err := command.NewCommandFromGVK(s, gvk)
+		obj, err := api.NewObjectFromGVK(s, gvk)
 		if err != nil {
 			return false, err
 		}
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, cmd); err != nil {
+		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, obj); err != nil {
 			return false, err
 		}
-		if _, ok := cmd.GetAnnotations()[v1alpha1.CommandWaitAnnotationKey]; !ok {
+		if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
 			// No checkpoint annotation set, we're clear to go
 			return true, nil
 		}

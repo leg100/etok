@@ -72,6 +72,24 @@ func TestRunnerWithTarball(t *testing.T) {
 	require.Equal(t, 0, code)
 }
 
+func TestRunnerWithoutTarball(t *testing.T) {
+	factory := fake.NewFactory(shell)
+
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "Shell",
+		"--name", "stok-shell-xyz",
+		"--namespace", "test",
+		"--",
+		"date",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+}
+
 func TestRunnerWithSpecificExitCode(t *testing.T) {
 	tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
 	factory := fake.NewFactory(shell)
@@ -97,7 +115,7 @@ func TestRunnerWithSpecificExitCode(t *testing.T) {
 // Test interaction between launcher and client. Client sets annotation on command, runner waits for
 // annotation to be unset, client unsets annotation, runner returns without error.
 func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
-	shell.SetAnnotations(map[string]string{v1alpha1.CommandWaitAnnotationKey: "true"})
+	shell.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 	factory := fake.NewFactory(shell)
 
 	rc, err := factory.NewClient(scheme.Scheme, "")
