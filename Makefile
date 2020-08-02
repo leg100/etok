@@ -12,7 +12,7 @@ LD_FLAGS = " \
 	" \
 
 ifeq ($(ENV),gke)
-KUBECTX=gke_automatize-admin_europe-west2-a_cluster-1
+KUBECTX=gke_automatize-admin_europe-west2-a_stok
 IMG=eu.gcr.io/automatize-admin/stok:$(VERSION)-$(RANDOM_SUFFIX)
 else
 KUBECTX=kind-kind
@@ -44,11 +44,12 @@ endif
 	kustomize
 
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
-# be built and loaded first.
+# be built and pushed/loaded first.
 local: image push
-	$(BUILD_BIN) operator
+	RUNNER_IMAGE=$(IMG) $(BUILD_BIN) operator
 
-deploy-operator: build
+# Same as above - image still needs to be built and pushed/loaded
+deploy-operator: image push
 	$(BUILD_BIN) generate operator --image $(IMG) | $(KUBECTL) apply -f -
 	$(KUBECTL) rollout status --timeout=10s deployment/stok-operator
 

@@ -78,12 +78,14 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 		// Default to image version (typically set via an LD flag when building the bin)
 		runnerImage = version.Image
 	}
+	log.Info("Runner image: " + runnerImage)
 
 	// Setup workspace ctrl with mgr
 	if err = (&controllers.WorkspaceReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Workspace"),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Log:         ctrl.Log.WithName("controllers").WithName("Workspace"),
+		Scheme:      mgr.GetScheme(),
+		RunnerImage: runnerImage,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create workspace controller: %w", err)
 	}

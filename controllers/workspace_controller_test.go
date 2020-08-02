@@ -2,12 +2,13 @@ package controllers
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/operator-framework/operator-sdk/pkg/status"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,247 +18,176 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var workspaceEmptyQueue2 = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName:         "stok",
-		ServiceAccountName: "stok",
-	},
-}
-
-var workspaceWithoutSecret = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		ServiceAccountName: "stok",
-	},
-}
-
-var workspaceWithCacheSpec = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		Cache: v1alpha1.WorkspaceCacheSpec{
-			Size:         "2Gi",
-			StorageClass: "local-path",
-		},
-		SecretName:         "stok",
-		ServiceAccountName: "stok",
-	},
-}
-
-var workspaceWithQueue = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName:         "stok",
-		ServiceAccountName: "stok",
-	},
-}
-
-var secret2 = corev1.Secret{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app": "stok",
-		},
-	},
-}
-
-var serviceAccount = corev1.ServiceAccount{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok",
-		Namespace: "operator-test",
-		Labels: map[string]string{
-			"app": "stok",
-		},
-	},
-}
-
-func TestReconcileWorkspace(t *testing.T) {
-	plan1 := v1alpha1.Plan{}
-	plan1.SetName("plan-1")
-	plan1.SetNamespace("operator-test")
-	plan1.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": "workspace-1",
-	})
-
-	plan2 := v1alpha1.Plan{}
-	plan2.SetName("plan-2")
-	plan2.SetNamespace("operator-test")
-	plan2.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": "workspace-1",
-	})
-
-	planWithNonExistantWorkspace := v1alpha1.Plan{}
-	planWithNonExistantWorkspace.SetName("pod-with-non-existant-workspace")
-	planWithNonExistantWorkspace.SetNamespace("operator-test")
-	planWithNonExistantWorkspace.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": "workspace-does-not-exist",
-	})
-
-	planCompleted := v1alpha1.Plan{}
-	planCompleted.SetName("plan-3")
-	planCompleted.SetNamespace("operator-test")
-	planCompleted.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": "workspace-1",
-	})
-	planCompleted.Conditions.SetCondition(
-		status.Condition{
-			Type:   v1alpha1.ConditionCompleted,
-			Status: corev1.ConditionTrue,
-		},
-	)
-
-	tests := []struct {
-		name                  string
-		workspace             *v1alpha1.Workspace
-		objs                  []runtime.Object
-		status                v1alpha1.WorkspaceStatus
-		wantQueue             []string
-		wantRequeue           bool
-		wantPVC               bool
-		wantCacheSize         string
-		wantCacheStorageClass string
-		wantHealthyCondition  corev1.ConditionStatus
-	}{
-		{
-			name:      "Missing secret",
-			workspace: &workspaceEmptyQueue2,
-			objs: []runtime.Object{
-				runtime.Object(&serviceAccount),
+func TestReconcileWorkspaceStatus(t *testing.T) {
+	plan1 := v1alpha1.Plan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "plan-1",
+			Labels: map[string]string{
+				"workspace": "workspace-1",
 			},
-			wantQueue:            []string{},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionFalse,
 		},
-		{
-			name:      "Missing service account",
-			workspace: &workspaceEmptyQueue2,
-			objs: []runtime.Object{
-				runtime.Object(&secret2),
+	}
+
+	plan2 := v1alpha1.Plan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "plan-2",
+			Labels: map[string]string{
+				"workspace": "workspace-1",
 			},
-			wantQueue:            []string{},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionFalse,
 		},
-		{
-			name:      "No secret",
-			workspace: &workspaceWithoutSecret,
-			objs: []runtime.Object{
-				runtime.Object(&serviceAccount),
+	}
+
+	plan3 := v1alpha1.Plan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "plan-3",
+			Labels: map[string]string{
+				"workspace": "workspace-2",
 			},
-			wantQueue:            []string{},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
 		},
-		{
-			name:      "Workspace with cache spec",
-			workspace: &workspaceWithCacheSpec,
-			objs: []runtime.Object{
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
+	}
+
+	planCompleted := v1alpha1.Plan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "plan-3",
+			Labels: map[string]string{
+				"workspace": "workspace-1",
 			},
-			wantQueue:             []string{},
-			wantRequeue:           false,
-			wantCacheSize:         "2Gi",
-			wantCacheStorageClass: "local-path",
-			wantHealthyCondition:  corev1.ConditionTrue,
-			wantPVC:               true,
 		},
-		{
-			name:      "No commands",
-			workspace: &workspaceEmptyQueue2,
-			objs: []runtime.Object{
-				runtime.Object(&planWithNonExistantWorkspace),
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
-			},
-			wantQueue:            []string{},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
-		},
-		{
-			name:      "Single command",
-			workspace: &workspaceEmptyQueue2,
-			objs: []runtime.Object{
-				runtime.Object(&plan1),
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
-			},
-			wantQueue:            []string{"plan-1"},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
-		},
-		{
-			name:      "Two commands",
-			workspace: &workspaceEmptyQueue2,
-			objs: []runtime.Object{
-				runtime.Object(&plan1),
-				runtime.Object(&plan2),
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
-			},
-			wantQueue:            []string{"plan-1", "plan-2"},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
-		},
-		{
-			name:      "Existing queue",
-			workspace: &workspaceWithQueue,
-			objs: []runtime.Object{
-				runtime.Object(&plan1),
-				runtime.Object(&plan2),
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
-			},
-			status: v1alpha1.WorkspaceStatus{
-				Queue: []string{
-					"plan-1",
+		CommandStatus: v1alpha1.CommandStatus{
+			Conditions: status.Conditions{
+				status.Condition{
+					Type:   v1alpha1.ConditionCompleted,
+					Status: corev1.ConditionTrue,
 				},
 			},
-			wantQueue:            []string{"plan-1", "plan-2"},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		workspace  *v1alpha1.Workspace
+		objs       []runtime.Object
+		assertions func(ws *v1alpha1.Workspace)
+	}{
+		{
+			name: "Missing secret",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					SecretName: "stok",
+				},
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, corev1.ConditionFalse, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
+			},
 		},
 		{
-			name:      "Completed command",
-			workspace: &workspaceEmptyQueue2,
+			name: "Missing service account",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					ServiceAccountName: "stok",
+				},
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, corev1.ConditionFalse, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
+			},
+		},
+		{
+			name: "No secret nor service account specified",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, corev1.ConditionTrue, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
+			},
+		},
+		{
+			name: "No commands",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Single command",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Three commands, one of which is unrelated to this workspace",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+				runtime.Object(&plan2),
+				runtime.Object(&plan3),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Existing queue",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Status: v1alpha1.WorkspaceStatus{
+					Queue: []string{
+						"plan-1",
+					},
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+				runtime.Object(&plan2),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Completed command",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
 			objs: []runtime.Object{
 				runtime.Object(&planCompleted),
 				runtime.Object(&plan1),
 				runtime.Object(&plan2),
-				runtime.Object(&secret2),
-				runtime.Object(&serviceAccount),
 			},
-			wantQueue:            []string{"plan-1", "plan-2"},
-			wantRequeue:          false,
-			wantHealthyCondition: corev1.ConditionTrue,
-			wantPVC:              true,
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.workspace.Status = tt.status
 			objs := append(tt.objs, runtime.Object(tt.workspace))
 			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
 
@@ -273,54 +203,268 @@ func TestReconcileWorkspace(t *testing.T) {
 					Namespace: tt.workspace.GetNamespace(),
 				},
 			}
-			res, err := r.Reconcile(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if tt.wantRequeue && !res.Requeue {
-				t.Error("expected reconcile to requeue")
-			}
+			_, err := r.Reconcile(req)
+			require.NoError(t, err)
 
 			err = r.Get(context.TODO(), req.NamespacedName, tt.workspace)
-			if err != nil {
-				t.Fatalf("get ws: (%v)", err)
+			require.NoError(t, err)
+
+			tt.assertions(tt.workspace)
+		})
+	}
+}
+
+func TestReconcileWorkspacePVC(t *testing.T) {
+	tests := []struct {
+		name       string
+		workspace  *v1alpha1.Workspace
+		assertions func(pvc *corev1.PersistentVolumeClaim)
+	}{
+		{
+			name: "Default size",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			assertions: func(pvc *corev1.PersistentVolumeClaim) {
+				size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+				require.Equal(t, "1Gi", size.String())
+			},
+		},
+		{
+			name: "Custom storage class",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					Cache: v1alpha1.WorkspaceCacheSpec{
+						StorageClass: "local-path",
+					},
+				},
+			},
+			assertions: func(pvc *corev1.PersistentVolumeClaim) {
+				require.Equal(t, "local-path", *pvc.Spec.StorageClassName)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
+
+			r := NewWorkspaceReconciler(cl)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.workspace.GetName(),
+					Namespace: tt.workspace.GetNamespace(),
+				},
 			}
+			_, err := r.Reconcile(req)
+			require.NoError(t, err)
 
-			gotHealthyCondition := tt.workspace.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy)
-			if tt.wantHealthyCondition != gotHealthyCondition.Status {
-				t.Fatalf("want %s got %s", tt.wantHealthyCondition, gotHealthyCondition.Status)
+			pvc := &corev1.PersistentVolumeClaim{}
+			err = r.Get(context.TODO(), req.NamespacedName, pvc)
+			require.NoError(t, err)
+
+			tt.assertions(pvc)
+		})
+	}
+}
+
+func TestReconcileWorkspaceConfigMap(t *testing.T) {
+	tests := []struct {
+		name       string
+		workspace  *v1alpha1.Workspace
+		assertions func(configmap *corev1.ConfigMap)
+	}{
+		{
+			name: "Default",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					Backend: v1alpha1.BackendSpec{
+						Type: "local",
+					},
+				},
+			},
+			assertions: func(configmap *corev1.ConfigMap) {
+				require.Equal(t, map[string]string{
+					"backend.tf": `terraform {
+  backend "local" {}
+}
+`,
+					"backend.ini": "",
+				}, configmap.Data)
+			},
+		},
+		{
+			name: "GCS backend",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					Backend: v1alpha1.BackendSpec{
+						Type: "gcs",
+						Config: map[string]string{
+							"bucket": "workspace-1-state",
+							"prefix": "dev",
+						},
+					},
+				},
+			},
+			assertions: func(configmap *corev1.ConfigMap) {
+				require.Equal(t, map[string]string{
+					"backend.tf": `terraform {
+  backend "gcs" {}
+}
+`,
+					"backend.ini": `bucket	= "workspace-1-state"
+prefix	= "dev"
+`,
+				}, configmap.Data)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
+
+			r := NewWorkspaceReconciler(cl)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.workspace.GetName(),
+					Namespace: tt.workspace.GetNamespace(),
+				},
 			}
+			_, err := r.Reconcile(req)
+			require.NoError(t, err)
 
-			queue := tt.workspace.Status.Queue
-			if !reflect.DeepEqual(tt.wantQueue, queue) {
-				t.Fatalf("workspace queue expected to be %#v, but got %#v", tt.wantQueue, queue)
+			configmap := &corev1.ConfigMap{}
+			configmapkey := types.NamespacedName{
+				Name:      "workspace-" + tt.workspace.GetName(),
+				Namespace: tt.workspace.GetNamespace(),
 			}
+			err = r.Get(context.TODO(), configmapkey, configmap)
+			require.NoError(t, err)
 
-			if tt.wantPVC {
-				pvc := &corev1.PersistentVolumeClaim{}
-				err = r.Get(context.TODO(), req.NamespacedName, pvc)
-				if err != nil {
-					t.Errorf("get pvc: (%v)", err)
-				}
+			tt.assertions(configmap)
+		})
+	}
+}
 
-				// If not set, want default of 1Gi
-				if tt.wantCacheSize == "" {
-					tt.wantCacheSize = "1Gi"
+func TestReconcileWorkspacePod(t *testing.T) {
+	tests := []struct {
+		name       string
+		workspace  *v1alpha1.Workspace
+		objs       []runtime.Object
+		assertions func(pod *corev1.Pod)
+	}{
+		{
+			name: "Default",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "workspace-1",
+					Namespace: "controller-test",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					TimeoutClient: "10s",
+				},
+			},
+			assertions: func(pod *corev1.Pod) {
+				assert.Equal(t, []string{
+					"--kind", "Workspace",
+					"--name", "workspace-1",
+					"--namespace", "controller-test",
+					"--timeout", "10s",
+					"--",
+					"-backend-config=backend.ini"},
+					pod.Spec.InitContainers[0].Args)
+			},
+		},
+		{
+			name: "With credentials",
+			objs: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "stok",
+					},
+					StringData: map[string]string{
+						"AWS_ACCESS_KEY_ID":                   "youraccesskeyid",
+						"AWS_SECRET_ACCESS_KEY":               "yoursecretaccesskey",
+						"google_application_credentials.json": "abc",
+					},
+				},
+			},
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					SecretName: "stok",
+				},
+			},
+			assertions: func(pod *corev1.Pod) {
+				got, ok := getEnvValueForName(&pod.Spec.InitContainers[0], "GOOGLE_APPLICATION_CREDENTIALS")
+				if !ok {
+					t.Fatal("Could not find env var with name GOOGLE_APPLICATION_CREDENTIALS")
 				}
-				gotSize, _ := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-				if tt.wantCacheSize != gotSize.String() {
-					t.Errorf("want %s got %s", tt.wantCacheSize, gotSize.String())
-				}
+				assert.Equal(t, "/credentials/google-credentials.json", got)
 
-				// Don't test when StorageClass is unset
-				if tt.wantCacheStorageClass != "" {
-					gotStorageClass := pvc.Spec.StorageClassName
-					if tt.wantCacheStorageClass != *gotStorageClass {
-						t.Errorf("want %s got %s", tt.wantCacheStorageClass, *gotStorageClass)
-					}
-				}
+				assert.Equal(t, "stok", pod.Spec.InitContainers[0].EnvFrom[0].SecretRef.Name)
+			},
+		},
+		{
+			name: "With service account",
+			objs: []runtime.Object{
+				&corev1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "stok",
+					},
+				},
+			},
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					ServiceAccountName: "stok",
+				},
+			},
+			assertions: func(pod *corev1.Pod) {
+				assert.Equal(t, "stok", pod.Spec.ServiceAccountName)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, append(tt.objs, tt.workspace)...)
+
+			r := NewWorkspaceReconciler(cl)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.workspace.GetName(),
+					Namespace: tt.workspace.GetNamespace(),
+				},
 			}
+			_, err := r.Reconcile(req)
+			require.NoError(t, err)
+
+			pod := &corev1.Pod{}
+			podkey := types.NamespacedName{
+				Name:      "workspace-" + tt.workspace.GetName(),
+				Namespace: tt.workspace.GetNamespace(),
+			}
+			err = r.Get(context.TODO(), podkey, pod)
+			require.NoError(t, err)
+
+			tt.assertions(pod)
 		})
 	}
 }

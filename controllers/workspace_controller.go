@@ -9,6 +9,7 @@ import (
 	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/scheme"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -28,8 +29,17 @@ import (
 
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Scheme      *runtime.Scheme
+	Log         logr.Logger
+	RunnerImage string
+}
+
+func NewWorkspaceReconciler(cl client.Client) *WorkspaceReconciler {
+	return &WorkspaceReconciler{
+		Client: cl,
+		Scheme: scheme.Scheme,
+		Log:    ctrl.Log.WithName("controllers").WithName("Workspace"),
+	}
 }
 
 // Reconcile reads that state of the cluster for a Workspace object and makes changes based on the state read
@@ -59,6 +69,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Because it is a required attribute we need to set the queue status to an empty array if it
 	// is not already set
+	// TODO: need to update ws after setting these defaults
 	if instance.Status.Queue == nil {
 		instance.Status.Queue = []string{}
 	}
@@ -121,12 +132,6 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
 	}
 
-	// Manage PVC for workspace cache dir
-	pvc := newPVCForCR(instance)
-	if err := r.manageControllee(instance, reqLogger, pvc); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	// Manage Role for workspace
 	role := newRoleForCR(instance)
 	if err := r.manageControllee(instance, reqLogger, role); err != nil {
@@ -138,6 +143,31 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := r.manageControllee(instance, reqLogger, binding); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Manage ConfigMap for workspace
+	configMap := newConfigMapForCR(instance)
+	if err := r.manageControllee(instance, reqLogger, configMap); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Manage PVC for workspace cache dir
+	pvc := newPVCForCR(instance)
+	if err := r.manageControllee(instance, reqLogger, pvc); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Manage Pod for workspace
+	pod := r.newPodForCR(instance)
+	if err := r.manageControllee(instance, reqLogger, pod); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	//TODO: check pod's initContainer finished successfully and update status accordingly
+	//if len(pod.Status.InitContainerStatuses) > 0 {
+	//	state := pod.Status.InitContainerStatuses[0]
+	//	if state.State.Terminated != nil {
+	//		if state.State.Terminated.ExitCode == 0 {
+	//}
 
 	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
 	var cmdList []command.Interface
@@ -197,8 +227,28 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// For a given go object, return the corresponding Kind. A wrapper for scheme.ObjectKinds, which
+// returns all possible GVKs for a go object, but the wrapper returns only the Kind, checking only
+// that at least one GVK exists. (The Kind should be the same for all GVKs).
+// TODO: could just use reflect.TypeOf instead...
+func GetKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, error) {
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		return "", err
+	}
+	if len(gvks) == 0 {
+		return "", fmt.Errorf("no kind found for obj %v", obj)
+	}
+	return gvks[0].Kind, nil
+}
+
 func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee api.Object) error {
-	log := logger.WithValues("Controllee.Kind", controllee.GetObjectKind().GroupVersionKind().Kind)
+	kind, err := GetKindFromObject(r.Scheme, controllee)
+	if err != nil {
+		return err
+	}
+
+	log := logger.WithValues("Controllee.Kind", kind)
 
 	// Set Workspace instance as the owner and controller
 	if err := controllerutil.SetControllerReference(ws, controllee, r.Scheme); err != nil {
@@ -217,18 +267,39 @@ func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger lo
 			log.Error(err, "Failed to create controllee", "Controllee.Name", controllee.GetName())
 			return err
 		}
+		log.Info("Created controllee", "Controllee.Name", controllee.GetName())
 	} else if err != nil {
-		log.Error(err, "Error retrieving PVC")
+		log.Error(err, "Error retrieving controllee")
 		return err
 	}
 
-	log.Info("Created controllee", "Controllee.Name", controllee.GetName())
 	return nil
+}
+
+func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      v1alpha1.BackendConfigMapName(cr.GetName()),
+			Namespace: cr.Namespace,
+			Labels: map[string]string{
+				"workspace": cr.GetName(),
+			},
+		},
+		Data: map[string]string{
+			v1alpha1.BackendTypeFilename:   v1alpha1.BackendEmptyConfig(cr.Spec.Backend.Type),
+			v1alpha1.BackendConfigFilename: v1alpha1.BackendConfig(cr.Spec.Backend.Config),
+		},
+	}
 }
 
 func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
 	labels := map[string]string{
-		"app": cr.Name,
+		"app":       cr.GetName(),
+		"workspace": cr.GetName(),
 	}
 
 	size := v1alpha1.WorkspaceDefaultCacheSize
@@ -263,6 +334,21 @@ func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
 	}
 
 	return &pvc
+}
+
+func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
+	args := []string{"-backend-config=" + v1alpha1.BackendConfigFilename}
+
+	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.RunnerImage).
+		AddRunnerContainer(args).
+		AddWorkspace().
+		AddCache(cr.GetName()).
+		AddBackendConfig(cr.GetName()).
+		AddCredentials(cr.Spec.SecretName).
+		HasServiceAccount(cr.Spec.ServiceAccountName).
+		WaitForClient("Workspace", cr.GetName(), cr.GetNamespace(), cr.Spec.TimeoutClient).
+		EnableDebug(cr.GetDebug()).
+		Build(true)
 }
 
 func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
@@ -351,14 +437,6 @@ func cmdListNames(cmdList []command.Interface) []string {
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	blder := ctrl.NewControllerManagedBy(mgr)
-
-	// Watch for changes to primary resource Workspace
-	blder.For(&v1alpha1.Workspace{})
-
-	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
-	blder.Owns(&corev1.PersistentVolumeClaim{})
-
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.serviceAccountName", func(o runtime.Object) []string {
 		sa := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
 		if sa == "" {
@@ -374,6 +452,20 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 		return []string{sa}
 	})
+
+	blder := ctrl.NewControllerManagedBy(mgr)
+
+	// Watch for changes to primary resource Workspace
+	blder = blder.For(&v1alpha1.Workspace{})
+
+	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
+	blder = blder.Owns(&corev1.PersistentVolumeClaim{})
+
+	// Watch owned configmaps
+	blder = blder.Owns(&corev1.ConfigMap{})
+
+	// Watch owned pods
+	blder = blder.Owns(&corev1.Pod{})
 
 	// Watch for changes to service accounts and secrets, because they may affect the functionality
 	// of a Workspace (e.g. the deletion of a service account)

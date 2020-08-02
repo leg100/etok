@@ -17,6 +17,13 @@ func TestRunnerArgsForKindShellWithArgs(t *testing.T) {
 	want := []string{"/bin/sh", "-c", "/bin/echo foo"}
 	require.Equal(t, want, got)
 }
+
+func TestRunnerArgsForKindWorkspaceWithArgs(t *testing.T) {
+	got := RunnerArgsForKind("Workspace", []string{"-backend-config=backend.ini"})
+	want := []string{"terraform", "init", "-backend-config=backend.ini"}
+	require.Equal(t, want, got)
+}
+
 func TestRunnerArgsForKindPlan(t *testing.T) {
 	got := RunnerArgsForKind("Plan", []string{})
 	want := []string{"terraform", "plan"}

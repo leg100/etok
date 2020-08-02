@@ -151,7 +151,7 @@ func (r *CommandReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder = blder.Owns(&corev1.Pod{})
 
 	// Watch for changes to resource Workspace and requeue the associated commands
-	blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			err = r.List(context.TODO(), oList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingLabels{
 				"workspace": a.Meta.GetName(),

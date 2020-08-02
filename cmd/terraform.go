@@ -193,7 +193,7 @@ func (t *terraformCmd) run() error {
 		"pod":       name,
 		"namespace": t.Namespace,
 	}).Debug("awaiting readiness")
-	pod, err := t.waitUntilPodRunningAndReady(rc, &corev1.Pod{}, name)
+	pod, err := waitUntilPodRunningAndReady(rc, &corev1.Pod{}, t.Namespace, name, t.TimeoutPod)
 	if err != nil {
 		return err
 	}
@@ -235,9 +235,9 @@ func (t *terraformCmd) run() error {
 		if err != nil {
 			done <- err
 		} else {
-			// Delete annotation CommandWaitAnnotationKey, giving the runner the signal to start
+			// Delete annotation WaitAnnotationKey, giving the runner the signal to start
 			annotations := cmdRes.GetAnnotations()
-			delete(annotations, v1alpha1.CommandWaitAnnotationKey)
+			delete(annotations, v1alpha1.WaitAnnotationKey)
 			cmdRes.SetAnnotations(annotations)
 
 			return rc.Update(context.TODO(), cmdRes, &client.UpdateOptions{})
@@ -248,9 +248,9 @@ func (t *terraformCmd) run() error {
 	return <-done
 }
 
-func (t *terraformCmd) waitUntilPodRunningAndReady(rc k8s.Client, pod *corev1.Pod, name string) (*corev1.Pod, error) {
-	err := wait.Poll(100*time.Millisecond, t.TimeoutPod, func() (bool, error) {
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: t.Namespace, Name: name}, pod); err != nil {
+func waitUntilPodRunningAndReady(rc k8s.Client, pod *corev1.Pod, namespace, name string, timeout time.Duration) (*corev1.Pod, error) {
+	err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
 			}

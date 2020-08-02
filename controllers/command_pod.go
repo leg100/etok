@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +29,7 @@ func (r *CommandReconciler) reconcilePod(request reconcile.Request, opts *podOpt
 	pod := &corev1.Pod{}
 	err := r.Get(context.TODO(), request.NamespacedName, pod)
 	if errors.IsNotFound(err) {
-		return r.create(pod, opts)
+		return r.create(opts)
 	}
 	if err != nil {
 		return reconcile.Result{}, err
@@ -79,22 +78,27 @@ func (r *CommandReconciler) updateStatus(pod *corev1.Pod) (reconcile.Result, err
 }
 
 // Create pod
-func (r CommandReconciler) create(pod *corev1.Pod, opts *podOpts) (reconcile.Result, error) {
+func (r CommandReconciler) create(opts *podOpts) (reconcile.Result, error) {
+	pod := NewPodBuilder(r.C.GetNamespace(), r.C.GetName(), r.RunnerImage).
+		AddRunnerContainer(r.C.GetArgs()).
+		AddWorkspace().
+		AddCache(opts.pvcName).
+		AddBackendConfig(opts.workspaceName).
+		AddCredentials(opts.secretName).
+		HasServiceAccount(opts.serviceAccountName).
+		MountTarball(opts.configMapName, opts.configMapKey).
+		WaitForClient(r.Kind, r.C.GetName(), r.C.GetNamespace(), r.C.GetTimeoutClient()).
+		EnableDebug(r.C.GetDebug()).
+		Build(false)
+
 	// TODO: move to a global variable or dedicated package
-	labels := map[string]string{
+	pod.SetLabels(map[string]string{
 		"app":       "stok",
 		"command":   command.CommandKindToCLI(r.C.GroupVersionKind().Kind),
 		"workspace": opts.workspaceName,
 		"version":   version.Version,
-	}
-	// Use same name as command
-	pod.SetName(r.C.GetName())
-	pod.SetNamespace(r.C.GetNamespace())
-	pod.SetLabels(labels)
+	})
 
-	if err := r.construct(pod, opts); err != nil {
-		return reconcile.Result{}, err
-	}
 	// Set Command instance as the owner and controller
 	if err := controllerutil.SetControllerReference(r.C, pod, r.Scheme); err != nil {
 		return reconcile.Result{}, err
@@ -110,133 +114,4 @@ func (r CommandReconciler) create(pod *corev1.Pod, opts *podOpts) (reconcile.Res
 	}
 
 	return reconcile.Result{Requeue: true}, nil
-}
-
-func (r *CommandReconciler) runnerArgs(opts *podOpts) []string {
-	var args []string
-	if r.C.GetDebug() {
-		args = append(args, "--debug")
-	}
-	args = append(args, "--tarball", filepath.Join("/tarball", opts.configMapKey))
-	args = append(args, "--timeout", r.C.GetTimeoutClient())
-	args = append(args, "--path", ".")
-	args = append(args, "--kind", r.C.GetObjectKind().GroupVersionKind().Kind)
-	args = append(args, "--name", r.C.GetName())
-	args = append(args, "--namespace", r.C.GetNamespace())
-	args = append(args, "--")
-	args = append(args, r.C.GetArgs()...)
-	return args
-}
-
-func (r *CommandReconciler) construct(pod *corev1.Pod, opts *podOpts) error {
-	fsgroup := new(int64)
-	*fsgroup = 2000
-
-	pod.Spec = corev1.PodSpec{
-		SecurityContext: &corev1.PodSecurityContext{
-			FSGroup: fsgroup,
-		},
-		Containers: []corev1.Container{
-			{
-				Name:                     "runner",
-				Image:                    r.RunnerImage,
-				ImagePullPolicy:          corev1.PullIfNotPresent,
-				Command:                  []string{"stok", "runner"},
-				Args:                     r.runnerArgs(opts),
-				Stdin:                    true,
-				TTY:                      true,
-				TerminationMessagePolicy: "FallbackToLogsOnError",
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "workspace",
-						MountPath: "/workspace",
-					},
-					{
-						Name:      "cache",
-						MountPath: "/workspace/.terraform",
-					},
-					{
-						Name:      "tarball",
-						MountPath: filepath.Join("/tarball", opts.configMapKey),
-						SubPath:   opts.configMapKey,
-					},
-				},
-				WorkingDir: "/workspace",
-			},
-		},
-		Volumes: []corev1.Volume{
-			{
-				Name: "cache",
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: opts.pvcName,
-					},
-				},
-			},
-			{
-				Name: "workspace",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			},
-			{
-				Name: "tarball",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: opts.configMapName,
-						},
-					},
-				},
-			},
-		},
-		RestartPolicy: corev1.RestartPolicyNever,
-	}
-
-	if opts.serviceAccountName != "" {
-		pod.Spec.ServiceAccountName = opts.serviceAccountName
-	}
-
-	if opts.secretName != "" {
-		r.mountCredentials(pod, opts)
-	}
-
-	return nil
-}
-
-// Mount secret into a volume and set GOOGLE_APPLICATION_CREDENTIALS to
-// the hardcoded google credentials file (whether it exists or not). Also
-// expose the secret data via environment variables.
-func (r *CommandReconciler) mountCredentials(pod *corev1.Pod, opts *podOpts) {
-	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
-		Name: "credentials",
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: opts.secretName,
-			},
-		},
-	})
-
-	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts,
-		corev1.VolumeMount{
-			Name:      "credentials",
-			MountPath: "/credentials",
-		})
-
-	//TODO: we set this regardless of whether google credentials exist and that
-	//doesn't cause any obvious problems but really should only set it if they exist
-	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env,
-		corev1.EnvVar{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: "/credentials/google-credentials.json",
-		})
-
-	pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom,
-		corev1.EnvFromSource{
-			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: opts.secretName,
-				},
-			},
-		})
 }

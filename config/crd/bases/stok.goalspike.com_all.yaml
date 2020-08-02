@@ -2149,6 +2149,31 @@ spec:
         spec:
           description: WorkspaceSpec defines the desired state of Workspace
           properties:
+            backend:
+              properties:
+                config:
+                  additionalProperties:
+                    type: string
+                  type: object
+                type:
+                  enum:
+                  - local
+                  - remote
+                  - artifactory
+                  - azurerm
+                  - consul
+                  - cos
+                  - etcd
+                  - etcdv3
+                  - gcs
+                  - http
+                  - manta
+                  - oss
+                  - pg
+                  - s3
+                  - swift
+                  type: string
+              type: object
             cache:
               description: WorkspaceSpec defines the desired state of Workspace's
                 cache storage
@@ -2156,18 +2181,19 @@ spec:
                 size:
                   type: string
                 storageClass:
-                  description: 'Important: Run "operator-sdk generate k8s" to regenerate
-                    code after modifying this file Add custom validation using kubebuilder
-                    tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
                   type: string
               type: object
+            debug:
+              type: boolean
             secretName:
-              description: 'Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               type: string
             serviceAccountName:
               type: string
+            timeoutclient:
+              type: string
+          required:
+          - backend
+          - timeoutclient
           type: object
         status:
           description: WorkspaceStatus defines the observed state of Workspace
@@ -2213,9 +2239,6 @@ spec:
                 type: object
               type: array
             queue:
-              description: 'Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               items:
                 type: string
               type: array
