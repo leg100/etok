@@ -12,7 +12,7 @@ LD_FLAGS = " \
 	" \
 
 ifeq ($(ENV),gke)
-KUBECTX=gke_automatize-admin_europe-west2-a_cluster-1
+KUBECTX=gke_automatize-admin_europe-west2-a_stok
 IMG=eu.gcr.io/automatize-admin/stok:$(VERSION)-$(RANDOM_SUFFIX)
 else
 KUBECTX=kind-kind
