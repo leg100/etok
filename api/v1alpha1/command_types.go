@@ -16,6 +16,7 @@ type CommandSpec struct {
 	Debug         bool     `json:"debug,omitempty"`
 	ConfigMap     string   `json:"configmap"`
 	ConfigMapKey  string   `json:"configmapkey"`
+	Workspace     string   `json:"workspace"`
 }
 
 // Get/Set Args functions
@@ -41,6 +42,10 @@ func (c *CommandSpec) SetConfigMap(name string) { c.ConfigMap = name }
 // Get/Set ConfigMapKey functions
 func (c *CommandSpec) GetConfigMapKey() string    { return c.ConfigMapKey }
 func (c *CommandSpec) SetConfigMapKey(key string) { c.ConfigMapKey = key }
+
+// Get/Set Workspace functions
+func (c *CommandSpec) GetWorkspace() string   { return c.Workspace }
+func (c *CommandSpec) SetWorkspace(ws string) { c.Workspace = ws }
 
 // CommandStatus defines the observed state of Command
 type CommandStatus struct {

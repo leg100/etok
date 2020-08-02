@@ -26,4 +26,6 @@ type Interface interface {
 	SetConfigMap(string)
 	GetConfigMapKey() string
 	SetConfigMapKey(string)
+	GetWorkspace() string
+	SetWorkspace(string)
 }

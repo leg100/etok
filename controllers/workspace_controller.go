@@ -438,19 +438,19 @@ func cmdListNames(cmdList []command.Interface) []string {
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.serviceAccountName", func(o runtime.Object) []string {
-		sa := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
-		if sa == "" {
+		serviceaccount := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
+		if serviceaccount == "" {
 			return nil
 		}
-		return []string{sa}
+		return []string{serviceaccount}
 	})
 
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.secretName", func(o runtime.Object) []string {
-		sa := o.(*v1alpha1.Workspace).Spec.SecretName
-		if sa == "" {
+		secret := o.(*v1alpha1.Workspace).Spec.SecretName
+		if secret == "" {
 			return nil
 		}
-		return []string{sa}
+		return []string{secret}
 	})
 
 	blder := ctrl.NewControllerManagedBy(mgr)
@@ -523,11 +523,11 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		blder = blder.Watches(&source.Kind{Type: o}, &handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				cmd := a.Object.(command.Interface)
-				if ws, ok := cmd.GetLabels()["workspace"]; ok {
+				if cmd.GetWorkspace() != "" {
 					return []reconcile.Request{
 						{
 							NamespacedName: types.NamespacedName{
-								Name:      ws,
+								Name:      cmd.GetWorkspace(),
 								Namespace: a.Meta.GetNamespace(),
 							},
 						},

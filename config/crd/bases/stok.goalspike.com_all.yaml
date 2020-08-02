@@ -54,11 +54,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -302,11 +305,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -426,11 +432,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -550,11 +559,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -674,11 +686,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -798,11 +813,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -922,11 +940,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1046,11 +1067,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1170,11 +1194,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1418,11 +1445,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1542,11 +1572,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1666,11 +1699,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1790,11 +1826,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -1914,11 +1953,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command
@@ -2038,11 +2080,14 @@ spec:
               type: string
             timeoutqueue:
               type: string
+            workspace:
+              type: string
           required:
           - configmap
           - configmapkey
           - timeoutclient
           - timeoutqueue
+          - workspace
           type: object
         status:
           description: CommandStatus defines the observed state of Command

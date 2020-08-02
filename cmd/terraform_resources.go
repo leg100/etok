@@ -29,6 +29,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 		"app":       "stok",
 		"workspace": t.Workspace,
 	})
+	cmd.SetWorkspace(t.Workspace)
 
 	cmd.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 

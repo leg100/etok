@@ -52,9 +52,8 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	//TODO: we really shouldn't be using a label for this but a spec field instead
-	workspaceName, ok := r.C.GetLabels()["workspace"]
-	if !ok {
+	workspaceName := r.C.GetWorkspace()
+	if workspaceName == "" {
 		// Unrecoverable error, signal completion
 		r.C.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
@@ -150,11 +149,21 @@ func (r *CommandReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch for changes to secondary resource Pods and requeue the owner command resource
 	blder = blder.Owns(&corev1.Pod{})
 
+	// Index field Spec.Workspace in order for the filtered watch below to work (I don't think it
+	// works without this...)
+	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), o, "spec.workspace", func(o runtime.Object) []string {
+		ws := o.(command.Interface).GetWorkspace()
+		if ws == "" {
+			return nil
+		}
+		return []string{ws}
+	})
+
 	// Watch for changes to resource Workspace and requeue the associated commands
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			err = r.List(context.TODO(), oList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingLabels{
-				"workspace": a.Meta.GetName(),
+			err = r.List(context.TODO(), oList, client.InNamespace(a.Meta.GetNamespace()), client.MatchingFields{
+				"spec.workspace": a.Meta.GetName(),
 			})
 			if err != nil {
 				return []reconcile.Request{}

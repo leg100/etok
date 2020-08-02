@@ -208,10 +208,9 @@ func TestReconcileCommand(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
-					Labels: map[string]string{
-						"app":       "stok",
-						"workspace": "workspace-1",
-					},
+				},
+				CommandSpec: v1alpha1.CommandSpec{
+					Workspace: "workspace-1",
 				},
 			}
 

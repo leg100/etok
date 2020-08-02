@@ -7,7 +7,6 @@ import (
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -20,68 +19,6 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 	Spec: v1alpha1.WorkspaceSpec{
 		SecretName: "secret-1",
-	},
-}
-
-var plan = v1alpha1.Plan{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-plan-12345",
-		Namespace: "default",
-		Labels: map[string]string{
-			"app":       "stok",
-			"workspace": "workspace-1",
-		},
-	},
-}
-
-var pod = v1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-plan-12345",
-		Namespace: "default",
-	},
-	Spec: v1.PodSpec{
-		Containers: []v1.Container{
-			{
-				Name:  "terraform",
-				Image: "hashicorp/terraform:0.12.21",
-			},
-		},
-	},
-	Status: v1.PodStatus{
-		Phase: v1.PodRunning,
-		Conditions: []v1.PodCondition{
-			{
-				Type:   v1.PodReady,
-				Status: v1.ConditionTrue,
-			},
-		},
-	},
-}
-
-var podFailed = v1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-xxxx",
-		Namespace: "default",
-	},
-	Spec: v1.PodSpec{
-		Containers: []v1.Container{
-			{
-				Name:  "terraform",
-				Image: "hashicorp/terraform:0.12.21",
-			},
-		},
-	},
-	Status: v1.PodStatus{
-		Phase: v1.PodFailed,
-		ContainerStatuses: []v1.ContainerStatus{
-			{
-				State: v1.ContainerState{
-					Terminated: &v1.ContainerStateTerminated{
-						Message: "Message regarding last termination of container",
-					},
-				},
-			},
-		},
 	},
 }
 
@@ -106,6 +43,17 @@ func TestCreateCommand(t *testing.T) {
 }
 
 func TestCreateConfigMap(t *testing.T) {
+	var plan = v1alpha1.Plan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "stok-plan-12345",
+			Namespace: "default",
+			Labels: map[string]string{
+				"app":       "stok",
+				"workspace": "workspace-1",
+			},
+		},
+	}
+
 	tc := &terraformCmd{
 		Kind:      "Plan",
 		Namespace: "default",
