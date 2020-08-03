@@ -34,6 +34,7 @@ type runnerCmd struct {
 	Kind      string
 	Timeout   time.Duration
 	Context   string
+	NoWait    bool
 
 	factory k8s.FactoryInterface
 	args    []string
@@ -60,6 +61,7 @@ func newRunnerCmd(f k8s.FactoryInterface) *cobra.Command {
 	cmd.Flags().StringVar(&runner.Path, "path", ".", "Workspace config path")
 	cmd.Flags().StringVar(&runner.Tarball, "tarball", "", "Extract specified tarball file to workspace path")
 
+	cmd.Flags().BoolVar(&runner.NoWait, "no-wait", false, "Disable polling resource for client annotation")
 	cmd.Flags().StringVar(&runner.Name, "name", "", "Name of command resource")
 	cmd.Flags().StringVar(&runner.Namespace, "namespace", "default", "Namespace of command resource")
 	cmd.Flags().StringVar(&runner.Kind, "kind", "", "Kind of command resource")
@@ -86,13 +88,15 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 		log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
 	}
 
-	rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
-	if err != nil {
-		return err
-	}
+	if !r.NoWait {
+		rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
+		if err != nil {
+			return err
+		}
 
-	if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
-		return err
+		if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
+			return err
+		}
 	}
 
 	if err := r.run(os.Stdout, os.Stderr); err != nil {

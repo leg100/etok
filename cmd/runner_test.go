@@ -50,6 +50,21 @@ func TestRunnerWithIncorrectTarball(t *testing.T) {
 	require.Equal(t, 1, code)
 }
 
+func TestRunnerWithWaitDisabled(t *testing.T) {
+	var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"runner",
+		"--kind", "Shell",
+		"--no-wait",
+		"--",
+		"uname",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, code)
+}
+
 func TestRunnerWithTarball(t *testing.T) {
 	tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
 	factory := fake.NewFactory(shell)
