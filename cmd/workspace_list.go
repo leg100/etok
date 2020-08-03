@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
@@ -49,7 +50,8 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 	}
 
 	currentNamespace, currentWorkspace, err := readEnvironmentFile(t.Path)
-	if err != nil {
+	// It's ok if there is no .terraform/environment file, so ignore not exist errors
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
