@@ -1,20 +1,57 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestNewWorkspaceWithoutArgs(t *testing.T) {
-	var cmd = newStokCmd(fake.NewFactory(), os.Stdout, os.Stderr)
+var newWorkspaceReactor = func(cr client.Client, ctx context.Context, key runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+	// Ignore create actions for non-command objs
+	ws, ok := obj.(*v1alpha1.Workspace)
+	if !ok {
+		return obj, nil
+	}
 
-	code, err := cmd.Execute([]string{
+	// Mock workspace controller
+	ws.Status.Conditions.SetCondition(status.Condition{
+		Type:   v1alpha1.ConditionHealthy,
+		Status: corev1.ConditionTrue,
+	})
+
+	pod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ws.PodName(),
+			Namespace: ws.GetNamespace(),
+		},
+		Status: corev1.PodStatus{
+			InitContainerStatuses: []corev1.ContainerStatus{
+				{
+					State: corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					},
+				},
+			},
+		},
+	}
+	if err := cr.Create(ctx, &pod); err != nil {
+		return nil, err
+	}
+	return ws, nil
+}
+
+func TestNewWorkspaceWithoutArgs(t *testing.T) {
+	code, err := newStokCmd(fake.NewFactory(), os.Stdout, os.Stderr).Execute([]string{
 		"workspace",
 		"new",
 	})
@@ -24,7 +61,14 @@ func TestNewWorkspaceWithoutArgs(t *testing.T) {
 }
 
 func TestNewWorkspaceWithoutFlags(t *testing.T) {
-	factory := fake.NewFactory()
+	factory := fake.NewFactory().
+		AddReactor("create", newWorkspaceReactor).
+		AddReactor("create", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+			require.Equal(t, "", obj.(*v1alpha1.Workspace).Spec.SecretName)
+			require.Equal(t, "", obj.(*v1alpha1.Workspace).Spec.ServiceAccountName)
+			return obj, nil
+		})
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{
@@ -34,11 +78,6 @@ func TestNewWorkspaceWithoutFlags(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
-
-	ws := factory.Objs[0].(*v1alpha1.Workspace)
-	require.NoError(t, err)
-	require.Equal(t, "", ws.Spec.ServiceAccountName)
-	require.Equal(t, "", ws.Spec.SecretName)
 }
 
 func TestNewWorkspaceWithUserSuppliedSecretAndServiceAccount(t *testing.T) {
@@ -54,7 +93,14 @@ func TestNewWorkspaceWithUserSuppliedSecretAndServiceAccount(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	factory := fake.NewFactory(secret, serviceaccount)
+	factory := fake.NewFactory(secret, serviceaccount).
+		AddReactor("create", newWorkspaceReactor).
+		AddReactor("create", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+			require.Equal(t, "foo", obj.(*v1alpha1.Workspace).Spec.SecretName)
+			require.Equal(t, "bar", obj.(*v1alpha1.Workspace).Spec.ServiceAccountName)
+			return obj, nil
+		})
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{
@@ -66,11 +112,6 @@ func TestNewWorkspaceWithUserSuppliedSecretAndServiceAccount(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
-
-	ws := factory.Objs[2].(*v1alpha1.Workspace)
-	require.NoError(t, err)
-	require.Equal(t, "foo", ws.Spec.SecretName)
-	require.Equal(t, "bar", ws.Spec.ServiceAccountName)
 }
 
 func TestNewWorkspaceWithDefaultSecretAndServiceAccount(t *testing.T) {
@@ -86,7 +127,14 @@ func TestNewWorkspaceWithDefaultSecretAndServiceAccount(t *testing.T) {
 			Namespace: "default",
 		},
 	}
-	factory := fake.NewFactory(secret, serviceaccount)
+	factory := fake.NewFactory(secret, serviceaccount).
+		AddReactor("create", newWorkspaceReactor).
+		AddReactor("create", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+			require.Equal(t, "stok", obj.(*v1alpha1.Workspace).Spec.SecretName)
+			require.Equal(t, "stok", obj.(*v1alpha1.Workspace).Spec.ServiceAccountName)
+			return obj, nil
+		})
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{
@@ -96,15 +144,12 @@ func TestNewWorkspaceWithDefaultSecretAndServiceAccount(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
-
-	ws := factory.Objs[2].(*v1alpha1.Workspace)
-	require.NoError(t, err)
-	require.Equal(t, "stok", ws.Spec.SecretName)
-	require.Equal(t, "stok", ws.Spec.ServiceAccountName)
 }
 
 func TestNewWorkspaceWithSpecificNamespace(t *testing.T) {
-	factory := fake.NewFactory()
+	factory := fake.NewFactory().
+		AddReactor("create", newWorkspaceReactor)
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{
@@ -115,14 +160,17 @@ func TestNewWorkspaceWithSpecificNamespace(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
-
-	ws := factory.Objs[0].(*v1alpha1.Workspace)
-	require.NoError(t, err)
-	require.Equal(t, "test", ws.GetNamespace())
 }
 
 func TestNewWorkspaceWithCacheSettings(t *testing.T) {
-	factory := fake.NewFactory()
+	factory := fake.NewFactory().
+		AddReactor("create", newWorkspaceReactor).
+		AddReactor("create", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+			require.Equal(t, "999Gi", obj.(*v1alpha1.Workspace).Spec.Cache.Size)
+			require.Equal(t, "lumpen-proletariat", obj.(*v1alpha1.Workspace).Spec.Cache.StorageClass)
+			return obj, nil
+		})
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{
@@ -134,15 +182,12 @@ func TestNewWorkspaceWithCacheSettings(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
-
-	ws := factory.Objs[0].(*v1alpha1.Workspace)
-	require.NoError(t, err)
-	require.Equal(t, "999Gi", ws.Spec.Cache.Size)
-	require.Equal(t, "lumpen-proletariat", ws.Spec.Cache.StorageClass)
 }
 
 func TestNewWorkspaceWithContextFlag(t *testing.T) {
-	factory := fake.NewFactory()
+	factory := fake.NewFactory().
+		AddReactor("create", newWorkspaceReactor)
+
 	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 	code, err := cmd.Execute([]string{

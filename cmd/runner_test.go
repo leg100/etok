@@ -7,12 +7,14 @@ import (
 	"testing"
 	"time"
 
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestRunnerWithoutKind(t *testing.T) {
@@ -136,24 +138,35 @@ func TestRunnerWithAnnotationSetThenUnset(t *testing.T) {
 	rc, err := factory.NewClient(scheme.Scheme, "")
 	require.NoError(t, err)
 
-	done := make(chan error)
-	go func() {
-		done <- handleSemaphore(rc, scheme.Scheme, "Shell", "stok-shell-xyz", "test", 5*time.Second)
-	}()
+	gets := make(chan struct{})
 
-	// Wait for runner to poll twice before unsetting annotation.
-	// The runner will take 1000ms to poll twice (500ms * 2), so the test is given plenty of time to
-	// check this (500ms * 6) before timing out.
-	wait.Poll(500*time.Millisecond, 6*time.Second, func() (bool, error) {
-		if factory.Gets > 1 {
-			return true, nil
-		}
-		return false, nil
+	// Everytime a get request is made, send a msg to increment the tally
+	factory.AddReactor("get", func(cr runtimeclient.Client, ctx context.Context, key runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+		gets <- struct{}{}
+		return obj, nil
 	})
 
-	// Unset wait annotation
-	shell.SetAnnotations(map[string]string{})
-	require.NoError(t, factory.Client.Update(context.TODO(), shell))
+	done := make(chan error)
+	go func() {
+		done <- handleSemaphore(rc, scheme.Scheme, "Shell", "stok-shell-xyz", "test", 5*time.Second, 100*time.Millisecond)
+	}()
 
-	require.NoError(t, <-done)
+	// Running tally of get requests
+	var tally int
+	select {
+	case <-gets:
+		tally++
+		// if at least two gets have been made, then release hold
+		if tally > 1 {
+			// Unset wait annotation
+			shell.SetAnnotations(map[string]string{})
+			factory.Client.Update(context.TODO(), shell)
+		}
+	case err := <-done:
+		require.NoError(t, err)
+		return
+	case <-time.After(3 * time.Second):
+		t.Errorf("timed out waiting for test to complete")
+		return
+	}
 }
