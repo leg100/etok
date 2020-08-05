@@ -167,9 +167,7 @@ func (t *terraformCmd) run() error {
 	// Delete command resource upon program termination. This will take care of deleting the
 	// configmap below too because the configmap is 'owned' by the command resource and k8s will
 	// therefore delete it automatically.
-	defer func() {
-		rc.Delete(context.TODO(), cmdRes)
-	}()
+	defer rc.Delete(context.TODO(), cmdRes)
 
 	// Compile tarball of terraform module
 	tarball, err := t.createTar()
