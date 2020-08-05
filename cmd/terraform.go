@@ -249,7 +249,7 @@ func (t *terraformCmd) run() error {
 }
 
 func waitUntilPodRunningAndReady(rc k8s.Client, pod *corev1.Pod, namespace, name string, timeout time.Duration) (*corev1.Pod, error) {
-	err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+	err := wait.PollImmediate(100*time.Millisecond, timeout, func() (bool, error) {
 		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil

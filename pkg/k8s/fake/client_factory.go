@@ -2,27 +2,26 @@ package fake
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/leg100/stok/api/command"
-	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimefake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 type Factory struct {
-	Objs    []runtime.Object
-	Client  runtimeclient.Client
-	Gets    int
-	Context string
+	Objs           []runtime.Object
+	Client         runtimeclient.Client
+	Context        string
+	getReactors    Reactors
+	createReactors Reactors
+	deleteReactors Reactors
 }
 
 var _ k8s.FactoryInterface = &Factory{}
@@ -44,6 +43,20 @@ func (f *Factory) NewClient(s *runtime.Scheme, context string) (k8s.Client, erro
 	return &client{factory: f, Client: rc}, nil
 }
 
+func (f *Factory) AddReactor(action string, reactor Reactor) *Factory {
+	switch action {
+	case "create":
+		f.createReactors = append(f.createReactors, reactor)
+	case "delete":
+		f.deleteReactors = append(f.deleteReactors, reactor)
+	case "get":
+		f.getReactors = append(f.getReactors, reactor)
+	default:
+		panic(fmt.Sprintf("no reactor support for %s", action))
+	}
+	return f
+}
+
 // No-op attach method to keep tests passing
 func (c *client) Attach(pod *corev1.Pod) error {
 	return nil
@@ -54,85 +67,33 @@ func (c *client) GetLogs(namespace, name string, opts *corev1.PodLogOptions) (io
 }
 
 func (c *client) Get(ctx context.Context, key runtimeclient.ObjectKey, obj runtime.Object) error {
-	c.factory.Gets++
-	return c.Client.Get(ctx, key, obj)
+	updatedObj, err := c.factory.getReactors.Apply(c.Client, ctx, key, obj)
+	if err != nil {
+		return err
+	}
+	return c.Client.Get(ctx, key, updatedObj)
+}
+
+func (c *client) Delete(ctx context.Context, obj runtime.Object, opts ...runtimeclient.DeleteOption) error {
+	// We don't even need/use a key for deleting objects, but the reactor function is expecting one.
+	// Ignore any error.
+	key, _ := runtimeclient.ObjectKeyFromObject(obj)
+	updatedObj, err := c.factory.deleteReactors.Apply(c.Client, ctx, key, obj)
+	if err != nil {
+		return err
+	}
+	return c.Client.Delete(ctx, updatedObj)
 }
 
 func (c *client) Create(ctx context.Context, obj runtime.Object, opts ...runtimeclient.CreateOption) error {
-	switch t := obj.(type) {
-	case command.Interface:
-		err := c.create(ctx, t, opts...)
-
-		// Mock command controller; t should now have a generated name for pod to use
-		if err := c.createPod(t.GetNamespace(), t.GetName()); err != nil {
-			return err
-		}
-
-		// Callee is expecting the create command error obj, so return that
+	// We don't even need/use a key for creating objects, but the reactor function is expecting one.
+	// Ignore any error.
+	key, _ := runtimeclient.ObjectKeyFromObject(obj)
+	updatedObj, err := c.factory.createReactors.Apply(c.Client, ctx, key, obj)
+	if err != nil {
 		return err
-	case *v1alpha1.Workspace:
-		err := c.create(ctx, t, opts...)
-
-		// Mock workspace controller
-		if err := c.createWorkspacePod(t.GetNamespace(), t.PodName()); err != nil {
-			return err
-		}
-
-		t.Status.Conditions.SetCondition(status.Condition{
-			Type:   v1alpha1.ConditionHealthy,
-			Status: corev1.ConditionTrue,
-		})
-
-		// Callee is expecting the create workspace error obj, so return that
-		return err
-	default:
-		return c.create(ctx, t, opts...)
 	}
-}
-
-func (c *client) createPod(namespace, name string) error {
-	var pod = &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			Conditions: []corev1.PodCondition{
-				{
-					Type:   corev1.PodReady,
-					Status: corev1.ConditionTrue,
-				},
-			},
-		},
-	}
-
-	return c.create(context.TODO(), pod)
-}
-
-func (c *client) createWorkspacePod(namespace, name string) error {
-	var pod = &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Status: corev1.PodStatus{
-			InitContainerStatuses: []corev1.ContainerStatus{
-				{
-					State: corev1.ContainerState{
-						Running: &corev1.ContainerStateRunning{},
-					},
-				},
-			},
-		},
-	}
-
-	return c.create(context.TODO(), pod)
-}
-
-func (c *client) create(ctx context.Context, obj runtime.Object, opts ...runtimeclient.CreateOption) error {
-	c.factory.Objs = append(c.factory.Objs, obj)
-	return c.Client.Create(ctx, obj, opts...)
+	return c.Client.Create(ctx, updatedObj)
 }
 
 // A really naff fake rest client. Any requests matching the given namespace and resource type will

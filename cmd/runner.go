@@ -94,7 +94,7 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 			return err
 		}
 
-		if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
+		if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout, 500*time.Millisecond); err != nil {
 			return err
 		}
 	}
@@ -134,12 +134,12 @@ func extractTarball(src, dst string) (int, error) {
 	return util.Extract(tarBytesBuffer, dst)
 }
 
-func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace string, timeout time.Duration) error {
+func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace string, timeout, interval time.Duration) error {
 	// Get REST Client for listwatch for watching resource
 	gvk := v1alpha1.SchemeGroupVersion.WithKind(kind)
 
 	// Wait until WaitAnnotation is unset, or return error if timeout or other error occurs
-	err := wait.Poll(500*time.Millisecond, timeout, func() (bool, error) {
+	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
 		obj, err := api.NewObjectFromGVK(s, gvk)
 		if err != nil {
 			return false, err
