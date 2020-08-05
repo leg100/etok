@@ -223,18 +223,3 @@ func TestNewWorkspaceWithContextFlag(t *testing.T) {
 	require.Equal(t, 0, code)
 	require.Equal(t, "oz-cluster", factory.Context)
 }
-
-//func TestNewWorkspaceWithTimeoutError(t *testing.T) {
-//	factory := fake.NewFactory()
-//	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
-//
-//	code, err := cmd.Execute([]string{
-//		"workspace",
-//		"new",
-//		"foo",
-//		"--service-account", "non-existent",
-//	})
-//	require.Equal(t, 1, code)
-//	require.Error(t, err)
-//	require.Equal(t, WorkspaceTimeoutErr, err)
-//}
