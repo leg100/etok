@@ -158,14 +158,25 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
-
 	log.WithFields(log.Fields{
 		"namespace": t.Namespace,
 		"workspace": t.Name,
 	}).Info("created workspace")
 
+	if err := t.manageNewWorkspace(rc, ws); err != nil {
+		// Upon error, clean up (probably broken) workspace
+		log.Info("deleting workspace...")
+		rc.Delete(context.TODO(), ws)
+		return err
+	}
+
+	return nil
+}
+
+func (t *newWorkspaceCmd) manageNewWorkspace(rc k8s.Client, ws *v1alpha1.Workspace) error {
 	// Wait until Workspace's healthy condition is true
-	err = wait.Poll(100*time.Millisecond, t.Timeout, func() (bool, error) {
+	// TODO: parameterize poll interval
+	err := wait.PollImmediate(100*time.Millisecond, t.Timeout, func() (bool, error) {
 		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: t.Namespace, Name: t.Name}, ws); err != nil {
 			return false, err
 		}

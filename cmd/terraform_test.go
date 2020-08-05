@@ -133,7 +133,9 @@ func TestTerraform(t *testing.T) {
 		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default")).
 			AddReactor("create", createPodReactor).
 			AddReactor("delete", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
-				deleted = true
+				if _, ok := obj.(*v1alpha1.Plan); ok {
+					deleted = true
+				}
 				return obj, nil
 			})
 

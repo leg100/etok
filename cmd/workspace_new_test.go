@@ -114,6 +114,29 @@ func TestNewWorkspaceWithUserSuppliedSecretAndServiceAccount(t *testing.T) {
 	require.Equal(t, 0, code)
 }
 
+func TestNewWorkspaceUnhealthyTimeout(t *testing.T) {
+	var deleted bool
+	factory := fake.NewFactory().
+		AddReactor("delete", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
+			if _, ok := obj.(*v1alpha1.Workspace); ok {
+				deleted = true
+			}
+			return obj, nil
+		})
+
+	var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+	code, err := cmd.Execute([]string{
+		"workspace",
+		"new",
+		"foo",
+		"--timeout", "1ms",
+	})
+	require.Error(t, err)
+	require.Equal(t, 1, code)
+	require.True(t, deleted)
+}
+
 func TestNewWorkspaceWithDefaultSecretAndServiceAccount(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
