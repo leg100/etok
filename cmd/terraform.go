@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 	"time"
 
 	"github.com/apex/log"
@@ -13,25 +11,25 @@ import (
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/scheme"
+	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type terraformCmd struct {
-	Workspace     string
-	Namespace     string
-	Context       string
-	Path          string
-	Args          []string
-	Kind          string
-	TimeoutClient time.Duration
-	TimeoutPod    time.Duration
-	TimeoutQueue  time.Duration
+	Workspace      string
+	Namespace      string
+	Context        string
+	Path           string
+	Args           []string
+	Kind           string
+	TimeoutClient  time.Duration
+	TimeoutPod     time.Duration
+	TimeoutQueue   time.Duration
+	TimeoutEnqueue time.Duration
 
 	cmd *cobra.Command
 
@@ -127,79 +125,144 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 // attach to pod (falling back to logs on error)
 func (t *terraformCmd) run() error {
 	// Get client from factory. Embeds controller-runtime client
-	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
+	rc, err := t.factory.NewClient(t.Context)
 	if err != nil {
 		return err
 	}
 
-	// Check namespace exists
-	if err := rc.Get(context.TODO(), types.NamespacedName{Name: t.Namespace}, &corev1.Namespace{}); err != nil {
+	// Get client from factory. Embeds controller-runtime client
+	cache, err := rc.NewCache(t.Namespace)
+	if err != nil {
 		return err
-	}
-	log.WithFields(log.Fields{"namespace": t.Namespace}).Debug("resource checked")
-
-	// Check workspace resource exists and is healthy
-	ws := v1alpha1.Workspace{}
-	wsNamespacedName := types.NamespacedName{Name: t.Workspace, Namespace: t.Namespace}
-	if err := rc.Get(context.TODO(), wsNamespacedName, &ws); err != nil {
-		return err
-	}
-	log.WithFields(log.Fields{"workspace": t.Workspace, "namespace": t.Namespace}).Debug("resource checked")
-
-	wsHealth := ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy)
-	if wsHealth == nil {
-		return fmt.Errorf("Workspace %s is missing a WorkspaceHealthy condition", t.Workspace)
-	}
-	if wsHealth.Status != corev1.ConditionTrue {
-		return fmt.Errorf("Workspace %s is unhealthy; %s", t.Workspace, wsHealth.Message)
 	}
 
 	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
 	// pod with this name, too)
 	name := command.GenerateName(t.Kind)
 
+	var quit = make(chan struct{})
+	var done = make(chan error)
+	var resources []runtime.Object
+	var cmd command.Interface
+	var configmap *corev1.ConfigMap
+
+	// Delete resources upon program termination.
+	defer func() {
+		// Deleting cmd will delete any pod it creates too
+		rc.Delete(context.TODO(), cmd)
+		rc.Delete(context.TODO(), configmap)
+	}()
+
+	// Compile tarball of terraform module, embed in configmap and deploy
+	go func() {
+		tarball, err := t.createTar()
+		if err != nil {
+			done <- err
+			return
+		}
+
+		// TODO: just let the create configmap step throw an error rather than pre-empting it.
+		if len(tarball) > v1alpha1.MaxConfigSize {
+			done <- fmt.Errorf("max config size exceeded; current=%d; max=%d", len(tarball), v1alpha1.MaxConfigSize)
+			return
+		}
+
+		// Construct and deploy ConfigMap resource
+		configmap, err := t.createConfigMap(rc, tarball, name, v1alpha1.CommandDefaultConfigMapKey)
+		if err != nil {
+			done <- err
+			return
+		} else {
+			resources = append(resources, configmap)
+		}
+		done <- nil
+	}()
+
 	// Construct and deploy command resource
-	cmdRes, err := t.createCommand(rc, name, name)
+	cmd, err = t.createCommand(rc, name, name)
 	if err != nil {
 		return err
 	}
 
-	// Delete command resource upon program termination. This will take care of deleting the
-	// configmap below too because the configmap is 'owned' by the command resource and k8s will
-	// therefore delete it automatically.
-	defer rc.Delete(context.TODO(), cmdRes)
+	events := t.factory.GetEventsChannel()
 
-	// Compile tarball of terraform module
-	tarball, err := t.createTar()
+	cmdInformer, err := cache.GetInformerForKind(context.TODO(), v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
 	if err != nil {
 		return err
 	}
+	cmdInformer.AddEventHandler(k8s.EventHandlers(events))
 
-	if len(tarball) > v1alpha1.MaxConfigSize {
-		return fmt.Errorf("max config size exceeded; current=%d; max=%d", len(tarball), v1alpha1.MaxConfigSize)
-	}
-
-	// Construct and deploy ConfigMap resource
-	// TODO: perform this task in parallel to constructing and deploying command resource above to
-	// increase performance
-	_, err = t.createConfigMap(rc, cmdRes, tarball, name, v1alpha1.CommandDefaultConfigMapKey)
+	workspaceInformer, err := cache.GetInformer(context.TODO(), &v1alpha1.Workspace{})
 	if err != nil {
 		return err
 	}
+	workspaceInformer.AddEventHandler(k8s.EventHandlers(events))
 
-	log.WithFields(log.Fields{
-		"pod":       name,
-		"namespace": t.Namespace,
-	}).Debug("awaiting readiness")
-	pod, err := waitUntilPodRunningAndReady(rc, &corev1.Pod{}, t.Namespace, name, t.TimeoutPod)
+	podInformer, err := cache.GetInformer(context.TODO(), &corev1.Pod{})
 	if err != nil {
 		return err
 	}
+	podInformer.AddEventHandler(k8s.EventHandlers(events))
 
-	log.WithFields(log.Fields{
-		"pod":       name,
-		"namespace": t.Namespace,
-	}).Debug("retrieve log stream")
+	go func() {
+		if err := cache.Start(quit); err != nil {
+			done <- err
+		}
+	}()
+
+	enqueueTimer := time.NewTimer(t.TimeoutEnqueue)
+	queueTimer := time.NewTimer(t.TimeoutQueue)
+	var phase v1alpha1.CommandPhase
+
+	var pod *corev1.Pod
+	var podRunningAndReady bool
+	for {
+		var err = error(nil)
+
+		select {
+		case <-enqueueTimer.C:
+			err = fmt.Errorf("timeout reached for enqueuing command")
+		case <-queueTimer.C:
+			err = fmt.Errorf("timeout reached for queued command")
+		case e := <-events:
+			switch obj := e.(type) {
+			case command.Interface:
+				phase, err = t.CommandReporter(rc, obj, name)
+			case *v1alpha1.Workspace:
+				err = t.WorkspaceReporter(rc, obj, name)
+			case *corev1.Pod:
+				podRunningAndReady, err = t.PodReporter(rc, obj, name)
+				if podRunningAndReady {
+					pod = obj
+				}
+			}
+		case err = <-done:
+			return err
+		}
+
+		if err != nil {
+			close(quit)
+			return err
+		}
+
+		if podRunningAndReady {
+			// Proceed to stream logs / attach to tty
+			break
+		}
+
+		switch phase {
+		case v1alpha1.CommanndPhaseQueued:
+			if !enqueueTimer.Stop() {
+				<-enqueueTimer.C
+			}
+		case v1alpha1.CommanndPhaseActive:
+			if !queueTimer.Stop() {
+				<-queueTimer.C
+			}
+		}
+	}
+
+	log.WithFields(log.Fields{"pod": name, "namespace": t.Namespace}).Debug("retrieve log stream")
 	logs, err := rc.GetLogs(t.Namespace, name, &corev1.PodLogOptions{Follow: true})
 	if err != nil {
 		return err
@@ -207,66 +270,110 @@ func (t *terraformCmd) run() error {
 	defer logs.Close()
 
 	// Attach to pod tty
-	done := make(chan error)
+	errors := make(chan error)
 	go func() {
-		log.WithFields(log.Fields{
-			"pod": name,
-		}).Debug("attaching")
-
-		drawDivider()
-
-		err := rc.Attach(pod)
-		if err != nil {
-			// TODO: use log fields
-			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
-			_, err = io.Copy(os.Stdout, logs)
-			done <- err
-		} else {
-			done <- nil
-		}
+		log.WithFields(log.Fields{"pod": name}).Debug("attaching")
+		errors <- k8s.AttachFallbackToLogs(rc, pod, logs)
 	}()
 
 	// Let operator know we're now streaming logs
-	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		objKey := types.NamespacedName{Name: name, Namespace: t.Namespace}
-		err = rc.Get(context.TODO(), objKey, cmdRes)
-		if err != nil {
-			done <- err
-		} else {
-			// Delete annotation WaitAnnotationKey, giving the runner the signal to start
-			annotations := cmdRes.GetAnnotations()
-			delete(annotations, v1alpha1.WaitAnnotationKey)
-			cmdRes.SetAnnotations(annotations)
+	if err := k8s.ReleaseHold(rc, cmd); err != nil {
+		return err
+	}
 
-			return rc.Update(context.TODO(), cmdRes, &client.UpdateOptions{})
-		}
-		return nil
-	})
-
-	return <-done
+	return <-errors
 }
 
-func waitUntilPodRunningAndReady(rc k8s.Client, pod *corev1.Pod, namespace, name string, timeout time.Duration) (*corev1.Pod, error) {
-	err := wait.PollImmediate(100*time.Millisecond, timeout, func() (bool, error) {
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
-			if errors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
+func (t *terraformCmd) WorkspaceReporter(rc k8s.Client, obj interface{}, cmdname string) error {
+	req := k8s.GetNamespacedName(obj.(metav1.Object))
+
+	if req.Name != t.Workspace {
+		// This is for another workspace
+		return nil
+	}
+
+	wslog := log.WithField("workspace", req)
+
+	// Fetch the Workspace instance
+	// Check workspace resource exists and is healthy
+	ws := &v1alpha1.Workspace{}
+	if err := rc.Get(context.TODO(), req, ws); err != nil {
+		// Workspace not found or some other error. Either way, it's bad.
+		// TODO: apart from transitory errors, which we could try to recover from.
+		return err
+	}
+	wslog.Debug("existence confirmed")
+
+	// Report on queue position
+	if pos := slice.StringIndex(ws.Status.Queue, cmdname); pos >= 0 {
+		// TODO: print cmdname in bold
+		wslog.WithField("queue", ws.Status.Queue).Info("Queued")
+	}
+
+	return nil
+}
+
+func (t *terraformCmd) CommandReporter(rc k8s.Client, obj interface{}, name string) (v1alpha1.CommandPhase, error) {
+	req := k8s.GetNamespacedName(obj.(metav1.Object))
+
+	if req.Name != name {
+		// This is for another command
+		return "", nil
+	}
+
+	_ = log.WithField("command", req)
+
+	cmd, err := command.NewCommandFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
+	if err != nil {
+		return "", err
+	}
+
+	// Fetch the Command instance
+	if err := rc.Get(context.TODO(), req, cmd); err != nil {
+		if errors.IsNotFound(err) {
+			// Command yet to be created
+			return "", nil
 		}
-		return podRunningAndReady(pod)
-	})
-	return pod, err
+		// Some error other than not found.
+		// TODO: apart from transitory errors, which we could try to recover from.
+		return "", err
+	}
+
+	// TODO: log status updates
+
+	return cmd.GetPhase(), nil
 }
 
 // ErrPodCompleted is returned by PodRunning or PodContainerRunning to indicate that
 // the pod has already reached completed state.
 var ErrPodCompleted = fmt.Errorf("pod ran to completion")
 
-// podRunningAndReady returns true if the pod is running and ready, false if the pod has not
-// yet reached those states, returns ErrPodCompleted if the pod has run to completion, or
-// an error in any other case.
-func podRunningAndReady(pod *corev1.Pod) (bool, error) {
+func (t *terraformCmd) PodReporter(rc k8s.Client, obj interface{}, name string) (bool, error) {
+	req := k8s.GetNamespacedName(obj.(metav1.Object))
+
+	if req.Name != name {
+		// This is for another pod
+		return false, nil
+	}
+
+	podlog := log.WithField("pod", req)
+
+	// Fetch the Pod instance
+	pod := &corev1.Pod{}
+	if err := rc.Get(context.TODO(), req, pod); err != nil {
+		if errors.IsNotFound(err) {
+			// Command yet to be created
+			return false, nil
+		}
+		// Some error other than not found.
+		// TODO: apart from transitory errors, which we could try to recover from.
+		return false, err
+	}
+
+	podlog.WithFields(log.Fields{
+		"namespace": t.Namespace,
+	}).Debug("awaiting readiness")
+
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded:
 		return false, ErrPodCompleted

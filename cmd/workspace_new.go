@@ -5,14 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -107,7 +104,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	t.Name = args[0]
 
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
+	rc, err := t.factory.NewClient(t.Context)
 	if err != nil {
 		return err
 	}
@@ -231,42 +228,16 @@ func (t *newWorkspaceCmd) manageNewWorkspace(rc k8s.Client, ws *v1alpha1.Workspa
 	// Attach to pod tty
 	done := make(chan error)
 	go func() {
-		log.WithFields(log.Fields{
-			"pod": ws.PodName(),
-		}).Debug("attaching")
-
-		drawDivider()
-
-		err := rc.Attach(pod)
-		if err != nil {
-			// TODO: use log fields
-			log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
-			_, err = io.Copy(os.Stdout, logs)
-			done <- err
-		} else {
-			done <- nil
-		}
+		log.WithFields(log.Fields{"pod": ws.PodName()}).Debug("attaching")
+		done <- k8s.AttachFallbackToLogs(rc, pod, logs)
 	}()
 
 	// Let operator know we're now streaming logs
-	retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		objKey := types.NamespacedName{Name: ws.GetName(), Namespace: t.Namespace}
-		err = rc.Get(context.TODO(), objKey, ws)
-		if err != nil {
-			done <- err
-		} else {
-			// Delete annotation WaitAnnotationKey, giving the runner the signal to start
-			annotations := ws.GetAnnotations()
-			delete(annotations, v1alpha1.WaitAnnotationKey)
-			ws.SetAnnotations(annotations)
+	if err := k8s.ReleaseHold(rc, ws); err != nil {
+		return err
+	}
 
-			return rc.Update(context.TODO(), ws, &client.UpdateOptions{})
-		}
-		return nil
-	})
-
-	err = <-done
-	if err != nil {
+	if err := <-done; err != nil {
 		return err
 	}
 

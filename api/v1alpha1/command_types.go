@@ -54,12 +54,24 @@ type CommandStatus struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
 	Conditions status.Conditions `json:"conditions"`
+	Phase      CommandPhase      `json:"phase"`
 }
+
+type CommandPhase string
 
 func (c *CommandStatus) GetConditions() *status.Conditions          { return &c.Conditions }
 func (c *CommandStatus) SetConditions(conditions status.Conditions) { c.Conditions = conditions }
 
+// Get/Set Phase functions
+func (c *CommandStatus) GetPhase() CommandPhase      { return c.Phase }
+func (c *CommandStatus) SetPhase(phase CommandPhase) { c.Phase = phase }
+
 const (
+	CommanndPhasePending   CommandPhase = "pending"
+	CommanndPhaseQueued    CommandPhase = "queued"
+	CommanndPhaseActive    CommandPhase = "active"
+	CommanndPhaseCompleted CommandPhase = "completed"
+
 	ConditionCompleted   status.ConditionType = "Completed"
 	ConditionClientReady status.ConditionType = "ClientReady"
 	ConditionAttachable  status.ConditionType = "PodAttachable"

@@ -11,18 +11,12 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type runnerCmd struct {
@@ -89,12 +83,12 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	}
 
 	if !r.NoWait {
-		rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
+		rc, err := r.factory.NewClient(r.Context)
 		if err != nil {
 			return err
 		}
 
-		if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout, 500*time.Millisecond); err != nil {
+		if err := r.handleSemaphore(rc, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
 			return err
 		}
 	}
@@ -134,27 +128,57 @@ func extractTarball(src, dst string) (int, error) {
 	return util.Extract(tarBytesBuffer, dst)
 }
 
-func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace string, timeout, interval time.Duration) error {
-	// Get REST Client for listwatch for watching resource
-	gvk := v1alpha1.SchemeGroupVersion.WithKind(kind)
+func (r *runnerCmd) handleSemaphore(rc k8s.Client, kind, name, namespace string, timeout time.Duration) error {
+	cache, err := rc.NewCache(r.Namespace)
+	if err != nil {
+		return err
+	}
+
+	informer, err := cache.GetInformerForKind(context.TODO(), v1alpha1.SchemeGroupVersion.WithKind(kind))
+	if err != nil {
+		return err
+	}
+
+	events := r.factory.GetEventsChannel()
+	informer.AddEventHandler(k8s.EventHandlers(events))
+
+	done := make(chan error)
+	stop := make(chan struct{})
+	go func() {
+		if err := cache.Start(stop); err != nil {
+			done <- err
+		}
+	}()
 
 	// Wait until WaitAnnotation is unset, or return error if timeout or other error occurs
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		obj, err := api.NewObjectFromGVK(s, gvk)
-		if err != nil {
-			return false, err
-		}
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, obj); err != nil {
-			return false, err
-		}
-		if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
-			// No checkpoint annotation set, we're clear to go
-			return true, nil
-		}
-		return false, nil
-	})
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case e := <-events:
+			switch obj := e.(type) {
+			case command.Interface:
+				if obj.GetName() != name || obj.GetNamespace() != namespace {
+					// Ignore event for a different cmd
+					break
+				}
 
-	return err
+				if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
+					// No checkpoint annotation set, we're clear to go
+					// Stop timer
+					if !timer.Stop() {
+						<-timer.C
+					}
+					// Stop cache
+					close(stop)
+					return nil
+				}
+			}
+		case <-timer.C:
+			return fmt.Errorf("timeout exceeded waiting for client hold to be released")
+		case err = <-done:
+			return err
+		}
+	}
 }
 
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the

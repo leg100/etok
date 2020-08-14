@@ -52,29 +52,18 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	workspaceName := r.C.GetWorkspace()
-	if workspaceName == "" {
-		// Unrecoverable error, signal completion
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionCompleted,
-			Status:  corev1.ConditionTrue,
-			Reason:  v1alpha1.ReasonWorkspaceUnspecified,
-			Message: "Error: Workspace label not set",
-		})
-		_ = r.Status().Update(context.TODO(), r.C)
-		return ctrl.Result{}, nil
-	}
-
 	// Fetch its Workspace object
 	workspace := &v1alpha1.Workspace{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: workspaceName, Namespace: req.Namespace}, workspace)
+	err = r.Get(context.TODO(), types.NamespacedName{Name: r.C.GetWorkspace(), Namespace: req.Namespace}, workspace)
 	if errors.IsNotFound(err) {
 		// Workspace not found, unlikely to be temporary, signal completion
+		// TODO: this is wrong: signalling completion gives the impression the command itself has
+		// completed, but it hasn't even started. We should signal error in some other way.
 		r.C.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonWorkspaceNotFound,
-			Message: fmt.Sprintf("Workspace '%s' not found", workspaceName),
+			Message: fmt.Sprintf("Workspace '%s' not found", r.C.GetWorkspace()),
 		})
 		_ = r.Status().Update(context.TODO(), r.C)
 		return ctrl.Result{}, nil
@@ -107,6 +96,7 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Check if client has told us they're ready and set condition accordingly
+	// TODO: this is no longer needed
 	if val, ok := r.C.GetAnnotations()["stok.goalspike.com/client"]; ok && val == "Ready" {
 		r.C.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionClientReady,

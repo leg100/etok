@@ -9,7 +9,6 @@ import (
 
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -44,7 +43,7 @@ func newListWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 
 func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) error {
 	// Controller-runtime client for listing workspace resources
-	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
+	rc, err := t.factory.NewClient(t.Context)
 	if err != nil {
 		return err
 	}
