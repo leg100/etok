@@ -3,9 +3,16 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
+	"github.com/apex/log"
+	"github.com/leg100/stok/api"
+	"github.com/leg100/stok/api/v1alpha1"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/client-go/util/retry"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,6 +50,34 @@ func WaitUntil(rc rest.Interface, obj runtime.Object, name, namespace, plural st
 
 func GetNamespacedName(obj metav1.Object) types.NamespacedName {
 	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+}
+
+func ReleaseHold(ctx context.Context, sc Client, obj api.Object) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
+		if err := sc.Get(ctx, key, obj); err != nil {
+			return err
+		}
+
+		// Delete annotation WaitAnnotationKey, giving the runner the signal to start
+		annotations := obj.GetAnnotations()
+		delete(annotations, v1alpha1.WaitAnnotationKey)
+		obj.SetAnnotations(annotations)
+
+		return sc.Update(ctx, obj, &runtimeclient.UpdateOptions{})
+	})
+}
+
+// Attach to pod, falling back to streaming logs on error
+func AttachFallbackToLogs(sc Client, pod *corev1.Pod, logstream io.ReadCloser) error {
+	err := sc.Attach(pod)
+	if err != nil {
+		// TODO: use log fields
+		log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
+		_, err = io.Copy(os.Stdout, logstream)
+		return err
+	}
+	return nil
 }
 
 // PodRunningAndReady returns true if the pod is running and ready, false if the pod has not

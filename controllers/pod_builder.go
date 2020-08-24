@@ -49,6 +49,14 @@ func (pb *PodBuilder) EnableDebug(debug bool) *PodBuilder {
 	return pb
 }
 
+func (pb *PodBuilder) SetLabels(workspace string) *PodBuilder {
+	pb.pod.SetLabels(map[string]string{
+		"app":       "stok",
+		"workspace": workspace,
+	})
+	return pb
+}
+
 func (pb *PodBuilder) WaitForClient(kind, name, namespace, timeout string) *PodBuilder {
 	args := []string{
 		"--kind", kind,
@@ -74,12 +82,10 @@ func (pb *PodBuilder) Build(init bool) *corev1.Pod {
 		pb.pod.Spec.InitContainers = []corev1.Container{pb.runner}
 		pb.pod.Spec.Containers = []corev1.Container{
 			{
-				Name:            "idler",
-				Image:           pb.image,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				//TODO: consider a signal trap to ensure pod can be terminated in a graceful manner
-				//(sleep only responds to TERM - or is it INT?)
-				Command:                  []string{"sleep", "infinity"},
+				Name:                     "idler",
+				Image:                    pb.image,
+				ImagePullPolicy:          corev1.PullIfNotPresent,
+				Command:                  []string{"sh", "-c", "trap \"exit 0\" SIGTERM; while true; do sleep 1; done"},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 			},
 		}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/apex/log"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -18,16 +17,7 @@ import (
 	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
-
-type FactoryInterface interface {
-	NewClient(*runtime.Scheme, string) (Client, error)
-}
-
-type Factory struct{}
-
-var _ FactoryInterface = &Factory{}
 
 type Client interface {
 	runtimeclient.Client
@@ -39,25 +29,6 @@ type client struct {
 	runtimeclient.Client
 	kc     kubernetes.Interface
 	config *rest.Config
-}
-
-func (f *Factory) NewClient(s *runtime.Scheme, context string) (Client, error) {
-	config, err := config.GetConfigWithContext(context)
-	if err != nil {
-		return nil, err
-	}
-
-	rc, err := runtimeclient.New(config, runtimeclient.Options{Scheme: s})
-	if err != nil {
-		return nil, err
-	}
-
-	kc, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &client{Client: rc, kc: kc, config: config}, nil
 }
 
 func (c *client) GetLogs(namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
@@ -113,14 +84,3 @@ func (_ attachErrOut) Write(in []byte) (int, error) {
 	log.Warn(s)
 	return 0, nil
 }
-
-// Client requirements
-//
-// Check ns exists
-// Check ws exists and is healthy
-// Create command
-// Create configmap
-// Wait until pod is ready and running
-// Get logs (kc)
-// Attach (config)
-// Set annotation on command resource

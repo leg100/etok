@@ -9,7 +9,6 @@ import (
 
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -43,10 +42,15 @@ func newListWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 }
 
 func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) error {
-	// Controller-runtime client for listing workspace resources
-	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
+	config, err := t.factory.NewConfig(t.Context)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to obtain kubernetes client config: %w", err)
+	}
+
+	// Controller-runtime client for listing workspace resources
+	rc, err := t.factory.NewClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	currentNamespace, currentWorkspace, err := readEnvironmentFile(t.Path)
@@ -55,12 +59,7 @@ func (t *listWorkspaceCmd) doListWorkspace(cmd *cobra.Command, args []string) er
 		return err
 	}
 
-	err = t.listWorkspaces(rc, currentNamespace, currentWorkspace)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return t.listWorkspaces(rc, currentNamespace, currentWorkspace)
 }
 
 func (t *listWorkspaceCmd) listWorkspaces(rc client.Client, currentNamespace, currentWorkspace string) error {

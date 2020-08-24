@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,4 +29,6 @@ type Interface interface {
 	SetConfigMapKey(string)
 	GetWorkspace() string
 	SetWorkspace(string)
+	GetPhase() v1alpha1.CommandPhase
+	SetPhase(v1alpha1.CommandPhase)
 }

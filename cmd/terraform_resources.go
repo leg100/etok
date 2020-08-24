@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func (t *terraformCmd) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
@@ -54,7 +53,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 	return cmd, nil
 }
 
-func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {
+func (t *terraformCmd) createConfigMap(rc client.Client, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -62,17 +61,12 @@ func (t *terraformCmd) createConfigMap(rc client.Client, command metav1.Object, 
 			Labels: map[string]string{
 				"app":       "stok",
 				"workspace": t.Workspace,
-				"command":   command.GetName(),
+				"command":   name,
 			},
 		},
 		BinaryData: map[string][]byte{
 			keyName: tarball,
 		},
-	}
-
-	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(command, configMap, scheme.Scheme); err != nil {
-		return nil, err
 	}
 
 	if err := rc.Create(context.TODO(), configMap); err != nil {

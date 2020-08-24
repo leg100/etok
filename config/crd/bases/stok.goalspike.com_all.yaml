@@ -109,8 +109,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -360,8 +363,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -487,8 +493,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -614,8 +623,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -741,8 +753,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -868,8 +883,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -995,8 +1013,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1122,8 +1143,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1249,8 +1273,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1500,8 +1527,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1627,8 +1657,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1754,8 +1787,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -1881,8 +1917,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -2008,8 +2047,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1
@@ -2135,8 +2177,11 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
           required:
           - conditions
+          - phase
           type: object
       type: object
   version: v1alpha1

@@ -70,7 +70,7 @@ func namespaceObj(name string) *corev1.Namespace {
 	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
 }
 
-func workspaceObj(namespace, name string) *v1alpha1.Workspace {
+func workspaceObj(namespace, name string, queue ...string) *v1alpha1.Workspace {
 	return &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -83,6 +83,7 @@ func workspaceObj(namespace, name string) *v1alpha1.Workspace {
 					Status: corev1.ConditionTrue,
 				},
 			},
+			Queue: queue,
 		},
 	}
 }

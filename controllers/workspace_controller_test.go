@@ -22,36 +22,36 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 	plan1 := v1alpha1.Plan{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-1",
-			Labels: map[string]string{
-				"workspace": "workspace-1",
-			},
+		},
+		CommandSpec: v1alpha1.CommandSpec{
+			Workspace: "workspace-1",
 		},
 	}
 
 	plan2 := v1alpha1.Plan{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-2",
-			Labels: map[string]string{
-				"workspace": "workspace-1",
-			},
+		},
+		CommandSpec: v1alpha1.CommandSpec{
+			Workspace: "workspace-1",
 		},
 	}
 
 	plan3 := v1alpha1.Plan{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-3",
-			Labels: map[string]string{
-				"workspace": "workspace-2",
-			},
+		},
+		CommandSpec: v1alpha1.CommandSpec{
+			Workspace: "workspace-2",
 		},
 	}
 
 	planCompleted := v1alpha1.Plan{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-3",
-			Labels: map[string]string{
-				"workspace": "workspace-1",
-			},
+		},
+		CommandSpec: v1alpha1.CommandSpec{
+			Workspace: "workspace-1",
 		},
 		CommandStatus: v1alpha1.CommandStatus{
 			Conditions: status.Conditions{

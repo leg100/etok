@@ -11,18 +11,12 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/command"
-	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"golang.org/x/sync/errgroup"
 )
 
 type runnerCmd struct {
@@ -79,31 +73,36 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	}
 
 	r.args = args
+	ctx := r.cmd.Context()
+	g, gctx := errgroup.WithContext(ctx)
 
+	// Concurrently extract tarball, if specified
 	if r.Tarball != "" {
-		files, err := extractTarball(r.Tarball, r.Path)
-		if err != nil {
-			return err
-		}
-		log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
+		g.Go(func() error {
+			files, err := extractTarball(r.Tarball, r.Path)
+			if err != nil {
+				return err
+			}
+			// TODO: move log to tar func
+			log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
+			return nil
+		})
 	}
 
+	// Concurrently wait for client to release hold, if specified
 	if !r.NoWait {
-		rc, err := r.factory.NewClient(scheme.Scheme, r.Context)
-		if err != nil {
-			return err
-		}
-
-		if err := handleSemaphore(rc, scheme.Scheme, r.Kind, r.Name, r.Namespace, r.Timeout, 500*time.Millisecond); err != nil {
-			return err
-		}
+		g.Go(func() error {
+			return r.handleSemaphore(gctx)
+		})
 	}
 
-	if err := r.run(os.Stdout, os.Stderr); err != nil {
+	// Wait for concurrent tasks to complete
+	if err := g.Wait(); err != nil {
 		return err
 	}
 
-	return nil
+	// Tasks succeeded; run command
+	return r.run(ctx, os.Stdout, os.Stderr)
 }
 
 func (r *runnerCmd) validate() error {
@@ -134,37 +133,40 @@ func extractTarball(src, dst string) (int, error) {
 	return util.Extract(tarBytesBuffer, dst)
 }
 
-func handleSemaphore(rc client.Client, s *runtime.Scheme, kind, name, namespace string, timeout, interval time.Duration) error {
-	// Get REST Client for listwatch for watching resource
-	gvk := v1alpha1.SchemeGroupVersion.WithKind(kind)
+func (r *runnerCmd) handleSemaphore(ctx context.Context) error {
+	config, err := r.factory.NewConfig(r.Context)
+	if err != nil {
+		return err
+	}
 
-	// Wait until WaitAnnotation is unset, or return error if timeout or other error occurs
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		obj, err := api.NewObjectFromGVK(s, gvk)
-		if err != nil {
-			return false, err
-		}
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, obj); err != nil {
-			return false, err
-		}
-		if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
-			// No checkpoint annotation set, we're clear to go
-			return true, nil
-		}
-		return false, nil
+	rc, err := r.factory.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	mgr, err := r.factory.NewManager(config, r.Namespace)
+	if err != nil {
+		return err
+	}
+
+	mgr.AddReporter(&RunnerReporter{
+		Client:  rc,
+		name:    r.Name,
+		kind:    r.Kind,
+		timeout: r.Timeout,
 	})
 
-	return err
+	return mgr.Start(ctx)
 }
 
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the
 // working directory of the executable; out and errout set stdout and stderr of executable.
-func (r *runnerCmd) run(out, errout io.Writer) error {
+func (r *runnerCmd) run(ctx context.Context, out, errout io.Writer) error {
 	args := command.RunnerArgsForKind(r.Kind, r.args)
 
 	log.WithFields(log.Fields{"command": args[0], "args": args[1:]}).Debug("running command")
 
-	exe := exec.Command(args[0], args[1:]...)
+	exe := exec.CommandContext(ctx, args[0], args[1:]...)
 	exe.Dir = r.Path
 	exe.Stdin = os.Stdin
 	exe.Stdout = out

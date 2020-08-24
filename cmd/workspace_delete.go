@@ -7,7 +7,6 @@ import (
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/scheme"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,8 +51,13 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 
 	t.Name = args[0]
 
+	config, err := t.factory.NewConfig(t.Context)
+	if err != nil {
+		return err
+	}
+
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(scheme.Scheme, t.Context)
+	rc, err := t.factory.NewClient(config)
 	if err != nil {
 		return err
 	}

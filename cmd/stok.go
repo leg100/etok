@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,11 @@ func Execute(args []string) int {
 func (cc *stokCmd) Execute(args []string) (int, error) {
 	cc.cmd.SetArgs(args)
 
-	if err := cc.cmd.Execute(); err != nil {
+	// Create context, and cancel if interrupt is received
+	ctx, cancel := context.WithCancel(context.Background())
+	catchCtrlC(cancel)
+
+	if err := cc.cmd.ExecuteContext(ctx); err != nil {
 		log.WithError(err).Error("Fatal error")
 
 		var exiterr *exec.ExitError

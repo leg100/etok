@@ -43,17 +43,6 @@ func TestCreateCommand(t *testing.T) {
 }
 
 func TestCreateConfigMap(t *testing.T) {
-	var plan = v1alpha1.Plan{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok-plan-12345",
-			Namespace: "default",
-			Labels: map[string]string{
-				"app":       "stok",
-				"workspace": "workspace-1",
-			},
-		},
-	}
-
 	tc := &terraformCmd{
 		Kind:      "Plan",
 		Namespace: "default",
@@ -65,19 +54,11 @@ func TestCreateConfigMap(t *testing.T) {
 	// TODO: create real tarball
 	tarball := make([]byte, 1024)
 
-	configMap, err := tc.createConfigMap(client, &plan, tarball, "stok-plan-12345", "config.tar.gz")
+	configMap, err := tc.createConfigMap(client, tarball, "stok-plan-12345", "config.tar.gz")
 	if err != nil {
 		t.Error(err)
 	}
 	if configMap.Name != "stok-plan-12345" {
 		t.Errorf("want stok-plan-12345, got %s\n", configMap.Name)
 	}
-
-	ownerRefs := configMap.GetOwnerReferences()
-	if len(ownerRefs) != 1 {
-		t.Fatal("want one ownerref, got none")
-	}
-
-	require.Equal(t, "Plan", ownerRefs[0].Kind)
-	require.Equal(t, "stok-plan-12345", ownerRefs[0].Name)
 }
