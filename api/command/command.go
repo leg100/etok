@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/iancoleman/strcase"
-	"github.com/leg100/stok/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -60,11 +59,10 @@ func CollectionKind(kind string) string {
 	return kind + "List"
 }
 
-// A (naive) implementation of the algorithm that k8s uses to generate a unique name on the
-// server side when `generateName` is specified. Allows us to generate a unique name client-side
-// for our k8s resources.
-func GenerateName(kind string) string {
-	return fmt.Sprintf("%s-%s-%s", "stok", CommandKindToCLI(kind), util.GenerateRandomString(5))
+// Generate name for cmd resource. The real program sets suffix to a random string, whereas the
+// tests set it to something known ahead of time.
+func GenerateName(kind, suffix string) string {
+	return fmt.Sprintf("%s-%s-%s", "stok", CommandKindToCLI(kind), suffix)
 }
 
 // For a given k8s kind and user supplied args, return the named program and args to be executed on

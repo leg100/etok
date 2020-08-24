@@ -16,35 +16,19 @@ import (
 	"k8s.io/kubectl/pkg/cmd/attach"
 	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
-	runtimecache "sigs.k8s.io/controller-runtime/pkg/cache"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 type Client interface {
 	runtimeclient.Client
 	GetLogs(string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
 	Attach(*corev1.Pod) error
-	NewCache(string) (runtimecache.Cache, error)
 }
 
 type client struct {
 	runtimeclient.Client
 	kc     kubernetes.Interface
 	config *rest.Config
-}
-
-func (c *client) NewCache(namespace string) (runtimecache.Cache, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(c.config)
-	if err != nil {
-		return nil, err
-	}
-
-	return runtimecache.New(c.config, runtimecache.Options{
-		Scheme:    scheme.Scheme,
-		Mapper:    mapper,
-		Namespace: namespace,
-	})
 }
 
 func (c *client) GetLogs(namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {

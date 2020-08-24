@@ -18,6 +18,7 @@ require (
 	github.com/kr/pty v1.1.5
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mattn/go-colorable v0.1.2
+	github.com/onsi/ginkgo v1.12.0
 	github.com/operator-framework/operator-sdk v0.19.0
 	github.com/pelletier/go-toml v1.7.0 // indirect
 	github.com/spf13/cobra v1.0.0

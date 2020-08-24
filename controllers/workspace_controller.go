@@ -169,7 +169,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//		if state.State.Terminated.ExitCode == 0 {
 	//}
 
-	// Fetch list of commands that belong to this workspace (its workspace label specifies this workspace)
+	// Fetch list of commands that belong to this workspace
 	var cmdList []command.Interface
 	// Fetch and append each type of command to cmdList
 	for _, kind := range command.CommandKinds {
@@ -178,15 +178,16 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		err = r.List(context.TODO(), ccList, client.InNamespace(req.Namespace), client.MatchingLabels{
-			"workspace": req.Name,
-		})
-		if err != nil {
+		if err := r.List(context.TODO(), ccList, client.InNamespace(req.Namespace)); err != nil {
 			return ctrl.Result{}, err
 		}
 
+		// Filter out commands that don't belong to this workspace
 		meta.EachListItem(ccList, func(o runtime.Object) error {
-			cmdList = append(cmdList, o.(command.Interface))
+			cmd := o.(command.Interface)
+			if cmd.GetWorkspace() == instance.GetName() {
+				cmdList = append(cmdList, cmd)
+			}
 			return nil
 		})
 	}
@@ -340,6 +341,7 @@ func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 	args := []string{"-backend-config=" + v1alpha1.BackendConfigFilename}
 
 	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.RunnerImage).
+		SetLabels(cr.GetName()).
 		AddRunnerContainer(args).
 		AddWorkspace().
 		AddCache(cr.GetName()).
@@ -370,7 +372,7 @@ func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
 			{
 				APIGroups: []string{"stok.goalspike.com"},
 				Resources: []string{"*"},
-				Verbs:     []string{"get"},
+				Verbs:     []string{"get", "list", "watch"},
 			},
 		},
 	}
@@ -473,6 +475,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			var reqs []reconcile.Request
 			wsList := &v1alpha1.WorkspaceList{}
+			// TODO: this fieldselector won't work
 			filter := client.MatchingFields{"spec.serviceAccountName": a.Meta.GetName()}
 			err := r.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
 			if err != nil {
@@ -495,6 +498,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			var reqs []reconcile.Request
 			wsList := &v1alpha1.WorkspaceList{}
+			// TODO: this fieldselector won't work
 			filter := client.MatchingFields{"spec.secretName": a.Meta.GetName()}
 			err := r.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
 			if err != nil {

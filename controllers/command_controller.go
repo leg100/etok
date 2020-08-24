@@ -74,6 +74,7 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// TODO: consider removing these status updates
 	if pos > 0 {
 		// Queued
+		r.C.SetPhase(v1alpha1.CommandPhaseQueued)
 		r.C.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionAttachable,
 			Status:  corev1.ConditionFalse,
@@ -85,6 +86,7 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	if pos < 0 {
 		// Not yet queued
+		r.C.SetPhase(v1alpha1.CommandPhasePending)
 		r.C.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionAttachable,
 			Status:  corev1.ConditionFalse,
@@ -94,6 +96,8 @@ func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Status().Update(context.TODO(), r.C)
 		return ctrl.Result{}, err
 	}
+
+	r.C.SetPhase(v1alpha1.CommandPhaseActive)
 
 	// Check if client has told us they're ready and set condition accordingly
 	// TODO: this is no longer needed

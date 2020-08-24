@@ -1,34 +1,27 @@
 package cmd
 
 import (
-	"context"
 	"crypto/rand"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestTerraform(t *testing.T) {
-	var createPodReactor = func(cr client.Client, ctx context.Context, key runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
-		// Ignore create actions for non-command objs
-		if _, ok := obj.(command.Interface); !ok {
-			return obj, nil
-		}
-
-		pod := corev1.Pod{
+	podReadyAndRunning := func(namespace, kind string) *corev1.Pod {
+		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      key.Name,
-				Namespace: key.Namespace,
+				Name:      fake.GenerateName(kind),
+				Namespace: namespace,
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
@@ -40,22 +33,31 @@ func TestTerraform(t *testing.T) {
 				},
 			},
 		}
-		if err := cr.Create(ctx, &pod); err != nil {
-			return nil, err
-		}
-		return obj, nil
+	}
+
+	cmd := func(namespace, kind string) command.Interface {
+		obj, err := command.NewCommandFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(strings.Title(kind)))
+		require.NoError(t, err)
+
+		obj.SetNamespace(namespace)
+		obj.SetName(fake.GenerateName(kind))
+		obj.SetPhase(v1alpha1.CommandPhaseActive)
+		return obj
 	}
 
 	for _, kind := range command.CommandKinds {
 		t.Run(kind+"WithDefaults", func(t *testing.T) {
 			setupEnvironment(t, "default", "default")
-			var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default")).
-				AddReactor("create", createPodReactor)
+			var factory = fake.NewFactory(
+				workspaceObj("default", "default"),
+				cmd("default", kind),
+				podReadyAndRunning("default", kind))
 
 			var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 			code, err := cmd.Execute([]string{
 				command.CommandKindToCLI(kind),
+				"--debug",
 			})
 
 			require.NoError(t, err)
@@ -66,12 +68,16 @@ func TestTerraform(t *testing.T) {
 
 	t.Run("PlanWithSpecificNamespaceAndWorkspace", func(t *testing.T) {
 		setupEnvironment(t, "foo", "bar")
-		var factory = fake.NewFactory(namespaceObj("foo"), workspaceObj("foo", "bar")).
-			AddReactor("create", createPodReactor)
+		var factory = fake.NewFactory(
+			workspaceObj("foo", "bar"),
+			cmd("foo", "plan"),
+			podReadyAndRunning("foo", "plan"))
+
 		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 		code, err := cmd.Execute([]string{
 			"plan",
+			"--debug",
 		})
 
 		require.NoError(t, err)
@@ -81,12 +87,16 @@ func TestTerraform(t *testing.T) {
 	t.Run("PlanWithSpecificNamespaceAndWorkspaceFlags", func(t *testing.T) {
 		// Set environment to be default/default, to be overridden by flags below
 		setupEnvironment(t, "default", "default")
-		var factory = fake.NewFactory(namespaceObj("foo"), workspaceObj("foo", "bar")).
-			AddReactor("create", createPodReactor)
+		var factory = fake.NewFactory(
+			workspaceObj("foo", "bar"),
+			cmd("foo", "plan"),
+			podReadyAndRunning("foo", "plan"))
+
 		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 		code, err := cmd.Execute([]string{
 			"plan",
+			"--debug",
 			"--namespace", "foo",
 			"--workspace", "bar",
 		})
@@ -97,14 +107,10 @@ func TestTerraform(t *testing.T) {
 
 	t.Run("PlanWithFlag", func(t *testing.T) {
 		setupEnvironment(t, "default", "default")
-		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default")).
-			AddReactor("create", createPodReactor).
-			AddReactor("create", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
-				if cmd, ok := obj.(command.Interface); ok {
-					require.Equal(t, []string{"-input", "false"}, cmd.GetArgs())
-				}
-				return obj, nil
-			})
+		var factory = fake.NewFactory(
+			workspaceObj("default", "default"),
+			cmd("default", "plan"),
+			podReadyAndRunning("default", "plan"))
 
 		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
@@ -128,16 +134,10 @@ func TestTerraform(t *testing.T) {
 		err = ioutil.WriteFile("toobig.tf", randBytes, 0644)
 		require.NoError(t, err)
 
-		// test whether plan resource is deleted
-		var deleted bool
-		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default")).
-			AddReactor("create", createPodReactor).
-			AddReactor("delete", func(_ client.Client, _ context.Context, _ runtimeclient.ObjectKey, obj runtime.Object) (runtime.Object, error) {
-				if _, ok := obj.(*v1alpha1.Plan); ok {
-					deleted = true
-				}
-				return obj, nil
-			})
+		var factory = fake.NewFactory(
+			workspaceObj("default", "default"),
+			cmd("default", "plan"),
+			podReadyAndRunning("default", "plan"))
 
 		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
@@ -149,13 +149,15 @@ func TestTerraform(t *testing.T) {
 
 		require.Error(t, err)
 		require.Equal(t, 1, code)
-		require.True(t, deleted)
 	})
 
 	t.Run("PlanWithContextFlag", func(t *testing.T) {
 		setupEnvironment(t, "default", "default")
-		var factory = fake.NewFactory(namespaceObj("default"), workspaceObj("default", "default")).
-			AddReactor("create", createPodReactor)
+		var factory = fake.NewFactory(
+			workspaceObj("default", "default"),
+			cmd("default", "plan"),
+			podReadyAndRunning("default", "plan"))
+
 		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 		code, err := cmd.Execute([]string{

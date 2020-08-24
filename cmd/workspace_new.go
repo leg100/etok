@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -74,9 +73,9 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	return cc.cmd
 }
 
-func CheckResourceExists(rc client.Client, name, namespace string, obj runtime.Object) (bool, error) {
+func CheckResourceExists(ctx context.Context, rc client.Client, name, namespace string, obj runtime.Object) (bool, error) {
 	nn := types.NamespacedName{Name: name, Namespace: namespace}
-	if err := rc.Get(context.TODO(), nn, obj); err != nil {
+	if err := rc.Get(ctx, nn, obj); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
@@ -103,15 +102,31 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	t.Name = args[0]
 
-	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(t.Context)
+	ctx := cmd.Context()
+
+	config, err := t.factory.NewConfig(t.Context)
 	if err != nil {
 		return err
 	}
 
+	rc, err := t.factory.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	// Delete any created resources upon program termination.
+	var resources []runtime.Object
+	go func() {
+		<-ctx.Done()
+
+		for _, r := range resources {
+			rc.Delete(context.TODO(), r)
+		}
+	}()
+
 	if t.Secret != "" {
 		// Secret specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(rc, t.Secret, t.Namespace, &corev1.Secret{})
+		found, err := CheckResourceExists(ctx, rc, t.Secret, t.Namespace, &corev1.Secret{})
 		if err != nil {
 			return err
 		}
@@ -120,7 +135,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		}
 	} else {
 		// Secret unspecified, check if resource called 'stok' exists and if so, use that
-		found, err := CheckResourceExists(rc, "stok", t.Namespace, &corev1.Secret{})
+		found, err := CheckResourceExists(ctx, rc, "stok", t.Namespace, &corev1.Secret{})
 		if err != nil {
 			return err
 		}
@@ -132,7 +147,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 
 	if t.ServiceAccount != "" {
 		// Service account specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(rc, t.ServiceAccount, t.Namespace, &corev1.ServiceAccount{})
+		found, err := CheckResourceExists(ctx, rc, t.ServiceAccount, t.Namespace, &corev1.ServiceAccount{})
 		if err != nil {
 			return err
 		}
@@ -141,7 +156,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		}
 	} else {
 		// Service account unspecified, check if resource called 'stok' exists and if so, use that
-		found, err := CheckResourceExists(rc, "stok", t.Namespace, &corev1.ServiceAccount{})
+		found, err := CheckResourceExists(ctx, rc, "stok", t.Namespace, &corev1.ServiceAccount{})
 		if err != nil {
 			return err
 		}
@@ -155,85 +170,57 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
-	log.WithFields(log.Fields{
-		"namespace": t.Namespace,
-		"workspace": t.Name,
-	}).Info("created workspace")
+	resources = append(resources, ws)
+	log.WithFields(log.Fields{"namespace": t.Namespace, "workspace": t.Name}).Info("created workspace")
 
-	if err := t.manageNewWorkspace(rc, ws); err != nil {
-		// Upon error, clean up (probably broken) workspace
-		log.Info("deleting workspace...")
-		rc.Delete(context.TODO(), ws)
+	// Instantiate k8s cache mgr
+	mgr, err := t.factory.NewManager(config, t.Namespace)
+	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (t *newWorkspaceCmd) manageNewWorkspace(rc k8s.Client, ws *v1alpha1.Workspace) error {
-	// Wait until Workspace's healthy condition is true
-	// TODO: parameterize poll interval
-	err := wait.PollImmediate(100*time.Millisecond, t.Timeout, func() (bool, error) {
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: t.Namespace, Name: t.Name}, ws); err != nil {
-			return false, err
-		}
-		conditions := ws.Status.Conditions
-		if conditions == nil {
-			return false, nil
-		}
-		for i := range conditions {
-			if conditions[i].Type == v1alpha1.ConditionHealthy {
-				log.WithFields(log.Fields{
-					"workspace": ws.GetName(),
-					"namespace": ws.GetNamespace(),
-					"reason":    conditions[i].Reason,
-				}).Debug("Checking health")
-
-				if conditions[i].Status == corev1.ConditionTrue {
-					return true, nil
-				}
-				if conditions[i].Status == corev1.ConditionFalse {
-					return false, fmt.Errorf(conditions[i].Message)
-				}
-			}
-		}
-		return false, nil
+	// Run workspace reporter, which waits until the status reports the pod is ready
+	mgr.AddReporter(&WorkspaceReporter{
+		Client: rc,
+		Id:     t.Name,
 	})
-	if err != nil {
-		if err == wait.ErrWaitTimeout {
-			return WorkspaceTimeoutErr
-		}
+
+	// Run workspace reporter, which waits until the status reports the pod is ready
+	mgr.AddReporter(&WorkspacePodReporter{
+		Client: rc,
+		Id:     ws.PodName(),
+	})
+
+	// Run cache mgr, blocking until the reporter returns successfully, indicating that we can
+	// proceed to connecting to the pod.
+	if err := mgr.Start(ctx); err != nil {
 		return err
 	}
 
-	log.WithFields(log.Fields{
-		"pod":       ws.PodName(),
-		"namespace": t.Namespace,
-	}).Debug("awaiting readiness")
-	pod, err := waitUntilPodInitialisedAndRunning(rc, &corev1.Pod{}, t.Namespace, ws.PodName(), t.TimeoutPod)
-	if err != nil {
+	// Get pod
+	pod := &corev1.Pod{}
+	if err := rc.Get(ctx, types.NamespacedName{Name: ws.PodName(), Namespace: t.Namespace}, pod); err != nil {
 		return err
 	}
 
-	log.WithFields(log.Fields{
-		"pod":       ws.PodName(),
-		"namespace": t.Namespace,
-	}).Debug("retrieve log stream")
-	logs, err := rc.GetLogs(t.Namespace, ws.PodName(), &corev1.PodLogOptions{Follow: true, Container: "runner"})
+	podlog := log.WithField("pod", k8s.GetNamespacedName(pod))
+
+	podlog.Debug("retrieve log stream")
+	logstream, err := rc.GetLogs(t.Namespace, ws.PodName(), &corev1.PodLogOptions{Follow: true, Container: "runner"})
 	if err != nil {
 		return err
 	}
-	defer logs.Close()
+	defer logstream.Close()
 
 	// Attach to pod tty
 	done := make(chan error)
 	go func() {
-		log.WithFields(log.Fields{"pod": ws.PodName()}).Debug("attaching")
-		done <- k8s.AttachFallbackToLogs(rc, pod, logs)
+		podlog.Debug("attaching")
+		done <- k8s.AttachFallbackToLogs(rc, pod, logstream)
 	}()
 
 	// Let operator know we're now streaming logs
-	if err := k8s.ReleaseHold(rc, ws); err != nil {
+	if err := k8s.ReleaseHold(ctx, rc, ws); err != nil {
 		return err
 	}
 
@@ -286,19 +273,6 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 
 	err := rc.Create(context.TODO(), ws)
 	return ws, err
-}
-
-func waitUntilPodInitialisedAndRunning(rc k8s.Client, pod *corev1.Pod, namespace, name string, timeout time.Duration) (*corev1.Pod, error) {
-	err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		if err := rc.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, pod); err != nil {
-			if errors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		return podInitialisedAndRunning(pod)
-	})
-	return pod, err
 }
 
 // podRunningAndReady returns true if the pod is running and ready, false if the pod has not

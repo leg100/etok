@@ -8,11 +8,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/command"
-	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
@@ -74,30 +74,56 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 
 	r.args = args
 
+	ctx, cancel := context.WithCancel(r.cmd.Context())
+	errch := make(chan error)
+
+	var wg sync.WaitGroup
+
+	// Concurrently extract tarball, if specified
 	if r.Tarball != "" {
-		files, err := extractTarball(r.Tarball, r.Path)
-		if err != nil {
-			return err
-		}
-		log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
+		wg.Add(1)
+		go func() {
+			files, err := extractTarball(r.Tarball, r.Path)
+			if err != nil {
+				errch <- err
+			} else {
+				// TODO: move log to tar func
+				log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
+				wg.Done()
+			}
+		}()
 	}
 
+	// Concurrently wait for client to release hold, if specified
 	if !r.NoWait {
-		rc, err := r.factory.NewClient(r.Context)
+		wg.Add(1)
+		go func() {
+			if err := r.handleSemaphore(ctx); err != nil {
+				errch <- err
+			} else {
+				wg.Done()
+			}
+		}()
+	}
+
+	// Wait for concurrent routines to complete
+	go func() {
+		wg.Wait()
+		// Only closes err chan if all routines completely successfully
+		close(errch)
+	}()
+
+	// If error received, cancel ops and exit
+	for err := range errch {
 		if err != nil {
-			return err
-		}
-
-		if err := r.handleSemaphore(rc, r.Kind, r.Name, r.Namespace, r.Timeout); err != nil {
+			cancel()
+			close(errch)
 			return err
 		}
 	}
 
-	if err := r.run(os.Stdout, os.Stderr); err != nil {
-		return err
-	}
-
-	return nil
+	// Routines succeeded; run command
+	return r.run(ctx, os.Stdout, os.Stderr)
 }
 
 func (r *runnerCmd) validate() error {
@@ -128,67 +154,40 @@ func extractTarball(src, dst string) (int, error) {
 	return util.Extract(tarBytesBuffer, dst)
 }
 
-func (r *runnerCmd) handleSemaphore(rc k8s.Client, kind, name, namespace string, timeout time.Duration) error {
-	cache, err := rc.NewCache(r.Namespace)
+func (r *runnerCmd) handleSemaphore(ctx context.Context) error {
+	config, err := r.factory.NewConfig(r.Context)
 	if err != nil {
 		return err
 	}
 
-	informer, err := cache.GetInformerForKind(context.TODO(), v1alpha1.SchemeGroupVersion.WithKind(kind))
+	rc, err := r.factory.NewClient(config)
 	if err != nil {
 		return err
 	}
 
-	events := r.factory.GetEventsChannel()
-	informer.AddEventHandler(k8s.EventHandlers(events))
-
-	done := make(chan error)
-	stop := make(chan struct{})
-	go func() {
-		if err := cache.Start(stop); err != nil {
-			done <- err
-		}
-	}()
-
-	// Wait until WaitAnnotation is unset, or return error if timeout or other error occurs
-	timer := time.NewTimer(timeout)
-	for {
-		select {
-		case e := <-events:
-			switch obj := e.(type) {
-			case command.Interface:
-				if obj.GetName() != name || obj.GetNamespace() != namespace {
-					// Ignore event for a different cmd
-					break
-				}
-
-				if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
-					// No checkpoint annotation set, we're clear to go
-					// Stop timer
-					if !timer.Stop() {
-						<-timer.C
-					}
-					// Stop cache
-					close(stop)
-					return nil
-				}
-			}
-		case <-timer.C:
-			return fmt.Errorf("timeout exceeded waiting for client hold to be released")
-		case err = <-done:
-			return err
-		}
+	mgr, err := r.factory.NewManager(config, r.Namespace)
+	if err != nil {
+		return err
 	}
+
+	mgr.AddReporter(&RunnerReporter{
+		Client:  rc,
+		name:    r.Name,
+		kind:    r.Kind,
+		timeout: r.Timeout,
+	})
+
+	return mgr.Start(ctx)
 }
 
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the
 // working directory of the executable; out and errout set stdout and stderr of executable.
-func (r *runnerCmd) run(out, errout io.Writer) error {
+func (r *runnerCmd) run(ctx context.Context, out, errout io.Writer) error {
 	args := command.RunnerArgsForKind(r.Kind, r.args)
 
 	log.WithFields(log.Fields{"command": args[0], "args": args[1:]}).Debug("running command")
 
-	exe := exec.Command(args[0], args[1:]...)
+	exe := exec.CommandContext(ctx, args[0], args[1:]...)
 	exe.Dir = r.Path
 	exe.Stdin = os.Stdin
 	exe.Stdout = out

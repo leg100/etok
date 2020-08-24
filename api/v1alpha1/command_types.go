@@ -67,10 +67,10 @@ func (c *CommandStatus) GetPhase() CommandPhase      { return c.Phase }
 func (c *CommandStatus) SetPhase(phase CommandPhase) { c.Phase = phase }
 
 const (
-	CommanndPhasePending   CommandPhase = "pending"
-	CommanndPhaseQueued    CommandPhase = "queued"
-	CommanndPhaseActive    CommandPhase = "active"
-	CommanndPhaseCompleted CommandPhase = "completed"
+	CommandPhasePending   CommandPhase = "pending"
+	CommandPhaseQueued    CommandPhase = "queued"
+	CommandPhaseActive    CommandPhase = "active"
+	CommandPhaseCompleted CommandPhase = "completed"
 
 	ConditionCompleted   status.ConditionType = "Completed"
 	ConditionClientReady status.ConditionType = "ClientReady"

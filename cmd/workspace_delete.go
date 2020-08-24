@@ -51,8 +51,13 @@ func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string
 
 	t.Name = args[0]
 
+	config, err := t.factory.NewConfig(t.Context)
+	if err != nil {
+		return err
+	}
+
 	// Controller-runtime client for constructing workspace resource
-	rc, err := t.factory.NewClient(t.Context)
+	rc, err := t.factory.NewClient(config)
 	if err != nil {
 		return err
 	}

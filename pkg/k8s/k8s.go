@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/kubectl/pkg/util/interrupt"
 )
 
@@ -49,22 +48,14 @@ func WaitUntil(rc rest.Interface, obj runtime.Object, name, namespace, plural st
 	return result, err
 }
 
-func EventHandlers(events chan interface{}) toolscache.ResourceEventHandler {
-	return toolscache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { events <- obj },
-		UpdateFunc: func(_, obj interface{}) { events <- obj },
-		DeleteFunc: func(obj interface{}) { events <- obj },
-	}
-}
-
 func GetNamespacedName(obj metav1.Object) types.NamespacedName {
 	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
 }
 
-func ReleaseHold(sc Client, obj api.Object) error {
+func ReleaseHold(ctx context.Context, sc Client, obj api.Object) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		key := types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
-		if err := sc.Get(context.TODO(), key, obj); err != nil {
+		if err := sc.Get(ctx, key, obj); err != nil {
 			return err
 		}
 
@@ -73,7 +64,7 @@ func ReleaseHold(sc Client, obj api.Object) error {
 		delete(annotations, v1alpha1.WaitAnnotationKey)
 		obj.SetAnnotations(annotations)
 
-		return sc.Update(context.TODO(), obj, &runtimeclient.UpdateOptions{})
+		return sc.Update(ctx, obj, &runtimeclient.UpdateOptions{})
 	})
 }
 
