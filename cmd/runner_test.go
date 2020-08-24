@@ -46,7 +46,8 @@ func TestRunner(t *testing.T) {
 	})
 
 	t.Run("WithIncorrectTarball", func(t *testing.T) {
-		var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
+		factory := fake.NewFactory(shellWithoutAnnotation)
+		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 		code, err := cmd.Execute([]string{
 			"runner",
