@@ -18,7 +18,6 @@ require (
 	github.com/kr/pty v1.1.5
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mattn/go-colorable v0.1.2
-	github.com/onsi/ginkgo v1.12.0
 	github.com/operator-framework/operator-sdk v0.19.0
 	github.com/pelletier/go-toml v1.7.0 // indirect
 	github.com/spf13/cobra v1.0.0
@@ -27,6 +26,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20200422194213-44a606286825
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
 	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.18.2

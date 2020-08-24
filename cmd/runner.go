@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -17,6 +16,7 @@ import (
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 type runnerCmd struct {
@@ -73,56 +73,35 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	}
 
 	r.args = args
-
-	ctx, cancel := context.WithCancel(r.cmd.Context())
-	errch := make(chan error)
-
-	var wg sync.WaitGroup
+	ctx := r.cmd.Context()
+	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball, if specified
 	if r.Tarball != "" {
-		wg.Add(1)
-		go func() {
+		g.Go(func() error {
 			files, err := extractTarball(r.Tarball, r.Path)
 			if err != nil {
-				errch <- err
-			} else {
-				// TODO: move log to tar func
-				log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
-				wg.Done()
+				return err
 			}
-		}()
+			// TODO: move log to tar func
+			log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
+			return nil
+		})
 	}
 
 	// Concurrently wait for client to release hold, if specified
 	if !r.NoWait {
-		wg.Add(1)
-		go func() {
-			if err := r.handleSemaphore(ctx); err != nil {
-				errch <- err
-			} else {
-				wg.Done()
-			}
-		}()
+		g.Go(func() error {
+			return r.handleSemaphore(gctx)
+		})
 	}
 
-	// Wait for concurrent routines to complete
-	go func() {
-		wg.Wait()
-		// Only closes err chan if all routines completely successfully
-		close(errch)
-	}()
-
-	// If error received, cancel ops and exit
-	for err := range errch {
-		if err != nil {
-			cancel()
-			close(errch)
-			return err
-		}
+	// Wait for concurrent tasks to complete
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
-	// Routines succeeded; run command
+	// Tasks succeeded; run command
 	return r.run(ctx, os.Stdout, os.Stderr)
 }
 
