@@ -9,6 +9,7 @@ import (
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/reporters"
 	"github.com/spf13/cobra"
@@ -152,16 +153,9 @@ func (t *terraformCmd) run(ctx context.Context) error {
 	// Compile tarball of terraform module, embed in configmap and deploy
 	var uploaded = make(chan struct{})
 	go func() {
-		// TODO: have createTar take a context, so that it can be cancelled
-		tarball, err := t.createTar()
+		tarball, err := archive.Create(t.Path)
 		if err != nil {
 			errch <- err
-			return
-		}
-
-		// TODO: just let the create configmap step throw an error rather than pre-empting it.
-		if len(tarball) > v1alpha1.MaxConfigSize {
-			errch <- fmt.Errorf("max config size exceeded; current=%d; max=%d", len(tarball), v1alpha1.MaxConfigSize)
 			return
 		}
 
