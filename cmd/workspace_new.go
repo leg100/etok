@@ -21,19 +21,13 @@ import (
 )
 
 type newWorkspaceCmd struct {
-	Name           string
-	Namespace      string
-	Path           string
-	CacheSize      string
-	StorageClass   string
-	NoSecret       bool
-	Secret         string
-	ServiceAccount string
-	Timeout        time.Duration
-	TimeoutClient  time.Duration
-	TimeoutPod     time.Duration
-	Context        string
-	Backend        v1alpha1.BackendSpec
+	Name          string
+	Namespace     string
+	Path          string
+	Timeout       time.Duration
+	TimeoutPod    time.Duration
+	Context       string
+	WorkspaceSpec v1alpha1.WorkspaceSpec
 
 	factory k8s.FactoryInterface
 	debug   bool
@@ -52,17 +46,22 @@ func newNewWorkspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
 	}
 	cc.cmd.Flags().StringVar(&cc.Path, "path", ".", "workspace config path")
 	cc.cmd.Flags().StringVar(&cc.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
-	cc.cmd.Flags().StringVar(&cc.ServiceAccount, "service-account", "", "Name of ServiceAccount")
-	cc.cmd.Flags().StringVar(&cc.Secret, "secret", "", "Name of Secret containing credentials")
-	cc.cmd.Flags().StringVar(&cc.CacheSize, "size", "1Gi", "Size of PersistentVolume for cache")
-	cc.cmd.Flags().StringVar(&cc.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
+
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.ServiceAccountName, "service-account", "", "Name of ServiceAccount")
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.SecretName, "secret", "", "Name of Secret containing credentials")
+
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.Cache.Size, "size", "1Gi", "Size of PersistentVolume for cache")
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cc.cmd.Flags().DurationVar(&cc.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
-	cc.cmd.Flags().DurationVar(&cc.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
+
+	// Validate
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.TimeoutClient, "timeout-client", "10s", "timeout for client to signal readiness")
+
 	cc.cmd.Flags().DurationVar(&cc.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 	cc.cmd.Flags().StringVar(&cc.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
-	cc.cmd.Flags().StringVar(&cc.Backend.Type, "backend-type", "local", "Set backend type")
-	cc.cmd.Flags().StringToStringVar(&cc.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
+	cc.cmd.Flags().StringVar(&cc.WorkspaceSpec.Backend.Type, "backend-type", "local", "Set backend type")
+	cc.cmd.Flags().StringToStringVar(&cc.WorkspaceSpec.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
 
 	// Add flags registered by imported packages (controller-runtime)
 	cc.cmd.Flags().AddGoFlagSet(flag.CommandLine)
@@ -124,14 +123,14 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 		}
 	}()
 
-	if t.Secret != "" {
+	if t.WorkspaceSpec.SecretName != "" {
 		// Secret specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(ctx, rc, t.Secret, t.Namespace, &corev1.Secret{})
+		found, err := CheckResourceExists(ctx, rc, t.WorkspaceSpec.SecretName, t.Namespace, &corev1.Secret{})
 		if err != nil {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("secret '%s' not found", t.Secret)
+			return fmt.Errorf("secret '%s' not found", t.WorkspaceSpec.SecretName)
 		}
 	} else {
 		// Secret unspecified, check if resource called 'stok' exists and if so, use that
@@ -140,19 +139,19 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 			return err
 		}
 		if found {
-			t.Secret = "stok"
+			t.WorkspaceSpec.SecretName = "stok"
 			log.Info("Found default secret...")
 		}
 	}
 
-	if t.ServiceAccount != "" {
+	if t.WorkspaceSpec.ServiceAccountName != "" {
 		// Service account specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(ctx, rc, t.ServiceAccount, t.Namespace, &corev1.ServiceAccount{})
+		found, err := CheckResourceExists(ctx, rc, t.WorkspaceSpec.ServiceAccountName, t.Namespace, &corev1.ServiceAccount{})
 		if err != nil {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("service account '%s' not found", t.ServiceAccount)
+			return fmt.Errorf("service account '%s' not found", t.WorkspaceSpec.ServiceAccountName)
 		}
 	} else {
 		// Service account unspecified, check if resource called 'stok' exists and if so, use that
@@ -161,7 +160,7 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 			return err
 		}
 		if found {
-			t.ServiceAccount = "stok"
+			t.WorkspaceSpec.ServiceAccountName = "stok"
 			log.Info("Found default service account...")
 		}
 	}
@@ -246,43 +245,12 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 				"app": "stok",
 			},
 		},
-		Spec: v1alpha1types.WorkspaceSpec{
-			Backend:       t.Backend,
-			TimeoutClient: t.TimeoutClient.String(),
-		},
+		Spec: t.WorkspaceSpec,
 	}
 
 	ws.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 	ws.SetDebug(t.debug)
 
-	if !t.NoSecret {
-		ws.Spec.SecretName = t.Secret
-	}
-
-	if t.ServiceAccount != "" {
-		ws.Spec.ServiceAccountName = t.ServiceAccount
-	}
-
-	if t.CacheSize != "" {
-		ws.Spec.Cache.Size = t.CacheSize
-	}
-
-	if t.StorageClass != "" {
-		ws.Spec.Cache.StorageClass = t.StorageClass
-	}
-
 	err := rc.Create(context.TODO(), ws)
 	return ws, err
-}
-
-// podRunningAndReady returns true if the pod is running and ready, false if the pod has not
-// yet reached those states, returns ErrPodCompleted if the pod has run to completion, or
-// an error in any other case.
-func podInitialisedAndRunning(pod *corev1.Pod) (bool, error) {
-	if len(pod.Status.InitContainerStatuses) > 0 {
-		if pod.Status.InitContainerStatuses[0].State.Running != nil {
-			return true, nil
-		}
-	}
-	return false, nil
 }
