@@ -58,13 +58,11 @@ func (pb *PodBuilder) SetLabels(workspace string) *PodBuilder {
 }
 
 func (pb *PodBuilder) WaitForClient(kind, name, namespace, timeout string) *PodBuilder {
-	args := []string{
-		"--kind", kind,
-		"--name", name,
-		"--namespace", namespace,
-		"--timeout", timeout,
-	}
-	pb.runner.Args = append(args, pb.runner.Args...)
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_KIND", Value: kind})
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_NAME", Value: name})
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_NAMESPACE", Value: namespace})
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_TIMEOUT", Value: timeout})
+
 	return pb
 }
 
@@ -215,12 +213,15 @@ func (pb *PodBuilder) AddBackendConfig(workspacename string) *PodBuilder {
 }
 
 func (pb *PodBuilder) MountTarball(configmapname, configmapkey string) *PodBuilder {
-	args := []string{
-		"--tarball", filepath.Join("/tarball", configmapkey),
-		"--path", ".",
-	}
-	// Prepend rather than append args because they must precede "--"
-	pb.runner.Args = append(args, pb.runner.Args...)
+	pb.envs = append(pb.envs, corev1.EnvVar{
+		Name:  "STOK_PATH",
+		Value: ".",
+	})
+
+	pb.envs = append(pb.envs, corev1.EnvVar{
+		Name:  "STOK_TARBALL",
+		Value: filepath.Join("/tarball", configmapkey),
+	})
 
 	pb.volumes = append(pb.volumes, corev1.Volume{
 		Name: "tarball",

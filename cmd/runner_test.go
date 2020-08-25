@@ -8,6 +8,7 @@ import (
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -74,7 +75,48 @@ func TestRunner(t *testing.T) {
 		require.Equal(t, 0, code)
 	})
 
+	t.Run("WithEnvVar", func(t *testing.T) {
+		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_KIND": "Shell"})
+
+		var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
+
+		code, err := cmd.Execute([]string{
+			"runner",
+			"--no-wait",
+			"--",
+			"uname",
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, code)
+	})
+
 	t.Run("WithTarball", func(t *testing.T) {
+		tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
+		factory := fake.NewFactory(shellWithoutAnnotation)
+		dest := createTempPath(t)
+
+		var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
+
+		code, err := cmd.Execute([]string{
+			"runner",
+			"--kind", "Shell",
+			"--name", "stok-shell-xyz",
+			"--namespace", "test",
+			"--tarball", tarball,
+			"--path", dest,
+			"--no-wait",
+			"--",
+			"/bin/ls", filepath.Join(dest, "test1.tf"),
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, code)
+	})
+
+	t.Run("WithTarballArgOverridingEnvVar", func(t *testing.T) {
+		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_TARBALL": "doesnotexist.tar.gz"})
+
 		tarball := createTarballWithFiles(t, "test1.tf", "test2.tf")
 		factory := fake.NewFactory(shellWithoutAnnotation)
 		dest := createTempPath(t)

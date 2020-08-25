@@ -358,6 +358,14 @@ prefix	= "dev"
 	}
 }
 
+func envsToMap(envs []corev1.EnvVar) map[string]string {
+	m := make(map[string]string, len(envs))
+	for _, ev := range envs {
+		m[ev.Name] = ev.Value
+	}
+	return m
+}
+
 func TestReconcileWorkspacePod(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -377,14 +385,25 @@ func TestReconcileWorkspacePod(t *testing.T) {
 				},
 			},
 			assertions: func(pod *corev1.Pod) {
-				assert.Equal(t, []string{
-					"--kind", "Workspace",
-					"--name", "workspace-1",
-					"--namespace", "controller-test",
-					"--timeout", "10s",
-					"--",
-					"-backend-config=backend.ini"},
-					pod.Spec.InitContainers[0].Args)
+				assert.Equal(t, []string{"--", "-backend-config=backend.ini"}, pod.Spec.InitContainers[0].Args)
+				assert.Equal(t, []corev1.EnvVar{
+					{
+						Name:  "STOK_KIND",
+						Value: "Workspace",
+					},
+					{
+						Name:  "STOK_NAME",
+						Value: "workspace-1",
+					},
+					{
+						Name:  "STOK_NAMESPACE",
+						Value: "controller-test",
+					},
+					{
+						Name:  "STOK_TIMEOUT",
+						Value: "10s",
+					},
+				}, pod.Spec.InitContainers[0].Env)
 			},
 		},
 		{
