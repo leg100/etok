@@ -1,19 +1,17 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -79,13 +77,7 @@ func (r *runnerCmd) doRunnerCmd(args []string) error {
 	// Concurrently extract tarball, if specified
 	if r.Tarball != "" {
 		g.Go(func() error {
-			files, err := extractTarball(r.Tarball, r.Path)
-			if err != nil {
-				return err
-			}
-			// TODO: move log to tar func
-			log.WithFields(log.Fields{"files": files, "path": r.Path}).Debug("extracted tarball")
-			return nil
+			return archive.Extract(r.Tarball, r.Path)
 		})
 	}
 
@@ -115,22 +107,6 @@ func (r *runnerCmd) validate() error {
 	}
 
 	return nil
-}
-
-// Extract Tarball with path 'src' to path 'dst'
-func extractTarball(src, dst string) (int, error) {
-	tarBytesBuffer := new(bytes.Buffer)
-	tarBytes, err := ioutil.ReadFile(src)
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = tarBytesBuffer.Write(tarBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	return util.Extract(tarBytesBuffer, dst)
 }
 
 func (r *runnerCmd) handleSemaphore(ctx context.Context) error {
