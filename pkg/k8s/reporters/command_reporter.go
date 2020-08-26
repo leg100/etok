@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
-	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/scheme"
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type CommandReporter struct {
-	k8s.Client
+	client.Client
 	Id             string
 	Kind           string
 	EnqueueTimeout time.Duration
@@ -59,6 +60,8 @@ func (r *CommandReporter) report(req ctrl.Request, enqueueTimer, queueTimer *tim
 		return false, nil
 	}
 
+	log := log.WithField("command", req)
+
 	cmd, err := command.NewCommandFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(r.Kind))
 	if err != nil {
 		return false, err
@@ -75,19 +78,26 @@ func (r *CommandReporter) report(req ctrl.Request, enqueueTimer, queueTimer *tim
 		return false, err
 	}
 
-	switch cmd.GetPhase() {
-	case v1alpha1.CommandPhaseQueued:
-		if !enqueueTimer.Stop() {
-			<-enqueueTimer.C
+	// It's no longer pending, so stop pending timer
+	if cmd.GetPhase() != v1alpha1.CommandPhasePending {
+		enqueueTimer.Stop()
+
+		// And it's no longer queued either, so stop queue timer
+		if cmd.GetPhase() != v1alpha1.CommandPhaseQueued {
+			queueTimer.Stop()
 		}
-	case v1alpha1.CommandPhaseActive:
-		// TODO: need to stop enqueue timer too...
-		if !queueTimer.Stop() {
-			<-queueTimer.C
-		}
-		// Command is active, which means the client can now connect to it
-		return true, nil
 	}
 
-	return false, nil
+	// TODO: move to new pods reporter
+	log.WithField("phase", cmd.GetPhase()).Debug("Event received")
+	switch cmd.GetPhase() {
+	case v1alpha1.CommandPhaseSync:
+		// Proceed: pod is now waiting for us to synchronise
+		return true, nil
+	case v1alpha1.CommandPhaseRunning, v1alpha1.CommandPhaseCompleted:
+		// This should never happen
+		return true, fmt.Errorf("command unexpectedly skipped synchronisation")
+	default:
+		return false, nil
+	}
 }

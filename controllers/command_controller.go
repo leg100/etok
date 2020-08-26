@@ -2,15 +2,13 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api/command"
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
-	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,106 +21,78 @@ import (
 
 type CommandReconciler struct {
 	client.Client
-	C            command.Interface
 	Kind         string
 	ResourceType string
 	Scheme       *runtime.Scheme
 	Log          logr.Logger
-	RunnerImage  string
+	Image        string
+}
+
+func NewCommandReconciler(c client.Client, kind, image string) *CommandReconciler {
+	return &CommandReconciler{
+		Client:       c,
+		Scheme:       scheme.Scheme,
+		Kind:         kind,
+		ResourceType: command.CommandKindToType(kind),
+		Log:          ctrl.Log.WithName("controllers").WithName(command.CommandKindToCLI(kind)),
+		Image:        image,
+	}
 }
 
 func (r *CommandReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	reqLogger := r.Log.WithValues(r.ResourceType, req.NamespacedName)
-	reqLogger.V(0).Info("Reconciling " + r.ResourceType)
+	log := r.Log.WithValues(r.ResourceType, req.NamespacedName)
 
-	err := r.Get(context.TODO(), req.NamespacedName, r.C)
+	// Create command obj of kind
+	cmd, err := command.NewCommandFromGVK(r.Scheme, v1alpha1.SchemeGroupVersion.WithKind(r.Kind))
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
 	}
 
+	// Fetch command obj
+	if err := r.Get(context.TODO(), req.NamespacedName, cmd); err != nil {
+		log.Error(err, "unable to fetch command obj")
+
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	// Command completed, nothing more to be done
-	if r.C.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
+	if cmd.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
 		return ctrl.Result{}, nil
 	}
 
 	// Fetch its Workspace object
-	workspace := &v1alpha1.Workspace{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: r.C.GetWorkspace(), Namespace: req.Namespace}, workspace)
-	if errors.IsNotFound(err) {
-		// Workspace not found, unlikely to be temporary, signal completion
-		// TODO: this is wrong: signalling completion gives the impression the command itself has
-		// completed, but it hasn't even started. We should signal error in some other way.
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionCompleted,
-			Status:  corev1.ConditionTrue,
-			Reason:  v1alpha1.ReasonWorkspaceNotFound,
-			Message: fmt.Sprintf("Workspace '%s' not found", r.C.GetWorkspace()),
-		})
-		_ = r.Status().Update(context.TODO(), r.C)
-		return ctrl.Result{}, nil
+	ws := &v1alpha1.Workspace{}
+	if err := r.Get(context.TODO(), types.NamespacedName{Name: cmd.GetWorkspace(), Namespace: req.Namespace}, ws); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Check workspace queue position
-	pos := slice.StringIndex(workspace.Status.Queue, r.C.GetName())
-	// TODO: consider removing these status updates
-	if pos > 0 {
-		// Queued
-		r.C.SetPhase(v1alpha1.CommandPhaseQueued)
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionAttachable,
-			Status:  corev1.ConditionFalse,
-			Reason:  v1alpha1.ReasonQueued,
-			Message: fmt.Sprintf("In workspace queue position %d", pos),
-		})
-		err = r.Status().Update(context.TODO(), r.C)
-		return ctrl.Result{}, err
-	}
-	if pos < 0 {
-		// Not yet queued
-		r.C.SetPhase(v1alpha1.CommandPhasePending)
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionAttachable,
-			Status:  corev1.ConditionFalse,
-			Reason:  v1alpha1.ReasonUnscheduled,
-			Message: "Not yet scheduled by workspace",
-		})
-		err = r.Status().Update(context.TODO(), r.C)
-		return ctrl.Result{}, err
-	}
-
-	r.C.SetPhase(v1alpha1.CommandPhaseActive)
-
-	// Check if client has told us they're ready and set condition accordingly
-	// TODO: this is no longer needed
-	if val, ok := r.C.GetAnnotations()["stok.goalspike.com/client"]; ok && val == "Ready" {
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionClientReady,
-			Status:  corev1.ConditionTrue,
-			Reason:  v1alpha1.ReasonClientAttached,
-			Message: "Client has attached to pod TTY",
-		})
-		if err = r.Status().Update(context.TODO(), r.C); err != nil {
-			return ctrl.Result{}, err
+	pos := slice.StringIndex(ws.Status.Queue, cmd.GetName())
+	switch {
+	case pos == 0:
+		// Currently scheduled to run; get or create pod
+		opts := podOpts{
+			cmd:                cmd,
+			workspaceName:      ws.GetName(),
+			serviceAccountName: ws.Spec.ServiceAccountName,
+			secretName:         ws.Spec.SecretName,
+			pvcName:            ws.GetName(),
+			configMapName:      cmd.GetConfigMap(),
+			configMapKey:       cmd.GetConfigMapKey(),
 		}
+		return r.reconcilePod(req, &opts)
+	case pos > 0:
+		// Queued
+		cmd.SetPhase(v1alpha1.CommandPhaseQueued)
+	case pos < 0:
+		// Not yet queued
+		cmd.SetPhase(v1alpha1.CommandPhasePending)
 	}
 
-	// Currently scheduled to run; get or create pod
-	opts := podOpts{
-		workspaceName:      workspace.GetName(),
-		serviceAccountName: workspace.Spec.ServiceAccountName,
-		secretName:         workspace.Spec.SecretName,
-		pvcName:            workspace.GetName(),
-		configMapName:      r.C.GetConfigMap(),
-		configMapKey:       r.C.GetConfigMapKey(),
-	}
-	return r.reconcilePod(req, &opts)
+	return reconcile.Result{}, r.Status().Update(context.TODO(), cmd)
 }
 
 func (r *CommandReconciler) SetupWithManager(mgr ctrl.Manager) error {

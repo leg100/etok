@@ -8,6 +8,7 @@ import (
 	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,9 +45,6 @@ func (r *RunnerReporter) Handler(ctx context.Context, events <-chan ctrl.Request
 				return nil
 			}
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
 			return ctx.Err()
 		case <-timer.C:
 			return fmt.Errorf("timeout exceeded waiting for client hold to be released")
@@ -73,10 +71,11 @@ func (r *RunnerReporter) isReleased(req ctrl.Request) (bool, error) {
 		return false, err
 	}
 
-	if _, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]; !ok {
-		// Hold has been released, we're clear to go
+	if controllers.IsSynchronising(obj) {
+		// Client is yet to synchronise.
+		return false, nil
+	} else {
+		// Client has synchronised, we're clear to proceed.
 		return true, nil
 	}
-
-	return false, nil
 }

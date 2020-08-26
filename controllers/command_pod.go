@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -16,6 +17,7 @@ import (
 )
 
 type podOpts struct {
+	cmd                command.Interface
 	workspaceName      string
 	secretName         string
 	serviceAccountName string
@@ -35,37 +37,34 @@ func (r *CommandReconciler) reconcilePod(request reconcile.Request, opts *podOpt
 		return reconcile.Result{}, err
 	}
 
-	return r.updateStatus(pod)
+	return r.updateStatus(pod, opts)
 }
 
-func (r *CommandReconciler) updateStatus(pod *corev1.Pod) (reconcile.Result, error) {
+// IsSynchronising indicates whether obj is in process of synchronisation between client and pod, or
+// not.
+func IsSynchronising(obj metav1.Object) bool {
+	_, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]
+	return ok
+}
+
+func (r *CommandReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconcile.Result, error) {
 	// Signal pod completion to workspace
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
-		r.C.GetConditions().SetCondition(operatorstatus.Condition{
+		opts.cmd.SetPhase(v1alpha1.CommandPhaseCompleted)
+		opts.cmd.GetConditions().SetCondition(operatorstatus.Condition{
 			Type:    v1alpha1.ConditionCompleted,
 			Status:  corev1.ConditionTrue,
 			Reason:  v1alpha1.ReasonPodCompleted,
 			Message: fmt.Sprintf("Pod completed with phase %s", pod.Status.Phase),
 		})
 	case corev1.PodRunning:
-		conditions := pod.Status.Conditions
-		if conditions != nil {
-			for i := range conditions {
-				if conditions[i].Type == corev1.PodReady &&
-					conditions[i].Status == corev1.ConditionTrue {
-					r.C.GetConditions().SetCondition(operatorstatus.Condition{
-						Type:    v1alpha1.ConditionAttachable,
-						Status:  corev1.ConditionTrue,
-						Reason:  v1alpha1.ReasonPodRunningAndReady,
-						Message: "Pod is running and ready and attachable",
-					})
-				}
-			}
+		if IsSynchronising(opts.cmd) {
+			opts.cmd.SetPhase(v1alpha1.CommandPhaseSync)
+		} else {
+			opts.cmd.SetPhase(v1alpha1.CommandPhaseRunning)
 		}
 	case corev1.PodPending:
-		// TODO: not sure if requeue is necessary:
-		// https://github.com/operator-framework/operator-sdk/issues/2898#issuecomment-623883813
 		return reconcile.Result{Requeue: true}, nil
 	case corev1.PodUnknown:
 		return reconcile.Result{}, fmt.Errorf("State of pod could not be obtained")
@@ -73,34 +72,34 @@ func (r *CommandReconciler) updateStatus(pod *corev1.Pod) (reconcile.Result, err
 		return reconcile.Result{}, fmt.Errorf("Unknown pod phase: %s", pod.Status.Phase)
 	}
 
-	err := r.Status().Update(context.TODO(), r.C)
+	err := r.Status().Update(context.TODO(), opts.cmd)
 	return reconcile.Result{}, err
 }
 
 // Create pod
 func (r CommandReconciler) create(opts *podOpts) (reconcile.Result, error) {
-	pod := NewPodBuilder(r.C.GetNamespace(), r.C.GetName(), r.RunnerImage).
-		AddRunnerContainer(r.C.GetArgs()).
+	pod := NewPodBuilder(opts.cmd.GetNamespace(), opts.cmd.GetName(), r.Image).
+		AddRunnerContainer(opts.cmd.GetArgs()).
 		AddWorkspace().
 		AddCache(opts.pvcName).
 		AddBackendConfig(opts.workspaceName).
 		AddCredentials(opts.secretName).
 		HasServiceAccount(opts.serviceAccountName).
 		MountTarball(opts.configMapName, opts.configMapKey).
-		WaitForClient(r.Kind, r.C.GetName(), r.C.GetNamespace(), r.C.GetTimeoutClient()).
-		EnableDebug(r.C.GetDebug()).
+		WaitForClient(r.Kind, opts.cmd.GetName(), opts.cmd.GetNamespace(), opts.cmd.GetTimeoutClient()).
+		EnableDebug(opts.cmd.GetDebug()).
 		Build(false)
 
 	// TODO: move to a global variable or dedicated package
 	pod.SetLabels(map[string]string{
 		"app":       "stok",
-		"command":   command.CommandKindToCLI(r.C.GroupVersionKind().Kind),
+		"command":   command.CommandKindToCLI(opts.cmd.GroupVersionKind().Kind),
 		"workspace": opts.workspaceName,
 		"version":   version.Version,
 	})
 
 	// Set Command instance as the owner and controller
-	if err := controllerutil.SetControllerReference(r.C, pod, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(opts.cmd, pod, r.Scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -110,6 +109,11 @@ func (r CommandReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		return reconcile.Result{}, nil
 	}
 	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	opts.cmd.SetPhase(v1alpha1.CommandPhaseProvisioning)
+	if err := r.Status().Update(context.TODO(), opts.cmd); err != nil {
 		return reconcile.Result{}, err
 	}
 

@@ -29,16 +29,17 @@ import (
 
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	Log         logr.Logger
-	RunnerImage string
+	Scheme *runtime.Scheme
+	Log    logr.Logger
+	Image  string
 }
 
-func NewWorkspaceReconciler(cl client.Client) *WorkspaceReconciler {
+func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler {
 	return &WorkspaceReconciler{
 		Client: cl,
 		Scheme: scheme.Scheme,
 		Log:    ctrl.Log.WithName("controllers").WithName("Workspace"),
+		Image:  image,
 	}
 }
 
@@ -340,7 +341,7 @@ func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
 func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 	args := []string{"-backend-config=" + v1alpha1.BackendConfigFilename}
 
-	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.RunnerImage).
+	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.Image).
 		SetLabels(cr.GetName()).
 		AddRunnerContainer(args).
 		AddWorkspace().

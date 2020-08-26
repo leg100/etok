@@ -7,204 +7,219 @@ import (
 	"github.com/leg100/stok/api/command"
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
-	"github.com/operator-framework/operator-sdk/pkg/status"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var secret = corev1.Secret{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "secret-1",
-		Namespace: "operator-test",
-	},
-	StringData: map[string]string{
-		"google_application_credentials.json": "abc",
-	},
-}
+func TestCommandReconciler(t *testing.T) {
+	plan1 := v1alpha1.Plan{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "stok.goalspike.com/v1alpha1",
+			Kind:       "Plan",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "plan-1",
+			Namespace: "operator-test",
+		},
+		CommandSpec: v1alpha1.CommandSpec{
+			Workspace: "workspace-1",
+		},
+	}
 
-var workspaceEmptyQueue = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName: "secret-1",
-	},
-}
+	var secret = corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret-1",
+			Namespace: "operator-test",
+		},
+		StringData: map[string]string{
+			"google_application_credentials.json": "abc",
+		},
+	}
 
-var workspaceQueueOfOne = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName: "secret-1",
-	},
-	Status: v1alpha1.WorkspaceStatus{
-		Queue: []string{"plan-1"},
-	},
-}
+	var workspaceEmptyQueue = v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workspace-1",
+			Namespace: "operator-test",
+		},
+		Spec: v1alpha1.WorkspaceSpec{
+			SecretName: "secret-1",
+		},
+	}
 
-var workspaceBackOfQueue = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "workspace-1",
-		Namespace: "operator-test",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName: "secret-1",
-	},
-	Status: v1alpha1.WorkspaceStatus{
-		Queue: []string{"plan-0", "plan-1"},
-	},
-}
+	var workspaceQueueOfOne = v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workspace-1",
+			Namespace: "operator-test",
+		},
+		Spec: v1alpha1.WorkspaceSpec{
+			SecretName: "secret-1",
+		},
+		Status: v1alpha1.WorkspaceStatus{
+			Queue: []string{"plan-1"},
+		},
+	}
 
-var pod = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "plan-1",
-		Namespace: "operator-test",
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodPending,
-	},
-}
+	var workspaceBackOfQueue = v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workspace-1",
+			Namespace: "operator-test",
+		},
+		Spec: v1alpha1.WorkspaceSpec{
+			SecretName: "secret-1",
+		},
+		Status: v1alpha1.WorkspaceStatus{
+			Queue: []string{"plan-0", "plan-1"},
+		},
+	}
 
-var podRunningAndReady = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "plan-1",
-		Namespace: "operator-test",
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodRunning,
-		Conditions: []corev1.PodCondition{
-			{
-				Type:   corev1.PodReady,
-				Status: corev1.ConditionTrue,
+	var pod = corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "plan-1",
+			Namespace: "operator-test",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
+
+	var podRunningAndReady = corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "plan-1",
+			Namespace: "operator-test",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
 			},
 		},
-	},
-}
+	}
 
-var successfullyCompletedPod = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "plan-1",
-		Namespace: "operator-test",
-	},
-	Status: corev1.PodStatus{
-		Phase: corev1.PodSucceeded,
-	},
-}
+	var successfullyCompletedPod = corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "plan-1",
+			Namespace: "operator-test",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodSucceeded,
+		},
+	}
 
-func newTrue() *bool {
-	b := true
-	return &b
-}
-
-func TestReconcileCommand(t *testing.T) {
 	tests := []struct {
-		name                     string
-		annotations              map[string]string
-		conditions               status.Conditions
-		objs                     []runtime.Object
-		wantAttachableCondition  corev1.ConditionStatus
-		wantClientReadyCondition corev1.ConditionStatus
-		wantCompletedCondition   corev1.ConditionStatus
-		wantRequeue              bool
-		wantGoogleCredentials    bool
+		name           string
+		cmd            command.Interface
+		objs           []runtime.Object
+		assertions     func(cmd command.Interface)
+		reconcileError bool
 	}{
 		{
-			name: "Missing workspace",
-			objs: []runtime.Object{
-				runtime.Object(&secret),
-			},
-			wantAttachableCondition:  corev1.ConditionUnknown,
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionTrue,
+			name:           "Missing workspace",
+			cmd:            &plan1,
+			reconcileError: true,
+			assertions:     func(cmd command.Interface) {},
 		},
 		{
-			name: "Create pod",
-			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&secret),
-			},
-			wantAttachableCondition:  corev1.ConditionUnknown,
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantGoogleCredentials:    true,
-		},
-		{
-			name: "Client has set annotation",
-			annotations: map[string]string{
-				"stok.goalspike.com/client": "Ready",
-			},
-			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&pod),
-			},
-			wantClientReadyCondition: corev1.ConditionTrue,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantAttachableCondition:  corev1.ConditionUnknown,
-		},
-		{
-			name: "Successfully completed pod",
-			annotations: map[string]string{
-				"stok.goalspike.com/client": "Ready",
-			},
-			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&successfullyCompletedPod),
-			},
-			wantClientReadyCondition: corev1.ConditionTrue,
-			wantAttachableCondition:  corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionTrue,
-		},
-		{
-			name: "Unenqueued command",
+			name: "Pending",
+			cmd:  &plan1,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
 				runtime.Object(&pod),
 			},
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantAttachableCondition:  corev1.ConditionFalse,
+			assertions: func(cmd command.Interface) {
+				assert.Equal(t, v1alpha1.CommandPhasePending, cmd.GetPhase())
+			},
 		},
 		{
-			name: "Waiting in queue",
+			name: "Queued",
+			cmd:  &plan1,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceBackOfQueue),
 				runtime.Object(&pod),
 			},
-			wantClientReadyCondition: corev1.ConditionUnknown,
-			wantAttachableCondition:  corev1.ConditionFalse,
-			wantCompletedCondition:   corev1.ConditionUnknown,
+			assertions: func(cmd command.Interface) {
+				assert.Equal(t, v1alpha1.CommandPhaseQueued, cmd.GetPhase())
+			},
 		},
 		{
-			name: "Command at front of queue with pod running and ready",
-			annotations: map[string]string{
-				"stok.goalspike.com/client": "Ready",
+			name: "Synchronising",
+			cmd: &v1alpha1.Plan{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "plan-1",
+					Namespace:   "operator-test",
+					Annotations: map[string]string{v1alpha1.WaitAnnotationKey: "true"},
+				},
+				CommandSpec: v1alpha1.CommandSpec{
+					Workspace: "workspace-1",
+				},
 			},
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&secret),
 				runtime.Object(&podRunningAndReady),
 			},
-			wantClientReadyCondition: corev1.ConditionTrue,
-			wantCompletedCondition:   corev1.ConditionUnknown,
-			wantAttachableCondition:  corev1.ConditionTrue,
+			assertions: func(cmd command.Interface) {
+				assert.Equal(t, v1alpha1.CommandPhaseSync, cmd.GetPhase())
+			},
+		},
+		{
+			name: "Completed",
+			cmd:  &plan1,
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&successfullyCompletedPod),
+			},
+			assertions: func(cmd command.Interface) {
+				assert.Equal(t, v1alpha1.CommandPhaseCompleted, cmd.GetPhase())
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan := &v1alpha1.Plan{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Plan",
-					APIVersion: "stok.goalspike.com/v1alpha1",
+			s := scheme.Scheme
+			objs := append(tt.objs, runtime.Object(tt.cmd))
+			cl := fake.NewFakeClientWithScheme(s, objs...)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.cmd.GetName(),
+					Namespace: tt.cmd.GetNamespace(),
 				},
+			}
+
+			kind, _ := GetKindFromObject(s, tt.cmd)
+
+			_, err := NewCommandReconciler(cl, kind, "a.b.c/d:v1").Reconcile(req)
+			if tt.reconcileError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			cmd, _ := command.NewCommandFromGVK(s, v1alpha1.SchemeGroupVersion.WithKind(kind))
+			err = cl.Get(context.TODO(), req.NamespacedName, cmd)
+			require.NoError(t, err)
+
+			tt.assertions(cmd)
+		})
+	}
+
+	podTests := []struct {
+		name       string
+		cmd        command.Interface
+		objs       []runtime.Object
+		assertions func(pod *corev1.Pod)
+	}{
+		{
+			name: "Creates pod",
+			cmd: &v1alpha1.Plan{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
@@ -212,82 +227,79 @@ func TestReconcileCommand(t *testing.T) {
 				CommandSpec: v1alpha1.CommandSpec{
 					Workspace: "workspace-1",
 				},
-			}
-
-			plan.SetConditions(tt.conditions)
-			plan.SetAnnotations(tt.annotations)
-
-			objs := append(tt.objs, runtime.Object(plan))
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
-
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      plan.GetName(),
-					Namespace: plan.GetNamespace(),
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+			},
+			assertions: func(pod *corev1.Pod) {
+				assert.NotEqual(t, &corev1.Pod{}, pod)
+			},
+		},
+		{
+			name: "Sets google credentials",
+			cmd: &v1alpha1.Plan{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plan-1",
+					Namespace: "operator-test",
 				},
-			}
-
-			gvk := v1alpha1.SchemeGroupVersion.WithKind("Plan")
-			c, err := scheme.Scheme.New(gvk)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			r := &CommandReconciler{
-				C:            c.(command.Interface),
-				Client:       cl,
-				Scheme:       scheme.Scheme,
-				ResourceType: "plans",
-				Log:          ctrl.Log.WithName("controllers").WithName("plan"),
-				RunnerImage:  "a.b.c/d:v1",
-			}
-
-			res, err := r.Reconcile(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if tt.wantRequeue {
-				if res.Requeue {
-					res, err = r.Reconcile(req)
-					if err != nil {
-						t.Fatalf("requeued reconcile: (%v)", err)
-					}
-				} else {
-					t.Error("want requeue got no requeue")
-				}
-			}
-
-			pod := &corev1.Pod{}
-			err = cl.Get(context.TODO(), req.NamespacedName, pod)
-			if err != nil && !errors.IsNotFound(err) {
-				t.Fatalf("error fetching pod %v", err)
-			}
-
-			err = cl.Get(context.TODO(), req.NamespacedName, plan)
-			if err != nil {
-				t.Fatalf("get command: (%v)", err)
-			}
-
-			if tt.wantGoogleCredentials {
+				CommandSpec: v1alpha1.CommandSpec{
+					Workspace: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+				runtime.Object(&secret),
+			},
+			assertions: func(pod *corev1.Pod) {
 				want := "/credentials/google-credentials.json"
 				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "GOOGLE_APPLICATION_CREDENTIALS")
 				if !ok {
 					t.Errorf("Could not find env var with name GOOGLE_APPLICATION_CREDENTIALS")
+				} else {
+					assert.Equal(t, want, got)
 				}
-				if want != got {
-					t.Errorf("want %s got %s", want, got)
-				}
+			},
+		},
+		{
+			name: "Image name",
+			cmd: &v1alpha1.Plan{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plan-1",
+					Namespace: "operator-test",
+				},
+				CommandSpec: v1alpha1.CommandSpec{
+					Workspace: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+			},
+			assertions: func(pod *corev1.Pod) {
+				require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
+			},
+		},
+	}
+	for _, tt := range podTests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := scheme.Scheme
+			objs := append(tt.objs, runtime.Object(tt.cmd))
+			cl := fake.NewFakeClientWithScheme(s, objs...)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.cmd.GetName(),
+					Namespace: tt.cmd.GetNamespace(),
+				},
 			}
 
-			//TODO: find a way to test presence of image (whilst handling cases where no pod was
-			//found)
-			//
-			//require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
+			kind, _ := GetKindFromObject(s, tt.cmd)
+			_, err := NewCommandReconciler(cl, kind, "a.b.c/d:v1").Reconcile(req)
+			assert.NoError(t, err)
 
-			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionCompleted, tt.wantCompletedCondition)
-			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionAttachable, tt.wantAttachableCondition)
-			assertCondition(t, &plan.CommandStatus, v1alpha1.ConditionClientReady, tt.wantClientReadyCondition)
+			pod := &corev1.Pod{}
+			_ = cl.Get(context.TODO(), req.NamespacedName, pod)
+
+			tt.assertions(pod)
 		})
 	}
 }
@@ -299,13 +311,4 @@ func getEnvValueForName(container *corev1.Container, name string) (string, bool)
 		}
 	}
 	return "", false
-}
-
-func assertCondition(t *testing.T, cmdstatus *v1alpha1.CommandStatus, ctype status.ConditionType, want corev1.ConditionStatus) {
-	if cmdstatus.Conditions.IsUnknownFor(ctype) && want != corev1.ConditionUnknown ||
-		cmdstatus.Conditions.IsTrueFor(ctype) && want != corev1.ConditionTrue ||
-		cmdstatus.Conditions.IsFalseFor(ctype) && want != corev1.ConditionFalse {
-
-		t.Errorf("expected %s status to be %v, got '%v'", ctype, want, cmdstatus.Conditions.GetCondition(ctype))
-	}
 }

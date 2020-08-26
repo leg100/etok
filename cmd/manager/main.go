@@ -10,7 +10,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"github.com/leg100/stok/api/command"
-	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
@@ -73,40 +72,22 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
-	runnerImage := os.Getenv("RUNNER_IMAGE")
-	if runnerImage == "" {
+	image := os.Getenv("RUNNER_IMAGE")
+	if image == "" {
 		// Default to image version (typically set via an LD flag when building the bin)
-		runnerImage = version.Image
+		image = version.Image
 	}
-	log.Info("Runner image: " + runnerImage)
+	log.Info("Runner image: " + image)
 
 	// Setup workspace ctrl with mgr
-	if err = (&controllers.WorkspaceReconciler{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName("controllers").WithName("Workspace"),
-		Scheme:      mgr.GetScheme(),
-		RunnerImage: runnerImage,
-	}).SetupWithManager(mgr); err != nil {
+	if err := controllers.NewWorkspaceReconciler(mgr.GetClient(), image).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create workspace controller: %w", err)
 	}
 
 	// Setup each command ctrl with mgr
 	for _, kind := range command.CommandKinds {
-		o, err := scheme.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(kind))
-		if err != nil {
-			return err
-		}
-
-		if err = (&controllers.CommandReconciler{
-			Client: mgr.GetClient(),
-			// TODO: rename to c to something less silly, like cmd
-			C:            o.(command.Interface),
-			Log:          ctrl.Log.WithName("controllers").WithName(kind),
-			Kind:         kind,
-			ResourceType: command.CommandKindToType(kind),
-			Scheme:       mgr.GetScheme(),
-			RunnerImage:  runnerImage,
-		}).SetupWithManager(mgr); err != nil {
+		r := controllers.NewCommandReconciler(mgr.GetClient(), kind, image)
+		if err := r.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("unable to create %s controller: %w", command.CommandKindToCLI(kind), err)
 		}
 

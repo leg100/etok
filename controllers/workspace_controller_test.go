@@ -253,7 +253,7 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
 
-			r := NewWorkspaceReconciler(cl)
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -334,7 +334,7 @@ prefix	= "dev"
 		t.Run(tt.name, func(t *testing.T) {
 			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
 
-			r := NewWorkspaceReconciler(cl)
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -464,7 +464,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cl := fake.NewFakeClientWithScheme(scheme.Scheme, append(tt.objs, tt.workspace)...)
 
-			r := NewWorkspaceReconciler(cl)
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{

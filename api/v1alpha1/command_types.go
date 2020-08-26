@@ -53,7 +53,7 @@ type CommandStatus struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// +genclient
-	Conditions status.Conditions `json:"conditions"`
+	Conditions status.Conditions `json:"conditions,omitempty"`
 	Phase      CommandPhase      `json:"phase"`
 }
 
@@ -67,22 +67,15 @@ func (c *CommandStatus) GetPhase() CommandPhase      { return c.Phase }
 func (c *CommandStatus) SetPhase(phase CommandPhase) { c.Phase = phase }
 
 const (
-	CommandPhasePending   CommandPhase = "pending"
-	CommandPhaseQueued    CommandPhase = "queued"
-	CommandPhaseActive    CommandPhase = "active"
-	CommandPhaseCompleted CommandPhase = "completed"
+	CommandPhasePending      CommandPhase = "pending"
+	CommandPhaseQueued       CommandPhase = "queued"
+	CommandPhaseProvisioning CommandPhase = "provisioning"
+	CommandPhaseSync         CommandPhase = "synchronising"
+	CommandPhaseRunning      CommandPhase = "running"
+	CommandPhaseCompleted    CommandPhase = "completed"
 
-	ConditionCompleted   status.ConditionType = "Completed"
-	ConditionClientReady status.ConditionType = "ClientReady"
-	ConditionAttachable  status.ConditionType = "PodAttachable"
-
-	ReasonWorkspaceUnspecified status.ConditionReason = "WorkspaceUnspecified"
-	ReasonWorkspaceNotFound    status.ConditionReason = "WorkspaceNotFound"
-	ReasonUnscheduled          status.ConditionReason = "Unscheduled"
-	ReasonQueued               status.ConditionReason = "InWorkspaceQueue"
-	ReasonPodRunningAndReady   status.ConditionReason = "PodRunningAndReady"
-	ReasonClientAttached       status.ConditionReason = "ClientAttached"
-	ReasonPodCompleted         status.ConditionReason = "PodCompleted"
+	ConditionCompleted status.ConditionType   = "Completed"
+	ReasonPodCompleted status.ConditionReason = "PodCompleted"
 
 	WaitAnnotationKey = "stok.goalspike.com/wait"
 

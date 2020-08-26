@@ -39,7 +39,7 @@ func TestTerraform(t *testing.T) {
 
 		obj.SetNamespace(namespace)
 		obj.SetName(fake.GenerateName(kind))
-		obj.SetPhase(v1alpha1.CommandPhaseActive)
+		obj.SetPhase(v1alpha1.CommandPhaseSync)
 		return obj
 	}
 
