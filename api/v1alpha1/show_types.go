@@ -7,6 +7,8 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Workspace",type="string",JSONPath=".spec.workspace",description="The workspace of the command"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The command phase"
 
 // Show is the Schema for the shows API
 type Show struct {

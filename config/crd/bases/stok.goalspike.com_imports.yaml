@@ -8,6 +8,15 @@ metadata:
     app: stok
   name: imports.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Import
@@ -112,7 +121,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object

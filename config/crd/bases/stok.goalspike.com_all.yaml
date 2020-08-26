@@ -8,6 +8,15 @@ metadata:
     app: stok
   name: applies.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Apply
@@ -112,7 +121,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -262,6 +270,15 @@ metadata:
     app: stok
   name: destroys.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Destroy
@@ -366,7 +383,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -392,6 +408,15 @@ metadata:
     app: stok
   name: forceunlocks.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: ForceUnlock
@@ -496,7 +521,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -522,6 +546,15 @@ metadata:
     app: stok
   name: gets.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Get
@@ -626,7 +659,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -652,6 +684,15 @@ metadata:
     app: stok
   name: imports.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Import
@@ -756,7 +797,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -782,6 +822,15 @@ metadata:
     app: stok
   name: inits.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Init
@@ -886,7 +935,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -912,6 +960,15 @@ metadata:
     app: stok
   name: outputs.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Output
@@ -1016,7 +1073,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1042,6 +1098,15 @@ metadata:
     app: stok
   name: plans.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Plan
@@ -1146,7 +1211,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1172,6 +1236,15 @@ metadata:
     app: stok
   name: refreshes.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Refresh
@@ -1276,7 +1349,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1426,6 +1498,15 @@ metadata:
     app: stok
   name: shells.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Shell
@@ -1530,7 +1611,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1556,6 +1636,15 @@ metadata:
     app: stok
   name: shows.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Show
@@ -1660,7 +1749,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1686,6 +1774,15 @@ metadata:
     app: stok
   name: states.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: State
@@ -1790,7 +1887,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1816,6 +1912,15 @@ metadata:
     app: stok
   name: taints.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Taint
@@ -1920,7 +2025,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -1946,6 +2050,15 @@ metadata:
     app: stok
   name: untaints.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Untaint
@@ -2050,7 +2163,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object
@@ -2076,6 +2188,15 @@ metadata:
     app: stok
   name: validates.stok.goalspike.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.workspace
+    description: The workspace of the command
+    name: Workspace
+    type: string
+  - JSONPath: .status.phase
+    description: The command phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Validate
@@ -2180,7 +2301,6 @@ spec:
             phase:
               type: string
           required:
-          - conditions
           - phase
           type: object
       type: object

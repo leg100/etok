@@ -48,6 +48,8 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Workspace",type="string",JSONPath=".spec.workspace",description="The workspace of the command"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The command phase"
 
 // {{ .Kind }} is the Schema for the {{ .ResourceType }} API
 type {{ .Kind }} struct {
