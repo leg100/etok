@@ -6,6 +6,7 @@ import (
 
 	v1alpha1types "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
+	"github.com/leg100/stok/util"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,7 +27,7 @@ func TestListWorkspaces(t *testing.T) {
 
 	t.Run("WithEnvironmentFile", func(t *testing.T) {
 		path := createTempPath(t)
-		err := writeEnvironmentFile(path, "default", "workspace-1")
+		err := util.WriteEnvironmentFile(path, "default", "workspace-1")
 		require.NoError(t, err)
 
 		var factory = fake.NewFactory(ws1, ws2)

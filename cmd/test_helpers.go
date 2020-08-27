@@ -8,6 +8,7 @@ import (
 
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/archive"
+	"github.com/leg100/stok/util"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -44,7 +45,7 @@ func setupEnvironment(t *testing.T, namespace, workspace string) {
 	require.NoError(t, os.Chdir(path))
 	t.Cleanup(func() { os.Chdir(previous) })
 
-	require.NoError(t, writeEnvironmentFile(path, namespace, workspace))
+	require.NoError(t, util.WriteEnvironmentFile(path, namespace, workspace))
 }
 
 func createTempPath(t *testing.T) string {

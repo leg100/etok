@@ -93,20 +93,19 @@ func CreateTar(w io.Writer, paths []string) error {
 }
 
 // Untar gzipped tarball src to dest directory
-func Extract(src, dest string) error {
+func Extract(src, dest string) (files int, err error) {
 	f, err := os.Open(src)
 	if err != nil {
-		return err
+		return files, err
 	}
 	defer f.Close()
 
 	zr, err := gzip.NewReader(f)
 	if err != nil {
-		return err
+		return files, err
 	}
 	defer zr.Close()
 
-	var files int
 	tr := tar.NewReader(zr)
 	for {
 		hdr, err := tr.Next()
@@ -116,23 +115,23 @@ func Extract(src, dest string) error {
 		}
 
 		if err != nil {
-			return err
+			return files, err
 		}
 
 		path := filepath.Join(dest, hdr.Name)
 		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
-			return err
+			return files, err
 		}
 		if _, err := io.Copy(f, tr); err != nil {
-			return err
+			return files, err
 		}
 		if err := f.Close(); err != nil {
-			return err
+			return files, err
 		}
 		files++
 	}
 
 	log.WithFields(log.Fields{"files": files, "path": dest}).Debug("extracted tarball")
-	return nil
+	return files, err
 }

@@ -4,14 +4,14 @@ import (
 	"os"
 	"testing"
 
-	v1alpha1types "github.com/leg100/stok/api/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestDeleteWorkspace(t *testing.T) {
-	ws1 := &v1alpha1types.Workspace{
+	ws1 := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "workspace-1",
 			Namespace: "default",

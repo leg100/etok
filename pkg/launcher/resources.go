@@ -1,4 +1,4 @@
-package cmd
+package launcher
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (t *terraformCmd) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
+func (t *Launcher) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
 	obj, err := scheme.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 	cmd.SetTimeoutQueue(t.TimeoutQueue.String())
 	cmd.SetTimeoutClient(t.TimeoutClient.String())
 	cmd.SetArgs(t.Args)
-	cmd.SetDebug(t.debug)
+	cmd.SetDebug(t.Debug)
 	cmd.SetConfigMap(configMapName)
 	cmd.SetConfigMapKey(v1alpha1.CommandDefaultConfigMapKey)
 
@@ -76,7 +76,7 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 	return cmd, nil
 }
 
-func (t *terraformCmd) createConfigMap(rc client.Client, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {
+func (t *Launcher) createConfigMap(rc client.Client, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

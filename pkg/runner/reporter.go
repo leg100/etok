@@ -1,4 +1,4 @@
-package cmd
+package runner
 
 import (
 	"context"
@@ -15,23 +15,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 )
 
-type RunnerReporter struct {
+type reporter struct {
 	k8s.Client
 	name    string
 	kind    string
 	timeout time.Duration
 }
 
-func (r *RunnerReporter) Register(c cache.Cache) (cache.Informer, error) {
+func (r *reporter) Register(c cache.Cache) (cache.Informer, error) {
 	return c.GetInformerForKind(context.TODO(), v1alpha1.SchemeGroupVersion.WithKind(r.kind))
 }
 
-func (r *RunnerReporter) MatchingObj(obj interface{}) bool {
+func (r *reporter) MatchingObj(obj interface{}) bool {
 	_, ok := obj.(command.Interface)
 	return ok
 }
 
-func (r *RunnerReporter) Handler(ctx context.Context, events <-chan ctrl.Request) error {
+func (r *reporter) Handler(ctx context.Context, events <-chan ctrl.Request) error {
 	timer := time.NewTimer(r.timeout)
 
 	for {
@@ -53,7 +53,7 @@ func (r *RunnerReporter) Handler(ctx context.Context, events <-chan ctrl.Request
 }
 
 // isReleased returns true if the client hold has been released on the cmd object; false otherwise
-func (r *RunnerReporter) isReleased(req ctrl.Request) (bool, error) {
+func (r *reporter) isReleased(req ctrl.Request) (bool, error) {
 	// Ignore event for a different cmd
 	if req.Name != r.name {
 		return false, nil

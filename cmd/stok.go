@@ -71,7 +71,7 @@ func newStokCmd(f k8s.FactoryInterface, out, errout io.Writer) *stokCmd {
 	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
 	childCommands := append(
-		newTerraformCmds(f),
+		newLauncherCmds(f),
 		workspaceCmd(f, out),
 		generateCmd(out),
 		newRunnerCmd(f),

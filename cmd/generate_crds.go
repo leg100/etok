@@ -10,52 +10,43 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type crdsCmd struct {
-	Local bool
-	Path  string
-	URL   string
+const allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
 
-	cmd *cobra.Command
-}
-
-const (
-	allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
-)
-
-var (
-	allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
-)
+var allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
 
 func newCrdsCmd(out io.Writer) *cobra.Command {
-	cc := &crdsCmd{}
-	cc.cmd = &cobra.Command{
+	var local bool
+	var path string
+	var url string
+
+	cmd := &cobra.Command{
 		Use:   "crds",
 		Short: "Generate stok CRDs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cc.generate(out)
+			return generateCrds(local, path, url, out)
 		},
 	}
 
-	cc.cmd.Flags().BoolVar(&cc.Local, "local", false, "Read CRDs from local file (default false)")
-	cc.cmd.Flags().StringVar(&cc.Path, "path", allCrdsPath, "Path to local CRDs file")
-	cc.cmd.Flags().StringVar(&cc.URL, "url", allCrdsURL, "URL for CRDs file")
+	cmd.Flags().BoolVar(&local, "local", false, "Read CRDs from local file (default false)")
+	cmd.Flags().StringVar(&path, "path", allCrdsPath, "Path to local CRDs file")
+	cmd.Flags().StringVar(&url, "url", allCrdsURL, "URL for CRDs file")
 
-	return cc.cmd
+	return cmd
 }
 
-func (o *crdsCmd) generate(out io.Writer) error {
+func generateCrds(local bool, path, url string, out io.Writer) error {
 	var crds []byte
 
-	if o.Local {
+	if local {
 		// Avoid stupid "crds: declared but not used" error
 		err := error(nil)
 
-		crds, err = ioutil.ReadFile(o.Path)
+		crds, err = ioutil.ReadFile(path)
 		if err != nil {
 			return err
 		}
 	} else {
-		resp, err := http.Get(o.URL)
+		resp, err := http.Get(url)
 		if err != nil {
 			return err
 		}

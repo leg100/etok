@@ -1,4 +1,4 @@
-package cmd
+package launcher
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 }
 
 func TestCreateCommand(t *testing.T) {
-	tc := &terraformCmd{
+	tc := &Launcher{
 		Kind:          "Plan",
 		Namespace:     "default",
 		Workspace:     "default",
@@ -43,7 +43,7 @@ func TestCreateCommand(t *testing.T) {
 }
 
 func TestCreateConfigMap(t *testing.T) {
-	tc := &terraformCmd{
+	tc := &Launcher{
 		Kind:      "Plan",
 		Namespace: "default",
 		Workspace: "default",

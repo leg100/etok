@@ -90,7 +90,7 @@ delete-command-resources:
 		| tr '\n' ',' | sed 's/.$$//') || true
 
 unit:
-	go test -v ./api/... ./cmd ./controllers ./pkg/k8s/... ./util
+	go test -v ./api/... ./cmd ./controllers ./pkg/... ./util
 
 build:
 	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
