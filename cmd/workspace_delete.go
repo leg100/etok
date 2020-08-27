@@ -45,10 +45,6 @@ func newDeleteWorkspaceCmd(f k8s.FactoryInterface) *cobra.Command {
 // wait til Workspace resource is healthy
 // write .terraform/environment
 func (t *deleteWorkspaceCmd) doDeleteWorkspace(cmd *cobra.Command, args []string) error {
-	if err := unmarshalV(t); err != nil {
-		return err
-	}
-
 	t.Name = args[0]
 
 	config, err := t.factory.NewConfig(t.Context)

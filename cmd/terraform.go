@@ -77,11 +77,6 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 	}
 	t.debug = debug
 
-	// TODO: remove
-	if err := unmarshalV(t); err != nil {
-		return err
-	}
-
 	t.Args = args
 
 	// Workspace config precedence:

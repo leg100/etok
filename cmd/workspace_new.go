@@ -96,10 +96,6 @@ func (t *newWorkspaceCmd) doNewWorkspace(cmd *cobra.Command, args []string) erro
 	}
 	t.debug = debug
 
-	if err := unmarshalV(t); err != nil {
-		return err
-	}
-
 	t.Name = args[0]
 
 	ctx := cmd.Context()
