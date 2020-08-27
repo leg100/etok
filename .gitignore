@@ -1,3 +1,5 @@
+# example terraform
+example/
 # docker push artefacts
 /push.out
 /stok.digest

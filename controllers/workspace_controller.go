@@ -10,6 +10,7 @@ import (
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
+	"github.com/leg100/stok/version"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -288,7 +289,26 @@ func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
 			Name:      v1alpha1.BackendConfigMapName(cr.GetName()),
 			Namespace: cr.Namespace,
 			Labels: map[string]string{
-				"workspace": cr.GetName(),
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-operator",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": cr.GetName(),
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "workspace",
+				"app.kubernetes.io/component": "workspace",
 			},
 		},
 		Data: map[string]string{
@@ -299,11 +319,6 @@ func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
 }
 
 func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
-	labels := map[string]string{
-		"app":       cr.GetName(),
-		"workspace": cr.GetName(),
-	}
-
 	size := v1alpha1.WorkspaceDefaultCacheSize
 	if cr.Spec.Cache.Size != "" {
 		size = cr.Spec.Cache.Size
@@ -317,7 +332,28 @@ func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
-			Labels:    labels,
+			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-operator",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": cr.GetName(),
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "workspace",
+				"app.kubernetes.io/component": "workspace",
+			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -342,7 +378,7 @@ func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 	args := []string{"-backend-config=" + v1alpha1.BackendConfigFilename}
 
 	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.Image).
-		SetLabels(cr.GetName()).
+		SetLabels(cr.GetName(), "", "", "workspace").
 		AddRunnerContainer(args).
 		AddWorkspace().
 		AddCache(cr.GetName()).
@@ -365,8 +401,26 @@ func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
 			Name:      "stok-workspace-" + cr.GetName(),
 			Namespace: cr.GetNamespace(),
 			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-operator",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": cr.GetName(),
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "workspace",
 				"app.kubernetes.io/component": "workspace",
-				"workspace":                   cr.GetName(),
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -390,8 +444,26 @@ func newRoleBindingForCR(cr *v1alpha1.Workspace, role *rbacv1.Role) *rbacv1.Role
 			Name:      "stok-workspace-" + cr.GetName(),
 			Namespace: cr.GetNamespace(),
 			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-operator",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": cr.GetName(),
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "workspace",
 				"app.kubernetes.io/component": "workspace",
-				"workspace":                   cr.GetName(),
 			},
 		},
 		RoleRef: rbacv1.RoleRef{

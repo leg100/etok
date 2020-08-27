@@ -7,6 +7,7 @@ import (
 	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
+	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,8 +26,30 @@ func (t *terraformCmd) createCommand(rc client.Client, name, configMapName strin
 	cmd.SetNamespace(t.Namespace)
 	cmd.SetName(name)
 	cmd.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": t.Workspace,
+		// Name of the application
+		"app":                          "stok",
+		"app.kubernetes.io/name":       "stok",
+		"app.kubernetes.io/part-of":    "stok",
+		"app.kubernetes.io/managed-by": "stok",
+
+		// Unique name of instance within application
+		"app.kubernetes.io/instance": name,
+
+		// Current version of application
+		"version":                   version.Version,
+		"app.kubernetes.io/version": version.Version,
+
+		// Component within architecture
+		"component":                   "command",
+		"app.kubernetes.io/component": "command",
+
+		// Workspace that this resource relates to
+		"workspace":                    t.Workspace,
+		"stok.goalspike.com/workspace": t.Workspace,
+
+		// Comamnd that this resource relates to
+		"command":                    name,
+		"stok.goalspike.com/command": name,
 	})
 	cmd.SetWorkspace(t.Workspace)
 
@@ -59,9 +82,30 @@ func (t *terraformCmd) createConfigMap(rc client.Client, tarball []byte, name, k
 			Name:      name,
 			Namespace: t.Namespace,
 			Labels: map[string]string{
-				"app":       "stok",
-				"workspace": t.Workspace,
-				"command":   name,
+				// Name of the application
+				"app":                          "stok",
+				"app.kubernetes.io/name":       "stok",
+				"app.kubernetes.io/part-of":    "stok",
+				"app.kubernetes.io/managed-by": "stok",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": name,
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "archive",
+				"app.kubernetes.io/component": "archive",
+
+				// Workspace that this resource relates to
+				"workspace":                    t.Workspace,
+				"stok.goalspike.com/workspace": t.Workspace,
+
+				// Comamnd that this resource relates to
+				"command":                    name,
+				"stok.goalspike.com/command": name,
 			},
 		},
 		BinaryData: map[string][]byte{

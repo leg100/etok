@@ -11,6 +11,7 @@ import (
 	"github.com/leg100/stok/api/v1alpha1"
 	v1alpha1types "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -242,7 +243,26 @@ func (t *newWorkspaceCmd) createWorkspace(rc client.Client) (*v1alpha1types.Work
 			Name:      t.Name,
 			Namespace: t.Namespace,
 			Labels: map[string]string{
-				"app": "stok",
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-operator",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": t.Name,
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "workspace",
+				"app.kubernetes.io/component": "workspace",
 			},
 		},
 		Spec: t.WorkspaceSpec,

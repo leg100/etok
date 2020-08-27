@@ -84,8 +84,26 @@ func (o *operatorCmd) clusterRole() *rbacv1.ClusterRole {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: o.Name,
 			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-cli",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": "stok",
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "operator",
 				"app.kubernetes.io/component": "operator",
-				"app.kubernetes.io/name":      o.Name,
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -161,8 +179,26 @@ func (o *operatorCmd) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: o.Name,
 			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-cli",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": "stok",
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "operator",
 				"app.kubernetes.io/component": "operator",
-				"app.kubernetes.io/name":      o.Name,
 			},
 		},
 		Subjects: []rbacv1.Subject{
@@ -190,8 +226,26 @@ func (o *operatorCmd) serviceAccount() *corev1.ServiceAccount {
 			Name:      o.Name,
 			Namespace: o.Namespace,
 			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-cli",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": "stok",
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "operator",
 				"app.kubernetes.io/component": "operator",
-				"app.kubernetes.io/name":      o.Name,
 			},
 		},
 	}
@@ -206,20 +260,42 @@ func (o *operatorCmd) deployment() *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Name,
 			Namespace: o.Namespace,
+			Labels: map[string]string{
+				// Name of the application
+				"app":                    "stok",
+				"app.kubernetes.io/name": "stok",
+
+				// Name of higher-level application this app is part of
+				"app.kubernetes.io/part-of": "stok",
+
+				// The tool being used to manage the operation of an application
+				"app.kubernetes.io/managed-by": "stok-cli",
+
+				// Unique name of instance within application
+				"app.kubernetes.io/instance": "stok",
+
+				// Current version of application
+				"version":                   version.Version,
+				"app.kubernetes.io/version": version.Version,
+
+				// Component within architecture
+				"component":                   "operator",
+				"app.kubernetes.io/component": "operator",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app.kubernetes.io/component": "operator",
-					"app.kubernetes.io/name":      o.Name,
+					"app.kubernetes.io/name":      "stok",
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"app.kubernetes.io/component": "operator",
-						"app.kubernetes.io/name":      o.Name,
+						"app.kubernetes.io/name":      "stok",
 					},
 				},
 				Spec: corev1.PodSpec{

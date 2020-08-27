@@ -12,7 +12,6 @@ import (
 
 	"github.com/leg100/stok/api/command"
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
-	"github.com/leg100/stok/version"
 	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 )
 
@@ -79,6 +78,7 @@ func (r *CommandReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconc
 // Create pod
 func (r CommandReconciler) create(opts *podOpts) (reconcile.Result, error) {
 	pod := NewPodBuilder(opts.cmd.GetNamespace(), opts.cmd.GetName(), r.Image).
+		SetLabels(opts.cmd.GetName(), opts.workspaceName, command.CommandKindToCLI(r.Kind), "runner").
 		AddRunnerContainer(opts.cmd.GetArgs()).
 		AddWorkspace().
 		AddCache(opts.pvcName).
@@ -89,14 +89,6 @@ func (r CommandReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		WaitForClient(r.Kind, opts.cmd.GetName(), opts.cmd.GetNamespace(), opts.cmd.GetTimeoutClient()).
 		EnableDebug(opts.cmd.GetDebug()).
 		Build(false)
-
-	// TODO: move to a global variable or dedicated package
-	pod.SetLabels(map[string]string{
-		"app":       "stok",
-		"command":   command.CommandKindToCLI(opts.cmd.GroupVersionKind().Kind),
-		"workspace": opts.workspaceName,
-		"version":   version.Version,
-	})
 
 	// Set Command instance as the owner and controller
 	if err := controllerutil.SetControllerReference(opts.cmd, pod, r.Scheme); err != nil {

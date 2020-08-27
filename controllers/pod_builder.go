@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -49,11 +50,43 @@ func (pb *PodBuilder) EnableDebug(debug bool) *PodBuilder {
 	return pb
 }
 
-func (pb *PodBuilder) SetLabels(workspace string) *PodBuilder {
-	pb.pod.SetLabels(map[string]string{
-		"app":       "stok",
-		"workspace": workspace,
-	})
+func (pb *PodBuilder) SetLabels(name, workspace, command, component string) *PodBuilder {
+	labels := map[string]string{
+		// Name of the application
+		"app":                    "stok",
+		"app.kubernetes.io/name": "stok",
+
+		// Name of higher-level application this app is part of
+		"app.kubernetes.io/part-of": "stok",
+
+		// The tool being used to manage the operation of an application
+		"app.kubernetes.io/managed-by": "stok-operator",
+
+		// Unique name of instance within application
+		"app.kubernetes.io/instance": name,
+
+		// Current version of application
+		"version":                   version.Version,
+		"app.kubernetes.io/version": version.Version,
+
+		// Component within architecture
+		"component":                   component,
+		"app.kubernetes.io/component": component,
+	}
+
+	if workspace != "" {
+		// Workspace that this resource relates to
+		labels["workspace"] = workspace
+		labels["stok.goalspike.com/workspace"] = workspace
+	}
+
+	if command != "" {
+		// Command that this resource relates to
+		labels["command"] = command
+		labels["stok.goalspike.com/command"] = command
+	}
+
+	pb.pod.SetLabels(labels)
 	return pb
 }
 

@@ -86,8 +86,9 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 
 	// Workspace config precedence:
 	// 1. Flag
-	// 2. Environment File
-	// 3. "default"
+	// 2. Environment Variable
+	// 3. Environment File
+	// 4. "default"
 	if t.Workspace == "" {
 		_, workspace, err := readEnvironmentFile(t.Path)
 		if errors.IsNotFound(err) {
@@ -100,8 +101,9 @@ func (t *terraformCmd) doTerraformCmd(cmd *cobra.Command, args []string) error {
 
 	// Namespace config precedence:
 	// 1. Flag
-	// 2. Environment File
-	// 3. "default"
+	// 2. Environment Variable
+	// 3. Environment File
+	// 4. "default"
 	if t.Namespace == "" {
 		namespace, _, err := readEnvironmentFile(t.Path)
 		if errors.IsNotFound(err) {
