@@ -9,9 +9,7 @@ import (
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/reporters"
-	"github.com/leg100/stok/util"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -33,36 +31,6 @@ type Launcher struct {
 }
 
 func (t *Launcher) Run(ctx context.Context) error {
-	// Workspace config precedence:
-	// 1. Flag
-	// 2. Environment Variable
-	// 3. Environment File
-	// 4. "default"
-	if t.Workspace == "" {
-		_, workspace, err := util.ReadEnvironmentFile(t.Path)
-		if errors.IsNotFound(err) {
-			t.Workspace = "default"
-		} else if err != nil {
-			return err
-		}
-		t.Workspace = workspace
-	}
-
-	// Namespace config precedence:
-	// 1. Flag
-	// 2. Environment Variable
-	// 3. Environment File
-	// 4. "default"
-	if t.Namespace == "" {
-		namespace, _, err := util.ReadEnvironmentFile(t.Path)
-		if errors.IsNotFound(err) {
-			t.Namespace = "default"
-		} else if err != nil {
-			return err
-		}
-		t.Namespace = namespace
-	}
-
 	config, err := t.Factory.NewConfig(t.Context)
 	if err != nil {
 		return err
