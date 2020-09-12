@@ -1,7 +1,7 @@
 package fake
 
 import (
-	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/scheme"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,5 +53,5 @@ func (f *Factory) GenerateName(kind string) string {
 }
 
 func GenerateName(kind string) string {
-	return command.GenerateName(kind, "12345")
+	return run.GenerateName(kind, "12345")
 }

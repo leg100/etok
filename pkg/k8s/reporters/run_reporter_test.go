@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/scheme"
@@ -16,10 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestCommandReporter(t *testing.T) {
+func TestRunReporter(t *testing.T) {
 	tests := []struct {
 		name       string
-		cmd        command.Interface
+		cmd        *v1alpha1.Run
 		assertions func(exit bool, enqueueTimer, queueTimer *time.Timer)
 	}{
 		{
@@ -29,11 +28,11 @@ func TestCommandReporter(t *testing.T) {
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
-				CommandStatus: v1alpha1.CommandStatus{
-					Phase: v1alpha1.CommandPhasePending,
+				RunStatus: v1alpha1.RunStatus{
+					Phase: v1alpha1.RunPhasePending,
 				},
 			},
 			assertions: func(exit bool, enqueueTimer, queueTimer *time.Timer) {
@@ -51,11 +50,11 @@ func TestCommandReporter(t *testing.T) {
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
-				CommandStatus: v1alpha1.CommandStatus{
-					Phase: v1alpha1.CommandPhaseQueued,
+				RunStatus: v1alpha1.RunStatus{
+					Phase: v1alpha1.RunPhaseQueued,
 				},
 			},
 			assertions: func(exit bool, enqueueTimer, queueTimer *time.Timer) {
@@ -71,11 +70,11 @@ func TestCommandReporter(t *testing.T) {
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
-				CommandStatus: v1alpha1.CommandStatus{
-					Phase: v1alpha1.CommandPhaseSync,
+				RunStatus: v1alpha1.RunStatus{
+					Phase: v1alpha1.RunPhaseSync,
 				},
 			},
 			assertions: func(exit bool, enqueueTimer, queueTimer *time.Timer) {
@@ -92,7 +91,7 @@ func TestCommandReporter(t *testing.T) {
 		s := scheme.Scheme
 		c := fake.NewFakeClientWithScheme(s, tt.cmd)
 		kind, _ := controllers.GetKindFromObject(s, tt.cmd)
-		reporter := &CommandReporter{
+		reporter := &RunReporter{
 			Id:     "plan-1",
 			Client: c,
 			Kind:   kind,

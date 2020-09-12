@@ -1,7 +1,7 @@
 package k8s
 
 import (
-	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -69,5 +69,5 @@ func (f *Factory) NewManager(config *rest.Config, namespace string) (*Manager, e
 // server side when `generateName` is specified. Allows us to generate a unique name client-side
 // for our k8s resources.
 func (f *Factory) GenerateName(kind string) string {
-	return command.GenerateName(kind, util.GenerateRandomString(5))
+	return run.GenerateName(kind, util.GenerateRandomString(5))
 }

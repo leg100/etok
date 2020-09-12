@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/leg100/stok/api/command"
 	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/assert"
@@ -17,17 +16,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestCommandReconciler(t *testing.T) {
-	plan1 := v1alpha1.Plan{
+func TestRunReconciler(t *testing.T) {
+	plan1 := v1alpha1.Run{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "stok.goalspike.com/v1alpha1",
-			Kind:       "Plan",
+			Kind:       "Run",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "plan-1",
 			Namespace: "operator-test",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
+		RunSpec: v1alpha1.RunSpec{
 			Workspace: "workspace-1",
 		},
 	}
@@ -116,48 +115,48 @@ func TestCommandReconciler(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		cmd            command.Interface
+		run            *v1alpha1.Run
 		objs           []runtime.Object
-		assertions     func(cmd command.Interface)
+		assertions     func(run *v1alpha1.Run)
 		reconcileError bool
 	}{
 		{
 			name:           "Missing workspace",
-			cmd:            &plan1,
+			run:            &plan1,
 			reconcileError: true,
-			assertions:     func(cmd command.Interface) {},
+			assertions:     func(run *v1alpha1.Run) {},
 		},
 		{
 			name: "Pending",
-			cmd:  &plan1,
+			run:  &plan1,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceEmptyQueue),
 				runtime.Object(&pod),
 			},
-			assertions: func(cmd command.Interface) {
-				assert.Equal(t, v1alpha1.CommandPhasePending, cmd.GetPhase())
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhasePending, run.GetPhase())
 			},
 		},
 		{
 			name: "Queued",
-			cmd:  &plan1,
+			run:  &plan1,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceBackOfQueue),
 				runtime.Object(&pod),
 			},
-			assertions: func(cmd command.Interface) {
-				assert.Equal(t, v1alpha1.CommandPhaseQueued, cmd.GetPhase())
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseQueued, run.GetPhase())
 			},
 		},
 		{
 			name: "Synchronising",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "plan-1",
 					Namespace:   "operator-test",
 					Annotations: map[string]string{v1alpha1.WaitAnnotationKey: "true"},
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
 			},
@@ -165,66 +164,64 @@ func TestCommandReconciler(t *testing.T) {
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&podRunningAndReady),
 			},
-			assertions: func(cmd command.Interface) {
-				assert.Equal(t, v1alpha1.CommandPhaseSync, cmd.GetPhase())
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseSync, run.GetPhase())
 			},
 		},
 		{
 			name: "Completed",
-			cmd:  &plan1,
+			run:  &plan1,
 			objs: []runtime.Object{
 				runtime.Object(&workspaceQueueOfOne),
 				runtime.Object(&successfullyCompletedPod),
 			},
-			assertions: func(cmd command.Interface) {
-				assert.Equal(t, v1alpha1.CommandPhaseCompleted, cmd.GetPhase())
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseCompleted, run.GetPhase())
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := scheme.Scheme
-			objs := append(tt.objs, runtime.Object(tt.cmd))
+			objs := append(tt.objs, runtime.Object(tt.run))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.cmd.GetName(),
-					Namespace: tt.cmd.GetNamespace(),
+					Name:      tt.run.GetName(),
+					Namespace: tt.run.GetNamespace(),
 				},
 			}
 
-			kind, _ := GetKindFromObject(s, tt.cmd)
-
-			_, err := NewCommandReconciler(cl, kind, "a.b.c/d:v1").Reconcile(req)
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
 			if tt.reconcileError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
 
-			cmd, _ := command.NewCommandFromGVK(s, v1alpha1.SchemeGroupVersion.WithKind(kind))
-			err = cl.Get(context.TODO(), req.NamespacedName, cmd)
+			run := &v1alpha1.Run{}
+			err = cl.Get(context.TODO(), req.NamespacedName, run)
 			require.NoError(t, err)
 
-			tt.assertions(cmd)
+			tt.assertions(run)
 		})
 	}
 
 	podTests := []struct {
 		name       string
-		cmd        command.Interface
+		run        *v1alpha1.Run
 		objs       []runtime.Object
 		assertions func(pod *corev1.Pod)
 	}{
 		{
 			name: "Creates pod",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
 			},
@@ -237,12 +234,12 @@ func TestCommandReconciler(t *testing.T) {
 		},
 		{
 			name: "Sets google credentials",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
 			},
@@ -262,12 +259,12 @@ func TestCommandReconciler(t *testing.T) {
 		},
 		{
 			name: "Image name",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
 				},
-				CommandSpec: v1alpha1.CommandSpec{
+				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
 				},
 			},
@@ -282,18 +279,17 @@ func TestCommandReconciler(t *testing.T) {
 	for _, tt := range podTests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := scheme.Scheme
-			objs := append(tt.objs, runtime.Object(tt.cmd))
+			objs := append(tt.objs, runtime.Object(tt.run))
 			cl := fake.NewFakeClientWithScheme(s, objs...)
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.cmd.GetName(),
-					Namespace: tt.cmd.GetNamespace(),
+					Name:      tt.run.GetName(),
+					Namespace: tt.run.GetNamespace(),
 				},
 			}
 
-			kind, _ := GetKindFromObject(s, tt.cmd)
-			_, err := NewCommandReconciler(cl, kind, "a.b.c/d:v1").Reconcile(req)
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
 			assert.NoError(t, err)
 
 			pod := &corev1.Pod{}

@@ -22,7 +22,7 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
-func TestCreateCommand(t *testing.T) {
+func TestCreateRun(t *testing.T) {
 	tc := &Launcher{
 		Kind:          "Plan",
 		Namespace:     "default",
@@ -34,7 +34,7 @@ func TestCreateCommand(t *testing.T) {
 
 	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
 
-	plan, err := tc.createCommand(client, "stok-plan-12345", "stok-plan-12345")
+	plan, err := tc.createRun(client, "stok-plan-12345", "stok-plan-12345")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,9 +18,9 @@ type Launcher struct {
 	Workspace      string
 	Namespace      string
 	Context        string
+	Command        string
 	Path           string
 	Args           []string
-	Kind           string
 	TimeoutClient  time.Duration
 	TimeoutPod     time.Duration
 	TimeoutQueue   time.Duration
@@ -43,7 +43,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 
 	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
 	// pod with this name, too)
-	name := t.Factory.GenerateName(t.Kind)
+	name := t.Factory.GenerateName(t.Command)
 
 	errch := make(chan error)
 
@@ -65,7 +65,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 		}
 
 		// Construct and deploy ConfigMap resource
-		configmap, err := t.createConfigMap(rc, tarball, name, v1alpha1.CommandDefaultConfigMapKey)
+		configmap, err := t.createConfigMap(rc, tarball, name, v1alpha1.RunDefaultConfigMapKey)
 		if err != nil {
 			errch <- err
 			return
@@ -76,7 +76,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 	}()
 
 	// Construct and deploy command resource
-	cmd, err := t.createCommand(rc, name, name)
+	cmd, err := t.createRun(rc, name, name)
 	if err != nil {
 		return err
 	}
@@ -104,10 +104,9 @@ func (t *Launcher) Run(ctx context.Context) error {
 	})
 
 	// Run cmd reporter, which waits until the cmd status reports the pod is ready
-	mgr.AddReporter(&reporters.CommandReporter{
+	mgr.AddReporter(&reporters.RunReporter{
 		Client:         rc,
 		Id:             name,
-		Kind:           t.Kind,
 		EnqueueTimeout: t.TimeoutEnqueue,
 		QueueTimeout:   t.TimeoutQueue,
 	})

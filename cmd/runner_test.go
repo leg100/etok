@@ -14,13 +14,14 @@ import (
 )
 
 func TestRunner(t *testing.T) {
-	shellWithoutAnnotation := &v1alpha1.Shell{
+	shellWithoutAnnotation := &v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "stok-shell-xyz",
 			Namespace: "test",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
-			Args: []string{"cow", "pig"},
+		RunSpec: v1alpha1.RunSpec{
+			Command: "shell",
+			Args:    []string{"cow", "pig"},
 		},
 	}
 
@@ -52,7 +53,7 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Apply",
+			"--kind", "Run",
 			"--tarball", "bad-tarball-zzz.tar.gz",
 		})
 
@@ -65,7 +66,7 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
+			"--kind", "Run",
 			"--no-wait",
 			"--",
 			"uname",
@@ -76,7 +77,7 @@ func TestRunner(t *testing.T) {
 	})
 
 	t.Run("WithEnvVar", func(t *testing.T) {
-		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_KIND": "Shell"})
+		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_KIND": "Run"})
 
 		var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
 
@@ -100,7 +101,7 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
+			"--kind", "Run",
 			"--name", "stok-shell-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,

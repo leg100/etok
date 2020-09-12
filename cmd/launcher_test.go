@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s/fake"
-	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,28 +31,26 @@ func TestTerraform(t *testing.T) {
 		}
 	}
 
-	cmd := func(namespace, kind string) command.Interface {
-		obj, err := command.NewCommandFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(strings.Title(kind)))
-		require.NoError(t, err)
-
-		obj.SetNamespace(namespace)
-		obj.SetName(fake.GenerateName(kind))
-		obj.SetPhase(v1alpha1.CommandPhaseSync)
-		return obj
+	cmd := func(namespace, cmd string) *v1alpha1.Run {
+		run := &v1alpha1.Run{}
+		run.SetNamespace(namespace)
+		run.SetName(fake.GenerateName(cmd))
+		run.SetPhase(v1alpha1.RunPhaseSync)
+		return run
 	}
 
-	for _, kind := range command.CommandKinds {
-		t.Run(kind+"WithDefaults", func(t *testing.T) {
+	for _, tfcmd := range run.TerraformCommands {
+		t.Run(tfcmd+"WithDefaults", func(t *testing.T) {
 			setupEnvironment(t, "default", "default")
 			var factory = fake.NewFactory(
 				workspaceObj("default", "default"),
-				cmd("default", kind),
-				podReadyAndRunning("default", kind))
+				cmd("default", tfcmd),
+				podReadyAndRunning("default", tfcmd))
 
 			var cmd = newStokCmd(factory, os.Stdout, os.Stderr)
 
 			code, err := cmd.Execute([]string{
-				command.CommandKindToCLI(kind),
+				tfcmd,
 				"--debug",
 			})
 

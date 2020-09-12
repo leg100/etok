@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api"
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/scheme"
+	"github.com/leg100/stok/util/slice"
 	"github.com/leg100/stok/version"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
@@ -171,57 +171,48 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//		if state.State.Terminated.ExitCode == 0 {
 	//}
 
-	// Fetch list of commands that belong to this workspace
-	var cmdList []command.Interface
-	// Fetch and append each type of command to cmdList
-	for _, kind := range command.CommandKinds {
-		ccList, err := r.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(command.CollectionKind(kind)))
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+	// Fetch all run resources
+	runlist := &v1alpha1.RunList{}
+	if err := r.List(context.TODO(), runlist, client.InNamespace(req.Namespace)); err != nil {
+		return ctrl.Result{}, err
+	}
 
-		if err := r.List(context.TODO(), ccList, client.InNamespace(req.Namespace)); err != nil {
-			return ctrl.Result{}, err
-		}
+	// Filter runs
+	incomplete := []string{}
+	meta.EachListItem(runlist, func(o runtime.Object) error {
+		run := o.(*v1alpha1.Run)
 
-		// Filter out commands that don't belong to this workspace
-		meta.EachListItem(ccList, func(o runtime.Object) error {
-			cmd := o.(command.Interface)
-			if cmd.GetWorkspace() == instance.GetName() {
-				cmdList = append(cmdList, cmd)
-			}
+		// Filter out commands belonging to other workspaces
+		if run.GetWorkspace() != instance.GetName() {
 			return nil
-		})
-	}
+		}
 
-	// Filter out completed commands
-	n := 0
-	for _, cmd := range cmdList {
-		if cond := cmd.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted); !cond {
-			cmdList[n] = cmd
-			n++
+		// Filter out completed commands
+		if run.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
+			return nil
+		}
+
+		incomplete = append(incomplete, run.GetName())
+		return nil
+	})
+
+	// Retain only incomplete runs in queue
+	queue := instance.Status.Queue[:0]
+	for _, run := range instance.Status.Queue {
+		if idx := slice.StringIndex(incomplete, run); idx > -1 {
+			queue = append(queue, run)
+			// And remove from list of incomplete runs
+			incomplete = append(incomplete[:idx], incomplete[idx+1:]...)
 		}
 	}
-	cmdList = cmdList[:n]
 
-	// Filter out completed/deleted commands from existing queue, building new queue
-	newQueue := []string{}
-	for _, cmd := range instance.Status.Queue {
-		if i := cmdListMatchingName(cmdList, cmd); i > -1 {
-			// add to new queue
-			newQueue = append(newQueue, cmd)
-			// remove from cmd list
-			cmdList = append(cmdList[:i], cmdList[i+1:]...)
-		}
-		// cmd not found, leave it out of new queue
-	}
-	// Append remainder of commands
-	newQueue = append(newQueue, cmdListNames(cmdList)...)
+	// Append incomplete runs to queue
+	queue = append(queue, incomplete...)
 
 	// update status if queue has changed
-	if !reflect.DeepEqual(newQueue, instance.Status.Queue) {
-		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", newQueue))
-		instance.Status.Queue = newQueue
+	if !reflect.DeepEqual(queue, instance.Status.Queue) {
+		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", queue))
+		instance.Status.Queue = queue
 		if err := r.Status().Update(context.TODO(), instance); err != nil {
 			return ctrl.Result{}, fmt.Errorf("Failed to update queue status: %w", err)
 		}
@@ -375,7 +366,7 @@ func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
 }
 
 func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
-	args := []string{"-backend-config=" + v1alpha1.BackendConfigFilename}
+	args := []string{"terraform", "init", "-backend-config=" + v1alpha1.BackendConfigFilename}
 
 	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.Image).
 		SetLabels(cr.GetName(), "", "", "workspace").
@@ -494,23 +485,6 @@ func newRoleBindingForCR(cr *v1alpha1.Workspace, role *rbacv1.Role) *rbacv1.Role
 	return &binding
 }
 
-func cmdListMatchingName(cmdList []command.Interface, name string) int {
-	for i, cmd := range cmdList {
-		if cmd.GetName() == name {
-			return i
-		}
-	}
-	return -1
-}
-
-func cmdListNames(cmdList []command.Interface) []string {
-	names := []string{}
-	for _, cmd := range cmdList {
-		names = append(names, cmd.GetName())
-	}
-	return names
-}
-
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.serviceAccountName", func(o runtime.Object) []string {
 		serviceaccount := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
@@ -590,30 +564,23 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}),
 	})
 
-	// Watch for changes to command resources and requeue the associated Workspace.
-	for _, kind := range command.CommandKinds {
-		o, err := r.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(kind))
-		if err != nil {
-			return err
-		}
-
-		blder = blder.Watches(&source.Kind{Type: o}, &handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				cmd := a.Object.(command.Interface)
-				if cmd.GetWorkspace() != "" {
-					return []reconcile.Request{
-						{
-							NamespacedName: types.NamespacedName{
-								Name:      cmd.GetWorkspace(),
-								Namespace: a.Meta.GetNamespace(),
-							},
+	// Watch for changes to run resources and requeue the associated Workspace.
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			run := a.Object.(*v1alpha1.Run)
+			if run.GetWorkspace() != "" {
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name:      run.GetWorkspace(),
+							Namespace: a.Meta.GetNamespace(),
 						},
-					}
+					},
 				}
-				return []reconcile.Request{}
-			}),
-		})
-	}
+			}
+			return []reconcile.Request{}
+		}),
+	})
 
 	return blder.Complete(r)
 }

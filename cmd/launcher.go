@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/util"
@@ -16,12 +16,12 @@ import (
 func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 	var cmds []*cobra.Command
 
-	for _, kind := range command.CommandKinds {
-		launcher := &launcher.Launcher{Kind: kind, Factory: f}
+	for _, tfcmd := range run.TerraformCommands {
+		launcher := &launcher.Launcher{Factory: f, Command: tfcmd}
 
 		cmd := &cobra.Command{
-			Use:   command.CommandKindToCLI(kind),
-			Short: fmt.Sprintf("Run %s", command.CommandKindToCLI(kind)),
+			Use:   tfcmd,
+			Short: fmt.Sprintf("Run terraform %s", tfcmd),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				// If either namespace or workspace has not been set by user, then try to load them
 				// from an environment file

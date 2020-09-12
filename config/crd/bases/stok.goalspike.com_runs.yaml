@@ -6,29 +6,32 @@ metadata:
   creationTimestamp: null
   labels:
     app: stok
-  name: states.stok.goalspike.com
+  name: runs.stok.goalspike.com
 spec:
   additionalPrinterColumns:
+  - JSONPath: .spec.Command
+    description: The run command
+    name: Command
+    type: string
   - JSONPath: .spec.workspace
-    description: The workspace of the command
+    description: The workspace of the run
     name: Workspace
     type: string
   - JSONPath: .status.phase
-    description: The command phase
+    description: The run phase
     name: Phase
     type: string
   group: stok.goalspike.com
   names:
-    kind: State
-    listKind: StateList
-    plural: states
-    singular: state
+    kind: Run
+    listKind: RunList
+    plural: runs
+    singular: run
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
-      description: State is the Schema for the states API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -43,16 +46,34 @@ spec:
         metadata:
           type: object
         spec:
-          description: CommandSpec defines the desired state of Command
+          description: RunSpec defines the desired state of Run
           properties:
             args:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               items:
                 type: string
               type: array
+            command:
+              enum:
+              - apply
+              - destroy
+              - force-unlock
+              - get
+              - import
+              - init
+              - output
+              - plan
+              - refresh
+              - sh
+              - state list
+              - state mv
+              - state pull
+              - state push
+              - state rm
+              - state show
+              - taint
+              - untaint
+              - validate
+              type: string
             configMap:
               type: string
             configMapKey:
@@ -73,13 +94,10 @@ spec:
           - workspace
           type: object
         status:
-          description: CommandStatus defines the observed state of Command
+          description: RunStatus defines the observed state of Run
           properties:
             conditions:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              description: Conditions is a set of Condition instances.
               items:
                 description: "Condition represents an observation of an object's state.
                   Conditions are an extension mechanism intended to be used when the
