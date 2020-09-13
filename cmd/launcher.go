@@ -21,8 +21,7 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 		launcher := &launcher.Launcher{Factory: f, Command: tfcmd}
 
 		cmd := &cobra.Command{
-			Use:   tfcmd,
-			Short: fmt.Sprintf("Run terraform %s", tfcmd),
+			Use: tfcmd,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				// If either namespace or workspace has not been set by user, then try to load them
 				// from an environment file
@@ -53,6 +52,13 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 				return launcher.Run(cmd.Context())
 			},
 		}
+
+		if tfcmd == "sh" {
+			cmd.Short = "Run shell"
+		} else {
+			cmd.Short = fmt.Sprintf("Run terraform %s", tfcmd)
+		}
+
 		cmd.Flags().StringVar(&launcher.Path, "path", ".", "terraform config path")
 		cmd.Flags().DurationVar(&launcher.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 		cmd.Flags().DurationVar(&launcher.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
