@@ -4,28 +4,18 @@ import (
 	"context"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
-	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (t *Launcher) createCommand(rc client.Client, name, configMapName string) (command.Interface, error) {
-	obj, err := scheme.Scheme.New(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := obj.(command.Interface)
-
-	// TODO: Why is this necessary after having used scheme.New? If so, leave comment explaining why
-	cmd.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind(t.Kind))
-	cmd.SetNamespace(t.Namespace)
-	cmd.SetName(name)
-	cmd.SetLabels(map[string]string{
+func (t *Launcher) createRun(rc client.Client, name, configMapName string) (*v1alpha1.Run, error) {
+	run := &v1alpha1.Run{}
+	run.SetNamespace(t.Namespace)
+	run.SetName(name)
+	run.SetLabels(map[string]string{
 		// Name of the application
 		"app":                          "stok",
 		"app.kubernetes.io/name":       "stok",
@@ -51,29 +41,28 @@ func (t *Launcher) createCommand(rc client.Client, name, configMapName string) (
 		"command":                    name,
 		"stok.goalspike.com/command": name,
 	})
-	cmd.SetWorkspace(t.Workspace)
+	run.SetWorkspace(t.Workspace)
 
-	cmd.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
+	run.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 
-	cmd.SetTimeoutQueue(t.TimeoutQueue.String())
-	cmd.SetTimeoutClient(t.TimeoutClient.String())
-	cmd.SetArgs(t.Args)
-	cmd.SetDebug(t.Debug)
-	cmd.SetConfigMap(configMapName)
-	cmd.SetConfigMapKey(v1alpha1.CommandDefaultConfigMapKey)
+	run.SetTimeoutQueue(t.TimeoutQueue.String())
+	run.SetTimeoutClient(t.TimeoutClient.String())
+	run.SetCommand(t.Command)
+	run.SetArgs(t.Args)
+	run.SetDebug(t.Debug)
+	run.SetConfigMap(configMapName)
+	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
 
-	err = rc.Create(context.TODO(), cmd)
-	if err != nil {
+	if err := rc.Create(context.TODO(), run); err != nil {
 		return nil, err
 	}
 
 	log.WithFields(log.Fields{
 		"namespace": t.Namespace,
-		"name":      cmd.GetName(),
-		"kind":      t.Kind,
+		"name":      run.GetName(),
 	}).Debug("resource created")
 
-	return cmd, nil
+	return run, nil
 }
 
 func (t *Launcher) createConfigMap(rc client.Client, tarball []byte, name, keyName string) (*corev1.ConfigMap, error) {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/util/slice"
@@ -37,7 +36,7 @@ func (r *Runner) validate() error {
 		return fmt.Errorf("missing flag: --kind <kind>")
 	}
 
-	if !slice.ContainsString(append(command.CommandKinds, "Workspace"), r.Kind) {
+	if !slice.ContainsString([]string{"Run", "Workspace"}, r.Kind) {
 		return fmt.Errorf("invalid kind: %s", r.Kind)
 	}
 
@@ -104,8 +103,7 @@ func (r *Runner) sync(ctx context.Context) error {
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the
 // working directory of the executable; out and errout set stdout and stderr of executable.
 func (r *Runner) run(ctx context.Context, out, errout io.Writer) error {
-	args := command.RunnerArgsForKind(r.Kind, r.Args)
-	return Run(ctx, args, r.Path, out, errout)
+	return Run(ctx, r.Args, r.Path, out, errout)
 }
 
 // Synchronously run command, taking first arg of args as executable, and remainder as arguments.

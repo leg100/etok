@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api"
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/pkg/k8s"
@@ -27,7 +26,7 @@ func (r *reporter) Register(c cache.Cache) (cache.Informer, error) {
 }
 
 func (r *reporter) MatchingObj(obj interface{}) bool {
-	_, ok := obj.(command.Interface)
+	_, ok := obj.(*v1alpha1.Run)
 	return ok
 }
 
@@ -59,13 +58,12 @@ func (r *reporter) isReleased(req ctrl.Request) (bool, error) {
 		return false, nil
 	}
 
-	// Fetch empty obj using kind
+	// Populate obj
 	obj, err := api.NewObjectFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(r.kind))
 	if err != nil {
 		return false, err
 	}
 
-	// Populate obj
 	if err := r.Get(context.TODO(), req.NamespacedName, obj); err != nil {
 		// TODO: recover from transitory errors
 		return false, err

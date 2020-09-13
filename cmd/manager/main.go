@@ -9,7 +9,6 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/leg100/stok/api/command"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
@@ -84,13 +83,9 @@ func (c *operatorCmd) doOperatorCmd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unable to create workspace controller: %w", err)
 	}
 
-	// Setup each command ctrl with mgr
-	for _, kind := range command.CommandKinds {
-		r := controllers.NewCommandReconciler(mgr.GetClient(), kind, image)
-		if err := r.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("unable to create %s controller: %w", command.CommandKindToCLI(kind), err)
-		}
-
+	// Setup run ctrl with mgr
+	if err := controllers.NewRunReconciler(mgr.GetClient(), image).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create run controller: %w", err)
 	}
 
 	log.Info("starting manager")

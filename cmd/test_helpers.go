@@ -57,13 +57,14 @@ func createTempPath(t *testing.T) string {
 	return path
 }
 
-var shell = &v1alpha1.Shell{
+var shell = &v1alpha1.Run{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      "stok-shell-xyz",
+		Name:      "run-xyz",
 		Namespace: "test",
 	},
-	CommandSpec: v1alpha1.CommandSpec{
-		Args: []string{"cow", "pig"},
+	RunSpec: v1alpha1.RunSpec{
+		Command: "sh",
+		Args:    []string{"cow", "pig"},
 	},
 }
 

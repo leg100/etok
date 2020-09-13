@@ -4,9 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/leg100/stok/api/command"
+	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/util"
@@ -16,12 +17,11 @@ import (
 func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 	var cmds []*cobra.Command
 
-	for _, kind := range command.CommandKinds {
-		launcher := &launcher.Launcher{Kind: kind, Factory: f}
+	for _, tfcmd := range run.TerraformCommands {
+		launcher := &launcher.Launcher{Factory: f, Command: tfcmd}
 
 		cmd := &cobra.Command{
-			Use:   command.CommandKindToCLI(kind),
-			Short: fmt.Sprintf("Run %s", command.CommandKindToCLI(kind)),
+			Use: tfcmd,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				// If either namespace or workspace has not been set by user, then try to load them
 				// from an environment file
@@ -42,10 +42,23 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 					return err
 				}
 				launcher.Debug = debug
+
+				if launcher.Command == "sh" {
+					// Wrap shell args into a single command string
+					args = wrapShellArgs(args)
+				}
 				launcher.Args = args
+
 				return launcher.Run(cmd.Context())
 			},
 		}
+
+		if tfcmd == "sh" {
+			cmd.Short = "Run shell"
+		} else {
+			cmd.Short = fmt.Sprintf("Run terraform %s", tfcmd)
+		}
+
 		cmd.Flags().StringVar(&launcher.Path, "path", ".", "terraform config path")
 		cmd.Flags().DurationVar(&launcher.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 		cmd.Flags().DurationVar(&launcher.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
@@ -64,4 +77,13 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 	}
 
 	return cmds
+}
+
+// Wrap shell args into a single command string
+func wrapShellArgs(args []string) []string {
+	if len(args) > 0 {
+		return []string{"-c", strings.Join(args, " ")}
+	} else {
+		return []string{}
+	}
 }

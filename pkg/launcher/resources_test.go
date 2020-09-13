@@ -22,9 +22,8 @@ var workspaceEmptyQueue = v1alpha1.Workspace{
 	},
 }
 
-func TestCreateCommand(t *testing.T) {
+func TestCreateRun(t *testing.T) {
 	tc := &Launcher{
-		Kind:          "Plan",
 		Namespace:     "default",
 		Workspace:     "default",
 		Args:          []string{},
@@ -34,7 +33,7 @@ func TestCreateCommand(t *testing.T) {
 
 	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
 
-	plan, err := tc.createCommand(client, "stok-plan-12345", "stok-plan-12345")
+	plan, err := tc.createRun(client, "run-12345", "run-12345")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +43,6 @@ func TestCreateCommand(t *testing.T) {
 
 func TestCreateConfigMap(t *testing.T) {
 	tc := &Launcher{
-		Kind:      "Plan",
 		Namespace: "default",
 		Workspace: "default",
 	}
@@ -54,11 +52,11 @@ func TestCreateConfigMap(t *testing.T) {
 	// TODO: create real tarball
 	tarball := make([]byte, 1024)
 
-	configMap, err := tc.createConfigMap(client, tarball, "stok-plan-12345", "config.tar.gz")
+	configMap, err := tc.createConfigMap(client, tarball, "run-12345", "config.tar.gz")
 	if err != nil {
 		t.Error(err)
 	}
-	if configMap.Name != "stok-plan-12345" {
-		t.Errorf("want stok-plan-12345, got %s\n", configMap.Name)
+	if configMap.Name != "run-12345" {
+		t.Errorf("want run-12345, got %s\n", configMap.Name)
 	}
 }

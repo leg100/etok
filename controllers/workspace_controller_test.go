@@ -19,41 +19,45 @@ import (
 )
 
 func TestReconcileWorkspaceStatus(t *testing.T) {
-	plan1 := v1alpha1.Plan{
+	plan1 := v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-1",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
+		RunSpec: v1alpha1.RunSpec{
+			Command:   "plan",
 			Workspace: "workspace-1",
 		},
 	}
 
-	plan2 := v1alpha1.Plan{
+	plan2 := v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-2",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
+		RunSpec: v1alpha1.RunSpec{
+			Command:   "plan",
 			Workspace: "workspace-1",
 		},
 	}
 
-	plan3 := v1alpha1.Plan{
+	plan3 := v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-3",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
+		RunSpec: v1alpha1.RunSpec{
+			Command:   "plan",
 			Workspace: "workspace-2",
 		},
 	}
 
-	planCompleted := v1alpha1.Plan{
+	planCompleted := v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "plan-3",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
+		RunSpec: v1alpha1.RunSpec{
+			Command:   "plan",
 			Workspace: "workspace-1",
 		},
-		CommandStatus: v1alpha1.CommandStatus{
+		RunStatus: v1alpha1.RunStatus{
 			Conditions: status.Conditions{
 				status.Condition{
 					Type:   v1alpha1.ConditionCompleted,
@@ -385,7 +389,10 @@ func TestReconcileWorkspacePod(t *testing.T) {
 				},
 			},
 			assertions: func(pod *corev1.Pod) {
-				assert.Equal(t, []string{"--", "-backend-config=backend.ini"}, pod.Spec.InitContainers[0].Args)
+				assert.Equal(t,
+					[]string{"--", "terraform", "init", "-backend-config=backend.ini"},
+					pod.Spec.InitContainers[0].Args)
+
 				assert.Equal(t, []corev1.EnvVar{
 					{
 						Name:  "STOK_KIND",

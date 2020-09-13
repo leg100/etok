@@ -14,13 +14,14 @@ import (
 )
 
 func TestRunner(t *testing.T) {
-	shellWithoutAnnotation := &v1alpha1.Shell{
+	shellWithoutAnnotation := &v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok-shell-xyz",
+			Name:      "run-xyz",
 			Namespace: "test",
 		},
-		CommandSpec: v1alpha1.CommandSpec{
-			Args: []string{"cow", "pig"},
+		RunSpec: v1alpha1.RunSpec{
+			Command: "sh",
+			Args:    []string{"cow", "pig"},
 		},
 	}
 
@@ -52,7 +53,7 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Apply",
+			"--kind", "Run",
 			"--tarball", "bad-tarball-zzz.tar.gz",
 		})
 
@@ -65,7 +66,7 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
+			"--kind", "Run",
 			"--no-wait",
 			"--",
 			"uname",
@@ -76,7 +77,7 @@ func TestRunner(t *testing.T) {
 	})
 
 	t.Run("WithEnvVar", func(t *testing.T) {
-		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_KIND": "Shell"})
+		(&testutil.T{T: t}).SetEnvs(map[string]string{"STOK_KIND": "Run"})
 
 		var cmd = newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr)
 
@@ -100,8 +101,8 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
@@ -125,8 +126,8 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
@@ -146,8 +147,8 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--no-wait",
 			"--",
@@ -167,14 +168,14 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
 			"--no-wait",
 			"--",
-			"exit", "101",
+			"sh", "-c", "exit 101",
 		})
 
 		require.EqualError(t, err, "runner: exit status 101")
@@ -190,8 +191,8 @@ func TestRunner(t *testing.T) {
 		factory := fake.NewFactory(shellWithoutAnnotation)
 		code, err := newStokCmd(factory, os.Stdout, os.Stderr).Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,

@@ -81,7 +81,7 @@ func (pb *PodBuilder) SetLabels(name, workspace, command, component string) *Pod
 	}
 
 	if command != "" {
-		// Command that this resource relates to
+		// Run that this resource relates to
 		labels["command"] = command
 		labels["stok.goalspike.com/command"] = command
 	}

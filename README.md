@@ -55,24 +55,25 @@ Usage:
   stok [command]
 
 Available Commands:
-  apply        Run apply
-  destroy      Run destroy
-  force-unlock Run force-unlock
+  apply        Run terraform apply
+  destroy      Run terraform destroy
+  force-unlock Run terraform force-unlock
   generate     Generate stok kubernetes resources
-  get          Run get
+  get          Run terraform get
   help         Help about any command
-  import       Run import
-  init         Run init
+  import       Run terraform import
+  init         Run terraform init
   operator     Run the stok operator
-  output       Run output
-  plan         Run plan
-  refresh      Run refresh
+  output       Run terraform output
+  plan         Run terraform plan
+  refresh      Run terraform refresh
   runner       Run the stok runner
-  shell        Run shell
-  show         Run show
-  taint        Run taint
-  untaint      Run untaint
-  validate     Run validate
+  sh           Run shell
+  show         Run terraform show
+  state        Run terraform state
+  taint        Run terraform taint
+  untaint      Run terraform untaint
+  validate     Run terraform validate
   workspace    Stok workspace management
 
 Flags:
@@ -81,7 +82,6 @@ Flags:
   -v, --version   version for stok
 
 Use "stok [command] --help" for more information about a command.
-
 ```
 
 Commands such as `terraform fmt` or `terraform console` have been left out because there is no purpose to running them on kubernetes.

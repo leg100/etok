@@ -99,7 +99,8 @@ const (
 // Workspace is the Schema for the workspaces API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced
-// +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue",description="The workspace command queue"
+// +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
+// +kubebuilder:printcolumn:name="Backend",type="string",JSONPath=".spec.backend.type"
 // +genclient
 type Workspace struct {
 	metav1.TypeMeta   `json:",inline"`
