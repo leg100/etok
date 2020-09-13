@@ -16,7 +16,7 @@ func TestTerraform(t *testing.T) {
 	podReadyAndRunning := func(namespace, kind string) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fake.GenerateName(kind),
+				Name:      fake.GenerateName(),
 				Namespace: namespace,
 			},
 			Status: corev1.PodStatus{
@@ -34,7 +34,7 @@ func TestTerraform(t *testing.T) {
 	cmd := func(namespace, cmd string) *v1alpha1.Run {
 		run := &v1alpha1.Run{}
 		run.SetNamespace(namespace)
-		run.SetName(fake.GenerateName(cmd))
+		run.SetName(fake.GenerateName())
 		run.SetPhase(v1alpha1.RunPhaseSync)
 		return run
 	}

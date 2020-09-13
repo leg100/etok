@@ -17,7 +17,7 @@ type FactoryInterface interface {
 	NewConfig(string) (*rest.Config, error)
 	NewClient(*rest.Config) (Client, error)
 	NewManager(*rest.Config, string) (*Manager, error)
-	GenerateName(string) string
+	GenerateName() string
 }
 
 type Factory struct {
@@ -68,6 +68,6 @@ func (f *Factory) NewManager(config *rest.Config, namespace string) (*Manager, e
 // A (naive) implementation of the algorithm that k8s uses to generate a unique name on the
 // server side when `generateName` is specified. Allows us to generate a unique name client-side
 // for our k8s resources.
-func (f *Factory) GenerateName(kind string) string {
-	return run.GenerateName(kind, util.GenerateRandomString(5))
+func (f *Factory) GenerateName() string {
+	return run.GenerateName(util.GenerateRandomString(5))
 }

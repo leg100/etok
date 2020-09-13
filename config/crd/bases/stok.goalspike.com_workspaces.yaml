@@ -10,8 +10,10 @@ metadata:
 spec:
   additionalPrinterColumns:
   - JSONPath: .status.queue
-    description: The workspace command queue
     name: Queue
+    type: string
+  - JSONPath: .spec.backend.type
+    name: Backend
     type: string
   group: stok.goalspike.com
   names:

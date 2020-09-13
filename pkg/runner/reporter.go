@@ -58,13 +58,12 @@ func (r *reporter) isReleased(req ctrl.Request) (bool, error) {
 		return false, nil
 	}
 
-	// Fetch empty obj using kind
+	// Populate obj
 	obj, err := api.NewObjectFromGVK(scheme.Scheme, v1alpha1.SchemeGroupVersion.WithKind(r.kind))
 	if err != nil {
 		return false, err
 	}
 
-	// Populate obj
 	if err := r.Get(context.TODO(), req.NamespacedName, obj); err != nil {
 		// TODO: recover from transitory errors
 		return false, err

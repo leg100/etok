@@ -43,7 +43,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 
 	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
 	// pod with this name, too)
-	name := t.Factory.GenerateName(t.Command)
+	name := t.Factory.GenerateName()
 
 	errch := make(chan error)
 

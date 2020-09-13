@@ -48,10 +48,10 @@ func (f *Factory) NewManager(config *rest.Config, namespace string) (*k8s.Manage
 // A (naive) implementation of the algorithm that k8s uses to generate a unique name on the
 // server side when `generateName` is specified. Allows us to generate a unique name client-side
 // for our k8s resources.
-func (f *Factory) GenerateName(kind string) string {
-	return GenerateName(kind)
+func (f *Factory) GenerateName() string {
+	return GenerateName()
 }
 
-func GenerateName(kind string) string {
-	return run.GenerateName(kind, "12345")
+func GenerateName() string {
+	return run.GenerateName("12345")
 }

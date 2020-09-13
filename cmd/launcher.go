@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/leg100/stok/api/run"
@@ -42,7 +43,13 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 					return err
 				}
 				launcher.Debug = debug
+
+				if launcher.Command == "sh" {
+					// Wrap shell args into a single command string
+					args = wrapShellArgs(args)
+				}
 				launcher.Args = args
+
 				return launcher.Run(cmd.Context())
 			},
 		}
@@ -64,4 +71,13 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 	}
 
 	return cmds
+}
+
+// Wrap shell args into a single command string
+func wrapShellArgs(args []string) []string {
+	if len(args) > 0 {
+		return []string{"-c", strings.Join(args, " ")}
+	} else {
+		return []string{}
+	}
 }

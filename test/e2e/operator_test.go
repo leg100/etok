@@ -143,8 +143,8 @@ func TestStok(t *testing.T) {
 			stdin:           []byte("foo\nyes\n"),
 		},
 		{
-			name:            "stok shell",
-			args:            []string{"shell", "--context", *kubectx},
+			name:            "stok sh",
+			args:            []string{"sh", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             true,
@@ -152,7 +152,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok queuing",
-			args:            []string{"shell", "--context", *kubectx, "--", "uname;", "sleep 5"},
+			args:            []string{"sh", "--context", *kubectx, "--", "uname;", "sleep 5"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             false,

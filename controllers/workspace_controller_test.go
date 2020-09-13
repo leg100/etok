@@ -389,7 +389,10 @@ func TestReconcileWorkspacePod(t *testing.T) {
 				},
 			},
 			assertions: func(pod *corev1.Pod) {
-				assert.Equal(t, []string{"--", "-backend-config=backend.ini"}, pod.Spec.InitContainers[0].Args)
+				assert.Equal(t,
+					[]string{"--", "terraform", "init", "-backend-config=backend.ini"},
+					pod.Spec.InitContainers[0].Args)
+
 				assert.Equal(t, []corev1.EnvVar{
 					{
 						Name:  "STOK_KIND",

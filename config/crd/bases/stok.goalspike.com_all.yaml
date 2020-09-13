@@ -9,16 +9,13 @@ metadata:
   name: runs.stok.goalspike.com
 spec:
   additionalPrinterColumns:
-  - JSONPath: .spec.Command
-    description: The run command
+  - JSONPath: .spec.command
     name: Command
     type: string
   - JSONPath: .spec.workspace
-    description: The workspace of the run
     name: Workspace
     type: string
   - JSONPath: .status.phase
-    description: The run phase
     name: Phase
     type: string
   group: stok.goalspike.com
@@ -87,6 +84,7 @@ spec:
             workspace:
               type: string
           required:
+          - command
           - configMap
           - configMapKey
           - timeoutClient
@@ -166,8 +164,10 @@ metadata:
 spec:
   additionalPrinterColumns:
   - JSONPath: .status.queue
-    description: The workspace command queue
     name: Queue
+    type: string
+  - JSONPath: .spec.backend.type
+    name: Backend
     type: string
   group: stok.goalspike.com
   names:

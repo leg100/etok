@@ -13,9 +13,9 @@ func init() {
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Command",type="string",JSONPath=".spec.Command",description="The run command"
-// +kubebuilder:printcolumn:name="Workspace",type="string",JSONPath=".spec.workspace",description="The workspace of the run"
-// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="The run phase"
+// +kubebuilder:printcolumn:name="Command",type="string",JSONPath=".spec.command"
+// +kubebuilder:printcolumn:name="Workspace",type="string",JSONPath=".spec.workspace"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 
 type Run struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -37,7 +37,7 @@ type RunList struct {
 // RunSpec defines the desired state of Run
 type RunSpec struct {
 	// +kubebuilder:validation:Enum={"apply","destroy","force-unlock","get","import","init","output","plan","refresh","sh","state list","state mv","state pull","state push","state rm","state show","taint","untaint","validate"}
-	Command       string   `json:"command,omitempty"`
+	Command       string   `json:"command"`
 	Args          []string `json:"args,omitempty"`
 	TimeoutClient string   `json:"timeoutClient"`
 	TimeoutQueue  string   `json:"timeoutQueue"`
@@ -46,6 +46,10 @@ type RunSpec struct {
 	ConfigMapKey  string   `json:"configMapKey"`
 	Workspace     string   `json:"workspace"`
 }
+
+// Get/Set Command functions
+func (c *RunSpec) GetCommand() string    { return c.Command }
+func (c *RunSpec) SetCommand(cmd string) { c.Command = cmd }
 
 // Get/Set Args functions
 func (c *RunSpec) GetArgs() []string     { return c.Args }

@@ -16,11 +16,11 @@ import (
 func TestRunner(t *testing.T) {
 	shellWithoutAnnotation := &v1alpha1.Run{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok-shell-xyz",
+			Name:      "run-xyz",
 			Namespace: "test",
 		},
 		RunSpec: v1alpha1.RunSpec{
-			Command: "shell",
+			Command: "sh",
 			Args:    []string{"cow", "pig"},
 		},
 	}
@@ -102,7 +102,7 @@ func TestRunner(t *testing.T) {
 		code, err := cmd.Execute([]string{
 			"runner",
 			"--kind", "Run",
-			"--name", "stok-shell-xyz",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
@@ -126,8 +126,8 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
@@ -147,8 +147,8 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--no-wait",
 			"--",
@@ -168,14 +168,14 @@ func TestRunner(t *testing.T) {
 
 		code, err := cmd.Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,
 			"--no-wait",
 			"--",
-			"exit", "101",
+			"sh", "-c", "exit 101",
 		})
 
 		require.EqualError(t, err, "runner: exit status 101")
@@ -191,8 +191,8 @@ func TestRunner(t *testing.T) {
 		factory := fake.NewFactory(shellWithoutAnnotation)
 		code, err := newStokCmd(factory, os.Stdout, os.Stderr).Execute([]string{
 			"runner",
-			"--kind", "Shell",
-			"--name", "stok-shell-xyz",
+			"--kind", "Run",
+			"--name", "run-xyz",
 			"--namespace", "test",
 			"--tarball", tarball,
 			"--path", dest,

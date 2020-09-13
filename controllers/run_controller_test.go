@@ -275,6 +275,25 @@ func TestRunReconciler(t *testing.T) {
 				require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
 			},
 		},
+		{
+			name: "Sets container args",
+			run: &v1alpha1.Run{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plan-1",
+					Namespace: "operator-test",
+				},
+				RunSpec: v1alpha1.RunSpec{
+					Command:   "plan",
+					Workspace: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+			},
+			assertions: func(pod *corev1.Pod) {
+				require.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)
+			},
+		},
 	}
 	for _, tt := range podTests {
 		t.Run(tt.name, func(t *testing.T) {

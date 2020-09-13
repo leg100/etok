@@ -110,7 +110,8 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// watch will trigger a reconcile on *all* run resources, not just those belonging to
 			// the changed workspace. Instead, we need to enumerate the result of this list and
 			// filter.
-			err := r.List(context.TODO(), &v1alpha1.RunList{}, client.InNamespace(a.Meta.GetNamespace()), client.MatchingFields{
+			runlist := &v1alpha1.RunList{}
+			err := r.List(context.TODO(), runlist, client.InNamespace(a.Meta.GetNamespace()), client.MatchingFields{
 				"spec.workspace": a.Meta.GetName(),
 			})
 			if err != nil {
@@ -118,7 +119,7 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 
 			rr := []reconcile.Request{}
-			meta.EachListItem(&v1alpha1.RunList{}, func(o runtime.Object) error {
+			meta.EachListItem(runlist, func(o runtime.Object) error {
 				run := o.(*v1alpha1.Run)
 				rr = append(rr, reconcile.Request{
 					NamespacedName: types.NamespacedName{

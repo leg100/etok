@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api/v1alpha1"
-	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
@@ -18,12 +17,12 @@ import (
 func TestRunReporter(t *testing.T) {
 	tests := []struct {
 		name       string
-		cmd        *v1alpha1.Run
+		run        *v1alpha1.Run
 		assertions func(exit bool, enqueueTimer, queueTimer *time.Timer)
 	}{
 		{
 			name: "pending",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
@@ -45,7 +44,7 @@ func TestRunReporter(t *testing.T) {
 		},
 		{
 			name: "queued",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
@@ -65,7 +64,7 @@ func TestRunReporter(t *testing.T) {
 		},
 		{
 			name: "synchronising",
-			cmd: &v1alpha1.Plan{
+			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "plan-1",
 					Namespace: "operator-test",
@@ -89,18 +88,16 @@ func TestRunReporter(t *testing.T) {
 
 	for _, tt := range tests {
 		s := scheme.Scheme
-		c := fake.NewFakeClientWithScheme(s, tt.cmd)
-		kind, _ := controllers.GetKindFromObject(s, tt.cmd)
+		c := fake.NewFakeClientWithScheme(s, tt.run)
 		reporter := &RunReporter{
 			Id:     "plan-1",
 			Client: c,
-			Kind:   kind,
 		}
 
 		req := ctrl.Request{
 			NamespacedName: types.NamespacedName{
-				Name:      tt.cmd.GetName(),
-				Namespace: tt.cmd.GetNamespace(),
+				Name:      tt.run.GetName(),
+				Namespace: tt.run.GetNamespace(),
 			},
 		}
 

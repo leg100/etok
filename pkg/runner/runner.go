@@ -93,6 +93,7 @@ func (r *Runner) sync(ctx context.Context) error {
 	mgr.AddReporter(&reporter{
 		Client:  rc,
 		name:    r.Name,
+		kind:    r.Kind,
 		timeout: r.Timeout,
 	})
 

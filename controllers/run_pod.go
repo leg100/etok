@@ -75,12 +75,19 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconcile.
 	return reconcile.Result{}, err
 }
 
+func prependTerraformToArgs(run *v1alpha1.Run, args []string) []string {
+	if run.Command == "sh" {
+		return args
+	}
+	return append([]string{"terraform"}, args...)
+}
+
 // Create pod
 func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 	args := append(strings.Split(opts.run.Command, " "), opts.run.GetArgs()...)
 	pod := NewPodBuilder(opts.run.GetNamespace(), opts.run.GetName(), r.Image).
 		SetLabels(opts.run.GetName(), opts.workspaceName, opts.run.Command, "runner").
-		AddRunnerContainer(args).
+		AddRunnerContainer(prependTerraformToArgs(opts.run, args)).
 		AddWorkspace().
 		AddCache(opts.pvcName).
 		AddBackendConfig(opts.workspaceName).

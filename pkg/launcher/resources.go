@@ -47,6 +47,7 @@ func (t *Launcher) createRun(rc client.Client, name, configMapName string) (*v1a
 
 	run.SetTimeoutQueue(t.TimeoutQueue.String())
 	run.SetTimeoutClient(t.TimeoutClient.String())
+	run.SetCommand(t.Command)
 	run.SetArgs(t.Args)
 	run.SetDebug(t.Debug)
 	run.SetConfigMap(configMapName)
