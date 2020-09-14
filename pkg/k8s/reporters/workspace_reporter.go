@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/util/slice"
 	ctrl "sigs.k8s.io/controller-runtime"

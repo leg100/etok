@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api"
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/scheme"
@@ -51,9 +51,9 @@ func (r *reporter) Handler(ctx context.Context, events <-chan ctrl.Request) erro
 	}
 }
 
-// isReleased returns true if the client hold has been released on the cmd object; false otherwise
+// isReleased returns true if the client hold has been released on the run object; false otherwise
 func (r *reporter) isReleased(req ctrl.Request) (bool, error) {
-	// Ignore event for a different cmd
+	// Ignore event for a different run
 	if req.Name != r.name {
 		return false, nil
 	}

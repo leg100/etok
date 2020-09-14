@@ -15,7 +15,6 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-cmp v0.4.0
 	github.com/gregjones/httpcache v0.0.0-20190203031600-7a902570cb17 // indirect
-	github.com/iancoleman/strcase v0.0.0-20190422225806-e506e3ef7365
 	github.com/kr/pty v1.1.5
 	github.com/mattn/go-colorable v0.1.2
 	github.com/operator-framework/operator-sdk v0.19.0

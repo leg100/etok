@@ -7,7 +7,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/api"
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"k8s.io/client-go/util/retry"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 

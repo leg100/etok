@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/reporters"
@@ -76,11 +76,11 @@ func (t *Launcher) Run(ctx context.Context) error {
 	}()
 
 	// Construct and deploy command resource
-	cmd, err := t.createRun(rc, name, name)
+	run, err := t.createRun(rc, name, name)
 	if err != nil {
 		return err
 	}
-	resources = append(resources, cmd)
+	resources = append(resources, run)
 
 	// Block until archive successsfully uploaded
 	select {
@@ -96,14 +96,14 @@ func (t *Launcher) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Run workspace reporter, which reports on the cmd's queue position
+	// Run workspace reporter, which reports on the run's queue position
 	mgr.AddReporter(&reporters.WorkspaceReporter{
 		Client: rc,
 		Id:     t.Workspace,
 		CmdId:  name,
 	})
 
-	// Run cmd reporter, which waits until the cmd status reports the pod is ready
+	// Run run reporter, which waits until the cmd status reports the pod is ready
 	mgr.AddReporter(&reporters.RunReporter{
 		Client:         rc,
 		Id:             name,
@@ -111,7 +111,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 		QueueTimeout:   t.TimeoutQueue,
 	})
 
-	// Run cache mgr, blocking until the cmd reporter returns successfully, indicating that we can
+	// Run cache mgr, blocking until the run reporter returns successfully, indicating that we can
 	// proceed to connecting to the pod.
 	if err := mgr.Start(ctx); err != nil {
 		return err
@@ -142,7 +142,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 
 	// Let operator know we're now at least streaming logs (so if there is an error message then at least
 	// it'll be fully streamed to the client)
-	if err := k8s.ReleaseHold(ctx, rc, cmd); err != nil {
+	if err := k8s.ReleaseHold(ctx, rc, run); err != nil {
 		return err
 	}
 

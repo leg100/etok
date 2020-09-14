@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"

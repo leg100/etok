@@ -6,6 +6,7 @@ WORKSPACE_NAMESPACE ?= default
 ALL_CRD = ./config/crd/bases/stok.goalspike.com_all.yaml
 BUILD_BIN ?= ./stok
 KUBECTL = kubectl --context=$(KUBECTX)
+KUBE_VERSION=v0.18.2
 LD_FLAGS = " \
 	-X '$(REPO)/version.Version=$(VERSION)' \
 	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
@@ -38,7 +39,7 @@ endif
 	build cli-test cli-install \
 	operator-build image push \
 	manifests \
-	generate generate-apis \
+	generate \
 	controller-gen \
 	fmt vet \
 	kustomize
@@ -84,10 +85,8 @@ delete-custom-resources:
 		| tr '\n' ',' | sed 's/.$$//') || true
 
 # delete all stok custom resources except workspace
-delete-command-resources:
-	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all $$($(KUBECTL) api-resources \
-		--api-group=stok.goalspike.com -o name | grep -v workspaces \
-		| tr '\n' ',' | sed 's/.$$//') || true
+delete-run-resources:
+	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.stok.goalspike.com
 
 unit:
 	go test -v ./api/... ./cmd ./controllers ./pkg/... ./util
@@ -114,10 +113,6 @@ ifeq ($(ENV),gke)
 else
 	kind load docker-image $(IMG)
 endif
-
-# Generate structs for each command
-generate-apis:
-	go generate ./api/generate.go
 
 # Generate manifests e.g. CRD, RBAC etc.
 # add app=stok label to each crd
@@ -159,6 +154,37 @@ ifeq (, $(shell which controller-gen))
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+generate-clientset: client-gen
+	@{ \
+	set -e ;\
+	rm -rf pkg/k8s/stokclient ;\
+	$(CLIENT_GEN) \
+		--clientset-name stokclient \
+		--input-base github.com/leg100/stok/api \
+		--input stok.goalspike.com/v1alpha1 \
+		-h hack/boilerplate.go.txt \
+		-p github.com/leg100/stok/pkg/k8s/stokclient ;\
+	mv github.com/leg100/stok/pkg/k8s/stokclient pkg/k8s/ ;\
+	rm -rf github.com ;\
+	}
+
+# find or download client-gen
+# download client-gen if necessary
+client-gen:
+ifeq (, $(shell which client-gen))
+	@{ \
+	set -e ;\
+	CLIENT_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CLIENT_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get k8s.io/code-generator/cmd/client-gen@$(KUBE_VERSION) ;\
+	rm -rf $$CLIENT_GEN_TMP_DIR ;\
+	}
+CLIENT_GEN=$(GOBIN)/client-gen
+else
+CLIENT_GEN=$(shell which client-gen)
 endif
 
 kustomize:

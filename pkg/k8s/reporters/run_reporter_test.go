@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"

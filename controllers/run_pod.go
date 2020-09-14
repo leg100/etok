@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 )
 
