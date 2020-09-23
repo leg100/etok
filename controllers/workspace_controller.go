@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api"
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
 	"github.com/leg100/stok/version"

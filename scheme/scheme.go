@@ -1,7 +1,7 @@
 package scheme
 
 import (
-	"github.com/leg100/stok/api/v1alpha1"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

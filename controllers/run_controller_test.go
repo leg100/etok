@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

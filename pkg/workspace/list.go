@@ -6,32 +6,25 @@ import (
 	"io"
 	"os"
 
-	"github.com/leg100/stok/api/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ListWorkspace struct {
 	Path    string
 	Context string
 
-	Out     io.Writer
-	Factory k8s.FactoryInterface
-	Cmd     *cobra.Command
+	Out io.Writer
+	Cmd *cobra.Command
 }
 
 func (t *ListWorkspace) Run(ctx context.Context) error {
-	config, err := t.Factory.NewConfig(t.Context)
+	sc, err := k8s.StokClient()
 	if err != nil {
-		return fmt.Errorf("failed to obtain kubernetes client config: %w", err)
-	}
-
-	// Controller-runtime client for listing workspace resources
-	rc, err := t.Factory.NewClient(config)
-	if err != nil {
-		return fmt.Errorf("failed to create kubernetes client: %w", err)
+		return err
 	}
 
 	currentNamespace, currentWorkspace, err := util.ReadEnvironmentFile(t.Path)
@@ -40,13 +33,13 @@ func (t *ListWorkspace) Run(ctx context.Context) error {
 		return err
 	}
 
-	return t.list(rc, currentNamespace, currentWorkspace)
+	return t.list(ctx, sc, currentNamespace, currentWorkspace)
 }
 
-func (t *ListWorkspace) list(rc client.Client, currentNamespace, currentWorkspace string) error {
-	workspaces := v1alpha1.WorkspaceList{}
+func (t *ListWorkspace) list(ctx context.Context, sc stokclient.Interface, currentNamespace, currentWorkspace string) error {
 	// List across all namespaces
-	if err := rc.List(context.TODO(), &workspaces); err != nil {
+	workspaces, err := sc.StokV1alpha1().Workspaces("").List(ctx, metav1.ListOptions{})
+	if err != nil {
 		return err
 	}
 

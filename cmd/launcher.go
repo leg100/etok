@@ -8,18 +8,19 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api/run"
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/launcher"
+	"github.com/leg100/stok/pkg/k8s/config"
+	launchermod "github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
 )
 
-func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
+func newLauncherCmds() []*cobra.Command {
 	var cmds []*cobra.Command
 
 	for _, tfcmd := range run.TerraformCommands {
-		launcher := &launcher.Launcher{Factory: f, Command: tfcmd}
+		launcher := &launchermod.Launcher{Command: tfcmd}
 
+		var kubeContext string
 		cmd := &cobra.Command{
 			Use: tfcmd,
 			RunE: func(cmd *cobra.Command, args []string) error {
@@ -37,6 +38,8 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 					launcher.Workspace = workspace
 				}
 
+				config.SetContext(kubeContext)
+
 				debug, err := cmd.InheritedFlags().GetBool("debug")
 				if err != nil {
 					return err
@@ -48,6 +51,8 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 					args = wrapShellArgs(args)
 				}
 				launcher.Args = args
+
+				launcher.Name = launchermod.GenerateName()
 
 				return launcher.Run(cmd.Context())
 			},
@@ -68,7 +73,7 @@ func newLauncherCmds(f k8s.FactoryInterface) []*cobra.Command {
 		cmd.Flags().StringVar(&launcher.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
 
 		cmd.Flags().StringVar(&launcher.Workspace, "workspace", "default", "Workspace name")
-		cmd.Flags().StringVar(&launcher.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
+		cmd.Flags().StringVar(&kubeContext, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
 		// Add flags registered by imported packages (controller-runtime)
 		cmd.Flags().AddGoFlagSet(flag.CommandLine)

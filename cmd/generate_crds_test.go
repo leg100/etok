@@ -6,13 +6,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateCRDsFromLocal(t *testing.T) {
 	out := new(bytes.Buffer)
-	var cmd = newStokCmd(fake.NewFactory(), out, os.Stderr)
+	var cmd = newStokCmd(out, os.Stderr)
 
 	// Command under test assumes it is invoked from parent directory (the root of the repo).
 	previous, err := os.Getwd()

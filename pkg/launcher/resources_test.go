@@ -1,26 +1,15 @@
 package launcher
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/leg100/stok/api/v1alpha1"
-	"github.com/leg100/stok/scheme"
+	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	kfake "k8s.io/client-go/kubernetes/fake"
 )
-
-var workspaceEmptyQueue = v1alpha1.Workspace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "default",
-		Namespace: "default",
-	},
-	Spec: v1alpha1.WorkspaceSpec{
-		SecretName: "secret-1",
-	},
-}
 
 func TestCreateRun(t *testing.T) {
 	tc := &Launcher{
@@ -31,12 +20,10 @@ func TestCreateRun(t *testing.T) {
 		TimeoutQueue:  time.Minute,
 	}
 
-	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
-
-	plan, err := tc.createRun(client, "run-12345", "run-12345")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Populate fake stok client with relevant objects
+	client := fake.NewSimpleClientset()
+	plan, err := tc.createRun(context.Background(), client, "run-12345", "run-12345")
+	require.NoError(t, err)
 
 	require.Equal(t, 0, len(plan.GetArgs()))
 }
@@ -47,16 +34,18 @@ func TestCreateConfigMap(t *testing.T) {
 		Workspace: "default",
 	}
 
-	client := fake.NewFakeClientWithScheme(scheme.Scheme, runtime.Object(&workspaceEmptyQueue))
+	client := kfake.NewSimpleClientset()
 
 	// TODO: create real tarball
 	tarball := make([]byte, 1024)
 
-	configMap, err := tc.createConfigMap(client, tarball, "run-12345", "config.tar.gz")
-	if err != nil {
-		t.Error(err)
-	}
-	if configMap.Name != "run-12345" {
-		t.Errorf("want run-12345, got %s\n", configMap.Name)
+	err := tc.createConfigMap(context.Background(), client, tarball, "run-12345", "config.tar.gz")
+	require.NoError(t, err)
+
+	cfg, err := client.CoreV1().ConfigMaps(tc.Namespace).Get(context.Background(), "run-12345", metav1.GetOptions{})
+	require.NoError(t, err)
+
+	if cfg.GetName() != "run-12345" {
+		t.Errorf("want run-12345, got %s\n", cfg.GetName())
 	}
 }

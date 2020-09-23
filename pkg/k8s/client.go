@@ -1,86 +1,31 @@
 package k8s
 
 import (
-	"context"
-	"io"
-	"os"
-	"strings"
-	"time"
+	"fmt"
 
-	"github.com/apex/log"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"github.com/leg100/stok/pkg/k8s/config"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/kubectl/pkg/cmd/attach"
-	"k8s.io/kubectl/pkg/cmd/exec"
-	"k8s.io/kubectl/pkg/scheme"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type Client interface {
-	runtimeclient.Client
-	GetLogs(string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
-	Attach(*corev1.Pod) error
-}
+// For testing purposes
+var (
+	KubeClient = getKubeClient
+	StokClient = getStokClient
+)
 
-type client struct {
-	runtimeclient.Client
-	kc     kubernetes.Interface
-	config *rest.Config
-}
-
-func (c *client) GetLogs(namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
-	req := c.kc.CoreV1().Pods(namespace).GetLogs(name, opts)
-	return req.Stream(context.TODO())
-}
-
-// TODO: need to unit test the body of this method
-func (c *client) Attach(pod *corev1.Pod) error {
-	c.config.ContentConfig = rest.ContentConfig{
-		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
-		GroupVersion:         &schema.GroupVersion{Version: "v1"},
+func getKubeClient() (kubernetes.Interface, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("getting client config for built-in kubernetes client: %w", err)
 	}
-	c.config.APIPath = "/api"
-
-	opts := &attach.AttachOptions{
-		StreamOptions: exec.StreamOptions{
-			// TODO: not sure how this has worked all this time for non-default namespaces?
-			Namespace:     "default",
-			PodName:       pod.GetName(),
-			ContainerName: "runner",
-			Stdin:         true,
-			TTY:           true,
-			Quiet:         true,
-			IOStreams: genericclioptions.IOStreams{
-				In:     os.Stdin,
-				Out:    os.Stdout,
-				ErrOut: attachErrOut{},
-			},
-		},
-		Attach:     &attach.DefaultRemoteAttach{},
-		AttachFunc: attach.DefaultAttachFunc,
-		// TODO: parameterize
-		GetPodTimeout: time.Second * 10,
-	}
-
-	opts.Config = c.config
-	opts.Pod = pod
-
-	if err := opts.Run(); err != nil {
-		return err
-	}
-
-	return nil
+	return kubernetes.NewForConfig(cfg)
 }
 
-// ErrOut above wants an obj with Write method, so lets provide one that writes to our logger with
-// warning level
-type attachErrOut struct{}
-
-func (_ attachErrOut) Write(in []byte) (int, error) {
-	s := strings.TrimSpace(string(in))
-	log.Warn(s)
-	return 0, nil
+func getStokClient() (stokclient.Interface, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("getting client config for stok kubernetes client: %w", err)
+	}
+	return stokclient.NewForConfig(cfg)
 }

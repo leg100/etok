@@ -5,43 +5,51 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/leg100/stok/pkg/k8s/fake"
-	"github.com/leg100/stok/util"
+	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWorkspaceShow(t *testing.T) {
-	t.Run("WithEnvironmentFile", func(t *testing.T) {
-		path := createTempPath(t)
-		err := util.WriteEnvironmentFile(path, "default", "workspace-1")
-		require.NoError(t, err)
+	tests := []struct {
+		name string
+		args []string
+		env  env.StokEnv
+		out  string
+		code int
+	}{
+		{
+			name: "WithEnvironmentFile",
+			args: []string{"workspace", "show"},
+			env:  env.StokEnv("default/workspace-1"),
+			out:  "default/workspace-1",
+		},
+		{
+			name: "WithoutEnvironmentFile",
+			args: []string{"workspace", "show"},
+			out:  "no such file or directory",
+			code: 1,
+		},
+	}
 
-		var out = new(bytes.Buffer)
-		var cmd = newStokCmd(&fake.Factory{}, out, out)
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			path := t.NewTempDir().Chdir().Root()
 
-		code, err := cmd.Execute([]string{
-			"workspace",
-			"show",
-			"--path", path,
+			// Write .terraform/environment
+			if tt.env != "" {
+				require.NoError(t, tt.env.Write(path))
+			}
+
+			out := new(bytes.Buffer)
+			code, _ := newStokCmd(out, out).Execute(tt.args)
+
+			require.Equal(t, tt.code, code)
+
+			// Merely ensure expected output is a subset of actual output (no such file error
+			// messages include the temporary directory name which isn't known to the test case in
+			// the table above)
+			require.Regexp(t, regexp.MustCompile(tt.out), out.String())
 		})
-		require.NoError(t, err)
-		require.Equal(t, 0, code)
-		require.Equal(t, "default/workspace-1\n", out.String())
-	})
-
-	t.Run("WithoutEnvironmentFile", func(t *testing.T) {
-		path := createTempPath(t)
-
-		var out = new(bytes.Buffer)
-		var cmd = newStokCmd(&fake.Factory{}, out, out)
-
-		code, err := cmd.Execute([]string{
-			"workspace",
-			"show",
-			"--path", path,
-		})
-		require.Error(t, err)
-		require.Equal(t, 1, code)
-		require.Regexp(t, regexp.MustCompile("no such file or directory"), out.String())
-	})
+	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	v1alpha1 "github.com/leg100/stok/api/v1alpha1"
+	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
 	corev1 "k8s.io/api/core/v1"

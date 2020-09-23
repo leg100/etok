@@ -3,16 +3,15 @@ package cmd
 import (
 	"io"
 
-	"github.com/leg100/stok/pkg/k8s"
 	"github.com/spf13/cobra"
 )
 
-func workspaceCmd(f k8s.FactoryInterface, out io.Writer) *cobra.Command {
+func workspaceCmd(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
 		Short: "Stok workspace management",
 	}
-	cmd.AddCommand(newNewWorkspaceCmd(f, out), newListWorkspaceCmd(f, out), newDeleteWorkspaceCmd(f), newSelectWorkspaceCmd(), newShowWorkspaceCmd(out))
+	cmd.AddCommand(newNewWorkspaceCmd(out), newListWorkspaceCmd(out), newDeleteWorkspaceCmd(), newSelectWorkspaceCmd(), newShowWorkspaceCmd(out))
 
 	return cmd
 }
