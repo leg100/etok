@@ -8,12 +8,14 @@ import (
 	"testing"
 
 	"github.com/leg100/stok/api/run"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
 	"github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/testutil"
+	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +25,24 @@ import (
 )
 
 func TestTerraform(t *testing.T) {
+	workspaceObj := func(namespace, name string, queue ...string) *v1alpha1.Workspace {
+		return &v1alpha1.Workspace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Status: v1alpha1.WorkspaceStatus{
+				Conditions: status.Conditions{
+					{
+						Type:   v1alpha1.ConditionHealthy,
+						Status: corev1.ConditionTrue,
+					},
+				},
+				Queue: queue,
+			},
+		}
+	}
+
 	podReadyAndRunning := func(namespace, name string) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
