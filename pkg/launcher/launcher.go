@@ -4,20 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/reporters"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"golang.org/x/sync/errgroup"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 )
 
 type Launcher struct {
+	Name           string
 	Workspace      string
 	Namespace      string
-	Context        string
 	Command        string
 	Path           string
 	Args           []string
@@ -26,126 +26,105 @@ type Launcher struct {
 	TimeoutQueue   time.Duration
 	TimeoutEnqueue time.Duration
 
-	Debug   bool
-	Factory k8s.FactoryInterface
+	Debug bool
 }
 
 func (t *Launcher) Run(ctx context.Context) error {
-	config, err := t.Factory.NewConfig(t.Context)
+	sc, err := k8s.StokClient()
 	if err != nil {
 		return err
 	}
 
-	rc, err := t.Factory.NewClient(config)
+	kc, err := k8s.KubeClient()
 	if err != nil {
 		return err
 	}
 
-	// Generate unique name shared by command and configmap resources (and command ctrl will spawn a
-	// pod with this name, too)
-	name := t.Factory.GenerateName()
+	// Tar up local config and deploy k8s resources
+	run, err := t.deploy(ctx, sc, kc)
+	if err != nil {
+		return err
+	}
 
+	// Monitor resources, wait until pod is running and ready
+	if err := t.monitor(ctx, sc, kc, run); err != nil {
+		return err
+	}
+
+	// Attach to pod, and release hold annotation
+	return k8s.PodConnect(ctx, kc, t.Namespace, t.Name, func() error {
+		runsclient := sc.StokV1alpha1().Runs(t.Namespace)
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			run, err := runsclient.Get(ctx, t.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			k8s.DeleteWaitAnnotationKey(run)
+
+			_, err = runsclient.Update(ctx, run, metav1.UpdateOptions{})
+			return err
+		})
+	})
+}
+
+func (t *Launcher) monitor(ctx context.Context, sc stokclient.Interface, kc kubernetes.Interface, run *v1alpha1.Run) error {
 	errch := make(chan error)
+	ready := make(chan struct{})
 
-	// Delete resources upon program termination.
-	var resources []runtime.Object
-	defer func() {
-		for _, r := range resources {
-			rc.Delete(context.TODO(), r)
-		}
-	}()
+	// Non-blocking; watch workspace queue, check timeouts are not exceeded, and log run's queue position
+	(&queueMonitor{
+		run:            run,
+		workspace:      t.Workspace,
+		client:         sc,
+		timeoutEnqueue: t.TimeoutEnqueue,
+		timeoutQueue:   t.TimeoutQueue,
+	}).monitor(ctx, errch)
 
-	// Compile tarball of terraform module, embed in configmap and deploy
-	var uploaded = make(chan struct{})
-	go func() {
-		tarball, err := archive.Create(t.Path)
-		if err != nil {
-			errch <- err
-			return
-		}
+	// Non-blocking; watch run, log status updates
+	(&runMonitor{
+		run:    run,
+		client: sc,
+	}).monitor(ctx, errch)
 
-		// Construct and deploy ConfigMap resource
-		configmap, err := t.createConfigMap(rc, tarball, name, v1alpha1.RunDefaultConfigMapKey)
-		if err != nil {
-			errch <- err
-			return
-		} else {
-			resources = append(resources, configmap)
-			uploaded <- struct{}{}
-		}
-	}()
+	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
+	// error on fatal pod errors
+	(&podMonitor{
+		run:    run,
+		client: kc,
+	}).monitor(ctx, errch, ready)
 
-	// Construct and deploy command resource
-	run, err := t.createRun(rc, name, name)
-	if err != nil {
-		return err
-	}
-	resources = append(resources, run)
-
-	// Block until archive successsfully uploaded
+	// Wait for pod to be ready
 	select {
-	case <-uploaded:
-		// proceed
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	case err := <-errch:
 		return err
 	}
+}
 
-	// Instantiate k8s cache mgr
-	mgr, err := t.Factory.NewManager(config, t.Namespace)
-	if err != nil {
-		return err
-	}
+// Deploy configmap and run resources in parallel
+func (t *Launcher) deploy(ctx context.Context, sc stokclient.Interface, kc kubernetes.Interface) (run *v1alpha1.Run, err error) {
+	g, ctx := errgroup.WithContext(ctx)
 
-	// Run workspace reporter, which reports on the run's queue position
-	mgr.AddReporter(&reporters.WorkspaceReporter{
-		Client: rc,
-		Id:     t.Workspace,
-		CmdId:  name,
+	// Compile tarball of terraform module, embed in configmap and deploy
+	g.Go(func() error {
+		tarball, err := archive.Create(t.Path)
+		if err != nil {
+			return err
+		}
+
+		// Construct and deploy ConfigMap resource
+		return t.createConfigMap(ctx, kc, tarball, t.Name, v1alpha1.RunDefaultConfigMapKey)
 	})
 
-	// Run run reporter, which waits until the cmd status reports the pod is ready
-	mgr.AddReporter(&reporters.RunReporter{
-		Client:         rc,
-		Id:             name,
-		EnqueueTimeout: t.TimeoutEnqueue,
-		QueueTimeout:   t.TimeoutQueue,
+	// Construct and deploy command resource
+	g.Go(func() error {
+		run, err = t.createRun(ctx, sc, t.Name, t.Name)
+		return err
 	})
 
-	// Run cache mgr, blocking until the run reporter returns successfully, indicating that we can
-	// proceed to connecting to the pod.
-	if err := mgr.Start(ctx); err != nil {
-		return err
-	}
-
-	// Get pod
-	pod := &corev1.Pod{}
-	if err := rc.Get(ctx, types.NamespacedName{Name: name, Namespace: t.Namespace}, pod); err != nil {
-		return err
-	}
-
-	podlog := log.WithField("pod", k8s.GetNamespacedName(pod))
-
-	// Fetch pod's log stream
-	podlog.Debug("retrieve log stream")
-	logstream, err := rc.GetLogs(t.Namespace, name, &corev1.PodLogOptions{Follow: true})
-	if err != nil {
-		return err
-	}
-	defer logstream.Close()
-
-	// Attach to pod tty, falling back to log stream upon error
-	errors := make(chan error)
-	go func() {
-		podlog.Debug("attaching")
-		errors <- k8s.AttachFallbackToLogs(rc, pod, logstream)
-	}()
-
-	// Let operator know we're now at least streaming logs (so if there is an error message then at least
-	// it'll be fully streamed to the client)
-	if err := k8s.ReleaseHold(ctx, rc, run); err != nil {
-		return err
-	}
-
-	// Wait until attach returns
-	return <-errors
+	return run, g.Wait()
 }

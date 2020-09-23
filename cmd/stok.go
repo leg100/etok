@@ -12,7 +12,6 @@ import (
 	"github.com/apex/log"
 	"github.com/leg100/stok/cmd/manager"
 	"github.com/leg100/stok/logging/handlers/cli"
-	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -24,7 +23,7 @@ type stokCmd struct {
 }
 
 func Execute(args []string) int {
-	code, _ := newStokCmd(&k8s.Factory{}, os.Stdout, os.Stderr).Execute(args)
+	code, _ := newStokCmd(os.Stdout, os.Stderr).Execute(args)
 	return code
 }
 
@@ -48,7 +47,7 @@ func (cc *stokCmd) Execute(args []string) (int, error) {
 	return 0, nil
 }
 
-func newStokCmd(f k8s.FactoryInterface, out, errout io.Writer) *stokCmd {
+func newStokCmd(out, errout io.Writer) *stokCmd {
 	log.SetHandler(cli.New(out, errout))
 
 	cc := &stokCmd{}
@@ -71,10 +70,10 @@ func newStokCmd(f k8s.FactoryInterface, out, errout io.Writer) *stokCmd {
 	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
 	childCommands := append(
-		newLauncherCmds(f),
-		workspaceCmd(f, out),
+		newLauncherCmds(),
+		workspaceCmd(out),
 		generateCmd(out),
-		newRunnerCmd(f),
+		newRunnerCmd(),
 		manager.NewOperatorCmd())
 
 	cc.cmd.AddCommand(childCommands...)

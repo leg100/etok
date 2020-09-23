@@ -8,6 +8,7 @@ import (
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/archive"
+	"github.com/leg100/stok/testutil"
 	"github.com/leg100/stok/util"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"
@@ -38,8 +39,8 @@ func createTarballWithFiles(t *testing.T, filenames ...string) string {
 
 // Create workspace directory and make it the current working dir. Switch back to previous CWD
 // when test finishes
-func setupEnvironment(t *testing.T, namespace, workspace string) {
-	path := createTempPath(t)
+func setupEnvironment(t *testutil.T, namespace, workspace string) {
+	path := t.NewTempDir().Root()
 	previous, err := os.Getwd()
 	require.NoError(t, err)
 	require.NoError(t, os.Chdir(path))

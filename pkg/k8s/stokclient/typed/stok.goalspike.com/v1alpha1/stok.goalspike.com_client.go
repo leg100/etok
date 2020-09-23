@@ -18,7 +18,7 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/k8s/stokclient/stokclient/scheme"
+	"github.com/leg100/stok/pkg/k8s/stokclient/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

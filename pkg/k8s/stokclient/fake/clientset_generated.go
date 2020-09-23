@@ -17,9 +17,9 @@
 package fake
 
 import (
-	clientset "github.com/leg100/stok/pkg/k8s/stokclient/stokclient"
-	stokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/stokclient/typed/stok.goalspike.com/v1alpha1"
-	fakestokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/stokclient/typed/stok.goalspike.com/v1alpha1/fake"
+	clientset "github.com/leg100/stok/pkg/k8s/stokclient"
+	stokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
+	fakestokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

@@ -19,7 +19,7 @@ package stokclient
 import (
 	"fmt"
 
-	stokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/stokclient/typed/stok.goalspike.com/v1alpha1"
+	stokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

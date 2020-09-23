@@ -5,18 +5,23 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/leg100/stok/version"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStokNoArgs(t *testing.T) {
-	require.Equal(t, 0, Execute([]string{""}))
+	out := new(bytes.Buffer)
+	cmd := newStokCmd(out, out)
+	cmd.cmd.SetOut(out)
+
+	code, _ := cmd.Execute([]string{"-v"})
+
+	require.Equal(t, 0, code)
 }
 
 func TestStokHelp(t *testing.T) {
 	var out bytes.Buffer
-	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
+	var cmd = newStokCmd(os.Stdout, os.Stderr)
 
 	cmd.cmd.SetOut(&out)
 	code, err := cmd.Execute([]string{"-h"})
@@ -31,7 +36,7 @@ func TestStokVersion(t *testing.T) {
 	version.Commit = "xyz"
 
 	var out bytes.Buffer
-	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
+	var cmd = newStokCmd(os.Stdout, os.Stderr)
 
 	cmd.cmd.SetOut(&out)
 	code, err := cmd.Execute([]string{"-v"})
@@ -42,8 +47,10 @@ func TestStokVersion(t *testing.T) {
 }
 
 func TestStokDebug(t *testing.T) {
-	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
+	out := new(bytes.Buffer)
 
+	cmd := newStokCmd(out, out)
+	cmd.cmd.SetOut(out)
 	code, err := cmd.Execute([]string{"--debug"})
 
 	require.NoError(t, err)
@@ -51,9 +58,9 @@ func TestStokDebug(t *testing.T) {
 }
 
 func TestStokInvalidCommand(t *testing.T) {
-	var cmd = newStokCmd(&fake.Factory{}, os.Stdout, os.Stderr)
+	out := new(bytes.Buffer)
 
-	code, err := cmd.Execute([]string{"invalid"})
+	code, err := newStokCmd(out, out).Execute([]string{"invalid"})
 
 	require.Error(t, err)
 	require.Equal(t, 1, code)

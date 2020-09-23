@@ -9,40 +9,47 @@ import (
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/version"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 )
 
 type NewWorkspace struct {
-	Name          string
-	Namespace     string
-	Path          string
-	Timeout       time.Duration
-	TimeoutPod    time.Duration
-	Context       string
-	WorkspaceSpec v1alpha1.WorkspaceSpec
+	Name              string
+	Namespace         string
+	Path              string
+	Timeout           time.Duration
+	TimeoutPod        time.Duration
+	Context           string
+	WorkspaceSpec     v1alpha1.WorkspaceSpec
+	SecretSet         bool
+	ServiceAccountSet bool
 
-	Factory k8s.FactoryInterface
-	Debug   bool
-	Out     io.Writer
+	Debug bool
+	Out   io.Writer
 }
 
-func CheckResourceExists(ctx context.Context, rc client.Client, name, namespace string, obj runtime.Object) (bool, error) {
-	nn := types.NamespacedName{Name: name, Namespace: namespace}
-	if err := rc.Get(ctx, nn, obj); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
+// Checks if user has specified a resource dependency and if so, that it exists. If it does not,
+// then throw an error.
+// If user has not specified dependency, i.e. they have left it to the default "stok", then if it
+// does not exist, set the dependency name to "" and don't throw an error.
+func checkResourceExistsIfSet(name *string, isSet bool, get func(string) (runtime.Object, error)) error {
+	resource, err := get(*name)
+	if errors.IsNotFound(err) {
+		if isSet {
+			return fmt.Errorf("specified %T not found: %s", resource, *name)
 		} else {
-			return false, err
+			log.Debugf("Default %T %s not found; skipping", resource, *name)
+			*name = ""
+			return nil
 		}
 	}
-	return true, nil
+	return err
 }
 
 // Create new workspace. First check values of secret and service account flags, if either are empty
@@ -50,128 +57,61 @@ func CheckResourceExists(ctx context.Context, rc client.Client, name, namespace 
 // accordingly. Otherwise use user-supplied values and check they exist. Only then create the
 // workspace resource and wait until it is reporting it is healthy, or the timeout expires.
 func (t *NewWorkspace) Run(ctx context.Context) error {
-
-	config, err := t.Factory.NewConfig(t.Context)
+	sc, err := k8s.StokClient()
 	if err != nil {
 		return err
 	}
 
-	rc, err := t.Factory.NewClient(config)
+	kc, err := k8s.KubeClient()
 	if err != nil {
 		return err
 	}
 
-	// Delete any created resources upon program termination.
-	var resources []runtime.Object
-	go func() {
-		<-ctx.Done()
-
-		for _, r := range resources {
-			rc.Delete(context.TODO(), r)
-		}
-	}()
-
-	if t.WorkspaceSpec.SecretName != "" {
-		// Secret specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(ctx, rc, t.WorkspaceSpec.SecretName, t.Namespace, &corev1.Secret{})
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("secret '%s' not found", t.WorkspaceSpec.SecretName)
-		}
-	} else {
-		// Secret unspecified, check if resource called 'stok' exists and if so, use that
-		found, err := CheckResourceExists(ctx, rc, "stok", t.Namespace, &corev1.Secret{})
-		if err != nil {
-			return err
-		}
-		if found {
-			t.WorkspaceSpec.SecretName = "stok"
-			log.Info("Found default secret...")
-		}
-	}
-
-	if t.WorkspaceSpec.ServiceAccountName != "" {
-		// Service account specified; check that it exists and if not found then error
-		found, err := CheckResourceExists(ctx, rc, t.WorkspaceSpec.ServiceAccountName, t.Namespace, &corev1.ServiceAccount{})
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("service account '%s' not found", t.WorkspaceSpec.ServiceAccountName)
-		}
-	} else {
-		// Service account unspecified, check if resource called 'stok' exists and if so, use that
-		found, err := CheckResourceExists(ctx, rc, "stok", t.Namespace, &corev1.ServiceAccount{})
-		if err != nil {
-			return err
-		}
-		if found {
-			t.WorkspaceSpec.ServiceAccountName = "stok"
-			log.Info("Found default service account...")
-		}
-	}
-
-	ws, err := t.createWorkspace(rc)
+	err = checkResourceExistsIfSet(&t.WorkspaceSpec.SecretName, t.SecretSet, func(name string) (runtime.Object, error) {
+		return kc.CoreV1().Secrets(t.Namespace).Get(ctx, name, metav1.GetOptions{})
+	})
 	if err != nil {
 		return err
 	}
-	resources = append(resources, ws)
+
+	err = checkResourceExistsIfSet(&t.WorkspaceSpec.ServiceAccountName, t.ServiceAccountSet, func(name string) (runtime.Object, error) {
+		return kc.CoreV1().ServiceAccounts(t.Namespace).Get(ctx, name, metav1.GetOptions{})
+	})
+	if err != nil {
+		return err
+	}
+
+	ws, err := t.createWorkspace(ctx, sc)
+	if err != nil {
+		return err
+	}
+	deleteWorkspace := func() {
+		sc.StokV1alpha1().Workspaces(t.Namespace).Delete(ctx, ws.GetName(), metav1.DeleteOptions{})
+	}
 	log.WithFields(log.Fields{"namespace": t.Namespace, "workspace": t.Name}).Info("created workspace")
 
-	// Instantiate k8s cache mgr
-	mgr, err := t.Factory.NewManager(config, t.Namespace)
-	if err != nil {
+	// Monitor resources, wait until pod is running and ready
+	if err := t.monitor(ctx, sc, kc, ws); err != nil {
+		deleteWorkspace()
 		return err
 	}
 
-	// Run workspace reporter, which waits until the status reports the pod is ready
-	mgr.AddReporter(&WorkspaceReporter{
-		Client: rc,
-		Id:     t.Name,
-	})
+	// Attach to pod, and release hold annotation
+	if err = k8s.PodConnect(ctx, kc, t.Namespace, ws.PodName(), func() error {
+		wsclient := sc.StokV1alpha1().Workspaces(t.Namespace)
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			ws, err := wsclient.Get(ctx, ws.GetName(), metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
 
-	// Run workspace reporter, which waits until the status reports the pod is ready
-	mgr.AddReporter(&WorkspacePodReporter{
-		Client: rc,
-		Id:     ws.PodName(),
-	})
+			k8s.DeleteWaitAnnotationKey(ws)
 
-	// Run cache mgr, blocking until the reporter returns successfully, indicating that we can
-	// proceed to connecting to the pod.
-	if err := mgr.Start(ctx); err != nil {
-		return err
-	}
-
-	// Get pod
-	pod := &corev1.Pod{}
-	if err := rc.Get(ctx, types.NamespacedName{Name: ws.PodName(), Namespace: t.Namespace}, pod); err != nil {
-		return err
-	}
-
-	podlog := log.WithField("pod", k8s.GetNamespacedName(pod))
-
-	podlog.Debug("retrieve log stream")
-	logstream, err := rc.GetLogs(t.Namespace, ws.PodName(), &corev1.PodLogOptions{Follow: true, Container: "runner"})
-	if err != nil {
-		return err
-	}
-	defer logstream.Close()
-
-	// Attach to pod tty
-	done := make(chan error)
-	go func() {
-		podlog.Debug("attaching")
-		done <- k8s.AttachFallbackToLogs(rc, pod, logstream)
-	}()
-
-	// Let operator know we're now streaming logs
-	if err := k8s.ReleaseHold(ctx, rc, ws); err != nil {
-		return err
-	}
-
-	if err := <-done; err != nil {
+			_, err = wsclient.Update(ctx, ws, metav1.UpdateOptions{})
+			return err
+		})
+	}); err != nil {
+		deleteWorkspace()
 		return err
 	}
 
@@ -182,9 +122,7 @@ func (t *NewWorkspace) Run(ctx context.Context) error {
 	return nil
 }
 
-var WorkspaceTimeoutErr = fmt.Errorf("timed out waiting for workspace to be in a healthy condition")
-
-func (t *NewWorkspace) createWorkspace(rc client.Client) (*v1alpha1.Workspace, error) {
+func (t *NewWorkspace) createWorkspace(ctx context.Context, sc stokclient.Interface) (*v1alpha1.Workspace, error) {
 	ws := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      t.Name,
@@ -218,6 +156,34 @@ func (t *NewWorkspace) createWorkspace(rc client.Client) (*v1alpha1.Workspace, e
 	ws.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 	ws.SetDebug(t.Debug)
 
-	err := rc.Create(context.TODO(), ws)
-	return ws, err
+	return sc.StokV1alpha1().Workspaces(t.Namespace).Create(ctx, ws, metav1.CreateOptions{})
+}
+
+func (t *NewWorkspace) monitor(ctx context.Context, sc stokclient.Interface, kc kubernetes.Interface, ws *v1alpha1.Workspace) error {
+	errch := make(chan error)
+	ready := make(chan struct{})
+
+	// Non-blocking; watch workspace resource, check workspace is healthy
+	// TODO: What is the point of this?
+	(&workspaceMonitor{
+		ws:     ws,
+		client: sc,
+	}).monitor(ctx, errch)
+
+	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
+	// error on fatal pod errors
+	(&podMonitor{
+		ws:     ws,
+		client: kc,
+	}).monitor(ctx, errch, ready)
+
+	// Wait for pod to be ready
+	select {
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errch:
+		return err
+	}
 }

@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/leg100/stok/pkg/k8s/fake"
 	"github.com/leg100/stok/util"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +16,7 @@ func TestWorkspaceShow(t *testing.T) {
 		require.NoError(t, err)
 
 		var out = new(bytes.Buffer)
-		var cmd = newStokCmd(&fake.Factory{}, out, out)
+		var cmd = newStokCmd(out, out)
 
 		code, err := cmd.Execute([]string{
 			"workspace",
@@ -33,7 +32,7 @@ func TestWorkspaceShow(t *testing.T) {
 		path := createTempPath(t)
 
 		var out = new(bytes.Buffer)
-		var cmd = newStokCmd(&fake.Factory{}, out, out)
+		var cmd = newStokCmd(out, out)
 
 		code, err := cmd.Execute([]string{
 			"workspace",

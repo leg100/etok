@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/util/slice"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 )
 
 type Runner struct {
@@ -27,27 +30,9 @@ type Runner struct {
 	NoWait    bool
 
 	Args []string
-
-	Factory k8s.FactoryInterface
-}
-
-func (r *Runner) validate() error {
-	if r.Kind == "" {
-		return fmt.Errorf("missing flag: --kind <kind>")
-	}
-
-	if !slice.ContainsString([]string{"Run", "Workspace"}, r.Kind) {
-		return fmt.Errorf("invalid kind: %s", r.Kind)
-	}
-
-	return nil
 }
 
 func (r *Runner) Run(ctx context.Context) error {
-	if err := r.validate(); err != nil {
-		return err
-	}
-
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball, if specified
@@ -73,31 +58,33 @@ func (r *Runner) Run(ctx context.Context) error {
 	return r.run(ctx, os.Stdout, os.Stderr)
 }
 
+// Watch run/workspace until the 'wait' annotation has been cleared; this indicates that the client is in
+// place to stream logs
 func (r *Runner) sync(ctx context.Context) error {
-	// TODO: have NewConfig take ctx parameter
-	config, err := r.Factory.NewConfig(r.Context)
+	sc, err := k8s.StokClient()
 	if err != nil {
 		return err
 	}
 
-	rc, err := r.Factory.NewClient(config)
-	if err != nil {
-		return err
+	var lw cache.ListerWatcher
+	var obj runtime.Object
+
+	switch r.Kind {
+	case "Run":
+		lw = &k8s.RunListWatcher{Client: sc, Name: r.Name, Namespace: r.Namespace}
+		obj = &v1alpha1.Run{}
+	case "Workspace":
+		lw = &k8s.WorkspaceListWatcher{Client: sc, Name: r.Name, Namespace: r.Namespace}
+		obj = &v1alpha1.Workspace{}
+	default:
+		return fmt.Errorf("invalid kind: %s", r.Kind)
 	}
 
-	mgr, err := r.Factory.NewManager(config, r.Namespace)
-	if err != nil {
-		return err
-	}
+	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
+	defer cancel()
 
-	mgr.AddReporter(&reporter{
-		Client:  rc,
-		name:    r.Name,
-		kind:    r.Kind,
-		timeout: r.Timeout,
-	})
-
-	return mgr.Start(ctx)
+	_, err = watchtools.UntilWithSync(ctx, lw, obj, nil, isSyncHandler)
+	return err
 }
 
 // Run args, taking first arg as executable, and remainder as args to executable. Path sets the

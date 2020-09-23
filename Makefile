@@ -165,7 +165,7 @@ generate-clientset: client-gen
 		--input-base github.com/leg100/stok/api \
 		--input stok.goalspike.com/v1alpha1 \
 		-h hack/boilerplate.go.txt \
-		-p github.com/leg100/stok/pkg/k8s/stokclient ;\
+		-p github.com/leg100/stok/pkg/k8s ;\
 	mv github.com/leg100/stok/pkg/k8s/stokclient pkg/k8s/ ;\
 	rm -rf github.com ;\
 	}

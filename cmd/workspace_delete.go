@@ -3,13 +3,12 @@ package cmd
 import (
 	"flag"
 
-	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/workspace"
 	"github.com/spf13/cobra"
 )
 
-func newDeleteWorkspaceCmd(f k8s.FactoryInterface) *cobra.Command {
-	deleteWorkspace := &workspace.DeleteWorkspace{Factory: f}
+func newDeleteWorkspaceCmd() *cobra.Command {
+	deleteWorkspace := &workspace.DeleteWorkspace{}
 
 	cmd := &cobra.Command{
 		Use:   "delete <namespace/workspace>",
