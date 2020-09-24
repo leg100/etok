@@ -42,7 +42,7 @@ func TestWorkspaceShow(t *testing.T) {
 			}
 
 			out := new(bytes.Buffer)
-			code, _ := newStokCmd(out, out).Execute(tt.args)
+			code, _ := newStokCmd(tt.args, out, out).Execute()
 
 			require.Equal(t, tt.code, code)
 

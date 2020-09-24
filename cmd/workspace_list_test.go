@@ -39,13 +39,14 @@ func TestListWorkspaces(t *testing.T) {
 		})
 
 		out := new(bytes.Buffer)
-		cmd := newStokCmd(out, out)
-
-		code, err := cmd.Execute([]string{
+		args := []string{
 			"workspace",
 			"list",
 			"--path", path,
-		})
+		}
+		cmd := newStokCmd(args, out, out)
+
+		code, err := cmd.Execute()
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 		require.Equal(t, "*\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
@@ -60,13 +61,14 @@ func TestListWorkspaces(t *testing.T) {
 		})
 
 		out := new(bytes.Buffer)
-		cmd := newStokCmd(out, out)
-
-		code, err := cmd.Execute([]string{
+		args := []string{
 			"workspace",
 			"list",
 			"--path", path,
-		})
+		}
+		cmd := newStokCmd(args, out, out)
+
+		code, err := cmd.Execute()
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 		require.Equal(t, "\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())

@@ -11,20 +11,20 @@ import (
 
 func TestStokNoArgs(t *testing.T) {
 	out := new(bytes.Buffer)
-	cmd := newStokCmd(out, out)
+	cmd := newStokCmd([]string{"-v"}, out, out)
 	cmd.cmd.SetOut(out)
 
-	code, _ := cmd.Execute([]string{"-v"})
+	code, _ := cmd.Execute()
 
 	require.Equal(t, 0, code)
 }
 
 func TestStokHelp(t *testing.T) {
 	var out bytes.Buffer
-	var cmd = newStokCmd(os.Stdout, os.Stderr)
+	var cmd = newStokCmd([]string{"-h"}, os.Stdout, os.Stderr)
 
 	cmd.cmd.SetOut(&out)
-	code, err := cmd.Execute([]string{"-h"})
+	code, err := cmd.Execute()
 
 	require.NoError(t, err)
 	require.Regexp(t, "^Supercharge terraform on kubernetes\n", out.String())
@@ -36,10 +36,10 @@ func TestStokVersion(t *testing.T) {
 	version.Commit = "xyz"
 
 	var out bytes.Buffer
-	var cmd = newStokCmd(os.Stdout, os.Stderr)
+	var cmd = newStokCmd([]string{"-v"}, os.Stdout, os.Stderr)
 
 	cmd.cmd.SetOut(&out)
-	code, err := cmd.Execute([]string{"-v"})
+	code, err := cmd.Execute()
 
 	require.NoError(t, err)
 	require.Equal(t, "stok version 123\txyz\n", out.String())
@@ -49,9 +49,9 @@ func TestStokVersion(t *testing.T) {
 func TestStokDebug(t *testing.T) {
 	out := new(bytes.Buffer)
 
-	cmd := newStokCmd(out, out)
+	cmd := newStokCmd([]string{"--debug"}, out, out)
 	cmd.cmd.SetOut(out)
-	code, err := cmd.Execute([]string{"--debug"})
+	code, err := cmd.Execute()
 
 	require.NoError(t, err)
 	require.Equal(t, 0, code)
@@ -60,7 +60,7 @@ func TestStokDebug(t *testing.T) {
 func TestStokInvalidCommand(t *testing.T) {
 	out := new(bytes.Buffer)
 
-	code, err := newStokCmd(out, out).Execute([]string{"invalid"})
+	code, err := newStokCmd([]string{"invalid"}, out, out).Execute()
 
 	require.Error(t, err)
 	require.Equal(t, 1, code)
