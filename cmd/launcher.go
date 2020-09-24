@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api/run"
+	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/k8s/config"
 	launchermod "github.com/leg100/stok/pkg/launcher"
-	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 )
@@ -35,17 +35,21 @@ func newLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
 			Use: tfcmd,
 			RunE: func(cmd *cobra.Command, a []string) error {
 				// If either namespace or workspace has not been set by user, then try to load them
-				// from an environment file
-				namespace, workspace, err := util.ReadEnvironmentFile(launcher.Path)
-				if err != nil && !os.IsNotExist(err) {
-					// It's ok for an environment file to not exist, but not any other error
-					return err
-				}
-				if !cmd.Flags().Changed("namespace") {
-					launcher.Namespace = namespace
-				}
-				if !cmd.Flags().Changed("workspace") {
-					launcher.Workspace = workspace
+				// from an env file
+				stokenv, err := env.ReadStokEnv(launcher.Path)
+				if err != nil {
+					if !os.IsNotExist(err) {
+						// It's ok for an environment file to not exist, but not any other error
+						return err
+					}
+				} else {
+					// Env file found, use namespace/workspace if user has not overridden them
+					if !cmd.Flags().Changed("namespace") {
+						launcher.Namespace = stokenv.Namespace()
+					}
+					if !cmd.Flags().Changed("workspace") {
+						launcher.Workspace = stokenv.Workspace()
+					}
 				}
 
 				config.SetContext(kubeContext)

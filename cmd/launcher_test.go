@@ -110,13 +110,6 @@ func TestTerraform(t *testing.T) {
 		}
 	}
 
-	//run := func(namespace) *v1alpha1.Run {
-	//	run := &v1alpha1.Run{}
-	//	run.SetNamespace(namespace)
-	//	run.SetName(fake.GenerateName())
-	//	run.SetPhase(v1alpha1.RunPhaseSync)
-	//	return run
-	//}
 	tests := []struct {
 		name     string
 		args     []string
@@ -172,6 +165,12 @@ func TestTerraform(t *testing.T) {
 				kubeObjs: []runtime.Object{podReadyAndRunning("default", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("default", "default")},
 			},
+			{
+				name:     tfcmd + "WithoutStokEnv",
+				args:     []string{tfcmd},
+				kubeObjs: []runtime.Object{podReadyAndRunning("default", "run-12345")},
+				stokObjs: []runtime.Object{workspaceObj("default", "default")},
+			},
 		}...)
 	}
 
@@ -181,7 +180,9 @@ func TestTerraform(t *testing.T) {
 			path := t.NewTempDir().Chdir().Root()
 
 			// Write .terraform/environment
-			require.NoError(t, tt.env.Write(path))
+			if tt.env != "" {
+				require.NoError(t, tt.env.Write(path))
+			}
 
 			// Fix name for run, configmap, and pod
 			name := "run-12345"
