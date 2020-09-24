@@ -23,13 +23,12 @@ type stokCmd struct {
 }
 
 func Execute(args []string) int {
-	code, _ := newStokCmd(os.Stdout, os.Stderr).Execute(args)
+	code, _ := newStokCmd(args, os.Stdout, os.Stderr).Execute()
 	return code
 }
 
 // Run stok command with args, unwrap exit code from error, and return both code and error
-func (cc *stokCmd) Execute(args []string) (int, error) {
-	cc.cmd.SetArgs(args)
+func (cc *stokCmd) Execute() (int, error) {
 
 	// Create context, and cancel if interrupt is received
 	ctx, cancel := context.WithCancel(context.Background())
@@ -47,7 +46,7 @@ func (cc *stokCmd) Execute(args []string) (int, error) {
 	return 0, nil
 }
 
-func newStokCmd(out, errout io.Writer) *stokCmd {
+func newStokCmd(args []string, out, errout io.Writer) *stokCmd {
 	log.SetHandler(cli.New(out, errout))
 
 	cc := &stokCmd{}
@@ -70,7 +69,7 @@ func newStokCmd(out, errout io.Writer) *stokCmd {
 	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
 	childCommands := append(
-		newLauncherCmds(),
+		newLauncherCmds(cc.cmd, args),
 		workspaceCmd(out),
 		generateCmd(out),
 		newRunnerCmd(),

@@ -11,19 +11,29 @@ import (
 	"github.com/leg100/stok/pkg/k8s/config"
 	launchermod "github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/util"
+	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 )
 
-func newLauncherCmds() []*cobra.Command {
+func newLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
+	stokargs, tfargs := parseTerraformArgs(args)
+	root.SetArgs(stokargs)
+
 	var cmds []*cobra.Command
 
 	for _, tfcmd := range run.TerraformCommands {
-		launcher := &launchermod.Launcher{Command: tfcmd}
+		launcher := &launchermod.Launcher{Command: tfcmd, Args: tfargs}
+		if tfcmd == "sh" {
+			// Wrap shell args into a single command string
+			launcher.Args = wrapShellArgs(tfargs)
+		} else {
+			launcher.Args = tfargs
+		}
 
 		var kubeContext string
 		cmd := &cobra.Command{
 			Use: tfcmd,
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(cmd *cobra.Command, a []string) error {
 				// If either namespace or workspace has not been set by user, then try to load them
 				// from an environment file
 				namespace, workspace, err := util.ReadEnvironmentFile(launcher.Path)
@@ -45,12 +55,6 @@ func newLauncherCmds() []*cobra.Command {
 					return err
 				}
 				launcher.Debug = debug
-
-				if launcher.Command == "sh" {
-					// Wrap shell args into a single command string
-					args = wrapShellArgs(args)
-				}
-				launcher.Args = args
 
 				launcher.Name = launchermod.GenerateName()
 
@@ -82,6 +86,28 @@ func newLauncherCmds() []*cobra.Command {
 	}
 
 	return cmds
+}
+
+func isLauncherCmd(args []string) bool {
+	return len(args) > 0 && slice.ContainsString(run.TerraformCommands, args[0])
+}
+
+// Parse and return
+// stok-specific args (those before '--'), and
+// terraform-specific args (those after '--')
+func parseTerraformArgs(args []string) (stokargs []string, tfargs []string) {
+	if isLauncherCmd(args) {
+		// Parse args after '--' only
+		if i := slice.StringIndex(args, "--"); i > -1 {
+			return append([]string{args[0]}, args[i+1:]...), args[1:i]
+		} else {
+			// No stok specific args
+			return []string{args[0]}, args[1:]
+		}
+	} else {
+		// Not a launcher command
+		return args, []string{}
+	}
 }
 
 // Wrap shell args into a single command string

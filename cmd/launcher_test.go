@@ -24,6 +24,55 @@ import (
 	kfake "k8s.io/client-go/kubernetes/fake"
 )
 
+func TestParseTerraformArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		stokargs []string
+		tfargs   []string
+	}{
+		{
+			name:     "no args",
+			args:     []string{},
+			stokargs: []string{},
+			tfargs:   []string{},
+		},
+		{
+			name:     "tf args, no stok args",
+			args:     []string{"plan", "-input", "false"},
+			stokargs: []string{"plan"},
+			tfargs:   []string{"-input", "false"},
+		},
+		{
+			name:     "stok args, no tf args",
+			args:     []string{"plan", "--", "--namespace", "foo"},
+			stokargs: []string{"plan", "--namespace", "foo"},
+			tfargs:   []string{},
+		},
+		{
+			name:     "stok args, and tf args",
+			args:     []string{"plan", "-input", "false", "--", "--namespace", "foo"},
+			stokargs: []string{"plan", "--namespace", "foo"},
+			tfargs:   []string{"-input", "false"},
+		},
+		{
+			name:     "not a launcher command",
+			args:     []string{"workspace", "new", "bar", "--namespace", "foo"},
+			stokargs: []string{"workspace", "new", "bar", "--namespace", "foo"},
+			tfargs:   []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			stokargs, tfargs := parseTerraformArgs(tt.args)
+
+			require.Equal(t, tt.stokargs, stokargs)
+			require.Equal(t, tt.tfargs, tfargs)
+		})
+	}
+}
+
 func TestTerraform(t *testing.T) {
 	workspaceObj := func(namespace, name string, queue ...string) *v1alpha1.Workspace {
 		return &v1alpha1.Workspace{
@@ -90,35 +139,35 @@ func TestTerraform(t *testing.T) {
 		}{
 			{
 				name:     tfcmd + "WithDefaults",
-				args:     []string{tfcmd, "--debug"},
+				args:     []string{tfcmd, "--", "--debug"},
 				env:      env.StokEnv("default/default"),
 				kubeObjs: []runtime.Object{podReadyAndRunning("default", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("default", "default")},
 			},
 			{
 				name:     tfcmd + "WithSpecificNamespaceAndWorkspace",
-				args:     []string{tfcmd, "--debug"},
+				args:     []string{tfcmd, "--", "--debug"},
 				env:      env.StokEnv("foo/bar"),
 				kubeObjs: []runtime.Object{podReadyAndRunning("foo", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("foo", "bar")},
 			},
 			{
 				name:     tfcmd + "WithSpecificNamespaceAndWorkspaceFlags",
-				args:     []string{tfcmd, "--debug", "--namespace", "foo", "--workspace", "bar"},
+				args:     []string{tfcmd, "--", "--debug", "--namespace", "foo", "--workspace", "bar"},
 				env:      env.StokEnv("default/default"),
 				kubeObjs: []runtime.Object{podReadyAndRunning("foo", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("foo", "bar")},
 			},
 			{
-				name:     tfcmd + "WithFlag",
-				args:     []string{tfcmd, "--debug", "--", "-input", "false"},
+				name:     tfcmd + "WithTerraformFlag",
+				args:     []string{tfcmd, "-input", "false", "--", "--debug"},
 				env:      env.StokEnv("default/default"),
 				kubeObjs: []runtime.Object{podReadyAndRunning("default", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("default", "default")},
 			},
 			{
 				name:     tfcmd + "WithContextFlag",
-				args:     []string{tfcmd, "--debug", "--context", "oz-cluster"},
+				args:     []string{tfcmd, "--", "--debug", "--context", "oz-cluster"},
 				env:      env.StokEnv("default/default"),
 				kubeObjs: []runtime.Object{podReadyAndRunning("default", "run-12345")},
 				stokObjs: []runtime.Object{workspaceObj("default", "default")},
@@ -165,7 +214,7 @@ func TestTerraform(t *testing.T) {
 
 			// Execute cobra command
 			out := new(bytes.Buffer)
-			code, err := newStokCmd(out, out).Execute(tt.args)
+			code, err := newStokCmd(tt.args, out, out).Execute()
 
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)

@@ -28,11 +28,12 @@ func TestDeleteWorkspace(t *testing.T) {
 		})
 
 		out := new(bytes.Buffer)
-		code, err := newStokCmd(out, out).Execute([]string{
+		args := []string{
 			"workspace",
 			"delete",
 			"workspace-1",
-		})
+		}
+		code, err := newStokCmd(args, out, out).Execute()
 
 		require.NoError(t, err)
 		require.Equal(t, 0, code)

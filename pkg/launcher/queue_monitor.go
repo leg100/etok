@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"github.com/leg100/stok/util/slice"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
 )
@@ -42,6 +44,9 @@ func (qm *queueMonitor) monitor(ctx context.Context, errch chan<- error) {
 
 		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, qm.isQueuedHandler)
 		if err != nil {
+			if errors.Is(err, wait.ErrWaitTimeout) {
+				err = fmt.Errorf("timed out waiting for run to be added to workspace queue")
+			}
 			errch <- err
 			return
 		}
@@ -57,6 +62,9 @@ func (qm *queueMonitor) monitor(ctx context.Context, errch chan<- error) {
 
 			_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, qm.isFirstPlaceHandler)
 			if err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					err = fmt.Errorf("timed out waiting for run to reach first place in workspace queue")
+				}
 				errch <- err
 			}
 			log.Debug("run is in first place within queue timeout")

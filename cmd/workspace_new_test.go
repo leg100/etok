@@ -155,7 +155,7 @@ func TestNewWorkspace(t *testing.T) {
 
 			// Execute cobra command
 			out := new(bytes.Buffer)
-			code, err := newStokCmd(out, out).Execute(tt.args)
+			code, err := newStokCmd(tt.args, out, out).Execute()
 
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
