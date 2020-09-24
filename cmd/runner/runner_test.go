@@ -1,4 +1,4 @@
-package cmd
+package runner
 
 import (
 	"bytes"

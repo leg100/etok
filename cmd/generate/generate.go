@@ -1,4 +1,4 @@
-package cmd
+package generate
 
 import (
 	"io"
@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func generateCmd(out io.Writer) *cobra.Command {
+func GenerateCmd(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Generate stok kubernetes resources",

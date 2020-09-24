@@ -1,4 +1,4 @@
-package cmd
+package workspace
 
 import (
 	"github.com/leg100/stok/util"

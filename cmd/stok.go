@@ -10,7 +10,11 @@ import (
 	"strings"
 
 	"github.com/apex/log"
+	"github.com/leg100/stok/cmd/generate"
+	"github.com/leg100/stok/cmd/launcher"
 	"github.com/leg100/stok/cmd/manager"
+	"github.com/leg100/stok/cmd/runner"
+	"github.com/leg100/stok/cmd/workspace"
 	"github.com/leg100/stok/logging/handlers/cli"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
@@ -69,10 +73,10 @@ func newStokCmd(args []string, out, errout io.Writer) *stokCmd {
 	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
 	childCommands := append(
-		newLauncherCmds(cc.cmd, args),
-		workspaceCmd(out),
-		generateCmd(out),
-		newRunnerCmd(),
+		launcher.NewLauncherCmds(cc.cmd, args),
+		workspace.WorkspaceCmd(out),
+		generate.GenerateCmd(out),
+		runner.NewRunnerCmd(),
 		manager.NewOperatorCmd())
 
 	cc.cmd.AddCommand(childCommands...)

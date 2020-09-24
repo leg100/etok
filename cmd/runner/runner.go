@@ -1,4 +1,4 @@
-package cmd
+package runner
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newRunnerCmd() *cobra.Command {
+func NewRunnerCmd() *cobra.Command {
 	runner := &runner.Runner{}
 
 	var kubeContext string
