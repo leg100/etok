@@ -1,4 +1,4 @@
-package launcher
+package cmd
 
 import (
 	"flag"
@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
+func newLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
 	stokargs, tfargs := parseTerraformArgs(args)
 	root.SetArgs(stokargs)
 
