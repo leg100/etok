@@ -16,70 +16,76 @@ import (
 	"github.com/leg100/stok/cmd/runner"
 	"github.com/leg100/stok/cmd/workspace"
 	"github.com/leg100/stok/logging/handlers/cli"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/version"
+	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-type stokCmd struct {
-	debug bool
-	cmd   *cobra.Command
+func extractExitCodeFromError(err error) int {
+	var exiterr *exec.ExitError
+	if errors.As(err, &exiterr) {
+		return exiterr.ExitCode()
+	}
+	return 1
 }
 
-func Execute(args []string) int {
-	code, _ := newStokCmd(args, os.Stdout, os.Stderr).Execute()
-	return code
-}
-
-// Run stok command with args, unwrap exit code from error, and return both code and error
-func (cc *stokCmd) Execute() (int, error) {
-
-	// Create context, and cancel if interrupt is received
-	ctx, cancel := context.WithCancel(context.Background())
-	catchCtrlC(cancel)
-
-	if err := cc.cmd.ExecuteContext(ctx); err != nil {
+func Execute(ctx context.Context, args []string) int {
+	if err := run(ctx, args); err != nil {
 		log.WithError(err).Error("Fatal error")
 
-		var exiterr *exec.ExitError
-		if errors.As(err, &exiterr) {
-			return exiterr.ExitCode(), err
-		}
-		return 1, err
+		return extractExitCodeFromError(err)
 	}
-	return 0, nil
+	return 0
+}
+
+func run(ctx context.Context, args[]string) int {
+	rootcmd := &ffcli.Command{
+		Name:       "stok",
+		ShortUsage: "stok <subcommand> [flags] [<arg>...]",
+		FlagSet:    fs,
+		LongHelp: "Supercharge terraform on kubernetes",
+	}
+
+	rootcmd.Subcommands = []*ffcli.Command{
+		launcher.NewLauncherCmds(cc.cmd, args),
+		workspace.WorkspaceCmd(out),
+		generate.GenerateCmd(out),
+		runner.NewRunnerCmd(),
+		manager.NewOperatorCmd(),
+	}
+
+	if err := rootCommand.Parse(args); err != nil {
+		return err
+	}
+
+	sc, err := k8s.StokClient()
+	if err != nil {
+		return err
+	}
+
+	kc, err := k8s.KubeClient()
+	if err != nil {
+		return err
+	}
+
 }
 
 func newStokCmd(args []string, out, errout io.Writer) *stokCmd {
 	log.SetHandler(cli.New(out, errout))
 
-	cc := &stokCmd{}
+	var (
+		rootFlagSet = flag.NewFlagSet
+		versionFlag = rootFlagSet
 
-	cc.cmd = &cobra.Command{
-		Use:   "stok",
-		Short: "Supercharge terraform on kubernetes",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if cc.debug {
-				log.SetLevel(log.DebugLevel)
-				log.Debug("debug logging enabled")
-			}
-			return nil
-		},
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		Version:       fmt.Sprintf("%s\t%s", version.Version, version.Commit),
+	if cc.debug {
+		log.SetLevel(log.DebugLevel)
+		log.Debug("debug logging enabled")
 	}
-
+	return nil
 	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
-	childCommands := append(
-		launcher.NewLauncherCmds(cc.cmd, args),
-		workspace.WorkspaceCmd(out),
-		generate.GenerateCmd(out),
-		runner.NewRunnerCmd(),
-		manager.NewOperatorCmd())
-
-	cc.cmd.AddCommand(childCommands...)
 
 	setFlagsFromEnvVariables(cc.cmd)
 

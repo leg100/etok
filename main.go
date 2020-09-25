@@ -16,13 +16,19 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/leg100/stok/cmd"
+	"github.com/leg100/stok/pkg/signals"
 )
 
 func main() {
+	// Create context, and cancel if interrupt is received
+	ctx, cancel := context.WithCancel(context.Background())
+	signals.CatchCtrlC(cancel)
+
 	os.Exit(
-		cmd.Execute(os.Args[1:]),
+		cmd.Execute(ctx, os.Args[1:]),
 	)
 }

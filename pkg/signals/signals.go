@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cmd
+package signals
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"syscall"
 )
 
-func catchCtrlC(cancel context.CancelFunc) {
+func CatchCtrlC(cancel context.CancelFunc) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals,
 		os.Interrupt,
