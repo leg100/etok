@@ -1,4 +1,4 @@
-package workspace
+package cmd
 
 import (
 	"io"
@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func WorkspaceCmd(out io.Writer) *cobra.Command {
+func workspaceCmd(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
 		Short: "Stok workspace management",
