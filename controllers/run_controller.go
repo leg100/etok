@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -60,6 +61,11 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// Make workspace owner of run (so that if workspace is deleted, so are its runs)
+	if err := controllerutil.SetControllerReference(ws, run, r.Scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Check workspace queue position
 	pos := slice.StringIndex(ws.Status.Queue, run.GetName())
 	switch {
@@ -83,7 +89,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		run.SetPhase(v1alpha1.RunPhasePending)
 	}
 
-	return reconcile.Result{}, r.Status().Update(context.TODO(), run)
+	return reconcile.Result{}, r.Update(context.TODO(), run)
 }
 
 func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
