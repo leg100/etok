@@ -9,7 +9,6 @@ import (
 
 	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/k8s/config"
 	launchermod "github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
@@ -30,7 +29,6 @@ func NewLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
 			launcher.Args = tfargs
 		}
 
-		var kubeContext string
 		cmd := &cobra.Command{
 			Use: tfcmd,
 			RunE: func(cmd *cobra.Command, a []string) error {
@@ -51,8 +49,6 @@ func NewLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
 						launcher.Workspace = stokenv.Workspace()
 					}
 				}
-
-				config.SetContext(kubeContext)
 
 				debug, err := cmd.InheritedFlags().GetBool("debug")
 				if err != nil {
@@ -78,10 +74,8 @@ func NewLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
 		cmd.Flags().DurationVar(&launcher.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
 		// TODO: rename to timeout-pending (enqueue is too similar sounding to queue)
 		cmd.Flags().DurationVar(&launcher.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
-		cmd.Flags().StringVar(&launcher.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
 
 		cmd.Flags().StringVar(&launcher.Workspace, "workspace", "default", "Workspace name")
-		cmd.Flags().StringVar(&kubeContext, "context", "", "Set kube context (defaults to kubeconfig current context)")
 
 		// Add flags registered by imported packages (controller-runtime)
 		cmd.Flags().AddGoFlagSet(flag.CommandLine)

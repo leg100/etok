@@ -3,24 +3,22 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
+	"flag"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/cmd/generate"
 	"github.com/leg100/stok/cmd/launcher"
 	"github.com/leg100/stok/cmd/manager"
+	"github.com/leg100/stok/cmd/options"
 	"github.com/leg100/stok/cmd/runner"
 	"github.com/leg100/stok/cmd/workspace"
 	"github.com/leg100/stok/logging/handlers/cli"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/version"
+	"github.com/leg100/stok/util/slice"
+	"github.com/peterbourgon/ff"
 	"github.com/peterbourgon/ff/v3/ffcli"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 func extractExitCodeFromError(err error) int {
@@ -40,24 +38,38 @@ func Execute(ctx context.Context, args []string) int {
 	return 0
 }
 
-func run(ctx context.Context, args[]string) int {
+func run(ctx context.Context, args []string) error {
+	log.SetHandler(cli.New(os.Stdout, os.Stderr))
+
+	fs := flag.NewFlagSet("stok", flag.ExitOnError)
+
+	var globalOpts options.GlobalOpts
+	var kubeOpts options.KubeOpts
+
+	globalOpts.AddFlags(fs)
 	rootcmd := &ffcli.Command{
 		Name:       "stok",
 		ShortUsage: "stok <subcommand> [flags] [<arg>...]",
 		FlagSet:    fs,
-		LongHelp: "Supercharge terraform on kubernetes",
+		LongHelp:   "Supercharge terraform on kubernetes",
+		Options:    []ff.Option{ff.WithEnvVarPrefix("STOK")},
 	}
 
 	rootcmd.Subcommands = []*ffcli.Command{
-		launcher.NewLauncherCmds(cc.cmd, args),
-		workspace.WorkspaceCmd(out),
-		generate.GenerateCmd(out),
-		runner.NewRunnerCmd(),
-		manager.NewOperatorCmd(),
+		launcher.NewLauncherCmds(globalOpts, kubeOpts),
+		workspace.WorkspaceCmd(globalOpts, kubeOpts),
+		generate.GenerateCmd(globalOpts),
+		runner.NewRunnerCmd(globalOpts, kubeOpts),
+		manager.NewOperatorCmd(globalOpts),
 	}
 
-	if err := rootCommand.Parse(args); err != nil {
+	if err := parse(rootcmd, args); err != nil {
 		return err
+	}
+
+	if globalOpts.Debug {
+		log.SetLevel(log.DebugLevel)
+		log.Debug("debug logging enabled")
 	}
 
 	sc, err := k8s.StokClient()
@@ -70,46 +82,34 @@ func run(ctx context.Context, args[]string) int {
 		return err
 	}
 
+	kubeOpts.StokClient = sc
+	kubeOpts.KubeClient = kc
+
+	return rootcmd.Run(ctx)
 }
 
-func newStokCmd(args []string, out, errout io.Writer) *stokCmd {
-	log.SetHandler(cli.New(out, errout))
-
-	var (
-		rootFlagSet = flag.NewFlagSet
-		versionFlag = rootFlagSet
-
-	if cc.debug {
-		log.SetLevel(log.DebugLevel)
-		log.Debug("debug logging enabled")
+func parse(rootcmd *ffcli.Command, args []string) error {
+	if isLauncherCmd(args) {
+		// Swap terraform args to instead follow a terminator (--), and stok args
+		// to precede a terminator
+		args = append([]string{args[0]}, swapArgs(args[1:])...)
 	}
-	return nil
-	cc.cmd.PersistentFlags().BoolVar(&cc.debug, "debug", false, "Enable debug logging")
 
-
-	setFlagsFromEnvVariables(cc.cmd)
-
-	return cc
+	return rootcmd.Parse(args)
 }
 
-// Each flag can also be set with an env variable whose name starts with `STOK_`.
-func setFlagsFromEnvVariables(rootCmd *cobra.Command) {
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		envVar := FlagToEnvVarName(f)
-		if val, present := os.LookupEnv(envVar); present {
-			rootCmd.PersistentFlags().Set(f.Name, val)
-		}
-	})
-	for _, cmd := range rootCmd.Commands() {
-		cmd.Flags().VisitAll(func(f *pflag.Flag) {
-			envVar := FlagToEnvVarName(f)
-			if val, present := os.LookupEnv(envVar); present {
-				cmd.Flags().Set(f.Name, val)
-			}
-		})
+// Parse args to determine if it'll invoke a launcher command, i.e. terraform commands
+func isLauncherCmd(args []string) bool {
+	return len(args) > 0 && slice.ContainsString(run.TerraformCommands, args[0])
+}
+
+// Swap around args:
+// (a) If terminator (--) is found, then swap the args either side of terminator
+// (b) If terminator is not found, then add one before any args
+func swapArgs(args []string) []string {
+	if i := slice.StringIndex(args, "--"); i > -1 {
+		return append(args[i+1:], args[:i]...)
+	} else {
+		return append([]string{"--"}, args...)
 	}
-}
-
-func FlagToEnvVarName(f *pflag.Flag) string {
-	return fmt.Sprintf("STOK_%s", strings.Replace(strings.ToUpper(f.Name), "-", "_", -1))
 }
