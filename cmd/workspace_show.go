@@ -1,32 +1,31 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"io"
 
+	"github.com/leg100/stok/cmd/flags"
 	"github.com/leg100/stok/pkg/env"
-	"github.com/spf13/cobra"
+	"github.com/leg100/stok/pkg/options"
 )
 
-func newShowWorkspaceCmd(out io.Writer) *cobra.Command {
-	var Path string
+func init() {
+	workspaceCmd.AddChild(
+		NewCmd("show").
+			WithShortUsage("show").
+			WithShortHelp("Show current workspace").
+			WithFlags(
+				flags.Path,
+			).
+			WithOneArg().
+			WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+				stokenv, err := env.ReadStokEnv(opts.Path)
+				if err != nil {
+					return err
+				}
 
-	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show current stok workspace",
-		Long:  "Show the current stok workspace for this module",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			stokenv, err := env.ReadStokEnv(Path)
-			if err != nil {
-				return err
-			}
+				fmt.Fprintln(opts.Out, string(stokenv))
 
-			fmt.Fprintln(out, string(stokenv))
-
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&Path, "path", ".", "workspace config path")
-
-	return cmd
+				return nil
+			}))
 }

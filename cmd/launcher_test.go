@@ -3,17 +3,19 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/apps/launcher"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
-	"github.com/leg100/stok/pkg/launcher"
 	"github.com/leg100/stok/testutil"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/require"
@@ -24,54 +26,54 @@ import (
 	kfake "k8s.io/client-go/kubernetes/fake"
 )
 
-func TestParseTerraformArgs(t *testing.T) {
-	tests := []struct {
-		name     string
-		args     []string
-		stokargs []string
-		tfargs   []string
-	}{
-		{
-			name:     "no args",
-			args:     []string{},
-			stokargs: []string{},
-			tfargs:   []string{},
-		},
-		{
-			name:     "tf args, no stok args",
-			args:     []string{"plan", "-input", "false"},
-			stokargs: []string{"plan"},
-			tfargs:   []string{"-input", "false"},
-		},
-		{
-			name:     "stok args, no tf args",
-			args:     []string{"plan", "--", "--namespace", "foo"},
-			stokargs: []string{"plan", "--namespace", "foo"},
-			tfargs:   []string{},
-		},
-		{
-			name:     "stok args, and tf args",
-			args:     []string{"plan", "-input", "false", "--", "--namespace", "foo"},
-			stokargs: []string{"plan", "--namespace", "foo"},
-			tfargs:   []string{"-input", "false"},
-		},
-		{
-			name:     "not a launcher command",
-			args:     []string{"workspace", "new", "bar", "--namespace", "foo"},
-			stokargs: []string{"workspace", "new", "bar", "--namespace", "foo"},
-			tfargs:   []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		testutil.Run(t, tt.name, func(t *testutil.T) {
-			stokargs, tfargs := parseTerraformArgs(tt.args)
-
-			require.Equal(t, tt.stokargs, stokargs)
-			require.Equal(t, tt.tfargs, tfargs)
-		})
-	}
-}
+//func TestParseTerraformArgs(t *testing.T) {
+//	tests := []struct {
+//		name     string
+//		args     []string
+//		stokargs []string
+//		tfargs   []string
+//	}{
+//		{
+//			name:     "no args",
+//			args:     []string{},
+//			stokargs: []string{},
+//			tfargs:   []string{},
+//		},
+//		{
+//			name:     "tf args, no stok args",
+//			args:     []string{"plan", "-input", "false"},
+//			stokargs: []string{"plan"},
+//			tfargs:   []string{"-input", "false"},
+//		},
+//		{
+//			name:     "stok args, no tf args",
+//			args:     []string{"plan", "--", "--namespace", "foo"},
+//			stokargs: []string{"plan", "--namespace", "foo"},
+//			tfargs:   []string{},
+//		},
+//		{
+//			name:     "stok args, and tf args",
+//			args:     []string{"plan", "-input", "false", "--", "--namespace", "foo"},
+//			stokargs: []string{"plan", "--namespace", "foo"},
+//			tfargs:   []string{"-input", "false"},
+//		},
+//		{
+//			name:     "not a launcher command",
+//			args:     []string{"workspace", "new", "bar", "--namespace", "foo"},
+//			stokargs: []string{"workspace", "new", "bar", "--namespace", "foo"},
+//			tfargs:   []string{},
+//		},
+//	}
+//
+//	for _, tt := range tests {
+//		testutil.Run(t, tt.name, func(t *testutil.T) {
+//			stokargs, tfargs := parseTerraformArgs(tt.args)
+//
+//			require.Equal(t, tt.stokargs, stokargs)
+//			require.Equal(t, tt.tfargs, tfargs)
+//		})
+//	}
+//}
 
 func TestTerraform(t *testing.T) {
 	workspaceObj := func(namespace, name string, queue ...string) *v1alpha1.Workspace {
@@ -120,7 +122,15 @@ func TestTerraform(t *testing.T) {
 		code     int
 	}{}
 
-	for _, tfcmd := range run.TerraformCommands {
+	var tfpaths []string
+	for k, v := range run.TerraformCommandMap {
+		if len(v) > 0 {
+			tfpaths = append(tfpaths, fmt.Sprintf("%s %s", k, strings.Join(v, " ")))
+		}
+		tfpaths = append(tfpaths, k)
+	}
+
+	for _, tfcmd := range tfpaths {
 		tests = append(tests, []struct {
 			name     string
 			args     []string
@@ -213,9 +223,8 @@ func TestTerraform(t *testing.T) {
 				return fakeStokClient, nil
 			})
 
-			// Execute cobra command
 			out := new(bytes.Buffer)
-			code, err := newStokCmd(tt.args, out, out).Execute()
+			code, err := ExecWithExitCode(context.Background(), tt.args, out, out)
 
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)

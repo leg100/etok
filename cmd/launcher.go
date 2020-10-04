@@ -3,108 +3,76 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/leg100/stok/api/run"
-	"github.com/leg100/stok/pkg/env"
-	launchermod "github.com/leg100/stok/pkg/launcher"
-	"github.com/leg100/stok/util/slice"
-	"github.com/spf13/cobra"
+	"github.com/leg100/stok/cmd/flags"
+	"github.com/leg100/stok/pkg/apps/launcher"
+	"github.com/leg100/stok/pkg/options"
 )
 
-func newLauncherCmds(root *cobra.Command, args []string) []*cobra.Command {
-	stokargs, tfargs := parseTerraformArgs(args)
-	root.SetArgs(stokargs)
-
-	var cmds []*cobra.Command
-
-	for _, tfcmd := range run.TerraformCommands {
-		launcher := &launchermod.Launcher{Command: tfcmd, Args: tfargs}
-		if tfcmd == "sh" {
-			// Wrap shell args into a single command string
-			launcher.Args = wrapShellArgs(tfargs)
+func init() {
+	for k, v := range run.TerraformCommandMap {
+		if len(v) > 0 {
+			// Terraform 'family' of commands, i.e. terraform show mv|rm|pull|push|show
+			parent := NewCmd(k).WithShortHelp(fmt.Sprintf("terraform %s family of commands", k))
+			root.AddChild(parent)
+			for _, child := range v {
+				parent.AddChild(launcherCmd(child))
+			}
 		} else {
-			launcher.Args = tfargs
+			root.AddChild(launcherCmd(k))
 		}
-
-		cmd := &cobra.Command{
-			Use: tfcmd,
-			RunE: func(cmd *cobra.Command, a []string) error {
-				// If either namespace or workspace has not been set by user, then try to load them
-				// from an env file
-				stokenv, err := env.ReadStokEnv(launcher.Path)
-				if err != nil {
-					if !os.IsNotExist(err) {
-						// It's ok for an environment file to not exist, but not any other error
-						return err
-					}
-				} else {
-					// Env file found, use namespace/workspace if user has not overridden them
-					if !cmd.Flags().Changed("namespace") {
-						launcher.Namespace = stokenv.Namespace()
-					}
-					if !cmd.Flags().Changed("workspace") {
-						launcher.Workspace = stokenv.Workspace()
-					}
-				}
-
-				debug, err := cmd.InheritedFlags().GetBool("debug")
-				if err != nil {
-					return err
-				}
-				launcher.Debug = debug
-
-				launcher.Name = launchermod.GenerateName()
-
-				return launcher.Run(cmd.Context())
-			},
-		}
-
-		if tfcmd == "sh" {
-			cmd.Short = "Run shell"
-		} else {
-			cmd.Short = fmt.Sprintf("Run terraform %s", tfcmd)
-		}
-
-		cmd.Flags().StringVar(&launcher.Path, "path", ".", "terraform config path")
-		cmd.Flags().DurationVar(&launcher.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
-		cmd.Flags().DurationVar(&launcher.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
-		cmd.Flags().DurationVar(&launcher.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
-		// TODO: rename to timeout-pending (enqueue is too similar sounding to queue)
-		cmd.Flags().DurationVar(&launcher.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
-
-		cmd.Flags().StringVar(&launcher.Workspace, "workspace", "default", "Workspace name")
-
-		// Add flags registered by imported packages (controller-runtime)
-		cmd.Flags().AddGoFlagSet(flag.CommandLine)
-
-		cmds = append(cmds, cmd)
 	}
-
-	return cmds
 }
 
-func isLauncherCmd(args []string) bool {
-	return len(args) > 0 && slice.ContainsString(run.TerraformCommands, args[0])
+func launcherCmd(tfcmd string) Builder {
+	return NewCmd(tfcmd).
+		WithShortUsage(fmt.Sprintf("%s [flags] -- [command flags|args]", tfcmd)).
+		WithShortHelp(launcherShortHelp(tfcmd)).
+		WithFlags(
+			flags.Path,
+			func(fs *flag.FlagSet, opts *options.StokOptions) {
+				fs.DurationVar(&opts.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
+				fs.DurationVar(&opts.TimeoutClient, "timeout-client", 10*time.Second, "timeout for client to signal readiness")
+				fs.DurationVar(&opts.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
+				fs.DurationVar(&opts.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
+
+				fs.StringVar(&opts.StokEnv, "workspace", "default", "Stok workspace")
+			},
+		).
+		WithOneArg().
+		WithPreExec(func(fs *flag.FlagSet, opts *options.StokOptions) error {
+			// Bring tfcmd into local lexical scope
+			tfcmd := tfcmd
+
+			if tfcmd == "sh" {
+				// Wrap shell args into a single command string
+				opts.Args = wrapShellArgs(opts.Args)
+			}
+
+			opts.Name = launcher.GenerateName()
+			opts.Command = tfcmd
+
+			if err := opts.SetWorkspace(fs); err != nil {
+				return err
+			}
+
+			if err := opts.SetNamespace(fs); err != nil {
+				return err
+			}
+
+			return nil
+		}).
+		WithApp(launcher.NewFromOptions)
 }
 
-// Parse and return
-// stok-specific args (those before '--'), and
-// terraform-specific args (those after '--')
-func parseTerraformArgs(args []string) (stokargs []string, tfargs []string) {
-	if isLauncherCmd(args) {
-		// Parse args after '--' only
-		if i := slice.StringIndex(args, "--"); i > -1 {
-			return append([]string{args[0]}, args[i+1:]...), args[1:i]
-		} else {
-			// No stok specific args
-			return []string{args[0]}, args[1:]
-		}
+func launcherShortHelp(tfcmd string) string {
+	if tfcmd == "sh" {
+		return "Run shell"
 	} else {
-		// Not a launcher command
-		return args, []string{}
+		return fmt.Sprintf("Run terraform %s", tfcmd)
 	}
 }
 

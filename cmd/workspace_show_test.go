@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"regexp"
 	"testing"
 
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,14 +44,14 @@ func TestWorkspaceShow(t *testing.T) {
 			}
 
 			out := new(bytes.Buffer)
-			code, _ := newStokCmd(tt.args, out, out).Execute()
+			code, _ := ExecWithExitCode(context.Background(), tt.args, out, out)
 
-			require.Equal(t, tt.code, code)
+			assert.Equal(t, tt.code, code)
 
 			// Merely ensure expected output is a subset of actual output (no such file error
 			// messages include the temporary directory name which isn't known to the test case in
 			// the table above)
-			require.Regexp(t, regexp.MustCompile(tt.out), out.String())
+			assert.Regexp(t, regexp.MustCompile(tt.out), out.String())
 		})
 	}
 }

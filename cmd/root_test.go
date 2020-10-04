@@ -2,66 +2,62 @@ package cmd
 
 import (
 	"bytes"
-	"os"
+	"context"
 	"testing"
 
+	"github.com/leg100/stok/testutil"
 	"github.com/leg100/stok/version"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestStokNoArgs(t *testing.T) {
-	out := new(bytes.Buffer)
-	cmd := newStokCmd([]string{"-v"}, out, out)
-	cmd.cmd.SetOut(out)
+func TestRoot(t *testing.T) {
+	tests := []struct {
+		name  string
+		args  []string
+		out   string
+		code  int
+		setup func()
+	}{
+		{
+			name: "version",
+			args: []string{"-v"},
+			out:  "stok version 123\txyz\n",
+			setup: func() {
+				version.Version = "123"
+				version.Commit = "xyz"
+			},
+		},
+		{
+			name: "no args",
+			args: []string{},
+			code: 1,
+		},
+		{
+			name: "help",
+			args: []string{"-h"},
+			out:  "^Usage\n",
+			code: 1,
+		},
+		{
+			name: "invalid",
+			args: []string{"invalid"},
+			code: 1,
+		},
+	}
 
-	code, _ := cmd.Execute()
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			if tt.setup != nil {
+				tt.setup()
+			}
+			out := new(bytes.Buffer)
 
-	require.Equal(t, 0, code)
-}
+			code, _ := ExecWithExitCode(context.Background(), tt.args, out, out)
+			//fmt.Printf("out: %v\n", out.String())
 
-func TestStokHelp(t *testing.T) {
-	var out bytes.Buffer
-	var cmd = newStokCmd([]string{"-h"}, os.Stdout, os.Stderr)
-
-	cmd.cmd.SetOut(&out)
-	code, err := cmd.Execute()
-
-	require.NoError(t, err)
-	require.Regexp(t, "^Supercharge terraform on kubernetes\n", out.String())
-	require.Equal(t, 0, code)
-}
-
-func TestStokVersion(t *testing.T) {
-	version.Version = "123"
-	version.Commit = "xyz"
-
-	var out bytes.Buffer
-	var cmd = newStokCmd([]string{"-v"}, os.Stdout, os.Stderr)
-
-	cmd.cmd.SetOut(&out)
-	code, err := cmd.Execute()
-
-	require.NoError(t, err)
-	require.Equal(t, "stok version 123\txyz\n", out.String())
-	require.Equal(t, 0, code)
-}
-
-func TestStokDebug(t *testing.T) {
-	out := new(bytes.Buffer)
-
-	cmd := newStokCmd([]string{"--debug"}, out, out)
-	cmd.cmd.SetOut(out)
-	code, err := cmd.Execute()
-
-	require.NoError(t, err)
-	require.Equal(t, 0, code)
-}
-
-func TestStokInvalidCommand(t *testing.T) {
-	out := new(bytes.Buffer)
-
-	code, err := newStokCmd([]string{"invalid"}, out, out).Execute()
-
-	require.Error(t, err)
-	require.Equal(t, 1, code)
+			//require.NoError(t, err)
+			assert.Equal(t, tt.code, code)
+			assert.Regexp(t, tt.out, out)
+		})
+	}
 }

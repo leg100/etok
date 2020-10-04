@@ -1,17 +1,7 @@
 package cmd
 
-import (
-	"io"
+var generateCmd = NewCmd("generate").WithShortHelp("Generate stok kubernetes resources")
 
-	"github.com/spf13/cobra"
-)
-
-func generateCmd(out io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "generate",
-		Short: "Generate stok kubernetes resources",
-	}
-	cmd.AddCommand(newOperatorCmd(), newCrdsCmd(out))
-
-	return cmd
+func init() {
+	root.AddChild(generateCmd)
 }

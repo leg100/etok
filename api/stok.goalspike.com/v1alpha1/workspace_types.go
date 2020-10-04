@@ -57,12 +57,16 @@ func (ws *Workspace) PodName() string {
 
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
-	SecretName         string             `json:"secretName,omitempty"`
-	ServiceAccountName string             `json:"serviceAccountName,omitempty"`
-	Cache              WorkspaceCacheSpec `json:"cache,omitempty"`
-	Backend            BackendSpec        `json:"backend"`
-	TimeoutClient      string             `json:"timeoutClient"`
-	Debug              bool               `json:"debug,omitempty"`
+	// +kubebuilder:default=stok
+	SecretName string `json:"secretName,omitempty"`
+
+	// +kubebuilder:default=stok
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	Cache         WorkspaceCacheSpec `json:"cache,omitempty"`
+	Backend       BackendSpec        `json:"backend"`
+	TimeoutClient string             `json:"timeoutClient"`
+	Debug         bool               `json:"debug,omitempty"`
 }
 
 // Get/Set TimeoutQueue functions

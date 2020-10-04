@@ -76,54 +76,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		instance.Status.Queue = []string{}
 	}
 
-	// Check ServiceAccount exists (if specified)
-	if instance.Spec.ServiceAccountName != "" {
-		serviceAccountNamespacedName := types.NamespacedName{Name: instance.Spec.ServiceAccountName, Namespace: req.Namespace}
-		err = r.Get(context.TODO(), serviceAccountNamespacedName, &corev1.ServiceAccount{})
-		if errors.IsNotFound(err) {
-			instance.Status.Conditions.SetCondition(status.Condition{
-				Type:    v1alpha1.ConditionHealthy,
-				Status:  corev1.ConditionFalse,
-				Reason:  v1alpha1.ReasonMissingResource,
-				Message: "ServiceAccount resource not found",
-			})
-			if err = r.Status().Update(context.TODO(), instance); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
-			}
-			// Pointless proceeding any further or requeuing a request (the service account watch will
-			// take care of triggering a request)
-			return ctrl.Result{}, nil
-		} else if err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Flag success if Secret is either:
-	// (a) unspecified and thus not required
-	// (b) specified and successfully found
-	if instance.Spec.SecretName != "" {
-		secretNamespacedName := types.NamespacedName{Name: instance.Spec.SecretName, Namespace: req.Namespace}
-		err = r.Get(context.TODO(), secretNamespacedName, &corev1.Secret{})
-		if errors.IsNotFound(err) {
-			instance.Status.Conditions.SetCondition(status.Condition{
-				Type:    v1alpha1.ConditionHealthy,
-				Status:  corev1.ConditionFalse,
-				Reason:  v1alpha1.ReasonMissingResource,
-				Message: "Secret resource not found",
-			})
-			if err = r.Status().Update(context.TODO(), instance); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
-			}
-			// Pointless proceeding any further or requeuing a request (the secret watch will
-			// take care of triggering a request)
-			return ctrl.Result{}, nil
-		} else if err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Set Healthy Condition since all pre-requisities satisfied
-	// TODO: only set this after confirming PVC (see below) is present
+	// TODO: only set this after confirming PVC and pod (see below) is present
 	instance.Status.Conditions.SetCondition(status.Condition{
 		Type:    v1alpha1.ConditionHealthy,
 		Status:  corev1.ConditionTrue,

@@ -18,9 +18,9 @@ require (
 	github.com/kr/pty v1.1.5
 	github.com/mattn/go-colorable v0.1.2
 	github.com/operator-framework/operator-sdk v0.19.0
-	github.com/spf13/cobra v1.0.0
-	github.com/spf13/pflag v1.0.5
+	github.com/peterbourgon/ff/v3 v3.0.0
 	github.com/stretchr/testify v1.6.1
+	github.com/tj/assert v0.0.3
 	golang.org/x/crypto v0.0.0-20200422194213-44a606286825 // indirect
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e

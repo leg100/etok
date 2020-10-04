@@ -1,27 +1,31 @@
 package cmd
 
 import (
-	"os"
+	"context"
+	"flag"
 
 	"github.com/leg100/stok/pkg/generate"
+	"github.com/leg100/stok/pkg/options"
 	"github.com/leg100/stok/version"
-	"github.com/spf13/cobra"
 )
 
-func newOperatorCmd() *cobra.Command {
-	operator := &generate.Operator{}
-
-	cmd := &cobra.Command{
-		Use:   "operator",
-		Short: "Generate operator's kubernetes resources",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return operator.Generate(os.Stdout)
-		},
-	}
-
-	cmd.Flags().StringVar(&operator.Name, "name", "stok-operator", "Name for kubernetes resources")
-	cmd.Flags().StringVar(&operator.Namespace, "namespace", "default", "Kubernetes namespace for resources")
-	cmd.Flags().StringVar(&operator.Image, "image", version.Image, "Docker image used for both the operator and the runner")
-
-	return cmd
+func init() {
+	generateCmd.AddChild(
+		NewCmd("operator").
+			WithShortUsage("new <[namespace/]workspace>").
+			WithShortHelp("Generate operator's kubernetes resources").
+			WithFlags(func(fs *flag.FlagSet, opts *options.StokOptions) {
+				fs.StringVar(&opts.Name, "name", "stok-operator", "Name for kubernetes resources")
+				fs.StringVar(&opts.Namespace, "namespace", "default", "Kubernetes namespace for resources")
+				fs.StringVar(&opts.Image, "image", version.Image, "Docker image used for both the operator and the runner")
+			}).
+			WithOneArg().
+			WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+				return (&generate.Operator{
+					Name:      opts.Name,
+					Namespace: opts.Namespace,
+					Image:     opts.Image,
+					Out:       opts.Out,
+				}).Generate()
+			}))
 }

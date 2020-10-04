@@ -5,16 +5,20 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/cmd/options"
+	"github.com/leg100/stok/pkg/apps"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/stok/pkg/options"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 )
 
 type Launcher struct {
 	Name           string
+	Namespace      string
 	Workspace      string
 	Command        string
 	Path           string
@@ -24,8 +28,25 @@ type Launcher struct {
 	TimeoutQueue   time.Duration
 	TimeoutEnqueue time.Duration
 
-	options.GlobalOpts
-	options.KubeOpts
+	StokClient stokclient.Interface
+	KubeClient kubernetes.Interface
+
+	Debug bool
+}
+
+func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, error) {
+	return &Launcher{
+		Name:           opts.Name,
+		Namespace:      opts.Namespace,
+		Path:           opts.Path,
+		TimeoutClient:  opts.TimeoutClient,
+		TimeoutPod:     opts.TimeoutPod,
+		TimeoutQueue:   opts.TimeoutQueue,
+		TimeoutEnqueue: opts.TimeoutEnqueue,
+		StokClient:     opts.StokClient,
+		KubeClient:     opts.KubeClient,
+		Debug:          opts.Debug,
+	}, nil
 }
 
 func (t *Launcher) Run(ctx context.Context) error {

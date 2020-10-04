@@ -5,6 +5,7 @@ import (
 
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
+	"github.com/tj/assert"
 )
 
 func TestStokEnv(t *testing.T) {
@@ -15,4 +16,11 @@ func TestStokEnv(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "default", env.Namespace())
 	require.Equal(t, "test-env", env.Workspace())
+}
+
+func TestStokEnvValidate(t *testing.T) {
+	assert.NoError(t, Validate("default/foo"))
+	assert.NoError(t, Validate("foo"))
+	assert.Error(t, Validate("foo$"))
+	assert.Error(t, Validate("defaul/foo/"))
 }

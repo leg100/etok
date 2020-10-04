@@ -2,65 +2,55 @@ package cmd
 
 import (
 	"flag"
-	"io"
 	"time"
 
-	"github.com/leg100/stok/pkg/k8s/config"
-	"github.com/leg100/stok/pkg/workspace"
-	"github.com/spf13/cobra"
+	"github.com/leg100/stok/cmd/flags"
+	"github.com/leg100/stok/pkg/apps/workspace"
+	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/options"
 )
 
-func newNewWorkspaceCmd(out io.Writer) *cobra.Command {
-	newWorkspace := &workspace.NewWorkspace{Out: out}
+func init() {
+	workspaceCmd.AddChild(
+		NewCmd("new").
+			WithShortUsage("new <[namespace/]workspace>").
+			WithShortHelp("Create a new stok workspace").
+			WithFlags(
+				flags.Path,
+				workspaceFlags,
+			).
+			WithOneArg().
+			WithPreExec(func(fs *flag.FlagSet, opts *options.StokOptions) error {
+				name, ns, err := env.ValidateAndParse(opts.Args[0])
+				if err != nil {
+					return err
+				}
 
-	var kubeContext string
-	cmd := &cobra.Command{
-		Use:   "new <workspace>",
-		Short: "Create a new stok workspace",
-		Long:  "Deploys a Workspace resource",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			config.SetContext(kubeContext)
+				if ns != "" {
+					// Namespace arg overrides namespace flag
+					opts.Namespace = ns
+				}
 
-			debug, err := cmd.InheritedFlags().GetBool("debug")
-			if err != nil {
-				return err
-			}
-			newWorkspace.Debug = debug
+				opts.Name = name
 
-			newWorkspace.Name = args[0]
+				return nil
+			}).
+			WithApp(workspace.NewFromOptions))
+}
 
-			if cmd.Flags().Changed("service-account") {
-				newWorkspace.ServiceAccountSet = true
-			}
-			if cmd.Flags().Changed("secret") {
-				newWorkspace.SecretSet = true
-			}
+func workspaceFlags(fs *flag.FlagSet, opts *options.StokOptions) {
+	fs.BoolVar(&opts.CreateServiceAccount, "create-service-account", true, "Create service account if it does not exist")
+	fs.BoolVar(&opts.CreateSecret, "create-secret", true, "Create secret if it does not exist")
 
-			return newWorkspace.Run(cmd.Context())
-		},
-	}
-	cmd.Flags().StringVar(&newWorkspace.Path, "path", ".", "workspace config path")
-	cmd.Flags().StringVar(&newWorkspace.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
+	fs.StringVar(&opts.WorkspaceSpec.ServiceAccountName, "service-account", "stok", "Name of ServiceAccount")
+	fs.StringVar(&opts.WorkspaceSpec.SecretName, "secret", "stok", "Name of Secret containing credentials")
+	fs.StringVar(&opts.WorkspaceSpec.Cache.Size, "size", "1Gi", "Size of PersistentVolume for cache")
+	fs.StringVar(&opts.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
+	fs.StringVar(&opts.WorkspaceSpec.TimeoutClient, "timeout-client", "10s", "timeout for client to signal readiness")
+	fs.StringVar(&opts.WorkspaceSpec.Backend.Type, "backend-type", "local", "Set backend type")
 
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.ServiceAccountName, "service-account", "stok", "Name of ServiceAccount")
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.SecretName, "secret", "stok", "Name of Secret containing credentials")
+	fs.DurationVar(&opts.TimeoutWorkspace, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
+	fs.DurationVar(&opts.TimeoutWorkspacePod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.Cache.Size, "size", "1Gi", "Size of PersistentVolume for cache")
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
-	cmd.Flags().DurationVar(&newWorkspace.Timeout, "timeout", 10*time.Second, "Time to wait for workspace to be healthy")
-
-	// Validate
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.TimeoutClient, "timeout-client", "10s", "timeout for client to signal readiness")
-
-	cmd.Flags().DurationVar(&newWorkspace.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
-	cmd.Flags().StringVar(&kubeContext, "context", "", "Set kube context (defaults to kubeconfig current context)")
-
-	cmd.Flags().StringVar(&newWorkspace.WorkspaceSpec.Backend.Type, "backend-type", "local", "Set backend type")
-	cmd.Flags().StringToStringVar(&newWorkspace.WorkspaceSpec.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
-
-	// Add flags registered by imported packages (controller-runtime)
-	cmd.Flags().AddGoFlagSet(flag.CommandLine)
-
-	return cmd
+	opts.WorkspaceSpec.Backend.Config = *flags.StringToStringFlag(fs, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
 }

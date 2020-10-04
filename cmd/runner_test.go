@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -110,7 +111,7 @@ func TestRunner(t *testing.T) {
 			})
 
 			out := new(bytes.Buffer)
-			code, err := newStokCmd(tt.args, out, out).Execute()
+			code, err := ExecWithExitCode(context.Background(), tt.args, out, out)
 
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)

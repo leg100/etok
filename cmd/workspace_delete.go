@@ -1,31 +1,50 @@
 package cmd
 
 import (
-	"flag"
+	"context"
+	"fmt"
 
-	"github.com/leg100/stok/pkg/workspace"
-	"github.com/spf13/cobra"
+	"github.com/apex/log"
+	"github.com/leg100/stok/cmd/flags"
+	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/options"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func newDeleteWorkspaceCmd() *cobra.Command {
-	deleteWorkspace := &workspace.DeleteWorkspace{}
+func init() {
+	workspaceCmd.AddChild(
+		NewCmd("delete").
+			WithShortUsage("delete <[namespace/]workspace>").
+			WithShortHelp("Deletes a stok workspace").
+			WithFlags(
+				flags.Path,
+				flags.Namespace,
+			).
+			WithOneArg().
+			WantsKubeClients().
+			WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+				name, ns, err := env.ValidateAndParse(opts.Args[0])
+				if err != nil {
+					return err
+				}
 
-	cmd := &cobra.Command{
-		Use:   "delete <namespace/workspace>",
-		Short: "Delete a stok workspace",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			deleteWorkspace.Name = args[0]
+				if ns != "" {
+					// Arg includes namespace; override flag value
+					opts.Namespace = ns
+				}
 
-			return deleteWorkspace.Run(cmd.Context())
-		},
-	}
-	cmd.Flags().StringVar(&deleteWorkspace.Path, "path", ".", "workspace config path")
-	cmd.Flags().StringVar(&deleteWorkspace.Namespace, "namespace", "default", "Kubernetes namespace of workspace")
-	cmd.Flags().StringVar(&deleteWorkspace.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
+				objs, _ := opts.StokClient.StokV1alpha1().Workspaces("").List(ctx, metav1.ListOptions{})
+				fmt.Printf("%#v\n", objs.Items)
 
-	// Add flags registered by imported packages (controller-runtime)
-	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+				if err := opts.StokClient.StokV1alpha1().Workspaces(opts.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+					return fmt.Errorf("failed to delete workspace: %w", err)
+				}
 
-	return cmd
+				log.WithFields(log.Fields{
+					"workspace": name,
+					"namespace": ns,
+				}).Info("Deleted workspace")
+
+				return nil
+			}))
 }

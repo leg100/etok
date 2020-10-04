@@ -153,9 +153,8 @@ func TestNewWorkspace(t *testing.T) {
 				return ioutil.NopCloser(bytes.NewBufferString("test output")), nil
 			})
 
-			// Execute cobra command
 			out := new(bytes.Buffer)
-			code, err := newStokCmd(tt.args, out, out).Execute()
+			code, err := ExecWithExitCode(context.Background(), tt.args, out, out)
 
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)

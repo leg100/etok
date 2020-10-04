@@ -19,6 +19,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/apex/log"
 	"github.com/leg100/stok/cmd"
 	"github.com/leg100/stok/pkg/signals"
 )
@@ -28,7 +29,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	signals.CatchCtrlC(cancel)
 
-	os.Exit(
-		cmd.Execute(ctx, os.Args[1:]),
-	)
+	code, err := cmd.ExecWithExitCode(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	if err != nil {
+		log.WithError(err).Error("Fatal error")
+
+	}
+	os.Exit(code)
 }

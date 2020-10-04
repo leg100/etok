@@ -112,3 +112,20 @@ Specific support is provided for the [GCP provider](https://www.terraform.io/doc
 ```
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
 ```
+
+## Workspace and Namespace Precedence
+
+When running a command, there are a number of methods of specifying a workspace and a kubernetes namespace. There is an implicit order of precedence to each method (beginning with highest precedence):
+
+Workspace:
+
+1. Workspace flag
+2. Environment file
+3. Default: `default`
+
+Namespace:
+
+1. Workspace flag with namespace prefix (overrides namespace flag below)
+2. Namespace flag
+3. Environment file
+4. Default: `default`

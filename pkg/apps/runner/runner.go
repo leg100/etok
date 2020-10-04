@@ -10,8 +10,11 @@ import (
 
 	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/apps"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/stok/pkg/options"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -26,10 +29,23 @@ type Runner struct {
 	Namespace string
 	Kind      string
 	Timeout   time.Duration
-	Context   string
-	NoWait    bool
+	Args      []string
 
-	Args []string
+	StokClient stokclient.Interface
+
+	Debug bool
+}
+
+func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, error) {
+	return &Runner{
+		Name:       opts.Name,
+		Namespace:  opts.Namespace,
+		Path:       opts.Path,
+		Timeout:    opts.TimeoutWorkspace,
+		Kind:       opts.Kind,
+		StokClient: opts.StokClient,
+		Debug:      opts.Debug,
+	}, nil
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -44,11 +60,9 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	// Concurrently wait for client to release hold, if specified
-	if !r.NoWait {
-		g.Go(func() error {
-			return r.sync(gctx)
-		})
-	}
+	g.Go(func() error {
+		return r.sync(gctx)
+	})
 
 	// Wait for concurrent tasks to complete
 	if err := g.Wait(); err != nil {
@@ -61,20 +75,15 @@ func (r *Runner) Run(ctx context.Context) error {
 // Watch run/workspace until the 'wait' annotation has been cleared; this indicates that the client is in
 // place to stream logs
 func (r *Runner) sync(ctx context.Context) error {
-	sc, err := k8s.StokClient()
-	if err != nil {
-		return err
-	}
-
 	var lw cache.ListerWatcher
 	var obj runtime.Object
 
 	switch r.Kind {
 	case "Run":
-		lw = &k8s.RunListWatcher{Client: sc, Name: r.Name, Namespace: r.Namespace}
+		lw = &k8s.RunListWatcher{Client: r.StokClient, Name: r.Name, Namespace: r.Namespace}
 		obj = &v1alpha1.Run{}
 	case "Workspace":
-		lw = &k8s.WorkspaceListWatcher{Client: sc, Name: r.Name, Namespace: r.Namespace}
+		lw = &k8s.WorkspaceListWatcher{Client: r.StokClient, Name: r.Name, Namespace: r.Namespace}
 		obj = &v1alpha1.Workspace{}
 	default:
 		return fmt.Errorf("invalid kind: %s", r.Kind)
@@ -83,7 +92,7 @@ func (r *Runner) sync(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
 
-	_, err = watchtools.UntilWithSync(ctx, lw, obj, nil, isSyncHandler)
+	_, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isSyncHandler)
 	return err
 }
 

@@ -275,6 +275,8 @@ func (pb *PodBuilder) MountTarball(configmapname, configmapkey string) *PodBuild
 	return pb
 }
 
+// Sets pod's service account. If serviceaccountname is "" then the pod's service account is set to
+// DefaultServiceAccount, unless it doesn't exist, in which case it is set to ""
 func (pb *PodBuilder) HasServiceAccount(serviceaccountname string) *PodBuilder {
 	if serviceaccountname != "" {
 		pb.pod.Spec.ServiceAccountName = serviceaccountname

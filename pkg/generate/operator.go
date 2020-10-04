@@ -18,9 +18,10 @@ type Operator struct {
 	Name      string
 	Namespace string
 	Image     string
+	Out       io.Writer
 }
 
-func (o *Operator) Generate(out io.Writer) error {
+func (o *Operator) Generate() error {
 	resources := []interface{}{
 		o.deployment(),
 		o.serviceAccount(),
@@ -37,7 +38,7 @@ func (o *Operator) Generate(out io.Writer) error {
 		}
 		sb.WriteString(string(y))
 	}
-	fmt.Fprint(out, sb.String())
+	fmt.Fprint(o.Out, sb.String())
 
 	return nil
 }
@@ -304,7 +305,7 @@ func (o *Operator) deployment() *appsv1.Deployment {
 									Value: "stok",
 								},
 								{
-									Name:  "RUNNER_IMAGE",
+									Name:  "STOK_IMAGE",
 									Value: o.Image,
 								},
 							},

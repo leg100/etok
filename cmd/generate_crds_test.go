@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -17,7 +18,7 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 	t.Cleanup(func() { os.Chdir(previous) })
 
 	out := new(bytes.Buffer)
-	code, err := newStokCmd([]string{"generate", "crds", "--local"}, out, os.Stderr).Execute()
+	code, err := ExecWithExitCode(context.Background(), []string{"generate", "crds", "--local"}, out, os.Stderr)
 
 	require.NoError(t, err)
 	require.Equal(t, 0, code)

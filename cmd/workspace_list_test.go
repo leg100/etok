@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	v1alpha1types "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
@@ -44,9 +45,8 @@ func TestListWorkspaces(t *testing.T) {
 			"list",
 			"--path", path,
 		}
-		cmd := newStokCmd(args, out, out)
+		code, err := ExecWithExitCode(context.Background(), args, out, out)
 
-		code, err := cmd.Execute()
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 		require.Equal(t, "*\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
@@ -66,9 +66,8 @@ func TestListWorkspaces(t *testing.T) {
 			"list",
 			"--path", path,
 		}
-		cmd := newStokCmd(args, out, out)
+		code, err := ExecWithExitCode(context.Background(), args, out, out)
 
-		code, err := cmd.Execute()
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 		require.Equal(t, "\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
