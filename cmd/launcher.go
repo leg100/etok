@@ -51,7 +51,6 @@ func launcherCmd(tfcmd string) Builder {
 				opts.Args = wrapShellArgs(opts.Args)
 			}
 
-			opts.Name = launcher.GenerateName()
 			opts.Command = tfcmd
 
 			if err := opts.SetNamespaceAndWorkspaceFromEnv(fs); err != nil {

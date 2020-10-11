@@ -20,8 +20,8 @@ import (
 
 type PodHandler struct {}
 
-// TODO: need to unit test the body of this method
-func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod) error {
+// TODO: unit test
+func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	// TODO: deep copy cfg
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),

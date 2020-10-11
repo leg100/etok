@@ -37,10 +37,9 @@ func (pm *podMonitor) podRunningAndReadyHandler(event watch.Event) (bool, error)
 
 	// ListWatcher field selector filters out other pods but the fake client doesn't implement the
 	// field selector, so the following is necessary purely for testing purposes
-	//if pod.GetName() != pm.ws.PodName() {
-	//	return false, nil
-	//}
-	return true, nil
+	if pod.GetName() != pm.ws.PodName() {
+		return false, nil
+	}
 
 	switch event.Type {
 	case watch.Deleted:

@@ -14,7 +14,7 @@ import (
 
 type PodHandlerFake struct {}
 
-func (h *PodHandlerFake) Attach(cfg *rest.Config, pod *corev1.Pod) error {
+func (h *PodHandlerFake) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	return fmt.Errorf("fake error")
 }
 

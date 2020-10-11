@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/app"
@@ -37,8 +38,13 @@ func (t *Launcher) Run(ctx context.Context) error {
 		return err
 	}
 
+	pod, err := t.KubeClient().CoreV1().Pods(t.Namespace).Get(ctx, t.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting pod %s/%s: %w", t.Namespace, t.Name, err)
+	}
+
 	// Attach to pod, and release hold annotation
-	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig, t.Namespace, t.Name, func() error {
+	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig, pod, t.Out, func() error {
 		runsclient := t.StokClient().StokV1alpha1().Runs(t.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			run, err := runsclient.Get(ctx, t.Name, metav1.GetOptions{})

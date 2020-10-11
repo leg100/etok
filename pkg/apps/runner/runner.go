@@ -31,15 +31,13 @@ func NewFromOpts(opts *app.Options) app.App {
 func (r *Runner) Run(ctx context.Context) error {
 	g, gctx := errgroup.WithContext(ctx)
 
-	// Concurrently extract tarball, if specified
-	if r.Tarball != "" {
-		g.Go(func() error {
-			_, err := archive.Extract(r.Tarball, r.Path)
-			return err
-		})
-	}
+	// Concurrently extract tarball
+	g.Go(func() error {
+		_, err := archive.Extract(r.Tarball, r.Path)
+		return err
+	})
 
-	// Concurrently wait for client to release hold, if specified
+	// Concurrently wait for client to release hold
 	g.Go(func() error {
 		return r.sync(gctx)
 	})
@@ -49,7 +47,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	return r.run(ctx, os.Stdout, os.Stderr)
+	return r.run(ctx, r.Out, os.Stderr)
 }
 
 // Watch run/workspace until the 'wait' annotation has been cleared; this indicates that the client is in

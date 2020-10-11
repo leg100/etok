@@ -10,6 +10,6 @@ import (
 )
 
 type Interface interface {
-	Attach(*rest.Config, *corev1.Pod) error 
+	Attach(*rest.Config, *corev1.Pod, io.Writer) error 
 	GetLogs(context.Context, kubernetes.Interface, *corev1.Pod, string) (io.ReadCloser, error)
 }

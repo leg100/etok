@@ -14,43 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTerraform(t *testing.T) {
-	//workspaceObj := func(namespace, name string, queue ...string) *v1alpha1.Workspace {
-	//	return &v1alpha1.Workspace{
-	//		ObjectMeta: metav1.ObjectMeta{
-	//			Name:      name,
-	//			Namespace: namespace,
-	//		},
-	//		Status: v1alpha1.WorkspaceStatus{
-	//			Conditions: status.Conditions{
-	//				{
-	//					Type:   v1alpha1.ConditionHealthy,
-	//					Status: corev1.ConditionTrue,
-	//				},
-	//			},
-	//			Queue: queue,
-	//		},
-	//	}
-	//}
-
-	//podReadyAndRunning := func(namespace, name string) *corev1.Pod {
-	//	return &corev1.Pod{
-	//		ObjectMeta: metav1.ObjectMeta{
-	//			Name:      name,
-	//			Namespace: namespace,
-	//		},
-	//		Status: corev1.PodStatus{
-	//			Phase: corev1.PodRunning,
-	//			Conditions: []corev1.PodCondition{
-	//				{
-	//					Type:   corev1.PodReady,
-	//					Status: corev1.ConditionTrue,
-	//				},
-	//			},
-	//		},
-	//	}
-	//}
-
+func TestLauncher(t *testing.T) {
 	var cmdpaths [][]string
 	for k, v := range run.TerraformCommandMap {
 		if len(v) > 0 {

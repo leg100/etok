@@ -33,26 +33,31 @@ func (pm *podMonitor) monitor(ctx context.Context, errch chan<- error, ready cha
 
 // Return true if pod is both ready and running
 func (pm *podMonitor) podRunningAndReadyHandler(event watch.Event) (bool, error) {
+	pod := event.Object.(*corev1.Pod)
+
+	// ListWatcher field selector filters out other pods but the fake client doesn't implement the
+	// field selector, so the following is necessary purely for testing purposes
+	if pod.GetName() != pm.run.GetName() {
+		return false, nil
+	}
+
 	switch event.Type {
 	case watch.Deleted:
 		return false, fmt.Errorf("pod resource deleted")
 	}
 
-	switch pod := event.Object.(type) {
-	case *corev1.Pod:
-		switch pod.Status.Phase {
-		case corev1.PodSucceeded:
-			return false, fmt.Errorf("pod prematurely succeeded")
-		case corev1.PodFailed:
-			return false, fmt.Errorf(pod.Status.ContainerStatuses[0].State.Terminated.Message)
-		case corev1.PodRunning:
-			if pod.Status.Conditions == nil {
-				return false, nil
-			}
-			for _, cond := range pod.Status.Conditions {
-				if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-					return true, nil
-				}
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded:
+		return false, fmt.Errorf("pod prematurely succeeded")
+	case corev1.PodFailed:
+		return false, fmt.Errorf(pod.Status.ContainerStatuses[0].State.Terminated.Message)
+	case corev1.PodRunning:
+		if pod.Status.Conditions == nil {
+			return false, nil
+		}
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+				return true, nil
 			}
 		}
 	}

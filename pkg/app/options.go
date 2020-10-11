@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/clientcreator"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +28,9 @@ type Options struct {
 
 	// Name
 	Name string
+
+	// Run name
+	RunName string `default:"-"`
 
 	// Kubernetes namespace
 	Namespace string `default:"default"`
@@ -119,6 +124,9 @@ type Options struct {
 func (opts *Options) SetDefaults() {
 	if defaults.CanUpdate(opts.Image) {
 		opts.Image = version.Image
+	}
+	if defaults.CanUpdate(opts.RunName) {
+		opts.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 	}
 }
 

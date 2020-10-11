@@ -49,8 +49,13 @@ func (nws *NewWorkspace) run(ctx context.Context) error {
 		return err
 	}
 
+	pod, err := nws.KubeClient().CoreV1().Pods(nws.Namespace).Get(ctx, nws.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting pod %s/%s: %w", nws.Namespace, nws.Name, err)
+	}
+
 	// Attach to pod, and release hold annotation
-	if err = k8s.PodConnect(ctx, nws.PodHandler, nws.KubeClient(), nws.KubeConfig, ws.PodName(), nws.Namespace, func() error {
+	if err = k8s.PodConnect(ctx, nws.PodHandler, nws.KubeClient(), nws.KubeConfig, pod, nws.Out, func() error {
 		wsclient := nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			ws, err := wsclient.Get(ctx, ws.GetName(), metav1.GetOptions{})
