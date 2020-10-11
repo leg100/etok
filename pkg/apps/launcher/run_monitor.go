@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/stok/pkg/log"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
 )
@@ -16,6 +16,9 @@ import (
 type runMonitor struct {
 	run    *v1alpha1.Run
 	client stokclient.Interface
+
+	// Current run phase
+	phase v1alpha1.RunPhase
 }
 
 func (rm *runMonitor) monitor(ctx context.Context, errch chan<- error) {
@@ -38,8 +41,9 @@ func (rm *runMonitor) phaseLogHandler(event watch.Event) (bool, error) {
 
 	switch run := event.Object.(type) {
 	case *v1alpha1.Run:
-		if phase := run.GetPhase(); string(phase) != "" {
-			log.WithField("phase", phase).Debug("Event received")
+		if phase := run.GetPhase(); phase != rm.phase {
+			rm.phase = phase
+			log.Debugf("New run phase: %s", phase)
 		}
 	}
 	return false, nil

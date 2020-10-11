@@ -6,15 +6,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"time"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/apps"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/log"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -22,30 +19,13 @@ import (
 )
 
 type Runner struct {
-	Path    string
-	Tarball string
-
-	Name      string
-	Namespace string
-	Kind      string
-	Timeout   time.Duration
-	Args      []string
-
-	StokClient stokclient.Interface
-
-	Debug bool
+	*app.Options
 }
 
-func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, error) {
+func NewFromOpts(opts *app.Options) app.App {
 	return &Runner{
-		Name:       opts.Name,
-		Namespace:  opts.Namespace,
-		Path:       opts.Path,
-		Timeout:    opts.TimeoutWorkspace,
-		Kind:       opts.Kind,
-		StokClient: opts.StokClient,
-		Debug:      opts.Debug,
-	}, nil
+		Options: opts,
+	}
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -80,16 +60,16 @@ func (r *Runner) sync(ctx context.Context) error {
 
 	switch r.Kind {
 	case "Run":
-		lw = &k8s.RunListWatcher{Client: r.StokClient, Name: r.Name, Namespace: r.Namespace}
+		lw = &k8s.RunListWatcher{Client: r.StokClient(), Name: r.Name, Namespace: r.Namespace}
 		obj = &v1alpha1.Run{}
 	case "Workspace":
-		lw = &k8s.WorkspaceListWatcher{Client: r.StokClient, Name: r.Name, Namespace: r.Namespace}
+		lw = &k8s.WorkspaceListWatcher{Client: r.StokClient(), Name: r.Name, Namespace: r.Namespace}
 		obj = &v1alpha1.Workspace{}
 	default:
 		return fmt.Errorf("invalid kind: %s", r.Kind)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, r.TimeoutClient)
 	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, lw, obj, nil, isSyncHandler)

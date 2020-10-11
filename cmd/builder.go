@@ -1,102 +1,83 @@
-/*
-Copyright 2019 The Skaffold Authors
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package cmd
 
 import (
 	"context"
-	"flag"
-	"fmt"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/apps"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/options"
-	ff "github.com/peterbourgon/ff/v3"
-	"github.com/peterbourgon/ff/v3/ffcli"
-	"k8s.io/client-go/kubernetes"
+	"github.com/leg100/stok/pkg/app"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
-// Builder is used to build ffcli commands.
+// Builder is used to build cobra commands.
 type Builder interface {
 	WithName(string) Builder
-	WithShortUsage(string) Builder
 	WithShortHelp(string) Builder
 	WithLongHelp(string) Builder
-	WithEnvVars() Builder
-	WithFlags(...func(*flag.FlagSet, *options.StokOptions)) Builder
+	WithFlags(...flags.DeferredFlag) Builder
+	WithVersionFlag(func() string) Builder
+	WithPersistentFlags(...flags.DeferredFlag) Builder
 	WithOneArg() Builder
+	WithHidden() Builder
 	WantsKubeClients() Builder
-	WithApp(apps.NewFunc) Builder
+	WithApp(app.NewApp) Builder
 	WithPreExec(stokPreExec) Builder
 	WithExec(stokExec) Builder
-	Build(*options.StokOptions, clientCreatorFunc) *ffcli.Command
+	Build(*app.Options, bool) *cobra.Command
 	AddChild(Builder)
 }
 
 type builder struct {
-	cmd              *ffcli.Command
-	children         []Builder
-	ffuncs           []func(*flag.FlagSet, *options.StokOptions)
-	validate         func([]string) error
-	preExec          stokPreExec
-	exec             stokExec
-	wantsKubeClients bool
-
-	newApp apps.NewFunc
+	use, short, long                 string
+	version                          func() string
+	children                         []Builder
+	ffuncs                           []flags.DeferredFlag
+	pffuncs                          []flags.DeferredFlag
+	validate                         cobra.PositionalArgs
+	preExec                          stokPreExec
+	exec                             stokExec
+	wantsKubeClients, isRoot, hidden bool
+	newApp                              app.NewApp
 }
 
-// ffcli-style Exec
-type ffcliExec func(context.Context, []string) error
+// cobra-style Exec
+type cobraExec func(*cobra.Command, []string) error
 
 // stok-style Exec
-type stokExec func(context.Context, *options.StokOptions) error
+type stokExec func(context.Context, *app.Options) error
 
 // stok-style PreExec
-type stokPreExec func(*flag.FlagSet, *options.StokOptions) error
-
-// Kubernetes clients factory (for testing)
-type clientCreatorFunc func(string) (stokclient.Interface, kubernetes.Interface, error)
+type stokPreExec func(*pflag.FlagSet, *app.Options) error
 
 // NewCmd creates a new command builder.
 func NewCmd(name string) Builder {
-	return &builder{
-		cmd: &ffcli.Command{
-			Name: name,
-		},
-	}
-}
-
-func (b *builder) WithName(name string) Builder {
-	b.cmd.Name = name
+	b := &builder{}
+	b.use = name
 	return b
 }
 
-func (b *builder) WithShortUsage(usage string) Builder {
-	b.cmd.ShortUsage = usage
+func (b *builder) WithName(name string) Builder {
+	b.use = name
 	return b
 }
 
 func (b *builder) WithShortHelp(help string) Builder {
-	b.cmd.ShortHelp = help
+	b.short = help
 	return b
 }
 
 func (b *builder) WithLongHelp(help string) Builder {
-	b.cmd.LongHelp = help
+	b.long = help
+	return b
+}
+
+func (b *builder) WithHidden() Builder {
+	b.hidden = true
+	return b
+}
+
+func (b *builder) WithVersionFlag(f func() string) Builder {
+	b.version = f
 	return b
 }
 
@@ -116,81 +97,100 @@ func (b *builder) WithExec(exec stokExec) Builder {
 	return b
 }
 
-func (b *builder) WithApp(newApp apps.NewFunc) Builder {
+func (b *builder) WithApp(newApp app.NewApp) Builder {
 	b.newApp = newApp
 	return b
 }
 
 func (b *builder) WithOneArg() Builder {
-	b.validate = func(args []string) error {
-		if len(args) != 1 {
-			return fmt.Errorf("expected one argument")
-		}
-		return nil
-	}
+	b.validate = cobra.ExactArgs(1)
 	return b
 }
 
-func (b *builder) Build(opts *options.StokOptions, clientCreator clientCreatorFunc) *ffcli.Command {
-	// Create new flagset for command and set dest for usage/error msgs
-	b.cmd.FlagSet = flag.NewFlagSet(b.cmd.Name, flag.ContinueOnError)
-	b.cmd.FlagSet.SetOutput(opts.ErrOut)
+func (b *builder) Build(opts *app.Options, isRoot bool) *cobra.Command {
+	b.isRoot = isRoot
 
-	// Add specified flags to flagset
+	// Ensure we build a new command from afresh
+	cmd := &cobra.Command{
+		Use:   b.use,
+		Short: b.short,
+		Long:  b.long,
+	}
+
+	if b.version != nil {
+		cmd.Version = b.version()
+	}
+
+	cmd.Hidden = b.hidden
+
+	// Set dest for usage/error msgs
+	cmd.SetOut(opts.Out)
+
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
+
+	// Add persistent flags
+	for _, pffunc := range b.pffuncs {
+		pffunc(cmd.PersistentFlags(), opts)
+	}
+
+	// Add flags
 	for _, ffunc := range b.ffuncs {
-		ffunc(b.cmd.FlagSet, opts)
+		ffunc(cmd.Flags(), opts)
 	}
 
-	// Add common flags to flagset
-	flags.Common(b.cmd.FlagSet, opts)
+	// Add arg validation
+	if b.validate != nil {
+		cmd.Args = b.validate
+	}
 
+	// Add exec callback
 	if b.exec != nil {
-		b.cmd.Exec = b.execBuilder(opts, b.exec, clientCreator)
+		cmd.RunE = b.execBuilder(opts, b.exec)
 	}
 
+	// Add stok app callback
 	if b.newApp != nil {
-		b.cmd.Exec = b.execBuilder(opts, func(ctx context.Context, opts *options.StokOptions) error {
-			var err error
-			// Sets pkg-level variable 'app'
-			app, err = b.newApp(ctx, opts)
-			return err
-		}, clientCreator)
+		cmd.RunE = b.execBuilder(opts, func(ctx context.Context, opts *app.Options) error {
+			opts.SelectApp(b.newApp)
+			return nil
+		})
 	}
 
 	// Recursively build child commands
 	for _, child := range b.children {
-		b.cmd.Subcommands = append(b.cmd.Subcommands, child.Build(opts, clientCreator))
+		cmd.AddCommand(child.Build(opts, false))
 	}
 
-	return b.cmd
+	// Set usage and help templates
+	t := &templater{
+		IsRoot:        isRoot,
+		UsageTemplate: MainUsageTemplate(),
+	}
+	cmd.SetUsageFunc(t.UsageFunc())
+	cmd.SetHelpTemplate(MainHelpTemplate())
+
+	return cmd
 }
 
-func (b *builder) execBuilder(opts *options.StokOptions, f stokExec, clients clientCreatorFunc) ffcliExec {
-	return func(ctx context.Context, args []string) error {
-		if opts.Help {
-			fmt.Fprintf(opts.Out, ffcli.DefaultUsageFunc(b.cmd))
-			return nil
-		}
-
-		if b.validate != nil {
-			if err := b.validate(args); err != nil {
-				return err
-			}
-		}
-
-		// Make positional args available via StokOptions
+func (b *builder) execBuilder(opts *app.Options, exec stokExec) cobraExec {
+	return func(cmd *cobra.Command, args []string) error {
+		// Make positional args available via App
 		opts.Args = args
 
-		if b.wantsKubeClients {
-			sc, kc, err := clients(opts.Context)
-			if err != nil {
-				return err
-			}
-			opts.KubeClient = kc
-			opts.StokClient = sc
+		// Invoke pre-exec callback
+		if b.preExec != nil {
+			b.preExec(cmd.Flags(), opts)
 		}
 
-		return f(ctx, opts)
+		// Only create kube clients if app needs them
+		if b.wantsKubeClients {
+			if err := opts.CreateClients(opts.KubeContext); err != nil {
+				return err
+			}
+		}
+
+		return exec(cmd.Context(), opts)
 	}
 }
 
@@ -198,12 +198,12 @@ func (b *builder) AddChild(child Builder) {
 	b.children = append(b.children, child)
 }
 
-func (b *builder) WithEnvVars() Builder {
-	b.cmd.Options = []ff.Option{ff.WithEnvVarPrefix("STOK")}
+func (b *builder) WithFlags(ffunc ...flags.DeferredFlag) Builder {
+	b.ffuncs = append(b.ffuncs, ffunc...)
 	return b
 }
 
-func (b *builder) WithFlags(ffunc ...func(*flag.FlagSet, *options.StokOptions)) Builder {
-	b.ffuncs = append(b.ffuncs, ffunc...)
+func (b *builder) WithPersistentFlags(pffuncs ...flags.DeferredFlag) Builder {
+	b.pffuncs = append(b.pffuncs, pffuncs...)
 	return b
 }

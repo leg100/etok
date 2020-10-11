@@ -17,22 +17,62 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 
-	"github.com/apex/log"
+	"github.com/fatih/color"
 	"github.com/leg100/stok/cmd"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/signals"
 )
 
 func main() {
+	// Exit code
+	var code int
+
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		code = handleError(err, os.Stderr)
+	}
+	os.Exit(code)
+}
+
+func run(args []string, out io.Writer) error {
 	// Create context, and cancel if interrupt is received
 	ctx, cancel := context.WithCancel(context.Background())
 	signals.CatchCtrlC(cancel)
 
-	code, err := cmd.ExecWithExitCode(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	// Construct options and their defaults
+	opts, err := app.NewOpts()
 	if err != nil {
-		log.WithError(err).Error("Fatal error")
-
+		return err
 	}
-	os.Exit(code)
+
+	// Parse args, furnish factory with app
+	if err := cmd.ParseArgs(ctx, args, opts); err != nil {
+		return err
+	} else {
+		// Run selected app
+		if err = opts.RunApp(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Print error message
+func handleError(err error, out io.Writer) int {
+	fmt.Fprintf(out, "%s %s\n", color.HiRedString("Error:"), err.Error())
+	return unwrapCode(err)
+}
+
+// Unwrap exit code from error message
+func unwrapCode(err error) int {
+	var exiterr *exec.ExitError
+	if errors.As(err, &exiterr) {
+		return exiterr.ExitCode()
+	}
+	return 1
 }

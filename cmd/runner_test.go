@@ -6,93 +6,61 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/archive"
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestRunner(t *testing.T) {
-	shellWithoutAnnotation := &v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "run-xyz",
-			Namespace: "test",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command: "sh",
-			Args:    []string{"cow", "pig"},
-		},
-	}
-
 	tests := []struct {
-		name     string
-		args     []string
-		envs     map[string]string
-		stokObjs []runtime.Object
-		err      string
-		code     int
+		name       string
+		args       []string
+		envs       map[string]string
+		objs       []runtime.Object
+		err        bool
+		assertions func(opts *app.Options)
 	}{
 		{
-			name:     "WithoutKind",
-			args:     []string{"runner"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-			err:      "runner: invalid kind: ",
-			code:     1,
+			name: "explicit env vars",
+			args: []string{"runner", "--debug", "--", "/bin/ls", "test1.tf"},
+			envs: map[string]string{
+				"STOK_KIND":      "Run",
+				"STOK_NAME":      "foo",
+				"STOK_NAMESPACE": "default",
+				"STOK_TIMEOUT":   "10s",
+				"STOK_TARBALL":   "doesnotexist.tar.gz",
+			},
+			assertions: func(opts *app.Options) {
+				assert.Equal(t, "Run", opts.Kind)
+				assert.Equal(t, "foo", opts.Name)
+				assert.Equal(t, "default", opts.Namespace)
+				assert.Equal(t, time.Second*10, opts.TimeoutClient)
+				assert.Equal(t, "doesnotexist.tar.gz", opts.Tarball)
+				assert.Equal(t, ".", opts.Path)
+				assert.Equal(t, []string{"/bin/ls", "test1.tf"}, opts.Args)
+			},
 		},
 		{
-			name:     "WithIncorrectKind",
-			args:     []string{"runner", "--kind", "InvalidKind"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-			err:      "runner: invalid kind: InvalidKind",
-			code:     1,
-		},
-		{
-			name:     "WithIncorrectTarball",
-			args:     []string{"runner", "--kind", "Run", "--tarball", "bad-tarball-zzz.tar.gz"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-			err:      "runner: open bad-tarball-zzz.tar.gz: no such file or directory",
-			code:     1,
-		},
-		{
-			name:     "WithWaitDisabled",
-			args:     []string{"runner", "--kind", "Run", "--no-wait", "--", "uname"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-		},
-		{
-			name:     "WithEnvVar",
-			args:     []string{"runner", "--no-wait", "--", "uname"},
-			envs:     map[string]string{"STOK_KIND": "Run"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-		},
-		{
-			name:     "WithTarball",
-			args:     []string{"runner", "--kind", "Run", "--name", "run-xyz", "--namespace", "test", "--tarball", "tarball.tar.gz", "--path", ".", "--no-wait", "--", "/bin/ls", "test1.tf"},
-			envs:     map[string]string{"STOK_KIND": "Run"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-		},
-		{
-			name:     "WithTarballArgOverridingEnvVar",
-			args:     []string{"runner", "--kind", "Run", "--name", "run-xyz", "--namespace", "test", "--tarball", "tarball.tar.gz", "--path", ".", "--no-wait", "--", "/bin/ls", "test1.tf"},
-			envs:     map[string]string{"STOK_TARBALL": "doesnotexist.tar.gz"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-		},
-		{
-			name:     "WithSpecificExitCode",
-			args:     []string{"runner", "--kind", "Run", "--name", "run-xyz", "--namespace", "test", "--tarball", "tarball.tar.gz", "--path", ".", "--no-wait", "--", "sh", "-c", "exit 101"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
-			err:      "runner: exit status 101",
-			code:     101,
-		},
-		{
-			name:     "WithWaitEnabled",
-			args:     []string{"runner", "--kind", "Run", "--name", "run-xyz", "--namespace", "test", "--tarball", "tarball.tar.gz", "--path", ".", "--", "echo", "testing 123"},
-			stokObjs: []runtime.Object{shellWithoutAnnotation},
+			name: "implicit defaults",
+			args: []string{"runner", "--debug", "--", "/bin/ls", "test1.tf"},
+			envs: map[string]string{
+				"STOK_KIND": "Run",
+				"STOK_NAME": "foo",
+			},
+			assertions: func(opts *app.Options) {
+				assert.Equal(t, "Run", opts.Kind)
+				assert.Equal(t, "foo", opts.Name)
+				assert.Equal(t, "default", opts.Namespace)
+				assert.Equal(t, time.Second*10, opts.TimeoutClient)
+				assert.Equal(t, "tarball.tar.gz", opts.Tarball)
+				assert.Equal(t, ".", opts.Path)
+				assert.Equal(t, []string{"/bin/ls", "test1.tf"}, opts.Args)
+			},
 		},
 	}
 
@@ -104,21 +72,12 @@ func TestRunner(t *testing.T) {
 
 			createTarballWithFiles(t, "tarball.tar.gz", "test1.tf")
 
-			// Populate fake stok client with relevant objects
-			fakeStokClient := fake.NewSimpleClientset(tt.stokObjs...)
-			t.Override(&k8s.StokClient, func() (stokclient.Interface, error) {
-				return fakeStokClient, nil
-			})
+			opts, err := app.NewFakeOpts(new(bytes.Buffer), tt.objs...)
+			require.NoError(t, err)
 
-			out := new(bytes.Buffer)
-			code, err := ExecWithExitCode(context.Background(), tt.args, out, out)
+			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
 
-			if tt.err != "" {
-				require.EqualError(t, err, tt.err)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.code, code)
+			tt.assertions(opts)
 		})
 	}
 }

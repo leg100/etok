@@ -2,47 +2,29 @@ package workspace
 
 import (
 	"context"
-	"time"
+	"fmt"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/apps"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/log"
+	"github.com/leg100/stok/pkg/podhandler"
 	"github.com/leg100/stok/version"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 )
 
 type NewWorkspace struct {
-	Name          string
-	Namespace     string
-	Path          string
-	Timeout       time.Duration
-	TimeoutPod    time.Duration
-	WorkspaceSpec v1alpha1.WorkspaceSpec
-
-	StokClient stokclient.Interface
-	KubeClient kubernetes.Interface
-
-	Debug bool
+	*app.Options
+	PodHandler podhandler.Interface
 }
 
-func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, error) {
+func NewFromOpts(opts *app.Options) app.App {
 	return &NewWorkspace{
-		Name:          opts.Name,
-		Namespace:     opts.Namespace,
-		Path:          opts.Path,
-		Timeout:       opts.TimeoutWorkspace,
-		TimeoutPod:    opts.TimeoutWorkspacePod,
-		WorkspaceSpec: opts.WorkspaceSpec,
-		StokClient:    opts.StokClient,
-		KubeClient:    opts.KubeClient,
-		Debug:         opts.Debug,
-	}, nil
+		Options: opts,
+		PodHandler: &podhandler.PodHandler{},
+	}
 }
 
 // Create new workspace. First check values of secret and service account flags, if either are empty
@@ -50,28 +32,30 @@ func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, e
 // accordingly. Otherwise use user-supplied values and check they exist. Only then create the
 // workspace resource and wait until it is reporting it is healthy, or the timeout expires.
 func (nws *NewWorkspace) Run(ctx context.Context) error {
-	ws, err := nws.createWorkspace(ctx)
-	if err != nil {
+	if err := nws.run(ctx); err != nil {
+		// Delete workspace upon error
+		nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace).Delete(ctx, nws.Workspace, metav1.DeleteOptions{})
 		return err
 	}
-	deleteWorkspace := func() {
-		nws.StokClient.StokV1alpha1().Workspaces(nws.Namespace).Delete(ctx, ws.GetName(), metav1.DeleteOptions{})
-	}
-	log.WithFields(log.Fields{"namespace": nws.Namespace, "workspace": nws.Name}).Info("created workspace")
+	return nil
+}
+
+func (nws *NewWorkspace) run(ctx context.Context) error {
+	ws, err := nws.createWorkspace(ctx)
+	log.Infof("Created workspace %s/%s\n", nws.Namespace, nws.Workspace)
 
 	// Monitor resources, wait until pod is running and ready
 	if err := nws.monitor(ctx, ws); err != nil {
-		deleteWorkspace()
 		return err
 	}
 
 	// Attach to pod, and release hold annotation
-	if err = k8s.PodConnect(ctx, nws.KubeClient, nws.Namespace, ws.PodName(), func() error {
-		wsclient := nws.StokClient.StokV1alpha1().Workspaces(nws.Namespace)
+	if err = k8s.PodConnect(ctx, nws.PodHandler, nws.KubeClient(), nws.KubeConfig, ws.PodName(), nws.Namespace, func() error {
+		wsclient := nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			ws, err := wsclient.Get(ctx, ws.GetName(), metav1.GetOptions{})
 			if err != nil {
-				return err
+				return fmt.Errorf("getting workspace to delete wait annotation: %w", err)
 			}
 
 			k8s.DeleteWaitAnnotationKey(ws)
@@ -80,17 +64,16 @@ func (nws *NewWorkspace) Run(ctx context.Context) error {
 			return err
 		})
 	}); err != nil {
-		deleteWorkspace()
 		return err
 	}
 
-	return env.NewStokEnv(nws.Namespace, nws.Name).Write(nws.Path)
+	return env.NewStokEnv(nws.Namespace, nws.Workspace).Write(nws.Path)
 }
 
 func (nws *NewWorkspace) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, error) {
 	ws := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nws.Name,
+			Name:      nws.Workspace,
 			Namespace: nws.Namespace,
 			Labels: map[string]string{
 				// Name of the application
@@ -104,7 +87,7 @@ func (nws *NewWorkspace) createWorkspace(ctx context.Context) (*v1alpha1.Workspa
 				"app.kubernetes.io/managed-by": "stok-operator",
 
 				// Unique name of instance within application
-				"app.kubernetes.io/instance": nws.Name,
+				"app.kubernetes.io/instance": nws.Workspace,
 
 				// Current version of application
 				"version":                   version.Version,
@@ -121,7 +104,7 @@ func (nws *NewWorkspace) createWorkspace(ctx context.Context) (*v1alpha1.Workspa
 	ws.SetAnnotations(map[string]string{v1alpha1.WaitAnnotationKey: "true"})
 	ws.SetDebug(nws.Debug)
 
-	return nws.StokClient.StokV1alpha1().Workspaces(nws.Namespace).Create(ctx, ws, metav1.CreateOptions{})
+	return nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace).Create(ctx, ws, metav1.CreateOptions{})
 }
 
 func (nws *NewWorkspace) monitor(ctx context.Context, ws *v1alpha1.Workspace) error {
@@ -132,14 +115,14 @@ func (nws *NewWorkspace) monitor(ctx context.Context, ws *v1alpha1.Workspace) er
 	// TODO: What is the point of this?
 	(&workspaceMonitor{
 		ws:     ws,
-		client: nws.StokClient,
+		client: nws.StokClient(),
 	}).monitor(ctx, errch)
 
 	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
 	// error on fatal pod errors
 	(&podMonitor{
 		ws:     ws,
-		client: nws.KubeClient,
+		client: nws.KubeClient(),
 	}).monitor(ctx, errch, ready)
 
 	// Wait for pod to be ready

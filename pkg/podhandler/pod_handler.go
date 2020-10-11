@@ -1,32 +1,28 @@
-package k8s
+package podhandler
 
 import (
-	"fmt"
+	"context"
+	"io"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/leg100/stok/pkg/k8s/config"
+	"github.com/leg100/stok/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/attach"
 	"k8s.io/kubectl/pkg/cmd/exec"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-var (
-	Attach = attachToPod
-)
+type PodHandler struct {}
 
 // TODO: need to unit test the body of this method
-func attachToPod(pod *corev1.Pod) error {
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return fmt.Errorf("getting client config for attaching to pod: %w", err)
-	}
+func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod) error {
+	// TODO: deep copy cfg
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -52,24 +48,24 @@ func attachToPod(pod *corev1.Pod) error {
 		AttachFunc: attach.DefaultAttachFunc,
 		// TODO: parameterize
 		GetPodTimeout: time.Second * 10,
+		Config:        cfg,
+		Pod:           pod,
 	}
 
-	opts.Config = cfg
-	opts.Pod = pod
-
-	if err := opts.Run(); err != nil {
-		return err
-	}
-
-	return nil
+	return opts.Run()
 }
 
 // ErrOut above wants an obj with Write method, so lets provide one that writes to our logger with
-// warning level
+// info level
 type attachErrOut struct{}
 
 func (_ attachErrOut) Write(in []byte) (int, error) {
 	s := strings.TrimSpace(string(in))
-	log.Warn(s)
-	return 0, nil
+	log.Info(s)
+	return len(in), nil
+}
+
+func (h *PodHandler) GetLogs(ctx context.Context, kc kubernetes.Interface, pod *corev1.Pod, container string) (io.ReadCloser, error) {
+	opts := &corev1.PodLogOptions{Follow: true, Container: container}
+	return kc.CoreV1().Pods(pod.GetNamespace()).GetLogs(pod.GetName(), opts).Stream(ctx)
 }

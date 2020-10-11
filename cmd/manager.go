@@ -2,18 +2,18 @@ package cmd
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"runtime"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/controllers"
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/app"
+	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
+	"github.com/spf13/pflag"
 
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,10 +29,10 @@ func printVersion() {
 
 func init() {
 	root.AddChild(NewCmd("operator").
-		WithShortUsage("operator").
 		WithShortHelp("Run the stok operator").
+		WithHidden().
 		WithFlags(
-			func(fs *flag.FlagSet, opts *options.StokOptions) {
+			func(fs *pflag.FlagSet, opts *app.Options) {
 				fs.StringVar(&opts.MetricsAddress, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 				fs.BoolVar(&opts.EnableLeaderElection, "enable-leader-election", false,
 					"Enable leader election for controller manager. "+
@@ -40,8 +40,7 @@ func init() {
 				fs.StringVar(&opts.Image, "image", version.Image, "Docker image used for both the operator and the runner")
 			},
 		).
-		WithEnvVars().
-		WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+		WithExec(func(ctx context.Context, opts *app.Options) error {
 			ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 			printVersion()

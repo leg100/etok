@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/util/slice"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -79,7 +79,7 @@ func (qm *queueMonitor) loggingHandler(event watch.Event) (bool, error) {
 		// Report on queue position
 		if pos := slice.StringIndex(ws.Status.Queue, qm.run.GetName()); pos >= 0 {
 			// TODO: print current run in bold
-			log.WithField("queue", ws.Status.Queue).Info("Queued")
+			log.Infof("Queued: %v", ws.Status.Queue)
 		}
 		return false, nil
 	})

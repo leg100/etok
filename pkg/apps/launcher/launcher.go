@@ -2,51 +2,27 @@ package launcher
 
 import (
 	"context"
-	"time"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/apps"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/podhandler"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 )
 
 type Launcher struct {
-	Name           string
-	Namespace      string
-	Workspace      string
-	Command        string
-	Path           string
-	Args           []string
-	TimeoutClient  time.Duration
-	TimeoutPod     time.Duration
-	TimeoutQueue   time.Duration
-	TimeoutEnqueue time.Duration
-
-	StokClient stokclient.Interface
-	KubeClient kubernetes.Interface
-
-	Debug bool
+	*app.Options
+	PodHandler podhandler.Interface
 }
 
-func NewFromOptions(ctx context.Context, opts *options.StokOptions) (apps.App, error) {
+func NewFromOpts(opts *app.Options) app.App {
 	return &Launcher{
-		Name:           opts.Name,
-		Namespace:      opts.Namespace,
-		Path:           opts.Path,
-		TimeoutClient:  opts.TimeoutClient,
-		TimeoutPod:     opts.TimeoutPod,
-		TimeoutQueue:   opts.TimeoutQueue,
-		TimeoutEnqueue: opts.TimeoutEnqueue,
-		StokClient:     opts.StokClient,
-		KubeClient:     opts.KubeClient,
-		Debug:          opts.Debug,
-	}, nil
+		Options: opts,
+		PodHandler: &podhandler.PodHandler{},
+	}
 }
 
 func (t *Launcher) Run(ctx context.Context) error {
@@ -62,8 +38,8 @@ func (t *Launcher) Run(ctx context.Context) error {
 	}
 
 	// Attach to pod, and release hold annotation
-	return k8s.PodConnect(ctx, t.KubeClient, t.Namespace, t.Name, func() error {
-		runsclient := t.StokClient.StokV1alpha1().Runs(t.Namespace)
+	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig, t.Namespace, t.Name, func() error {
+		runsclient := t.StokClient().StokV1alpha1().Runs(t.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			run, err := runsclient.Get(ctx, t.Name, metav1.GetOptions{})
 			if err != nil {
@@ -86,7 +62,7 @@ func (t *Launcher) monitor(ctx context.Context, run *v1alpha1.Run) error {
 	(&queueMonitor{
 		run:            run,
 		workspace:      t.Workspace,
-		client:         t.StokClient,
+		client:         t.StokClient(),
 		timeoutEnqueue: t.TimeoutEnqueue,
 		timeoutQueue:   t.TimeoutQueue,
 	}).monitor(ctx, errch)
@@ -94,14 +70,14 @@ func (t *Launcher) monitor(ctx context.Context, run *v1alpha1.Run) error {
 	// Non-blocking; watch run, log status updates
 	(&runMonitor{
 		run:    run,
-		client: t.StokClient,
+		client: t.StokClient(),
 	}).monitor(ctx, errch)
 
 	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
 	// error on fatal pod errors
 	(&podMonitor{
 		run:    run,
-		client: t.KubeClient,
+		client: t.KubeClient(),
 	}).monitor(ctx, errch, ready)
 
 	// Wait for pod to be ready
@@ -127,12 +103,12 @@ func (t *Launcher) deploy(ctx context.Context) (run *v1alpha1.Run, err error) {
 		}
 
 		// Construct and deploy ConfigMap resource
-		return t.createConfigMap(ctx, t.KubeClient, tarball, t.Name, v1alpha1.RunDefaultConfigMapKey)
+		return t.createConfigMap(ctx, tarball, t.Name, v1alpha1.RunDefaultConfigMapKey)
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = t.createRun(ctx, t.StokClient, t.Name, t.Name)
+		run, err = t.createRun(ctx, t.Name, t.Name)
 		return err
 	})
 

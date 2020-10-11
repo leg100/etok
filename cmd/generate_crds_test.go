@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/leg100/stok/pkg/app"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,13 +20,13 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 	t.Cleanup(func() { os.Chdir(previous) })
 
 	out := new(bytes.Buffer)
-	code, err := ExecWithExitCode(context.Background(), []string{"generate", "crds", "--local"}, out, os.Stderr)
-
+	opts, err := app.NewFakeOpts(out)
 	require.NoError(t, err)
-	require.Equal(t, 0, code)
+
+	assert.NoError(t, ParseArgs(context.Background(), []string{"generate", "crds", "--local"}, opts))
 
 	crds, _ := ioutil.ReadFile(allCrdsPath)
-	require.Equal(t, string(crds), out.String())
+	assert.Equal(t, string(crds), out.String())
 }
 
 // TODO: test default behaviour (retrieval of CRDs from remote URL)

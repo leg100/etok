@@ -1,30 +1,24 @@
 package flags
 
 import (
-	"flag"
-
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/app"
+	"github.com/spf13/pflag"
 )
 
-type DeferredFlag func(*flag.FlagSet, *options.StokOptions)
+type DeferredFlag func(*pflag.FlagSet, *app.Options)
 
-func Path(fs *flag.FlagSet, opts *options.StokOptions) {
-	fs.StringVar(&opts.Path, "path", ".", "Workspace config path")
+func Path(fs *pflag.FlagSet, opts *app.Options) {
+	fs.StringVar(&opts.Path, "path", opts.Path, "Workspace config path")
 }
 
-func Namespace(fs *flag.FlagSet, opts *options.StokOptions) {
+func Namespace(fs *pflag.FlagSet, opts *app.Options) {
 	fs.StringVar(&opts.Namespace, "namespace", "default", "Kubernetes namespace")
 }
 
-func KubeContext(fs *flag.FlagSet, opts *options.StokOptions) {
-	fs.StringVar(&opts.Context, "context", "", "Set kube context (defaults to kubeconfig current context)")
+func KubeContext(fs *pflag.FlagSet, opts *app.Options) {
+	fs.StringVar(&opts.KubeContext, "context", opts.KubeContext, "Set kube context (defaults to kubeconfig current context)")
 }
 
-func Common(fs *flag.FlagSet, opts *options.StokOptions) {
-	fs.BoolVar(&opts.Debug, "debug", false, "Enable debug logging")
-	fs.BoolVar(&opts.Help, "h", false, "print usage")
-}
-
-func Version(fs *flag.FlagSet, opts *options.StokOptions) {
-	fs.BoolVar(&opts.Version, "v", false, "print version")
+func Common(fs *pflag.FlagSet, opts *app.Options) {
+	fs.BoolVar(&opts.Debug, "debug", opts.Debug, "Enable debug logging")
 }

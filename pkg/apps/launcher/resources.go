@@ -3,16 +3,14 @@ package launcher
 import (
 	"context"
 
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
-func (t *Launcher) createRun(ctx context.Context, sc stokclient.Interface, name, configMapName string) (*v1alpha1.Run, error) {
+func (t *Launcher) createRun(ctx context.Context, name, configMapName string) (*v1alpha1.Run, error) {
 	run := &v1alpha1.Run{}
 	run.SetNamespace(t.Namespace)
 	run.SetName(name)
@@ -54,20 +52,17 @@ func (t *Launcher) createRun(ctx context.Context, sc stokclient.Interface, name,
 	run.SetConfigMap(configMapName)
 	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
 
-	run, err := sc.StokV1alpha1().Runs(t.Namespace).Create(ctx, run, metav1.CreateOptions{})
+	run, err := t.StokClient().StokV1alpha1().Runs(t.Namespace).Create(ctx, run, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	log.WithFields(log.Fields{
-		"namespace": t.Namespace,
-		"name":      run.GetName(),
-	}).Debug("resource created")
+	log.Debugf("created run %s/%s\n", t.Namespace, t.Name)
 
 	return run, nil
 }
 
-func (t *Launcher) createConfigMap(ctx context.Context, kc kubernetes.Interface, tarball []byte, name, keyName string) error {
+func (t *Launcher) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -104,15 +99,12 @@ func (t *Launcher) createConfigMap(ctx context.Context, kc kubernetes.Interface,
 		},
 	}
 
-	_, err := kc.CoreV1().ConfigMaps(t.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
+	_, err := t.KubeClient().CoreV1().ConfigMaps(t.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 
-	log.WithFields(log.Fields{
-		"namespace": t.Namespace,
-		"configmap": configMap.GetName(),
-	}).Debug("resource created")
+	log.Debugf("Created config map %s/%s\n", t.Namespace, name)
 
 	return nil
 }

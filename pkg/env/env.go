@@ -26,10 +26,15 @@ func ValidateAndParse(stokenv string) (workspace string, namespace string, err e
 		return workspace, namespace, err
 	}
 	parts := strings.Split(stokenv, "/")
-	if len(parts) == 2 {
+	switch len(parts) {
+	case 2:
+		// <ws>/<ns> -> ns, ws
 		return parts[1], parts[0], nil
-	} else {
+	case 1:
+		// <ns> -> ws, ""
 		return parts[0], "", nil
+	default:
+		return "", "", fmt.Errorf("could not parse stok environment string: %s", stokenv)
 	}
 }
 

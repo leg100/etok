@@ -3,20 +3,15 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"io"
-	"io/ioutil"
 	"testing"
 
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	kfake "k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNewWorkspace(t *testing.T) {
@@ -58,28 +53,26 @@ func TestNewWorkspace(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		stokObjs []runtime.Object
-		kubeObjs []runtime.Object
-		args     []string
-		code     int
-		err      string
+		name       string
+		objs       []runtime.Object
+		args       []string
+		err        bool
+		assertions func(opts *app.Options)
 	}{
 		{
-			name:     "WithDefaults",
-			kubeObjs: []runtime.Object{pod("default", "xxx")},
-			args:     []string{"workspace", "new"},
-			code:     1,
-			err:      "accepts 1 arg(s), received 0",
+			name: "WithDefaults",
+			objs: []runtime.Object{pod("default", "xxx")},
+			args: []string{"workspace", "new"},
+			err:  true,
 		},
 		{
-			name:     "WithoutFlags",
-			kubeObjs: []runtime.Object{pod("default", "foo")},
-			args:     []string{"workspace", "new", "foo"},
+			name: "WithoutFlags",
+			objs: []runtime.Object{pod("default", "foo")},
+			args: []string{"workspace", "new", "foo"},
 		},
 		{
 			name: "WithUserSuppliedSecretAndServiceAccount",
-			kubeObjs: []runtime.Object{
+			objs: []runtime.Object{
 				pod("default", "foo"),
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -98,7 +91,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "WithDefaultSecretAndServiceAccount",
-			kubeObjs: []runtime.Object{
+			objs: []runtime.Object{
 				pod("default", "foo"),
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -116,52 +109,44 @@ func TestNewWorkspace(t *testing.T) {
 			args: []string{"workspace", "new", "foo"},
 		},
 		{
-			name:     "WithSpecificNamespace",
-			kubeObjs: []runtime.Object{pod("foo", "foo")},
-			args:     []string{"workspace", "new", "foo", "--namespace", "foo"},
+			name: "WithSpecificNamespace",
+			objs: []runtime.Object{pod("foo", "foo")},
+			args: []string{"workspace", "new", "foo", "--namespace", "foo"},
+			assertions: func(opts *app.Options) {
+				assert.Equal(t, "foo", opts.Workspace)
+				assert.Equal(t, "foo", opts.Namespace)
+			},
 		},
 		{
-			name:     "WithCacheSettings",
-			kubeObjs: []runtime.Object{pod("default", "foo")},
-			args:     []string{"workspace", "new", "foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
+			name: "WithCacheSettings",
+			objs: []runtime.Object{pod("default", "foo")},
+			args: []string{"workspace", "new", "foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
+			assertions: func(opts *app.Options) {
+				assert.Equal(t, "foo", opts.Workspace)
+				assert.Equal(t, "999Gi", opts.WorkspaceSpec.Cache.Size)
+				assert.Equal(t, "lumpen-proletariat", opts.WorkspaceSpec.Cache.StorageClass)
+			},
 		},
 		{
-			name:     "WithContextFlag",
-			kubeObjs: []runtime.Object{pod("default", "foo")},
-			args:     []string{"workspace", "new", "foo", "--context", "oz-cluster"},
+			name: "WithContextFlag",
+			objs: []runtime.Object{pod("default", "foo")},
+			args: []string{"workspace", "new", "foo", "--context", "oz-cluster"},
+			assertions: func(opts *app.Options) {
+				assert.Equal(t, "oz-cluster", opts.KubeContext)
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Populate fake kubernetes client with relevant objects
-			fakeKubeClient := kfake.NewSimpleClientset(tt.kubeObjs...)
-			t.Override(&k8s.KubeClient, func() (kubernetes.Interface, error) {
-				return fakeKubeClient, nil
-			})
+			opts, err := app.NewFakeOpts(new(bytes.Buffer), tt.objs...)
+			require.NoError(t, err)
 
-			fakeStokClient := fake.NewSimpleClientset(tt.stokObjs...)
-			t.Override(&k8s.StokClient, func() (stokclient.Interface, error) {
-				return fakeStokClient, nil
-			})
+			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
 
-			// Mock call to attach to pod TTY
-			t.Override(&k8s.Attach, func(pod *corev1.Pod) error { return nil })
-
-			// Mock call to retrieve pod logs
-			t.Override(&k8s.GetLogs, func(ctx context.Context, kc kubernetes.Interface, pod *corev1.Pod, container string) (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBufferString("test output")), nil
-			})
-
-			out := new(bytes.Buffer)
-			code, err := ExecWithExitCode(context.Background(), tt.args, out, out)
-
-			if tt.err != "" {
-				require.EqualError(t, err, tt.err)
-			} else {
-				require.NoError(t, err)
+			if tt.assertions != nil {
+				tt.assertions(opts)
 			}
-			require.Equal(t, tt.code, code)
 		})
 	}
 }

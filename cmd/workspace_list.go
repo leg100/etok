@@ -3,38 +3,42 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/leg100/stok/cmd/flags"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/options"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
 	workspaceCmd.AddChild(
-		NewCmd("list").
-			WithShortUsage("stok workspace list [flags]").
+		NewCmd("list [flags]").
 			WithShortHelp("List all workspaces").
 			WithFlags(
 				flags.Path,
 			).
-			WithOneArg().
 			WantsKubeClients().
-			WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+			WithExec(func(ctx context.Context, opts *app.Options) error {
 				stokenv, err := env.ReadStokEnv(opts.Path)
 				if err != nil {
-					return err
+					if !os.IsNotExist(err) {
+						return err
+					}
+				} else {
+					opts.Namespace = stokenv.Namespace()
+					opts.Workspace = stokenv.Workspace()
 				}
 
 				// List across all namespaces
-				workspaces, err := opts.StokClient.StokV1alpha1().Workspaces("").List(ctx, metav1.ListOptions{})
+				workspaces, err := opts.StokClient().StokV1alpha1().Workspaces("").List(ctx, metav1.ListOptions{})
 				if err != nil {
 					return err
 				}
 
 				var prefix string
 				for _, ws := range workspaces.Items {
-					if ws.GetNamespace() == stokenv.Namespace() && ws.GetName() == stokenv.Workspace() {
+					if ws.GetNamespace() == opts.Namespace && ws.GetName() == opts.Workspace {
 						prefix = "*"
 					} else {
 						prefix = ""

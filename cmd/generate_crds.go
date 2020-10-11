@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/leg100/stok/pkg/options"
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/version"
+	"github.com/spf13/pflag"
 )
 
 const allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
@@ -18,15 +18,13 @@ var allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Ver
 func init() {
 	generateCmd.AddChild(
 		NewCmd("crds").
-			WithShortUsage("new <[namespace/]workspace>").
 			WithShortHelp("Generate stok CRDs").
-			WithFlags(func(fs *flag.FlagSet, opts *options.StokOptions) {
+			WithFlags(func(fs *pflag.FlagSet, opts *app.Options) {
 				fs.BoolVar(&opts.LocalCRDToggle, "local", false, "Read CRDs from local file (default false)")
 				fs.StringVar(&opts.LocalCRDPath, "path", allCrdsPath, "Path to local CRDs file")
 				fs.StringVar(&opts.RemoteCRDURL, "url", allCrdsURL, "URL for CRDs file")
 			}).
-			WithOneArg().
-			WithExec(func(ctx context.Context, opts *options.StokOptions) error {
+			WithExec(func(ctx context.Context, opts *app.Options) error {
 				var crds []byte
 
 				if opts.LocalCRDToggle {

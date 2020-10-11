@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	v1alpha1types "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	"github.com/leg100/stok/pkg/k8s/stokclient/fake"
+	"github.com/leg100/stok/pkg/app"
+	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
-	"github.com/leg100/stok/util"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestListWorkspaces(t *testing.T) {
@@ -29,47 +29,44 @@ func TestListWorkspaces(t *testing.T) {
 		},
 	}
 
-	testutil.Run(t, "WithEnvironmentFile", func(t *testutil.T) {
-		path := t.NewTempDir().Root()
-		err := util.WriteEnvironmentFile(path, "default", "workspace-1")
-		require.NoError(t, err)
+	tests := []struct {
+		name string
+		objs []runtime.Object
+		args []string
+		env  env.StokEnv
+		err  bool
+		out  string
+	}{
+		{
+			name: "WithEnvironmentFile",
+			objs: []runtime.Object{ws1, ws2},
+			args: []string{"workspace", "list"},
+			env:  env.StokEnv("default/workspace-1"),
+			out:  "*\tdefault/workspace-1\n\tdev/workspace-2\n",
+		},
+		{
+			name: "WithoutEnvironmentFile",
+			objs: []runtime.Object{ws1, ws2},
+			args: []string{"workspace", "list"},
+			out:  "\tdefault/workspace-1\n\tdev/workspace-2\n",
+		},
+	}
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			path := t.NewTempDir().Chdir().Root()
 
-		fakeStokClient := fake.NewSimpleClientset(ws1, ws2)
-		t.Override(&k8s.StokClient, func() (stokclient.Interface, error) {
-			return fakeStokClient, nil
+			// Write .terraform/environment
+			if tt.env != "" {
+				require.NoError(t, tt.env.Write(path))
+			}
+
+			out := new(bytes.Buffer)
+
+			opts, err := app.NewFakeOpts(out, tt.objs...)
+			require.NoError(t, err)
+
+			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
+			assert.Equal(t, tt.out, out.String())
 		})
-
-		out := new(bytes.Buffer)
-		args := []string{
-			"workspace",
-			"list",
-			"--path", path,
-		}
-		code, err := ExecWithExitCode(context.Background(), args, out, out)
-
-		require.NoError(t, err)
-		require.Equal(t, 0, code)
-		require.Equal(t, "*\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
-	})
-
-	testutil.Run(t, "WithoutEnvironmentFile", func(t *testutil.T) {
-		path := t.NewTempDir().Root()
-
-		fakeStokClient := fake.NewSimpleClientset(ws1, ws2)
-		t.Override(&k8s.StokClient, func() (stokclient.Interface, error) {
-			return fakeStokClient, nil
-		})
-
-		out := new(bytes.Buffer)
-		args := []string{
-			"workspace",
-			"list",
-			"--path", path,
-		}
-		code, err := ExecWithExitCode(context.Background(), args, out, out)
-
-		require.NoError(t, err)
-		require.Equal(t, 0, code)
-		require.Equal(t, "\tdefault/workspace-1\n\tdev/workspace-2\n", out.String())
-	})
+	}
 }

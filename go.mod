@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/storage v1.5.0
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/Sirupsen/logrus v0.0.0-00010101000000-000000000000 // indirect
-	github.com/apex/log v1.6.0
+	github.com/creasty/defaults v1.5.1
 	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
@@ -15,10 +15,11 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-cmp v0.4.0
 	github.com/gregjones/httpcache v0.0.0-20190203031600-7a902570cb17 // indirect
+	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kr/pty v1.1.5
-	github.com/mattn/go-colorable v0.1.2
 	github.com/operator-framework/operator-sdk v0.19.0
-	github.com/peterbourgon/ff/v3 v3.0.0
+	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	github.com/tj/assert v0.0.3
 	golang.org/x/crypto v0.0.0-20200422194213-44a606286825 // indirect

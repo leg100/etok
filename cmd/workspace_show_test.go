@@ -3,12 +3,11 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"regexp"
 	"testing"
 
+	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +17,7 @@ func TestWorkspaceShow(t *testing.T) {
 		args []string
 		env  env.StokEnv
 		out  string
-		code int
+		err  bool
 	}{
 		{
 			name: "WithEnvironmentFile",
@@ -29,8 +28,7 @@ func TestWorkspaceShow(t *testing.T) {
 		{
 			name: "WithoutEnvironmentFile",
 			args: []string{"workspace", "show"},
-			out:  "no such file or directory",
-			code: 1,
+			err:  true,
 		},
 	}
 
@@ -44,14 +42,12 @@ func TestWorkspaceShow(t *testing.T) {
 			}
 
 			out := new(bytes.Buffer)
-			code, _ := ExecWithExitCode(context.Background(), tt.args, out, out)
 
-			assert.Equal(t, tt.code, code)
+			opts, err := app.NewFakeOpts(out)
+			require.NoError(t, err)
 
-			// Merely ensure expected output is a subset of actual output (no such file error
-			// messages include the temporary directory name which isn't known to the test case in
-			// the table above)
-			assert.Regexp(t, regexp.MustCompile(tt.out), out.String())
+			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
+			t.CheckContains(tt.out, out.String())
 		})
 	}
 }

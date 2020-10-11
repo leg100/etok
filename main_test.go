@@ -1,24 +1,22 @@
-package cmd
+package main
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
-	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/testutil"
 	"github.com/leg100/stok/version"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestRoot(t *testing.T) {
+func TestMain(t *testing.T) {
 	tests := []struct {
 		name  string
 		args  []string
 		out   string
 		err   bool
 		setup func()
+		code  int
 	}{
 		{
 			name: "no args",
@@ -40,9 +38,14 @@ func TestRoot(t *testing.T) {
 			},
 		},
 		{
+			name: "debug",
+			args: []string{"--debug"},
+		},
+		{
 			name: "invalid",
 			args: []string{"invalid"},
 			err:  true,
+			code: 1,
 		},
 	}
 
@@ -53,11 +56,18 @@ func TestRoot(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			opts, err := app.NewFakeOpts(out)
-			require.NoError(t, err)
+			err := run(tt.args, out)
 
-			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
 			assert.Regexp(t, tt.out, out)
+
+			if tt.err {
+				// Check exit code and check stderr is not empty
+				errOut := new(bytes.Buffer)
+				assert.Equal(t, tt.code, handleError(err, errOut))
+				assert.NotEmpty(t, errOut)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
