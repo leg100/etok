@@ -46,7 +46,7 @@ func Debugf(format string, a ...interface{}) {
 
 func Info(msg string) {
 	if level >= InfoLevel {
-		fmt.Fprintf(out, msg)
+		fmt.Fprintln(out, msg)
 	}
 }
 

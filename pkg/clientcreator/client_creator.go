@@ -5,10 +5,14 @@ import (
 
 	"github.com/leg100/stok/pkg/k8s/stokclient"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type ClientCreator struct {
+	// Client config
+	config *rest.Config
+
 	// Kubernetes built-in client
 	kubeClient kubernetes.Interface
 
@@ -16,8 +20,12 @@ type ClientCreator struct {
 	stokClient stokclient.Interface
 }
 
-func  NewClientCreator() *ClientCreator {
+func NewClientCreator() *ClientCreator {
 	return &ClientCreator{}
+}
+
+func (cc *ClientCreator) KubeConfig() *rest.Config {
+	return cc.config
 }
 
 func (cc *ClientCreator) KubeClient() kubernetes.Interface {
@@ -44,8 +52,9 @@ func (cc *ClientCreator) CreateClients(kubeCtx string) error {
 		return fmt.Errorf("creating built-in kubernetes client: %w", err)
 	}
 
-	cc.stokClient= sc
-	cc.kubeClient= kc
+	cc.config = cfg
+	cc.stokClient = sc
+	cc.kubeClient = kc
 
 	return nil
 }

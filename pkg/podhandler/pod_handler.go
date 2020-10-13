@@ -3,11 +3,8 @@ package podhandler
 import (
 	"context"
 	"io"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/leg100/stok/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -18,11 +15,10 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-type PodHandler struct {}
+type PodHandler struct{}
 
 // TODO: unit test
-func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
-	// TODO: deep copy cfg
+func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, in io.Reader, out, errOut io.Writer) error {
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -31,17 +27,16 @@ func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) er
 
 	opts := &attach.AttachOptions{
 		StreamOptions: exec.StreamOptions{
-			// TODO: not sure how this has worked all this time for non-default namespaces?
-			Namespace:     "default",
+			Namespace:     pod.GetNamespace(),
 			PodName:       pod.GetName(),
 			ContainerName: "runner",
 			Stdin:         true,
 			TTY:           true,
 			Quiet:         true,
 			IOStreams: genericclioptions.IOStreams{
-				In:     os.Stdin,
-				Out:    os.Stdout,
-				ErrOut: attachErrOut{},
+				In:     in,
+				Out:    out,
+				ErrOut: errOut,
 			},
 		},
 		Attach:     &attach.DefaultRemoteAttach{},
@@ -51,18 +46,7 @@ func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) er
 		Config:        cfg,
 		Pod:           pod,
 	}
-
 	return opts.Run()
-}
-
-// ErrOut above wants an obj with Write method, so lets provide one that writes to our logger with
-// info level
-type attachErrOut struct{}
-
-func (_ attachErrOut) Write(in []byte) (int, error) {
-	s := strings.TrimSpace(string(in))
-	log.Info(s)
-	return len(in), nil
 }
 
 func (h *PodHandler) GetLogs(ctx context.Context, kc kubernetes.Interface, pod *corev1.Pod, container string) (io.ReadCloser, error) {

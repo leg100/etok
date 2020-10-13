@@ -22,7 +22,7 @@ type NewWorkspace struct {
 
 func NewFromOpts(opts *app.Options) app.App {
 	return &NewWorkspace{
-		Options: opts,
+		Options:    opts,
 		PodHandler: &podhandler.PodHandler{},
 	}
 }
@@ -33,8 +33,8 @@ func NewFromOpts(opts *app.Options) app.App {
 // workspace resource and wait until it is reporting it is healthy, or the timeout expires.
 func (nws *NewWorkspace) Run(ctx context.Context) error {
 	if err := nws.run(ctx); err != nil {
-		// Delete workspace upon error
-		nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace).Delete(ctx, nws.Workspace, metav1.DeleteOptions{})
+		// Delete workspace upon error - use new ctx because existing ctx may have been cancelled
+		nws.StokClient().StokV1alpha1().Workspaces(nws.Namespace).Delete(context.Background(), nws.Workspace, metav1.DeleteOptions{})
 		return err
 	}
 	return nil

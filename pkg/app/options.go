@@ -15,7 +15,6 @@ import (
 	"github.com/leg100/stok/version"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/rest"
 )
 
 // Options pertaining to stok apps
@@ -114,9 +113,6 @@ type Options struct {
 	// Kubernetes context
 	KubeContext string
 
-	// Kubernetes config
-	KubeConfig *rest.Config
-
 	// Deferred creation of clients
 	clientcreator.Interface
 }
@@ -138,10 +134,10 @@ func NewOpts() (*Options, error) {
 	return opts, nil
 }
 
-func NewFakeOpts(out io.Writer, objs... runtime.Object) (*Options, error) {
+func NewFakeOpts(out io.Writer, objs ...runtime.Object) (*Options, error) {
 	opts := &Options{
 		Interface: clientcreator.NewFakeClientCreator(objs...),
-		Out: out,
+		Out:       out,
 	}
 	if err := defaults.Set(opts); err != nil {
 		return nil, err
@@ -149,7 +145,7 @@ func NewFakeOpts(out io.Writer, objs... runtime.Object) (*Options, error) {
 	return opts, nil
 }
 
-func NewFakeOptsWithClients(out io.Writer, objs... runtime.Object) (*Options, error) {
+func NewFakeOptsWithClients(out io.Writer, objs ...runtime.Object) (*Options, error) {
 	opts, err := NewFakeOpts(out, objs...)
 	if err != nil {
 		return nil, err

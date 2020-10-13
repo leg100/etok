@@ -18,9 +18,11 @@ type Fake struct {
 
 	// Fake objs
 	objs []runtime.Object
+
+	Interface
 }
 
-func NewFakeClientCreator(objs... runtime.Object) *Fake {
+func NewFakeClientCreator(objs ...runtime.Object) *Fake {
 	return &Fake{objs: objs}
 }
 
