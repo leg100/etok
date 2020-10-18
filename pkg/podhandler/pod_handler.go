@@ -3,6 +3,7 @@ package podhandler
 import (
 	"context"
 	"io"
+	"os"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,10 +16,17 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
+type Interface interface {
+	// Out parameter for testing purposes
+	Attach(*rest.Config, *corev1.Pod, io.Writer) error
+	GetLogs(context.Context, kubernetes.Interface, *corev1.Pod, string) (io.ReadCloser, error)
+}
+
+// Implements Interface
 type PodHandler struct{}
 
 // TODO: unit test
-func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, in io.Reader, out, errOut io.Writer) error {
+func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -34,9 +42,11 @@ func (h *PodHandler) Attach(cfg *rest.Config, pod *corev1.Pod, in io.Reader, out
 			TTY:           true,
 			Quiet:         true,
 			IOStreams: genericclioptions.IOStreams{
-				In:     in,
-				Out:    out,
-				ErrOut: errOut,
+				// Exec module overrides In and Out with os.Stdin and os.Stdout respectively,
+				// so these parameters have no effect! It does seem to pass ErrOut through, however.
+				In:     os.Stdin,
+				Out:    os.Stdout,
+				ErrOut: os.Stderr,
 			},
 		},
 		Attach:     &attach.DefaultRemoteAttach{},

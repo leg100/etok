@@ -9,6 +9,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+type Interface interface {
+	KubeConfig() *rest.Config
+	KubeClient() kubernetes.Interface
+	StokClient() stokclient.Interface
+	CreateClients(string) error
+}
+
+// Implements Interface
 type ClientCreator struct {
 	// Client config
 	config *rest.Config

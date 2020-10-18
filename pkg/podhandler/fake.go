@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-type PodHandlerFake struct {}
+type PodHandlerFake struct{}
 
 func (h *PodHandlerFake) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	return fmt.Errorf("fake error")

@@ -52,7 +52,7 @@ func TestLauncher(t *testing.T) {
 			},
 			{
 				name: strings.Join(tfcmd, "") + "WithSpecificNamespaceAndWorkspaceFlags",
-				args: []string{"--debug", "--namespace", "foo", "--workspace", "bar"},
+				args: []string{"--namespace", "foo", "--workspace", "bar"},
 				env:  env.StokEnv("default/default"),
 				assertions: func(opts *app.Options) {
 					assert.Equal(t, "foo", opts.Namespace)
@@ -73,7 +73,7 @@ func TestLauncher(t *testing.T) {
 			},
 			{
 				name: strings.Join(tfcmd, "") + "WithContextFlag",
-				args: []string{"--debug", "--context", "oz-cluster"},
+				args: []string{"--context", "oz-cluster"},
 				env:  env.StokEnv("default/default"),
 				assertions: func(opts *app.Options) {
 					assert.Equal(t, "oz-cluster", opts.KubeContext)
@@ -84,6 +84,13 @@ func TestLauncher(t *testing.T) {
 				assertions: func(opts *app.Options) {
 					assert.Equal(t, "default", opts.Namespace)
 					assert.Equal(t, "default", opts.Workspace)
+				},
+			},
+			{
+				name: strings.Join(tfcmd, "") + "ensure kube clients are created",
+				assertions: func(opts *app.Options) {
+					assert.NotNil(t, opts.KubeClient())
+					assert.NotNil(t, opts.StokClient())
 				},
 			},
 		}

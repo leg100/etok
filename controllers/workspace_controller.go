@@ -178,7 +178,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 // returns all possible GVKs for a go object, but the wrapper returns only the Kind, checking only
 // that at least one GVK exists. (The Kind should be the same for all GVKs).
 // TODO: could just use reflect.TypeOf instead...
-func GetKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, error) {
+func getKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, error) {
 	gvks, _, err := scheme.ObjectKinds(obj)
 	if err != nil {
 		return "", err
@@ -190,7 +190,7 @@ func GetKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, erro
 }
 
 func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee api.Object) error {
-	kind, err := GetKindFromObject(r.Scheme, controllee)
+	kind, err := getKindFromObject(r.Scheme, controllee)
 	if err != nil {
 		return err
 	}

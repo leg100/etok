@@ -24,18 +24,18 @@ func TestPodConnect(t *testing.T) {
 		name       string
 		err        bool
 		assertions func(opts *app.Options)
-		ph podhandler.Interface
-		out string
+		ph         podhandler.Interface
+		out        string
 	}{
 		{
 			name: "successful attach",
-			ph: &testAttachSucceed{},
-			out: "fake attach",
+			ph:   &testAttachSucceed{},
+			out:  "fake attach",
 		},
 		{
 			name: "fallback to logs",
-			ph: &testAttachFail{},
-			out: "fake logs",
+			ph:   &testAttachFail{},
+			out:  "fake logs",
 		},
 	}
 
@@ -56,7 +56,7 @@ func TestPodConnect(t *testing.T) {
 				context.Background(),
 				tt.ph,
 				opts.KubeClient(),
-				opts.KubeConfig,
+				opts.KubeConfig(),
 				pod,
 				opts.Out,
 				func() error { return nil },
@@ -77,7 +77,9 @@ func testPod(namespace, name string) *corev1.Pod {
 	}
 }
 
-type testAttachSucceed struct {}
+type testAttachSucceed struct{}
+
+var _ podhandler.Interface = &testAttachSucceed{}
 
 func (h *testAttachSucceed) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	fmt.Fprintln(out, "fake attach")
@@ -88,7 +90,9 @@ func (h *testAttachSucceed) GetLogs(ctx context.Context, kc kubernetes.Interface
 	return ioutil.NopCloser(bytes.NewBufferString("fake logs")), nil
 }
 
-type testAttachFail struct {}
+type testAttachFail struct{}
+
+var _ podhandler.Interface = &testAttachFail{}
 
 func (h *testAttachFail) Attach(cfg *rest.Config, pod *corev1.Pod, out io.Writer) error {
 	return fmt.Errorf("fake error")

@@ -28,7 +28,7 @@ func TestCatchCtrlC(t *testing.T) {
 	wg.Add(1)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	catchCtrlC(cancel)
+	CatchCtrlC(cancel)
 
 	go func() {
 		<-ctx.Done()

@@ -1,11 +1,11 @@
-
----
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
+  labels:
+    app: stok
   name: workspaces.stok.goalspike.com
 spec:
   additionalPrinterColumns:
@@ -43,12 +43,6 @@ spec:
         spec:
           description: WorkspaceSpec defines the desired state of Workspace
           properties:
-            autoCreateSecret:
-              default: true
-              type: boolean
-            autoCreateServiceAccout:
-              default: true
-              type: boolean
             backend:
               properties:
                 config:
@@ -86,16 +80,12 @@ spec:
             debug:
               type: boolean
             secretName:
-              default: stok
               type: string
             serviceAccountName:
-              default: stok
               type: string
             timeoutClient:
               type: string
           required:
-          - autoCreateSecret
-          - autoCreateServiceAccout
           - backend
           - timeoutClient
           type: object

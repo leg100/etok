@@ -11,6 +11,8 @@ import (
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/clientcreator"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/log"
+	"github.com/leg100/stok/pkg/podhandler"
 	"github.com/leg100/stok/util"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/pflag"
@@ -66,7 +68,7 @@ type Options struct {
 
 	// Stdout, Stderr writers
 	// TODO: ErrOut might well now be redundant
-	Out, ErrOut io.Writer
+	Out, ErrOut io.Writer `default:"-"`
 
 	// Toggle debug-level logging
 	Debug bool
@@ -84,13 +86,10 @@ type Options struct {
 	Image string `default:"-"`
 
 	// Kubernetes resource kind
-	Kind string
-
-	// Runner: toggle waiting for resource
-	NoWait bool
+	Kind string `default:"Run"`
 
 	// Runner: Tarball filename
-	Tarball string `default:"tarball.tar.gz"`
+	Tarball string `default:""`
 
 	// Stok run command
 	Command string
@@ -104,17 +103,19 @@ type Options struct {
 	// Workspace name with optional namespace i.e. namespace/workspace
 	StokEnv string
 
-	// Create service account if it does not exist
-	CreateServiceAccount bool
+	// Create a service acccount if it does not exist
+	CreateServiceAccount bool `default:"true"`
 
-	// Create secret if it does not exist
-	CreateSecret bool
+	// Create a secret if it does not exist
+	CreateSecret bool `default:"true"`
 
 	// Kubernetes context
 	KubeContext string
 
 	// Deferred creation of clients
 	clientcreator.Interface
+
+	PodHandler podhandler.Interface
 }
 
 func (opts *Options) SetDefaults() {
@@ -124,10 +125,17 @@ func (opts *Options) SetDefaults() {
 	if defaults.CanUpdate(opts.RunName) {
 		opts.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 	}
+
+	// Set logger output device
+	log.SetOut(opts.Out)
 }
 
-func NewOpts() (*Options, error) {
-	opts := &Options{Interface: clientcreator.NewClientCreator()}
+func NewOpts(out io.Writer) (*Options, error) {
+	opts := &Options{
+		Interface:  clientcreator.NewClientCreator(),
+		PodHandler: &podhandler.PodHandler{},
+		Out:        out,
+	}
 	if err := defaults.Set(opts); err != nil {
 		return nil, err
 	}
@@ -136,8 +144,9 @@ func NewOpts() (*Options, error) {
 
 func NewFakeOpts(out io.Writer, objs ...runtime.Object) (*Options, error) {
 	opts := &Options{
-		Interface: clientcreator.NewFakeClientCreator(objs...),
-		Out:       out,
+		Interface:  clientcreator.NewFakeClientCreator(objs...),
+		PodHandler: &podhandler.PodHandlerFake{},
+		Out:        out,
 	}
 	if err := defaults.Set(opts); err != nil {
 		return nil, err

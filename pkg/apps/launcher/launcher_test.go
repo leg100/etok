@@ -23,7 +23,7 @@ func TestLauncher(t *testing.T) {
 	tests := []struct {
 		name       string
 		err        bool
-		setOpts func(opts *app.Options)
+		setOpts    func(opts *app.Options)
 		assertions func(opts *app.Options)
 	}{
 		{
@@ -39,7 +39,7 @@ func TestLauncher(t *testing.T) {
 			name: "plan with args",
 			setOpts: func(opts *app.Options) {
 				opts.Command = "Plan"
-				opts.Args= []string{"-input", "false"}
+				opts.Args = []string{"-input", "false"}
 			},
 		},
 	}
@@ -100,11 +100,10 @@ func testPod(namespace, name string) *corev1.Pod {
 			Phase: corev1.PodRunning,
 			Conditions: []corev1.PodCondition{
 				{
-					Type: corev1.PodReady,
+					Type:   corev1.PodReady,
 					Status: corev1.ConditionTrue,
 				},
 			},
 		},
 	}
 }
-

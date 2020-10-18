@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/creasty/defaults"
 	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -57,16 +58,22 @@ func (ws *Workspace) PodName() string {
 
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
-	// +kubebuilder:default=stok
-	SecretName string `json:"secretName,omitempty"`
-
-	// +kubebuilder:default=stok
+	SecretName         string `json:"secretName,omitempty"`
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
 	Cache         WorkspaceCacheSpec `json:"cache,omitempty"`
 	Backend       BackendSpec        `json:"backend"`
 	TimeoutClient string             `json:"timeoutClient"`
 	Debug         bool               `json:"debug,omitempty"`
+}
+
+func (w *WorkspaceSpec) SetDefaults() {
+	if defaults.CanUpdate(w.SecretName) {
+		w.SecretName = "stok"
+	}
+	if defaults.CanUpdate(w.ServiceAccountName) {
+		w.ServiceAccountName = "stok"
+	}
 }
 
 // Get/Set TimeoutQueue functions

@@ -28,9 +28,16 @@ func TestRunner(t *testing.T) {
 		code       int
 	}{
 		{
-			name: "defaults + run",
+			name: "defaults",
 			setOpts: func(opts *app.Options) {
-				opts.Kind = "Run"
+				opts.Args = []string{"sh", "-c", "echo -n hallelujah"}
+			},
+			out: "hallelujah",
+		},
+		{
+			name: "defaults + tarball",
+			setOpts: func(opts *app.Options) {
+				opts.Tarball = "archive.tar.gz"
 				opts.Args = []string{"/bin/ls", "test1.tf"}
 			},
 			out: "test1.tf\n",
@@ -39,14 +46,13 @@ func TestRunner(t *testing.T) {
 			name: "defaults + workspace",
 			setOpts: func(opts *app.Options) {
 				opts.Kind = "Workspace"
-				opts.Args = []string{"/bin/ls", "test1.tf"}
+				opts.Args = []string{"sh", "-c", "echo -n hallelujah"}
 			},
-			out: "test1.tf\n",
+			out: "hallelujah",
 		},
 		{
 			name: "non-zero exit code",
 			setOpts: func(opts *app.Options) {
-				opts.Kind = "Run"
 				opts.Args = []string{"sh", "-c", "echo -n alienation; exit 2"}
 			},
 			out:  "alienation",
@@ -68,8 +74,10 @@ func TestRunner(t *testing.T) {
 			// Change into tmpdir and set as path
 			opts.Path = t.NewTempDir().Chdir().Root()
 
-			// Create dummy tarball
-			createTarballWithFiles(t, opts.Tarball, "test1.tf")
+			if opts.Tarball != "" {
+				// Create dummy tarball
+				createTarballWithFiles(t, opts.Tarball, "test1.tf")
+			}
 
 			// Create resource it watches (w/o wait annotation)
 			switch opts.Kind {

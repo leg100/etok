@@ -45,12 +45,12 @@ func run(args []string, out io.Writer) error {
 	signals.CatchCtrlC(cancel)
 
 	// Construct options and their defaults
-	opts, err := app.NewOpts()
+	opts, err := app.NewOpts(out)
 	if err != nil {
 		return err
 	}
 
-	// Parse args, furnish factory with app
+	// Parse args, furnish options with app
 	if err := cmd.ParseArgs(ctx, args, opts); err != nil {
 		return err
 	} else {

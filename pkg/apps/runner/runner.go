@@ -32,10 +32,12 @@ func (r *Runner) Run(ctx context.Context) error {
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball
-	g.Go(func() error {
-		_, err := archive.Extract(r.Tarball, r.Path)
-		return err
-	})
+	if r.Tarball != "" {
+		g.Go(func() error {
+			_, err := archive.Extract(r.Tarball, r.Path)
+			return err
+		})
+	}
 
 	// Concurrently wait for client to release hold
 	g.Go(func() error {

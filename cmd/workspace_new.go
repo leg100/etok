@@ -29,11 +29,11 @@ func init() {
 }
 
 func workspaceFlags(fs *pflag.FlagSet, opts *app.Options) {
-	fs.BoolVar(&opts.CreateServiceAccount, "create-service-account", true, "Create service account if it does not exist")
-	fs.BoolVar(&opts.CreateSecret, "create-secret", true, "Create secret if it does not exist")
+	fs.BoolVar(&opts.CreateServiceAccount, "create-service-account", opts.CreateServiceAccount, "Create service account if missing")
+	fs.BoolVar(&opts.CreateSecret, "create-secret", opts.CreateSecret, "Create secret if missing")
 
-	fs.StringVar(&opts.WorkspaceSpec.ServiceAccountName, "service-account", "stok", "Name of ServiceAccount")
-	fs.StringVar(&opts.WorkspaceSpec.SecretName, "secret", "stok", "Name of Secret containing credentials")
+	fs.StringVar(&opts.WorkspaceSpec.ServiceAccountName, "service-account", opts.WorkspaceSpec.ServiceAccountName, "Name of ServiceAccount")
+	fs.StringVar(&opts.WorkspaceSpec.SecretName, "secret", opts.WorkspaceSpec.SecretName, "Name of Secret containing credentials")
 	fs.StringVar(&opts.WorkspaceSpec.Cache.Size, "size", "1Gi", "Size of PersistentVolume for cache")
 	fs.StringVar(&opts.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	fs.StringVar(&opts.WorkspaceSpec.TimeoutClient, "timeout-client", "10s", "timeout for client to signal readiness")

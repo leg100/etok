@@ -37,6 +37,9 @@ func (mon *workspaceMonitor) workspaceHealthyHandler(event watch.Event) (bool, e
 
 	switch ws := event.Object.(type) {
 	case *v1alpha1.Workspace:
+		if ws.Status.Conditions == nil {
+			return false, nil
+		}
 		if ws.Status.Conditions.IsTrueFor(v1alpha1.ConditionHealthy) {
 			return true, nil
 		}

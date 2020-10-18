@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	kfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 )
 
 type Fake struct {
@@ -24,6 +25,10 @@ type Fake struct {
 
 func NewFakeClientCreator(objs ...runtime.Object) *Fake {
 	return &Fake{objs: objs}
+}
+
+func (f *Fake) KubeConfig() *rest.Config {
+	return nil
 }
 
 func (f *Fake) KubeClient() kubernetes.Interface {

@@ -24,7 +24,7 @@ func TestRunner(t *testing.T) {
 	}{
 		{
 			name: "explicit env vars",
-			args: []string{"runner", "--debug", "--", "/bin/ls", "test1.tf"},
+			args: []string{"runner", "--", "/bin/ls", "test1.tf"},
 			envs: map[string]string{
 				"STOK_KIND":      "Run",
 				"STOK_NAME":      "foo",
@@ -44,7 +44,7 @@ func TestRunner(t *testing.T) {
 		},
 		{
 			name: "implicit defaults",
-			args: []string{"runner", "--debug", "--", "/bin/ls", "test1.tf"},
+			args: []string{"runner", "--", "/bin/ls", "test1.tf"},
 			envs: map[string]string{
 				"STOK_KIND": "Run",
 				"STOK_NAME": "foo",
@@ -54,9 +54,17 @@ func TestRunner(t *testing.T) {
 				assert.Equal(t, "foo", opts.Name)
 				assert.Equal(t, "default", opts.Namespace)
 				assert.Equal(t, time.Second*10, opts.TimeoutClient)
-				assert.Equal(t, "tarball.tar.gz", opts.Tarball)
+				assert.Equal(t, "", opts.Tarball)
 				assert.Equal(t, ".", opts.Path)
 				assert.Equal(t, []string{"/bin/ls", "test1.tf"}, opts.Args)
+			},
+		},
+		{
+			name: "ensure kube clients are created",
+			args: []string{"runner"},
+			assertions: func(opts *app.Options) {
+				assert.NotNil(t, opts.KubeClient())
+				assert.NotNil(t, opts.StokClient())
 			},
 		},
 	}

@@ -10,14 +10,13 @@ import (
 
 func init() {
 	generateCmd.AddChild(
-		NewCmd("operator new <[namespace/]workspace>").
+		NewCmd("operator").
 			WithShortHelp("Generate operator's kubernetes resources").
 			WithFlags(func(fs *pflag.FlagSet, opts *app.Options) {
 				fs.StringVar(&opts.Name, "name", "stok-operator", "Name for kubernetes resources")
 				fs.StringVar(&opts.Namespace, "namespace", opts.Namespace, "Kubernetes namespace for resources")
 				fs.StringVar(&opts.Image, "image", opts.Image, "Docker image used for both the operator and the runner")
 			}).
-			WithOneArg().
 			WithExec(func(ctx context.Context, opts *app.Options) error {
 				return (&generate.Operator{
 					Name:      opts.Name,

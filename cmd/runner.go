@@ -12,15 +12,14 @@ func init() {
 		WithShortHelp("Run the stok runner").
 		WithLongHelp("The stok runner is intended to be run in on pod, started by the relevant stok command controller. When invoked, it extracts a tarball containing terraform configuration files. It then waits for the command's ClientReady condition to be true. And then it invokes the relevant command, typically a terraform command.").
 		WithHidden().
+		WantsKubeClients().
 		WithFlags(
-			flags.KubeContext,
 			flags.Namespace,
 			flags.Path,
 			func(fs *pflag.FlagSet, opts *app.Options) {
 				fs.StringVar(&opts.Kind, "kind", opts.Kind, "Kubernetes kind to watch")
 				fs.StringVar(&opts.Name, "name", opts.Name, "Kubernetes resource name to watch")
 				fs.StringVar(&opts.Tarball, "tarball", opts.Tarball, "Tarball filename")
-				fs.BoolVar(&opts.NoWait, "no-wait", opts.NoWait, "Toggle waiting for resource to be ready")
 				fs.DurationVar(&opts.TimeoutClient, "timeout", opts.TimeoutClient, "Timeout for client to signal readiness")
 			},
 		).

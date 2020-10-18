@@ -29,7 +29,7 @@ func PodConnect(ctx context.Context, h podhandler.Interface, kc kubernetes.Inter
 	errors := make(chan error)
 	go func() {
 		log.Debugf("Attaching to pod %s", GetNamespacedName(pod))
-		errors <- attachFallbackToLogs(h, cfg, pod, out, logstream)
+		errors <- attachFallbackToLogs(h, cfg, pod, logstream, out)
 	}()
 
 	// Let operator know we're now at least streaming logs (so if there is an error message then at least
@@ -43,7 +43,7 @@ func PodConnect(ctx context.Context, h podhandler.Interface, kc kubernetes.Inter
 }
 
 // Attach to pod, falling back to streaming logs on error
-func attachFallbackToLogs(h podhandler.Interface, cfg *rest.Config, pod *corev1.Pod, out io.Writer, logstream io.ReadCloser) error {
+func attachFallbackToLogs(h podhandler.Interface, cfg *rest.Config, pod *corev1.Pod, logstream io.ReadCloser, out io.Writer) error {
 	if err := h.Attach(cfg, pod, out); err != nil {
 		log.Info("Failed to attach to pod TTY; falling back to streaming logs")
 		_, err = io.Copy(out, logstream)

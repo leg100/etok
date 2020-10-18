@@ -21,7 +21,7 @@ type Launcher struct {
 
 func NewFromOpts(opts *app.Options) app.App {
 	return &Launcher{
-		Options: opts,
+		Options:    opts,
 		PodHandler: &podhandler.PodHandler{},
 	}
 }
@@ -44,7 +44,7 @@ func (t *Launcher) Run(ctx context.Context) error {
 	}
 
 	// Attach to pod, and release hold annotation
-	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig, pod, t.Out, func() error {
+	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig(), pod, t.Out, func() error {
 		runsclient := t.StokClient().StokV1alpha1().Runs(t.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			run, err := runsclient.Get(ctx, t.Name, metav1.GetOptions{})

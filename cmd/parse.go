@@ -9,8 +9,6 @@ import (
 
 // ParseArgs parses CLI args and furnishes the factory f with a selected app to be run
 func ParseArgs(ctx context.Context, args []string, opts *app.Options) error {
-	log.SetOut(opts.Out)
-
 	// Build command tree
 	cmd := root.Build(opts, true)
 

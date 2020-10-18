@@ -82,14 +82,6 @@ func prependTerraformToArgs(run *v1alpha1.Run, args []string) []string {
 	return append([]string{"terraform"}, args...)
 }
 
-//func setDefaultIfExists(rc client.Client, defname string, namespace string, obj runtime.Object) (string, error) {
-//	nn := types.NamespacedName{Name: defname, Namespace: namespace}
-//	if err := rc.Get(context.TODO(), nn, obj); err != nil {
-//		if errors.IsNotFound(err) {
-//			return "",
-//
-//}
-
 // Create pod
 func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 	args := append(strings.Split(opts.run.Command, " "), opts.run.GetArgs()...)

@@ -15,24 +15,6 @@ import (
 )
 
 func TestNewWorkspace(t *testing.T) {
-	//workspace := func(namespace, name string, queue ...string) *v1alpha1.Workspace {
-	//	return &v1alpha1.Workspace{
-	//		ObjectMeta: metav1.ObjectMeta{
-	//			Name:      name,
-	//			Namespace: namespace,
-	//		},
-	//		Status: v1alpha1.WorkspaceStatus{
-	//			Conditions: status.Conditions{
-	//				{
-	//					Type:   v1alpha1.ConditionHealthy,
-	//					Status: corev1.ConditionTrue,
-	//				},
-	//			},
-	//			Queue: queue,
-	//		},
-	//	}
-	//}
-
 	pod := func(namespace, name string) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -91,21 +73,6 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "WithDefaultSecretAndServiceAccount",
-			objs: []runtime.Object{
-				pod("default", "foo"),
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "stok",
-						Namespace: "default",
-					},
-				},
-				&corev1.ServiceAccount{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "stok",
-						Namespace: "default",
-					},
-				},
-			},
 			args: []string{"workspace", "new", "foo"},
 		},
 		{
@@ -129,10 +96,17 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "WithContextFlag",
-			objs: []runtime.Object{pod("default", "foo")},
 			args: []string{"workspace", "new", "foo", "--context", "oz-cluster"},
 			assertions: func(opts *app.Options) {
 				assert.Equal(t, "oz-cluster", opts.KubeContext)
+			},
+		},
+		{
+			name: "ensure kube clients are created",
+			args: []string{"workspace", "new", "foo"},
+			assertions: func(opts *app.Options) {
+				assert.NotNil(t, opts.KubeClient())
+				assert.NotNil(t, opts.StokClient())
 			},
 		},
 	}
