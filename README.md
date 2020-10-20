@@ -49,31 +49,18 @@ stok apply
 Usage is similar to the terraform CLI:
 
 ```
-Supercharge terraform on kubernetes
+Usage: stok [command]
 
-Usage:
-  stok [command]
+Terraform Commands:
+  apply		destroy		force-unlock
+  get		import		init
+  output	plan		refresh
+  show		state		taint
+  untaint	validate	
 
-Available Commands:
-  apply        Run terraform apply
-  destroy      Run terraform destroy
-  force-unlock Run terraform force-unlock
-  generate     Generate stok kubernetes resources
-  get          Run terraform get
-  help         Help about any command
-  import       Run terraform import
-  init         Run terraform init
-  operator     Run the stok operator
-  output       Run terraform output
-  plan         Run terraform plan
-  refresh      Run terraform refresh
-  runner       Run the stok runner
-  sh           Run shell
-  show         Run terraform show
-  state        Run terraform state
-  taint        Run terraform taint
-  untaint      Run terraform untaint
-  validate     Run terraform validate
+Stok Commands:
+  generate     Generate deployment resources
+  sh           Run shell commands in workspace
   workspace    Stok workspace management
 
 Flags:
@@ -112,20 +99,3 @@ Specific support is provided for the [GCP provider](https://www.terraform.io/doc
 ```
 kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
 ```
-
-## Workspace and Namespace Precedence
-
-When running a command, there are a number of methods of specifying a workspace and a kubernetes namespace. There is an implicit order of precedence to each method (beginning with highest precedence):
-
-Workspace:
-
-1. Workspace flag
-2. Environment file
-3. Default: `default`
-
-Namespace:
-
-1. Workspace flag with namespace prefix (overrides namespace flag below)
-2. Namespace flag
-3. Environment file
-4. Default: `default`
