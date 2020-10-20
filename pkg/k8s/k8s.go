@@ -1,15 +1,8 @@
 package k8s
 
 import (
-	"context"
-	"io"
-	"os"
-
-	"github.com/apex/log"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"k8s.io/client-go/kubernetes"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -25,52 +18,3 @@ func DeleteWaitAnnotationKey(obj metav1.Object) {
 	obj.SetAnnotations(annotations)
 }
 
-// Attach to pod, falling back to streaming logs on error
-func AttachFallbackToLogs(pod *corev1.Pod, logstream io.ReadCloser) error {
-	if err := Attach(pod); err != nil {
-		// TODO: use log fields
-		log.Warn("Failed to attach to pod TTY; falling back to streaming logs")
-		_, err = io.Copy(os.Stdout, logstream)
-		return err
-	}
-	return nil
-}
-
-// PodConnect does the following:
-// 1. Gets log stream of stdout of pod
-// 2. Attaches to TTY of pod, failing that it falls back to copying log stream to user stdout
-// 3. Releases the 'hold' on the pod, i.e. deletes an annotation, informing the pod runner that it
-// can invoke the terraform process, safe in the knowledge that the user is at the very least
-// streaming logs
-func PodConnect(ctx context.Context, kc kubernetes.Interface, namespace, name string, release func() error) error {
-	pod, err := kc.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	podlog := log.WithField("pod", GetNamespacedName(pod))
-
-	// Fetch pod's log stream
-	podlog.Debug("retrieve log stream")
-	logstream, err := GetLogs(ctx, kc, pod, "runner")
-	if err != nil {
-		return err
-	}
-	defer logstream.Close()
-
-	// Attach to pod tty, falling back to log stream upon error
-	errors := make(chan error)
-	go func() {
-		podlog.Debug("attaching")
-		errors <- AttachFallbackToLogs(pod, logstream)
-	}()
-
-	// Let operator know we're now at least streaming logs (so if there is an error message then at least
-	// it'll be fully streamed to the client)
-	if err := release(); err != nil {
-		return err
-	}
-
-	// Wait until attach returns
-	return <-errors
-}

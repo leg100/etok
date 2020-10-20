@@ -74,51 +74,13 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 		assertions func(ws *v1alpha1.Workspace)
 	}{
 		{
-			name: "Missing secret",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					SecretName: "stok",
-				},
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, corev1.ConditionFalse, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
-			},
-		},
-		{
-			name: "Missing service account",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					ServiceAccountName: "stok",
-				},
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, corev1.ConditionFalse, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
-			},
-		},
-		{
-			name: "No secret nor service account specified",
+			name: "No runs",
 			workspace: &v1alpha1.Workspace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "workspace-1",
 				},
 			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, corev1.ConditionTrue, ws.Status.Conditions.GetCondition(v1alpha1.ConditionHealthy).Status)
-			},
-		},
-		{
-			name: "No commands",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
+			objs: []runtime.Object{},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{}, ws.Status.Queue)
 			},

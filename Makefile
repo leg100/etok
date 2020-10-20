@@ -47,7 +47,7 @@ endif
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
 # be built and pushed/loaded first.
 local: image push
-	RUNNER_IMAGE=$(IMG) $(BUILD_BIN) operator
+	STOK_IMAGE=$(IMG) $(BUILD_BIN) operator
 
 # Same as above - image still needs to be built and pushed/loaded
 deploy-operator: image push

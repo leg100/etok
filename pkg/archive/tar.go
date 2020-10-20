@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/apex/log"
+	"github.com/leg100/stok/pkg/log"
 )
 
 // ConfigMap/etcd only supports data payload of up to 1MB, which limits the size of the config that
@@ -36,7 +36,7 @@ func Create(root string) ([]byte, error) {
 
 	// Change into root directory, so that all paths within tarball are relative to it
 	if err := os.Chdir(root); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not change to directory: %s: %w", root, err)
 	}
 
 	paths, err := filepath.Glob("*.tf")
@@ -54,7 +54,7 @@ func Create(root string) ([]byte, error) {
 		return nil, err
 	}
 
-	log.WithFields(log.Fields{"files": paths, "bytes": out.Len()}).Debug("archive created")
+	log.Debugf("archived %d files totalling %d bytes\n", len(paths), out.Len())
 	return out.Bytes(), nil
 }
 
@@ -132,6 +132,6 @@ func Extract(src, dest string) (files int, err error) {
 		files++
 	}
 
-	log.WithFields(log.Fields{"files": files, "path": dest}).Debug("extracted tarball")
+	log.Debugf("extracted %d files to: %s\n", files, dest)
 	return files, err
 }
