@@ -22,7 +22,7 @@ func init() {
 				if err := stokenv.Write(opts.Path); err != nil {
 					return err
 				}
-				log.Infof("Current workspace now: %s", stokenv)
+				log.Infof("Current workspace now: %s\n", stokenv)
 				return nil
 			}))
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWorkspaceShow(t *testing.T) {
+func TestWorkspaceSelect(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
@@ -21,15 +21,10 @@ func TestWorkspaceShow(t *testing.T) {
 		err  bool
 	}{
 		{
-			name: "WithEnvironmentFile",
-			args: []string{"workspace", "show"},
-			env:  env.StokEnv("default/workspace-1"),
-			out:  "default/workspace-1\n",
-		},
-		{
-			name: "WithoutEnvironmentFile",
-			args: []string{"workspace", "show"},
-			err:  true,
+			name: "defaults",
+			args: []string{"workspace", "select", "dev/networking"},
+			env:  env.StokEnv("dev/networking"),
+			out:  "Current workspace now: dev/networking\n",
 		},
 	}
 
@@ -37,18 +32,19 @@ func TestWorkspaceShow(t *testing.T) {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			path := t.NewTempDir().Chdir().Root()
 
-			// Write .terraform/environment
-			if tt.env != "" {
-				require.NoError(t, tt.env.Write(path))
-			}
-
 			out := new(bytes.Buffer)
 
 			opts, err := app.NewFakeOpts(out)
 			require.NoError(t, err)
 
 			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
+
 			assert.Equal(t, tt.out, out.String())
+
+			// Confirm .terraform/environment was written with expected contents
+			stokenv, err := env.ReadStokEnv(path)
+			require.NoError(t, err)
+			assert.Equal(t, tt.env, stokenv)
 		})
 	}
 }
