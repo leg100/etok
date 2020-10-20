@@ -57,7 +57,6 @@ func TestStok(t *testing.T) {
 		wantExitCode    int
 		wantStdoutRegex *regexp.Regexp
 		pty             bool
-		wantWarnings    []string
 		stdin           []byte
 		queueAdditional int
 	}{
@@ -102,7 +101,6 @@ func TestStok(t *testing.T) {
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
 			pty:             false,
-			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
 			name:            "stok plan",
@@ -110,7 +108,6 @@ func TestStok(t *testing.T) {
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
-			wantWarnings:    []string{"Unable to use a TTY - input is not a terminal or the right kind of file", "Failed to attach to pod TTY; falling back to streaming logs"},
 		},
 		{
 			name:            "stok plan with pty",
@@ -146,7 +143,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok destroy with pty",
-			args:            []string{"destroy", "--context", "*kubectx", "--", "-input=true", "-var", "suffix=foo"},
+			args:            []string{"destroy", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             true,
@@ -200,17 +197,6 @@ func TestStok(t *testing.T) {
 				}
 
 				exitCodeTest(t, cmd.Wait(), tt.wantExitCode)
-
-				// Without a pty we expect a warning log msg telling us as much.
-				// (We can use stderr without pty but not with pty)
-				if !tt.pty {
-					got := errbuf.String()
-					for _, want := range tt.wantWarnings {
-						if !regexp.MustCompile(want).MatchString(got) {
-							t.Errorf("want '%s', got '%s'\n", want, got)
-						}
-					}
-				}
 
 				got := outbuf.String()
 				if !tt.wantStdoutRegex.MatchString(got) {

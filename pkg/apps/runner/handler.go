@@ -16,10 +16,15 @@ func isSyncHandler(event watch.Event) (bool, error) {
 
 	switch t := event.Object.(type) {
 	case metav1.Object:
+		// Synchronisation is successful if either:
+		// (a) the annotations map exists and the key is absent
+		// (b) the annotations map is nil
 		if annos := t.GetAnnotations(); annos != nil {
 			if _, ok := annos[v1alpha1.WaitAnnotationKey]; !ok {
 				return true, nil
 			}
+		} else {
+			return true, nil
 		}
 	}
 

@@ -38,16 +38,16 @@ func (t *Launcher) Run(ctx context.Context) error {
 		return err
 	}
 
-	pod, err := t.KubeClient().CoreV1().Pods(t.Namespace).Get(ctx, t.Name, metav1.GetOptions{})
+	pod, err := t.KubeClient().CoreV1().Pods(t.Namespace).Get(ctx, t.RunName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("getting pod %s/%s: %w", t.Namespace, t.Name, err)
+		return fmt.Errorf("getting pod %s/%s: %w", t.Namespace, t.RunName, err)
 	}
 
 	// Attach to pod, and release hold annotation
 	return k8s.PodConnect(ctx, t.PodHandler, t.KubeClient(), t.KubeConfig(), pod, t.Out, func() error {
 		runsclient := t.StokClient().StokV1alpha1().Runs(t.Namespace)
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			run, err := runsclient.Get(ctx, t.Name, metav1.GetOptions{})
+			run, err := runsclient.Get(ctx, t.RunName, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -109,12 +109,12 @@ func (t *Launcher) deploy(ctx context.Context) (run *v1alpha1.Run, err error) {
 		}
 
 		// Construct and deploy ConfigMap resource
-		return t.createConfigMap(ctx, tarball, t.Name, v1alpha1.RunDefaultConfigMapKey)
+		return t.createConfigMap(ctx, tarball, t.RunName, v1alpha1.RunDefaultConfigMapKey)
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = t.createRun(ctx, t.Name, t.Name)
+		run, err = t.createRun(ctx, t.RunName, t.RunName)
 		return err
 	})
 

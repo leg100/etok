@@ -16,13 +16,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestRunner(t *testing.T) {
+func TestRunnerApp(t *testing.T) {
 	tests := []struct {
 		name       string
 		setOpts    func(opts *app.Options)
 		out        string
+		objs       []runtime.Object
 		assertions func(opts *app.Options)
 		err        bool
 		code       int
@@ -35,7 +37,7 @@ func TestRunner(t *testing.T) {
 			out: "hallelujah",
 		},
 		{
-			name: "defaults + tarball",
+			name: "defaults and tarball",
 			setOpts: func(opts *app.Options) {
 				opts.Tarball = "archive.tar.gz"
 				opts.Args = []string{"/bin/ls", "test1.tf"}
@@ -43,7 +45,7 @@ func TestRunner(t *testing.T) {
 			out: "test1.tf\n",
 		},
 		{
-			name: "defaults + workspace",
+			name: "defaults and workspace",
 			setOpts: func(opts *app.Options) {
 				opts.Kind = "Workspace"
 				opts.Args = []string{"sh", "-c", "echo -n hallelujah"}

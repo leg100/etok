@@ -28,7 +28,8 @@ type Options struct {
 	Args []string
 
 	// Name
-	Name string
+	// TODO: what does 'Name' refer to?
+	Name string `default:"default"`
 
 	// Run name
 	RunName string `default:"-"`

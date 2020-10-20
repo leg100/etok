@@ -59,14 +59,14 @@ func TestLauncher(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Confirm run exists
-			run, err := opts.StokClient().StokV1alpha1().Runs(opts.Namespace).Get(context.Background(), opts.Name, metav1.GetOptions{})
+			run, err := opts.StokClient().StokV1alpha1().Runs(opts.Namespace).Get(context.Background(), opts.RunName, metav1.GetOptions{})
 			assert.NoError(t, err)
 
 			// Confirm wait annotation key has been deleted
 			assert.False(t, controllers.IsSynchronising(run))
 
 			assert.Equal(t, opts.Namespace, run.GetNamespace())
-			assert.Equal(t, opts.Name, run.GetName())
+			assert.Equal(t, opts.RunName, run.GetName())
 			assert.Equal(t, opts.Command, run.GetCommand())
 			assert.Equal(t, opts.Args, run.GetArgs())
 
