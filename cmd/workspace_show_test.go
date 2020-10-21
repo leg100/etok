@@ -29,7 +29,7 @@ func TestWorkspaceShow(t *testing.T) {
 		{
 			name: "WithoutEnvironmentFile",
 			args: []string{"workspace", "show"},
-			err:  true,
+			out:  "default/default\n",
 		},
 	}
 
