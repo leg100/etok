@@ -5,17 +5,13 @@ go 1.14
 require (
 	cloud.google.com/go v0.53.0 // indirect
 	cloud.google.com/go/storage v1.5.0
-	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/Sirupsen/logrus v0.0.0-00010101000000-000000000000 // indirect
-	github.com/creack/pty v1.1.9
 	github.com/creasty/defaults v1.5.1
 	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/fatih/color v1.7.0
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-cmp v0.4.0
-	github.com/gregjones/httpcache v0.0.0-20190203031600-7a902570cb17 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kr/pty v1.1.5
 	github.com/operator-framework/operator-sdk v0.19.0
@@ -30,7 +26,6 @@ require (
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
-	k8s.io/cli-runtime v0.18.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubectl v0.18.2
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect

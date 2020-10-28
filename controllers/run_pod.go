@@ -7,7 +7,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -39,13 +38,6 @@ func (r *RunReconciler) reconcilePod(request reconcile.Request, opts *podOpts) (
 	return r.updateStatus(pod, opts)
 }
 
-// IsSynchronising indicates whether obj is in process of synchronisation between client and pod, or
-// not.
-func IsSynchronising(obj metav1.Object) bool {
-	_, ok := obj.GetAnnotations()[v1alpha1.WaitAnnotationKey]
-	return ok
-}
-
 func (r *RunReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconcile.Result, error) {
 	// Signal pod completion to workspace
 	switch pod.Status.Phase {
@@ -58,11 +50,7 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconcile.
 			Message: fmt.Sprintf("Pod completed with phase %s", pod.Status.Phase),
 		})
 	case corev1.PodRunning:
-		if IsSynchronising(opts.run) {
-			opts.run.SetPhase(v1alpha1.RunPhaseSync)
-		} else {
-			opts.run.SetPhase(v1alpha1.RunPhaseRunning)
-		}
+		opts.run.SetPhase(v1alpha1.RunPhaseRunning)
 	case corev1.PodPending:
 		return reconcile.Result{Requeue: true}, nil
 	case corev1.PodUnknown:
@@ -94,7 +82,7 @@ func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		AddCredentials(opts.secretName).
 		HasServiceAccount(opts.serviceAccountName).
 		MountTarball(opts.configMapName, opts.configMapKey).
-		WaitForClient("Run", opts.run.GetName(), opts.run.GetNamespace(), opts.run.GetTimeoutClient()).
+		RequireMagicString(opts.run.RequireMagicString, opts.run.GetTimeoutClient()).
 		EnableDebug(opts.run.GetDebug()).
 		Build(false)
 

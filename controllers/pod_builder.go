@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"path/filepath"
+	"strconv"
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/version"
@@ -90,10 +91,8 @@ func (pb *PodBuilder) SetLabels(name, workspace, command, component string) *Pod
 	return pb
 }
 
-func (pb *PodBuilder) WaitForClient(kind, name, namespace, timeout string) *PodBuilder {
-	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_KIND", Value: kind})
-	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_NAME", Value: name})
-	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_NAMESPACE", Value: namespace})
+func (pb *PodBuilder) RequireMagicString(required bool, timeout string) *PodBuilder {
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_REQUIRE_MAGIC_STRING", Value: strconv.FormatBool(required)})
 	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_TIMEOUT", Value: timeout})
 
 	return pb

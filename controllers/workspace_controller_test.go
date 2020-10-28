@@ -347,6 +347,9 @@ func TestReconcileWorkspacePod(t *testing.T) {
 					Namespace: "controller-test",
 				},
 				Spec: v1alpha1.WorkspaceSpec{
+					AttachSpec: v1alpha1.AttachSpec{
+						RequireMagicString: true,
+					},
 					TimeoutClient: "10s",
 				},
 			},
@@ -357,16 +360,8 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 				assert.Equal(t, []corev1.EnvVar{
 					{
-						Name:  "STOK_KIND",
-						Value: "Workspace",
-					},
-					{
-						Name:  "STOK_NAME",
-						Value: "workspace-1",
-					},
-					{
-						Name:  "STOK_NAMESPACE",
-						Value: "controller-test",
+						Name:  "STOK_REQUIRE_MAGIC_STRING",
+						Value: "true",
 					},
 					{
 						Name:  "STOK_TIMEOUT",

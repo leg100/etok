@@ -1,81 +1,45 @@
 package client
 
 import (
-	"context"
-	"fmt"
-	"io"
-	"os"
-
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/leg100/stok/pkg/k8s/stokclient"
+	stoktyped "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
 	"k8s.io/client-go/kubernetes"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-// Client is a Kubernetes client factory, along with methods for interacting with pods.
-type Client interface {
-	Create(string) error
-	KubeConfig() *rest.Config
-	KubeClient() kubernetes.Interface
-	StokClient() stokclient.Interface
-	GetLogs(context.Context, *corev1.Pod, string) (io.ReadCloser, error)
-	Attach(*corev1.Pod, string, string, *os.File, io.Writer) error
-}
-
-// Implements Client
-type client struct {
+// Client is a collection of kubernetes clients along with some convenience methods.
+type Client struct {
 	// Client config
-	config *rest.Config
+	Config *rest.Config
 
 	// Kubernetes built-in client
-	kubeClient kubernetes.Interface
+	KubeClient kubernetes.Interface
 
 	// Stok generated client
-	stokClient stokclient.Interface
+	StokClient stokclient.Interface
 }
 
-func NewClient() Client {
-	return &client{}
+func (c *Client) PodsClient(namespace string) typedv1.PodInterface {
+	return c.KubeClient.CoreV1().Pods(namespace)
 }
 
-func (c *client) KubeConfig() *rest.Config {
-	return c.config
+func (c *Client) ServiceAccountsClient(namespace string) typedv1.ServiceAccountInterface {
+	return c.KubeClient.CoreV1().ServiceAccounts(namespace)
 }
 
-func (c *client) KubeClient() kubernetes.Interface {
-	return c.kubeClient
+func (c *Client) SecretsClient(namespace string) typedv1.SecretInterface {
+	return c.KubeClient.CoreV1().Secrets(namespace)
 }
 
-func (c *client) StokClient() stokclient.Interface {
-	return c.stokClient
+func (c *Client) ConfigMapsClient(namespace string) typedv1.ConfigMapInterface {
+	return c.KubeClient.CoreV1().ConfigMaps(namespace)
 }
 
-func (c *client) Create(kubeCtx string) error {
-	cfg, err := config.GetConfigWithContext(kubeCtx)
-	if err != nil {
-		return fmt.Errorf("getting kubernetes client config: %w", err)
-	}
-
-	sc, err := stokclient.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("creating stok kubernetes client: %w", err)
-	}
-
-	kc, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("creating built-in kubernetes client: %w", err)
-	}
-
-	c.config = cfg
-	c.stokClient = sc
-	c.kubeClient = kc
-
-	return nil
+func (c *Client) WorkspacesClient(namespace string) stoktyped.WorkspaceInterface {
+	return c.StokClient.StokV1alpha1().Workspaces(namespace)
 }
 
-func (c *client) GetLogs(ctx context.Context, pod *corev1.Pod, container string) (io.ReadCloser, error) {
-	opts := &corev1.PodLogOptions{Follow: true, Container: container}
-	return c.KubeClient().CoreV1().Pods(pod.GetNamespace()).GetLogs(pod.GetName(), opts).Stream(ctx)
+func (c *Client) RunsClient(namespace string) stoktyped.RunInterface {
+	return c.StokClient.StokV1alpha1().Runs(namespace)
 }

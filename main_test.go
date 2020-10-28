@@ -21,12 +21,12 @@ func TestMain(t *testing.T) {
 		{
 			name: "no args",
 			args: []string{},
-			out:  "^Usage: stok \\[command\\]",
+			out:  "^Usage:",
 		},
 		{
 			name: "help",
 			args: []string{"-h"},
-			out:  "^Usage: stok \\[command\\]",
+			out:  "^Usage:",
 		},
 		{
 			name: "version",
@@ -56,7 +56,7 @@ func TestMain(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			err := run(tt.args, out)
+			err := run(tt.args, out, new(bytes.Buffer), new(bytes.Buffer))
 
 			assert.Regexp(t, tt.out, out)
 

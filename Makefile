@@ -89,7 +89,7 @@ delete-run-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.stok.goalspike.com
 
 unit:
-	go test -v ./api/... ./cmd ./controllers ./pkg/... ./util
+	go test ./ ./cmd/... ./controllers/... ./pkg/... ./util/...
 
 build:
 	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok

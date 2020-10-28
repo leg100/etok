@@ -40,11 +40,12 @@ type RunSpec struct {
 	Command       string   `json:"command"`
 	Args          []string `json:"args,omitempty"`
 	TimeoutClient string   `json:"timeoutClient"`
-	TimeoutQueue  string   `json:"timeoutQueue"`
 	Debug         bool     `json:"debug,omitempty"`
 	ConfigMap     string   `json:"configMap"`
 	ConfigMapKey  string   `json:"configMapKey"`
 	Workspace     string   `json:"workspace"`
+
+	AttachSpec `json:",attach"`
 }
 
 // Get/Set Command functions
@@ -58,10 +59,6 @@ func (c *RunSpec) SetArgs(args []string) { c.Args = args }
 // Get/Set TimeoutClient functions
 func (c *RunSpec) GetTimeoutClient() string        { return c.TimeoutClient }
 func (c *RunSpec) SetTimeoutClient(timeout string) { c.TimeoutClient = timeout }
-
-// Get/Set TimeoutQueue functions
-func (c *RunSpec) GetTimeoutQueue() string        { return c.TimeoutQueue }
-func (c *RunSpec) SetTimeoutQueue(timeout string) { c.TimeoutQueue = timeout }
 
 // Get/Set Debug functions
 func (c *RunSpec) GetDebug() bool      { return c.Debug }
@@ -98,14 +95,11 @@ const (
 	RunPhasePending      RunPhase = "pending"
 	RunPhaseQueued       RunPhase = "queued"
 	RunPhaseProvisioning RunPhase = "provisioning"
-	RunPhaseSync         RunPhase = "synchronising"
 	RunPhaseRunning      RunPhase = "running"
 	RunPhaseCompleted    RunPhase = "completed"
 
 	ConditionCompleted status.ConditionType   = "Completed"
 	ReasonPodCompleted status.ConditionReason = "PodCompleted"
-
-	WaitAnnotationKey = "stok.goalspike.com/wait"
 
 	RunDefaultConfigMapKey = "config.tar.gz"
 )

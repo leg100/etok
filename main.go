@@ -33,33 +33,25 @@ func main() {
 	// Exit code
 	var code int
 
-	if err := run(os.Args[1:], os.Stdout); err != nil {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr, os.Stdin); err != nil {
 		code = handleError(err, os.Stderr)
 	}
 	os.Exit(code)
 }
 
-func run(args []string, out io.Writer) error {
+func run(args []string, out, errout io.Writer, in io.Reader) error {
 	// Create context, and cancel if interrupt is received
 	ctx, cancel := context.WithCancel(context.Background())
 	signals.CatchCtrlC(cancel)
 
 	// Construct options and their defaults
-	opts, err := app.NewOpts(out)
+	opts, err := app.NewOpts(out, errout, in)
 	if err != nil {
 		return err
 	}
 
-	// Parse args, furnish options with app
-	if err := cmd.ParseArgs(ctx, args, opts); err != nil {
-		return err
-	} else {
-		// Run selected app
-		if err = opts.RunApp(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
+	// Parse args and execute selected command
+	return cmd.ParseArgs(ctx, args, opts)
 }
 
 // Print error message

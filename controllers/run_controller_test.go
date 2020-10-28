@@ -149,12 +149,11 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
-			name: "Synchronising",
+			name: "Running",
 			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "plan-1",
-					Namespace:   "operator-test",
-					Annotations: map[string]string{v1alpha1.WaitAnnotationKey: "true"},
+					Name:      "plan-1",
+					Namespace: "operator-test",
 				},
 				RunSpec: v1alpha1.RunSpec{
 					Workspace: "workspace-1",
@@ -165,7 +164,7 @@ func TestRunReconciler(t *testing.T) {
 				runtime.Object(&podRunningAndReady),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseSync, run.GetPhase())
+				assert.Equal(t, v1alpha1.RunPhaseRunning, run.GetPhase())
 			},
 		},
 		{

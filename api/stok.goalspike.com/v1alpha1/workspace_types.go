@@ -15,7 +15,7 @@ import (
 // WorkspaceSpec defines the desired state of Workspace's cache storage
 type WorkspaceCacheSpec struct {
 	StorageClass string `json:"storageClass,omitempty"`
-	Size         string `json:"size,omitempty"`
+	Size         string `json:"size,omitempty" default:"1Gi"`
 }
 
 type BackendSpec struct {
@@ -53,7 +53,11 @@ func BackendConfigMapName(workspace string) string {
 }
 
 func (ws *Workspace) PodName() string {
-	return "workspace-" + ws.GetName()
+	return WorkspacePodName(ws.GetName())
+}
+
+func WorkspacePodName(name string) string {
+	return "workspace-" + name
 }
 
 // WorkspaceSpec defines the desired state of Workspace
@@ -65,6 +69,8 @@ type WorkspaceSpec struct {
 	Backend       BackendSpec        `json:"backend"`
 	TimeoutClient string             `json:"timeoutClient"`
 	Debug         bool               `json:"debug,omitempty"`
+
+	AttachSpec `json:"inline"`
 }
 
 func (w *WorkspaceSpec) SetDefaults() {

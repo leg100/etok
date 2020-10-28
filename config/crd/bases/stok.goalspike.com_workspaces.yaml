@@ -79,6 +79,11 @@ spec:
               type: object
             debug:
               type: boolean
+            inline:
+              properties:
+                requireMagicString:
+                  type: boolean
+              type: object
             secretName:
               type: string
             serviceAccountName:
@@ -87,6 +92,7 @@ spec:
               type: string
           required:
           - backend
+          - inline
           - timeoutClient
           type: object
         status:

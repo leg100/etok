@@ -23,12 +23,12 @@ func TestRoot(t *testing.T) {
 		{
 			name: "no args",
 			args: []string{},
-			out:  "^Usage: stok \\[command\\]",
+			out:  "^Usage:",
 		},
 		{
 			name: "help",
 			args: []string{"-h"},
-			out:  "^Usage: stok \\[command\\]",
+			out:  "^Usage:",
 		},
 		{
 			name: "version",
@@ -44,6 +44,14 @@ func TestRoot(t *testing.T) {
 			args: []string{"invalid"},
 			err:  true,
 		},
+		{
+			name: "generate",
+			args: []string{"generate"},
+		},
+		{
+			name: "workspace",
+			args: []string{"workspace"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -56,7 +64,12 @@ func TestRoot(t *testing.T) {
 			opts, err := app.NewFakeOpts(out)
 			require.NoError(t, err)
 
-			t.CheckError(tt.err, ParseArgs(context.Background(), tt.args, opts))
+			cmd := RootCmd(opts)
+			cmd.SetArgs(tt.args)
+			cmd.SetOut(out)
+
+			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+
 			assert.Regexp(t, tt.out, out)
 		})
 	}
