@@ -12,8 +12,15 @@ func WorkspaceCmd(opts *app.Options) *cobra.Command {
 	}
 
 	newCmd, _ := NewCmd(opts)
+	cmd.AddCommand(newCmd)
+
 	cmd.AddCommand(
-		newCmd,
+		ListCmd(opts),
+		DeleteCmd(opts),
+		ShowCmd(opts),
+		SelectCmd(opts),
+		DeleteCmd(opts),
 	)
+
 	return cmd
 }
