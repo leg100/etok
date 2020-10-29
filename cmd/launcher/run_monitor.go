@@ -43,7 +43,7 @@ func (rm *runMonitor) phaseLogHandler(event watch.Event) (bool, error) {
 	case *v1alpha1.Run:
 		if phase := run.GetPhase(); phase != rm.phase {
 			rm.phase = phase
-			log.Debugf("New run phase: %s", phase)
+			log.Debugf("New run phase: %s\n", phase)
 		}
 	}
 	return false, nil

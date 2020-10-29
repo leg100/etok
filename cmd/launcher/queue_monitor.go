@@ -79,7 +79,7 @@ func (qm *queueMonitor) loggingHandler(event watch.Event) (bool, error) {
 		// Report on queue position
 		if pos := slice.StringIndex(ws.Status.Queue, qm.run.GetName()); pos >= 0 {
 			// TODO: print current run in bold
-			log.Infof("Queued: %v", ws.Status.Queue)
+			log.Infof("Queued: %v\n", ws.Status.Queue)
 		}
 		return false, nil
 	})
