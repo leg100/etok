@@ -194,11 +194,12 @@ func unwrapCode(err error) int {
 	return 0
 }
 
-// eofReader mocks reader that returns EOF upon read
+// eofReader mocks terminal sending Ctrl-D
 type eofReader struct{}
 
 func (e *eofReader) Read(p []byte) (int, error) {
-	return 0, io.EOF
+	p[0] = 0x4
+	return 1, nil
 }
 
 // delayedReader mocks reader that only returns read call after delay
