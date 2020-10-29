@@ -71,9 +71,12 @@ create-secret:
 		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
 			--from-file=google-credentials.json=$(GOOGLE_APPLICATION_CREDENTIALS)
 
+delete-secret:
+	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret stok --ignore-not-found=true
+
 e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
 
-e2e-clean: delete-custom-resources delete-operator delete-crds
+e2e-clean: delete-custom-resources delete-operator delete-crds delete-secret
 
 e2e-run:
 	go test -v ./test/e2e -context $(KUBECTX)
