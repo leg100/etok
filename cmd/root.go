@@ -23,7 +23,8 @@ func RootCmd(opts *app.Options) *cobra.Command {
 			}
 			return nil
 		},
-		SilenceUsage: true,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
 	cmd.SetUsageFunc((&templater{

@@ -18,16 +18,15 @@ type podMonitor struct {
 	client kubernetes.Interface
 }
 
-func (pm *podMonitor) monitor(ctx context.Context, errch chan<- error, ready chan<- struct{}) {
+func (pm *podMonitor) monitor(ctx context.Context, pod chan<- *corev1.Pod, errch chan<- error) {
 	lw := &k8s.PodListWatcher{Client: pm.client, Name: pm.run.GetName(), Namespace: pm.run.GetNamespace()}
 
 	go func() {
-		_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, pm.podRunningAndReadyHandler)
+		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, pm.podRunningAndReadyHandler)
 		if err != nil {
 			errch <- err
-		} else {
-			ready <- struct{}{}
 		}
+		pod <- event.Object.(*corev1.Pod)
 	}()
 }
 

@@ -31,6 +31,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "defaults",
 			env:  env.StokEnv("default/default"),
+			objs: []runtime.Object{testWorkspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
@@ -39,6 +40,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "specific namespace and workspace",
 			env:  env.StokEnv("foo/bar"),
+			objs: []runtime.Object{testWorkspace("foo", "bar")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
 				assert.Equal(t, "bar", o.Workspace)
@@ -47,6 +49,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "specific namespace and workspace flags",
 			args: []string{"--namespace", "foo", "--workspace", "bar"},
+			objs: []runtime.Object{testWorkspace("foo", "bar")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
@@ -56,6 +59,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "arbitrary terraform flag",
 			args: []string{"--", "-input", "false"},
+			objs: []runtime.Object{testWorkspace("default", "default")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				if o.Command == "sh" {
@@ -68,6 +72,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "context flag",
 			args: []string{"--context", "oz-cluster"},
+			objs: []runtime.Object{testWorkspace("default", "default")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "oz-cluster", o.KubeContext)
@@ -75,10 +80,15 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "without env file",
+			objs: []runtime.Object{testWorkspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
 			},
+		},
+		{
+			name: "workspace does not exist",
+			err:  true,
 		},
 	}
 
@@ -151,6 +161,15 @@ func testPod(namespace, name string) *corev1.Pod {
 					Status: corev1.ConditionTrue,
 				},
 			},
+		},
+	}
+}
+
+func testWorkspace(namespace, name string) *v1alpha1.Workspace {
+	return &v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
 		},
 	}
 }
