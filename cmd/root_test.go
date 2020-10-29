@@ -31,6 +31,16 @@ func TestRoot(t *testing.T) {
 			out:  "^Usage:",
 		},
 		{
+			name: "terraform command group",
+			args: []string{"-h"},
+			out:  "Terraform Commands:\n",
+		},
+		{
+			name: "stok command group",
+			args: []string{"-h"},
+			out:  "Stok Commands:\n",
+		},
+		{
 			name: "version",
 			args: []string{"-v"},
 			out:  "stok version 123\txyz\n",

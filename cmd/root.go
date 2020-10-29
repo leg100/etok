@@ -26,6 +26,10 @@ func RootCmd(opts *app.Options) *cobra.Command {
 		SilenceUsage: true,
 	}
 
+	cmd.SetUsageFunc((&templater{
+		UsageTemplate: MainUsageTemplate(),
+	}).UsageFunc())
+
 	cmd.PersistentFlags().BoolVar(&opts.Debug, "debug", false, "Enable debug logging")
 
 	cmd.SetOut(opts.Out)

@@ -55,8 +55,8 @@ func (grps CommandGroups) String() string {
 	return strings.Join(output, "\n")
 }
 
-func CompileCommandGroups(cmd *cobra.Command, isRoot bool) CommandGroups {
-	if isRoot {
+func CompileCommandGroups(cmd *cobra.Command) CommandGroups {
+	if cmd == cmd.Root() {
 		var tfCmds, stokCmds []*cobra.Command
 		for _, c := range cmd.Commands() {
 			if isTerraformCommand(c.Name()) {

@@ -11,7 +11,6 @@ import (
 )
 
 type templater struct {
-	IsRoot        bool
 	UsageTemplate string
 }
 
@@ -26,10 +25,10 @@ func (templater *templater) UsageFunc() func(*cobra.Command) error {
 }
 
 func (t *templater) cmdGroupsString(c *cobra.Command) string {
-	return CompileCommandGroups(c, t.IsRoot).String()
+	return CompileCommandGroups(c).String()
 }
 
-func (templater *templater) templateFuncs() template.FuncMap {
+func (t *templater) templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"trim":                    strings.TrimSpace,
 		"trimRight":               func(s string) string { return strings.TrimRightFunc(s, unicode.IsSpace) },
@@ -37,7 +36,7 @@ func (templater *templater) templateFuncs() template.FuncMap {
 		"gt":                      cobra.Gt,
 		"eq":                      cobra.Eq,
 		"rpad":                    rpad,
-		"cmdGroupsString":         templater.cmdGroupsString,
+		"cmdGroupsString":         t.cmdGroupsString,
 		"trimTrailingWhitespaces": trimRightSpace,
 	}
 }
