@@ -54,17 +54,13 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 	return cmd.ParseArgs(ctx, args, opts)
 }
 
-// Print error message
+// Print error message unless the error originated from executing a program (which would have
+// printed its own message)
 func handleError(err error, out io.Writer) int {
-	fmt.Fprintf(out, "%s %s\n", color.HiRedString("Error:"), err.Error())
-	return unwrapCode(err)
-}
-
-// Unwrap exit code from error message
-func unwrapCode(err error) int {
 	var exiterr *exec.ExitError
 	if errors.As(err, &exiterr) {
 		return exiterr.ExitCode()
 	}
+	fmt.Fprintf(out, "%s %s\n", color.HiRedString("Error:"), err.Error())
 	return 1
 }
