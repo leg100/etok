@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"flag"
 	"fmt"
 	"runtime"
 	"time"
@@ -8,6 +9,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/leg100/stok/cmd/flags"
 	"github.com/leg100/stok/controllers"
 	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/log"
@@ -29,6 +31,8 @@ func printVersion() {
 
 type ManagerOptions struct {
 	*app.Options
+
+	KubeContext string
 
 	Path        string
 	MagicString string
@@ -59,7 +63,12 @@ func ManagerCmd(opts *app.Options) *cobra.Command {
 
 			printVersion()
 
-			mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+			client, err := opts.Create(o.KubeContext)
+			if err != nil {
+				return err
+			}
+
+			mgr, err := ctrl.NewManager(client.Config, ctrl.Options{
 				Scheme:             scheme.Scheme,
 				MetricsBindAddress: o.MetricsAddress,
 				Port:               9443,
@@ -90,6 +99,10 @@ func ManagerCmd(opts *app.Options) *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+
+	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 
 	cmd.Flags().StringVar(&o.MetricsAddress, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	cmd.Flags().BoolVar(&o.EnableLeaderElection, "enable-leader-election", false,
