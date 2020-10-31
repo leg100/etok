@@ -10,15 +10,16 @@ import (
 	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/storage"
 
-	"github.com/kr/pty"
-	"golang.org/x/sys/unix"
+	expect "github.com/google/goexpect"
+	"github.com/stretchr/testify/require"
 )
 
 const (
-	buildPath     = "../../../stok"
+	buildPath     = "../../stok"
 	workspacePath = "./workspace"
 	backendBucket = "automatize-tfstate"
 	backendPrefix = "e2e"
@@ -42,9 +43,7 @@ func TestStok(t *testing.T) {
 
 	// we want a clean backend beforehand
 	sclient, err := storage.NewClient(goctx.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	bkt := sclient.Bucket(backendBucket)
 	// ignore errors
 	bkt.Object(backendPrefix + "/default.tfstate").Delete(goctx.Background())
@@ -58,80 +57,92 @@ func TestStok(t *testing.T) {
 		wantStdoutRegex *regexp.Regexp
 		pty             bool
 		stdin           []byte
+		batch           []expect.Batcher
 		queueAdditional int
 	}{
 		{
 			name:            "new workspace",
-			args:            []string{"workspace", "new", wsName, "--debug", "--timeout", "5s", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e"},
+			args:            []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "second new workspace",
-			args:            []string{"workspace", "new", wsName2, "--debug", "--timeout", "5s", "--timeout-pod", "60s", "--context", *kubectx},
+			args:            []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "list workspaces",
-			args:            []string{"workspace", "list", "--context", *kubectx},
+			args:            []string{"workspace", "list", "--path", "workspace", "--context", *kubectx},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s/%s\n\t%s/%s", wsNamespace, wsName2, wsNamespace, wsName)),
 			pty:             false,
 		},
 		{
 			name:            "select first workspace",
-			args:            []string{"workspace", "select", wsName},
+			args:            []string{"workspace", "select", "--path", "workspace", wsName},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,
 		},
 		{
 			name:            "show current workspace",
-			args:            []string{"workspace", "show"},
+			args:            []string{"workspace", "show", "--path", "workspace"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(wsNamespace + "/" + wsName),
 			pty:             false,
 		},
 		{
-			name:            "stok init",
-			args:            []string{"init", "--context", *kubectx, "--", "-no-color", "-input=false"},
+			name:            "stok init without pty",
+			args:            []string{"init", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
 			pty:             false,
 		},
 		{
-			name:            "stok plan",
-			args:            []string{"plan", "--context", *kubectx, "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
+			name:            "stok plan without pty",
+			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
 		},
 		{
-			name:            "stok plan with pty",
-			args:            []string{"plan", "--context", *kubectx, "--", "-input=true", "-no-color"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`(?s)var\.suffix.*Enter a value:.*Refreshing Terraform state in-memory prior to plan`),
-			pty:             true,
-			stdin:           []byte("foo\n"),
+			name:         "stok plan with pty",
+			args:         []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
+			wantExitCode: 0,
+			pty:          true,
+			batch: []expect.Batcher{
+				&expect.BExp{R: `Enter a value:`},
+				&expect.BSnd{S: "foo\n"},
+				&expect.BExp{R: `Plan: 1 to add, 0 to change, 0 to destroy.`},
+			},
 		},
 		{
-			name:            "stok apply with pty",
-			args:            []string{"apply", "--context", *kubectx, "--", "-no-color", "-input=true"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`),
-			pty:             true,
-			stdin:           []byte("foo\nyes\n"),
+			name:         "stok apply with pty",
+			args:         []string{"apply", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
+			wantExitCode: 0,
+			pty:          true,
+			batch: []expect.Batcher{
+				&expect.BExp{R: `Enter a value:`},
+				&expect.BSnd{S: "foo\n"},
+				&expect.BExp{R: `Enter a value:`},
+				&expect.BSnd{S: "yes\n"},
+				&expect.BExp{R: `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`},
+			},
 		},
 		{
-			name:            "stok sh",
-			args:            []string{"sh", "--context", *kubectx},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(`Linux`),
-			pty:             true,
-			stdin:           []byte("uname; sleep 1; exit\n"),
+			name:         "stok sh",
+			args:         []string{"sh", "--path", "workspace", "--context", *kubectx},
+			wantExitCode: 0,
+			pty:          true,
+			batch: []expect.Batcher{
+				&expect.BExp{R: `\$`},
+				&expect.BSnd{S: "uname; exit\n"},
+				&expect.BExp{R: `Linux`},
+			},
 		},
 		{
 			name:            "stok queuing",
@@ -142,12 +153,15 @@ func TestStok(t *testing.T) {
 			queueAdditional: 1,
 		},
 		{
-			name:            "stok destroy with pty",
-			args:            []string{"destroy", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(``),
-			pty:             true,
-			stdin:           []byte("yes\n"),
+			name:         "stok destroy with pty",
+			args:         []string{"destroy", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo", "-no-color"},
+			wantExitCode: 0,
+			pty:          true,
+			batch: []expect.Batcher{
+				&expect.BExp{R: `Enter a value:`},
+				&expect.BSnd{S: "yes\n"},
+				&expect.BExp{R: `Destroy complete! Resources: 1 destroyed.`},
+			},
 		},
 		{
 			name:            "delete workspace",
@@ -162,87 +176,57 @@ func TestStok(t *testing.T) {
 	for _, tt := range tests {
 		success := t.Run(tt.name, func(t *testing.T) {
 			for i := 0; i <= tt.queueAdditional; i++ {
-				cmd := exec.Command(buildPath, tt.args...)
-				cmd.Dir = workspacePath
-
-				outbuf := new(bytes.Buffer)
-				out := io.MultiWriter(outbuf, os.Stdout)
-
-				errbuf := new(bytes.Buffer)
-				stderr := io.MultiWriter(errbuf, os.Stderr)
-
+				args := append([]string{buildPath}, tt.args...)
 				if tt.pty {
-					terminal, err := pty.Start(cmd)
-					if err != nil {
-						t.Fatal(err)
-					}
-					defer terminal.Close()
+					exp, _, err := expect.SpawnWithArgs(args, 10*time.Second, expect.Tee(nopWriteCloser{os.Stdout}))
+					require.NoError(t, err)
+					defer exp.Close()
 
-					// https://github.com/creack/pty/issues/82#issuecomment-502785533
-					echoOff(terminal)
-					stdinR, stdinW := io.Pipe()
-					go io.Copy(terminal, stdinR)
-					stdinW.Write(tt.stdin)
-
-					// ... and the pty to stdout.
-					_, _ = io.Copy(out, terminal)
+					_, err = exp.ExpectBatch(tt.batch, 10*time.Second)
+					require.NoError(t, err)
 				} else {
+					cmd := exec.Command(args[0], args[1:]...)
+
+					outbuf := new(bytes.Buffer)
+					out := io.MultiWriter(outbuf, os.Stdout)
+
 					// without pty, so just use a buffer, and skip stdin
 					cmd.Stdout = out
-					cmd.Stderr = stderr
+					cmd.Stderr = os.Stderr
 
-					if err = cmd.Start(); err != nil {
-						t.Fatal(err)
+					require.NoError(t, cmd.Start())
+
+					exitCodeTest(t, cmd.Wait(), tt.wantExitCode)
+
+					if tt.wantStdoutRegex != nil {
+						require.Regexp(t, tt.wantStdoutRegex, outbuf.String())
 					}
-				}
-
-				exitCodeTest(t, cmd.Wait(), tt.wantExitCode)
-
-				got := outbuf.String()
-				if !tt.wantStdoutRegex.MatchString(got) {
-					t.Errorf("expected stdout to match '%s' but got '%s'\n", tt.wantStdoutRegex, got)
 				}
 			}
 		})
-		// if any one test fails then exit
-		if !success {
-			t.FailNow()
-		}
+		require.True(t, success)
 	}
 }
 
-func echoOff(f *os.File) {
-	fd := int(f.Fd())
-	//      const ioctlReadTermios = unix.TIOCGETA // OSX.
-	const ioctlReadTermios = unix.TCGETS // Linux
-	//      const ioctlWriterTermios =  unix.TIOCSETA // OSX.
-	const ioctlWriteTermios = unix.TCSETS // Linux
+type nopWriteCloser struct {
+	f *os.File
+}
 
-	termios, err := unix.IoctlGetTermios(fd, ioctlReadTermios)
-	if err != nil {
-		panic(err)
-	}
+func (n nopWriteCloser) Write(p []byte) (int, error) {
+	return n.f.Write(p)
+}
 
-	newState := *termios
-	newState.Lflag &^= unix.ECHO
-	newState.Lflag |= unix.ICANON | unix.ISIG
-	newState.Iflag |= unix.ICRNL
-	if err := unix.IoctlSetTermios(fd, ioctlWriteTermios, &newState); err != nil {
-		panic(err)
-	}
+func (n nopWriteCloser) Close() error {
+	return nil
 }
 
 func exitCodeTest(t *testing.T, err error, wantExitCode int) {
 	if exiterr, ok := err.(*exec.ExitError); ok {
-		if wantExitCode != exiterr.ExitCode() {
-			t.Fatalf("expected exit code %d, got %d\n", wantExitCode, exiterr.ExitCode())
-		}
+		require.Equal(t, wantExitCode, exiterr.ExitCode())
 	} else if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	} else {
-		// got exit code 0 and no error
-		if wantExitCode != 0 {
-			t.Fatalf("expected exit code %d, got 0\n", wantExitCode)
-		}
+		// got exit code 0; ensures thats whats wanted
+		require.Equal(t, wantExitCode, 0)
 	}
 }

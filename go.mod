@@ -12,6 +12,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-cmp v0.4.0
+	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kr/pty v1.1.5
 	github.com/operator-framework/operator-sdk v0.19.0
@@ -19,10 +20,10 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	github.com/tj/assert v0.0.3
-	golang.org/x/crypto v0.0.0-20200422194213-44a606286825
+	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a
+	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a // indirect
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
@@ -36,6 +37,8 @@ require (
 replace k8s.io/client-go => k8s.io/client-go v0.18.2
 
 replace github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.4.2 // Suppresses https://github.com/sirupsen/logrus/issues/1041
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.29.0
 
 //replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
 
