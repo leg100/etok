@@ -146,7 +146,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok queuing",
-			args:            []string{"sh", "--context", *kubectx, "--", "uname;", "sleep 5"},
+			args:            []string{"sh", "--path", "workspace", "--context", *kubectx, "--", "uname;", "sleep 5"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
 			pty:             false,
