@@ -45,7 +45,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	run.SetTimeoutClient(o.TimeoutClient.String())
 	run.SetCommand(o.Command)
 	run.SetArgs(o.args)
-	run.SetDebug(o.debug)
+	run.SetDebug(o.Debug)
 	run.SetConfigMap(configMapName)
 	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
 

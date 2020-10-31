@@ -61,8 +61,6 @@ type LauncherOptions struct {
 	// TODO: rename to timeout-pending (enqueue is too similar sounding to queue)
 	// timeout waiting to be queued
 	TimeoutEnqueue time.Duration `default:"10s"`
-
-	debug bool
 }
 
 func LauncherCmds(opts *app.Options) (cmds []*cobra.Command) {

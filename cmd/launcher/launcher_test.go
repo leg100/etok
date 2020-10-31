@@ -79,6 +79,16 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
+			name: "debug",
+			args: []string{"--debug"},
+			objs: []runtime.Object{testWorkspace("default", "default")},
+			assertions: func(o *LauncherOptions) {
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, true, run.GetDebug())
+			},
+		},
+		{
 			name: "without env file",
 			objs: []runtime.Object{testWorkspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
@@ -123,6 +133,9 @@ func TestLauncher(t *testing.T) {
 				cmd.SetArgs(tt.args)
 
 				mockRunController(opts, cmdOpts)
+
+				// Set debug flag (that root cmd otherwise sets)
+				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
 
 				t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 
