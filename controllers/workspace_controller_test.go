@@ -151,6 +151,46 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
+		{
+			name:      "Initializing phase",
+			workspace: testWorkspace("workspace-1"),
+			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodPending)},
+			assertions: func(ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
+			},
+		},
+		{
+			name:      "Ready phase",
+			workspace: testWorkspace("workspace-1"),
+			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodRunning)},
+			assertions: func(ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseReady, ws.Status.Phase)
+			},
+		},
+		{
+			name:      "Error phase",
+			workspace: testWorkspace("workspace-1"),
+			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodSucceeded)},
+			assertions: func(ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
+			},
+		},
+		{
+			name:      "Error phase",
+			workspace: testWorkspace("workspace-1"),
+			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodFailed)},
+			assertions: func(ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
+			},
+		},
+		{
+			name:      "Unknown phase",
+			workspace: testWorkspace("workspace-1"),
+			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodUnknown)},
+			assertions: func(ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseUnknown, ws.Status.Phase)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -449,5 +489,24 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 			tt.assertions(pod)
 		})
+	}
+}
+
+func testWorkspacePod(name string, phase corev1.PodPhase) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+		},
+	}
+}
+
+func testWorkspace(name string) *v1alpha1.Workspace {
+	return &v1alpha1.Workspace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
 	}
 }

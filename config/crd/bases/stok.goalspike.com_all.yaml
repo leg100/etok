@@ -168,6 +168,9 @@ spec:
   - JSONPath: .spec.backend.type
     name: Backend
     type: string
+  - JSONPath: .status.phase
+    name: Phase
+    type: string
   group: stok.goalspike.com
   names:
     kind: Workspace
@@ -291,11 +294,14 @@ spec:
                 - type
                 type: object
               type: array
+            phase:
+              type: string
             queue:
               items:
                 type: string
               type: array
           required:
+          - phase
           - queue
           type: object
       type: object

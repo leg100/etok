@@ -94,13 +94,16 @@ func (ws *Workspace) SetDebug(debug bool) { ws.Spec.Debug = debug }
 type WorkspaceStatus struct {
 	Queue      []string          `json:"queue"`
 	Conditions status.Conditions `json:"conditions,omitempty"`
+	Phase      WorkspacePhase    `json:"phase"`
 }
 
-const (
-	ConditionHealthy status.ConditionType = "Healthy"
+type WorkspacePhase string
 
-	ReasonAllResourcesFound status.ConditionReason = "AllResourcesFound"
-	ReasonMissingResource   status.ConditionReason = "MissingResource"
+const (
+	WorkspacePhaseInitializing WorkspacePhase = "initializing"
+	WorkspacePhaseReady        WorkspacePhase = "ready"
+	WorkspacePhaseError        WorkspacePhase = "error"
+	WorkspacePhaseUnknown      WorkspacePhase = "unknown"
 
 	WorkspaceDefaultCacheSize = "1Gi"
 
@@ -118,6 +121,7 @@ const (
 // +kubebuilder:resource:path=workspaces,scope=Namespaced
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +kubebuilder:printcolumn:name="Backend",type="string",JSONPath=".spec.backend.type"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +genclient
 type Workspace struct {
 	metav1.TypeMeta   `json:",inline"`

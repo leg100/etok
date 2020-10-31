@@ -11,7 +11,6 @@ import (
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
 	"github.com/leg100/stok/version"
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -76,17 +75,6 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		instance.Status.Queue = []string{}
 	}
 
-	// TODO: only set this after confirming PVC and pod (see below) is present
-	instance.Status.Conditions.SetCondition(status.Condition{
-		Type:    v1alpha1.ConditionHealthy,
-		Status:  corev1.ConditionTrue,
-		Reason:  v1alpha1.ReasonAllResourcesFound,
-		Message: "All prerequisite resources found",
-	})
-	if err := r.Status().Update(context.TODO(), instance); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Setting healthy condition: %w", err)
-	}
-
 	// Manage Role for workspace
 	role := newRoleForCR(instance)
 	if err := r.manageControllee(instance, reqLogger, role); err != nil {
@@ -117,12 +105,10 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	//TODO: check pod's initContainer finished successfully and update status accordingly
-	//if len(pod.Status.InitContainerStatuses) > 0 {
-	//	state := pod.Status.InitContainerStatuses[0]
-	//	if state.State.Terminated != nil {
-	//		if state.State.Terminated.ExitCode == 0 {
-	//}
+	// Set workspace phase status
+	if err := r.setPhase(instance, pod); err != nil {
+		return ctrl.Result{}, fmt.Errorf("Unable to set workspace phase: %w", err)
+	}
 
 	// Fetch all run resources
 	runlist := &v1alpha1.RunList{}
@@ -172,6 +158,20 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *WorkspaceReconciler) setPhase(ws *v1alpha1.Workspace, pod *corev1.Pod) error {
+	switch pod.Status.Phase {
+	case corev1.PodPending:
+		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
+	case corev1.PodRunning:
+		ws.Status.Phase = v1alpha1.WorkspacePhaseReady
+	case corev1.PodSucceeded, corev1.PodFailed:
+		ws.Status.Phase = v1alpha1.WorkspacePhaseError
+	default:
+		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
+	}
+	return r.Status().Update(context.TODO(), ws)
 }
 
 // For a given go object, return the corresponding Kind. A wrapper for scheme.ObjectKinds, which

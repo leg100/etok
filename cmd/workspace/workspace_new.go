@@ -323,13 +323,6 @@ func (o *NewOptions) monitor(ctx context.Context, ws *v1alpha1.Workspace, attach
 	errch := make(chan error)
 	ready := make(chan struct{})
 
-	// Non-blocking; watch workspace resource, check workspace is healthy
-	// TODO: What is the point of this?
-	//(&workspaceMonitor{
-	//	ws:     ws,
-	//	client: o.StokClient(),
-	//}).monitor(ctx, errch)
-
 	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
 	// error on fatal pod errors
 	monitors.NewWorkspacePodMonitor(o.KubeClient, ws, attaching).Monitor(ctx, errch, ready)
