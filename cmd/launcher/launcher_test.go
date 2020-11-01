@@ -133,6 +133,7 @@ func TestLauncher(t *testing.T) {
 				cmd.SetArgs(tt.args)
 
 				mockRunController(opts, cmdOpts)
+				//mockPodController(opts, cmdOpts)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
@@ -157,8 +158,34 @@ func mockRunController(opts *app.Options, o *LauncherOptions) {
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
-	opts.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
+	opts.ClientCreator.(*client.FakeClientCreator).PrependStokReactor("create", "runs", createPodAction)
 }
+
+// ...and when a pod create event occurs update pod's exit code status
+//func mockPodController(opts *app.Options, o *LauncherOptions) {
+//	updatePodAction := func(action testcore.Action) (bool, watch.Interface, error) {
+//		watcher := watch.NewFake()
+//		pod := action.(testcore.CreateAction).GetObject().(*corev1.Pod)
+//		pod.Status = corev1.PodStatus{
+//			Phase: corev1.PodSucceeded,
+//			ContainerStatuses: []corev1.ContainerStatus{
+//				{
+//					State: corev1.ContainerState{
+//						Terminated: &corev1.ContainerStateTerminated{
+//							ExitCode: 0,
+//						},
+//					},
+//				},
+//			},
+//		}
+//		fwatch.Modify(
+//		pod, _ = o.PodsClient(pod.GetNamespace()).Update(context.Background(), pod, metav1.UpdateOptions{})
+//
+//		return false, pod, nil
+//	}
+//
+//	opts.ClientCreator.(*client.FakeClientCreator).PrependWatchReactor("pods", updatePodAction)
+//}
 
 func testPod(namespace, name string) *corev1.Pod {
 	return &corev1.Pod{

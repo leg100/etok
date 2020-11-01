@@ -14,6 +14,8 @@ import (
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/errors"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/util"
@@ -23,6 +25,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/kubectl/pkg/util/term"
 )
 
@@ -172,6 +176,31 @@ func isFlagPassed(fs *pflag.FlagSet, name string) (found bool) {
 	return found
 }
 
+type podExitCodeMonitor struct {
+	pod *corev1.Pod
+}
+
+func (pm *podExitCodeMonitor) handler(event watch.Event) (bool, error) {
+	pod := event.Object.(*corev1.Pod)
+
+	// ListWatcher field selector filters out other pods but the fake client doesn't implement the
+	// field selector, so the following is necessary purely for testing purposes
+	if pod.GetName() != pm.pod.GetName() {
+		return false, nil
+	}
+
+	switch event.Type {
+	case watch.Deleted:
+		return false, fmt.Errorf("pod resource deleted")
+	}
+
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
 func (o *LauncherOptions) Run(ctx context.Context) error {
 	isTTY := term.IsTerminal(o.In)
 
@@ -187,10 +216,52 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	if isTTY {
-		return o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), app.MagicString, app.ContainerName)
-	} else {
-		return logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, app.ContainerName)
+	// monitor exit code
+	exitch := make(chan error)
+	errch := make(chan error)
+	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: pod.GetName(), Namespace: pod.GetNamespace()}
+	go func() {
+		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, (&podExitCodeMonitor{pod: pod}).handler)
+		if err != nil {
+			exitch <- fmt.Errorf("failed to retrieve exit code: %w", err)
+		} else {
+			pod := event.Object.(*corev1.Pod)
+			exitch <- errors.NewExitError(
+				int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode),
+			)
+		}
+	}()
+
+	go func() {
+		if isTTY {
+			errch <- o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), app.MagicString, app.ContainerName)
+		} else {
+			errch <- logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, app.ContainerName)
+		}
+	}()
+
+	// Exit code
+	var exiterr error
+	var completed, exited bool
+	var timeout <-chan time.Time
+	for {
+		if completed && exited {
+			return exiterr
+		}
+		select {
+		case err := <-errch:
+			if err != nil {
+				// attach/streamer failure
+				return err
+			}
+			completed = true
+			// Start timer ticking to wait for exit code
+			timeout = time.After(10 * time.Second)
+		case exiterr = <-exitch:
+			exited = true
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for exit code handler to finish")
+		}
 	}
 }
 

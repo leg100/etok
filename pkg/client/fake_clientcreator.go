@@ -12,8 +12,9 @@ import (
 // Implements ClientCreator
 type FakeClientCreator struct {
 	// Fake objs
-	objs     []runtime.Object
-	reactors []testing.SimpleReactor
+	objs                       []runtime.Object
+	kubeReactors, stokReactors []testing.SimpleReactor
+	testing.Fake
 }
 
 func NewFakeClientCreator(objs ...runtime.Object) ClientCreator {
@@ -31,19 +32,29 @@ func (f *FakeClientCreator) Create(kubeCtx string) (*Client, error) {
 		}
 	}
 
+	kubeClient := kfake.NewSimpleClientset(kubeObjs...)
+	for _, r := range f.kubeReactors {
+		kubeClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
+	}
+
 	stokClient := sfake.NewSimpleClientset(stokObjs...)
-	for _, r := range f.reactors {
+	for _, r := range f.stokReactors {
 		stokClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
 	}
 
 	return &Client{
 		Config:     &rest.Config{},
+		KubeClient: kubeClient,
 		StokClient: stokClient,
-		KubeClient: kfake.NewSimpleClientset(kubeObjs...),
 	}, nil
 }
 
 // Add a reactor to the list of reactors to be prepended.
-func (f *FakeClientCreator) PrependReactor(verb, resource string, reaction testing.ReactionFunc) {
-	f.reactors = append(f.reactors, testing.SimpleReactor{verb, resource, reaction})
+func (f *FakeClientCreator) PrependKubeReactor(verb, resource string, reaction testing.ReactionFunc) {
+	f.kubeReactors = append(f.kubeReactors, testing.SimpleReactor{verb, resource, reaction})
+}
+
+// Add a reactor to the list of reactors to be prepended.
+func (f *FakeClientCreator) PrependStokReactor(verb, resource string, reaction testing.ReactionFunc) {
+	f.stokReactors = append(f.stokReactors, testing.SimpleReactor{verb, resource, reaction})
 }

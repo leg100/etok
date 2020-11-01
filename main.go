@@ -17,15 +17,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 
 	"github.com/fatih/color"
 	"github.com/leg100/stok/cmd"
 	"github.com/leg100/stok/pkg/app"
+	"github.com/leg100/stok/pkg/errors"
 	"github.com/leg100/stok/pkg/signals"
 )
 
@@ -57,7 +56,7 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 // Print error message unless the error originated from executing a program (which would have
 // printed its own message)
 func handleError(err error, out io.Writer) int {
-	var exiterr *exec.ExitError
+	var exiterr errors.ExitError
 	if errors.As(err, &exiterr) {
 		return exiterr.ExitCode()
 	}
