@@ -135,7 +135,7 @@ func TestLauncher(t *testing.T) {
 				mockRunController(opts, cmdOpts)
 
 				// Set debug flag (that root cmd otherwise sets)
-				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
+				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
 
 				t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 

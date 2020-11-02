@@ -137,7 +137,7 @@ func TestRunner(t *testing.T) {
 			cmd.SetArgs(tt.args)
 
 			// Set debug flag (that root cmd otherwise sets)
-			cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
+			cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
 			log.SetLevel(log.DebugLevel)
 
 			// Always run runner in unique temp dir
