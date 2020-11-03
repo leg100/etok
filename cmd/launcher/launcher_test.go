@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	testcore "k8s.io/client-go/testing"
 )
 
@@ -132,8 +133,8 @@ func TestLauncher(t *testing.T) {
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				mockRunController(opts, cmdOpts)
-				//mockPodController(opts, cmdOpts)
+				//mockRunController(opts, cmdOpts)
+				mockPodController(opts, cmdOpts)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
@@ -153,39 +154,39 @@ func mockRunController(opts *app.Options, o *LauncherOptions) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 		pod := testPod(run.GetNamespace(), run.GetName())
-		o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
-
+		pod, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
 	opts.ClientCreator.(*client.FakeClientCreator).PrependStokReactor("create", "runs", createPodAction)
 }
 
-// ...and when a pod create event occurs update pod's exit code status
-//func mockPodController(opts *app.Options, o *LauncherOptions) {
-//	updatePodAction := func(action testcore.Action) (bool, watch.Interface, error) {
-//		watcher := watch.NewFake()
-//		pod := action.(testcore.CreateAction).GetObject().(*corev1.Pod)
-//		pod.Status = corev1.PodStatus{
-//			Phase: corev1.PodSucceeded,
-//			ContainerStatuses: []corev1.ContainerStatus{
-//				{
-//					State: corev1.ContainerState{
-//						Terminated: &corev1.ContainerStateTerminated{
-//							ExitCode: 0,
-//						},
-//					},
-//				},
-//			},
-//		}
-//		fwatch.Modify(
-//		pod, _ = o.PodsClient(pod.GetNamespace()).Update(context.Background(), pod, metav1.UpdateOptions{})
-//
-//		return false, pod, nil
-//	}
-//
-//	opts.ClientCreator.(*client.FakeClientCreator).PrependWatchReactor("pods", updatePodAction)
-//}
+// ...and when launcher retrieves a watch event for the pod, update pod's status to show it has
+// exited successfully
+func mockPodController(opts *app.Options, o *LauncherOptions) {
+	watcher := watch.NewFake()
+	pod := testPod(o.Namespace, o.RunName)
+	watcher.Add(pod)
+	opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher, nil))
+
+	//watcher2 := watch.NewFake()
+	//watcher2.Modify(updatePodWithSuccessfulExit(pod))
+	//opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher2, nil))
+}
+
+func updatePodWithSuccessfulExit(pod *corev1.Pod) *corev1.Pod {
+	pod.Status.Phase = corev1.PodSucceeded
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+		{
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					ExitCode: 0,
+				},
+			},
+		},
+	}
+	return pod
+}
 
 func testPod(namespace, name string) *corev1.Pod {
 	return &corev1.Pod{
