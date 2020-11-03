@@ -5,7 +5,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/client"
@@ -103,20 +102,12 @@ func TestLauncher(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		var leafCmds []string
-		for k, v := range run.TerraformCommandMap {
-			if len(v) > 0 {
-				for _, subcmd := range v {
-					leafCmds = append(leafCmds, subcmd)
-				}
-			} else {
-				leafCmds = append(leafCmds, k)
-			}
-		}
+		cmdFactories := nonStateCommands()
+		cmdFactories = append(cmdFactories, stateSubCommands()...)
+		cmdFactories = append(cmdFactories, shellCommand())
 
-		for _, lcmd := range leafCmds {
-			name := lcmd + tt.name
-			testutil.Run(t, name, func(t *testutil.T) {
+		for _, f := range cmdFactories {
+			testutil.Run(t, tt.name+"/"+f.name, func(t *testutil.T) {
 				path := t.NewTempDir().Chdir().Root()
 
 				// Write .terraform/environment
@@ -128,7 +119,8 @@ func TestLauncher(t *testing.T) {
 				opts, err := app.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
 
-				cmd, cmdOpts := LauncherCmd(opts, lcmd)
+				cmdOpts := &LauncherOptions{}
+				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 

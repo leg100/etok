@@ -37,11 +37,12 @@ func RootCmd(opts *app.Options) *cobra.Command {
 
 	cmd.AddCommand(workspace.WorkspaceCmd(opts))
 	cmd.AddCommand(generate.GenerateCmd(opts))
-	cmd.AddCommand(launcher.LauncherCmds(opts)...)
 	cmd.AddCommand(manager.ManagerCmd(opts))
 
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)
+
+	launcher.AddCommandsToRoot(cmd, opts)
 
 	return cmd
 }

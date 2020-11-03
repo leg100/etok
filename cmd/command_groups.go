@@ -5,7 +5,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/leg100/stok/api/run"
+	"github.com/leg100/stok/cmd/launcher"
 	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 )
@@ -88,10 +88,8 @@ func CompileCommandGroups(cmd *cobra.Command) CommandGroups {
 
 // All commands bar sh
 func isTerraformCommand(name string) bool {
-	for tfcmd := range run.TerraformCommandMap {
-		if name == tfcmd && name != "sh" {
-			return true
-		}
-	}
-	return false
+	return slice.ContainsString(
+		append(launcher.TerraformCommands),
+		name,
+	)
 }

@@ -62,6 +62,22 @@ func TestRoot(t *testing.T) {
 			name: "workspace",
 			args: []string{"workspace"},
 		},
+		{
+			name: "state",
+			args: []string{"state"},
+		},
+		{
+			name: "apply",
+			args: []string{"apply", "-h"},
+		},
+		{
+			name: "plan",
+			args: []string{"plan", "-h"},
+		},
+		{
+			name: "shell",
+			args: []string{"sh", "-h"},
+		},
 	}
 
 	for _, tt := range tests {
