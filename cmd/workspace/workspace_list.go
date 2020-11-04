@@ -5,13 +5,13 @@ import (
 	"os"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func ListCmd(opts *app.Options) *cobra.Command {
+func ListCmd(opts *cmdutil.Options) *cobra.Command {
 	var path, kubeContext, namespace string
 	var workspace = "default"
 

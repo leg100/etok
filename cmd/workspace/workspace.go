@@ -1,11 +1,11 @@
 package workspace
 
 import (
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/spf13/cobra"
 )
 
-func WorkspaceCmd(opts *app.Options) *cobra.Command {
+func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
 		Short: "Stok workspace management",

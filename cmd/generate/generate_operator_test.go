@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ func TestGenerateOperator(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			out := new(bytes.Buffer)
-			opts, err := app.NewFakeOpts(out)
+			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
 			cmd, _ := GenerateOperatorCmd(opts)

@@ -5,9 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
@@ -104,20 +103,12 @@ func TestLauncher(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		var leafCmds []string
-		for k, v := range run.TerraformCommandMap {
-			if len(v) > 0 {
-				for _, subcmd := range v {
-					leafCmds = append(leafCmds, subcmd)
-				}
-			} else {
-				leafCmds = append(leafCmds, k)
-			}
-		}
+		cmdFactories := nonStateCommands()
+		cmdFactories = append(cmdFactories, stateSubCommands()...)
+		cmdFactories = append(cmdFactories, shellCommand())
 
-		for _, lcmd := range leafCmds {
-			name := lcmd + tt.name
-			testutil.Run(t, name, func(t *testutil.T) {
+		for _, f := range cmdFactories {
+			testutil.Run(t, tt.name+"/"+f.name, func(t *testutil.T) {
 				path := t.NewTempDir().Chdir().Root()
 
 				// Write .terraform/environment
@@ -126,10 +117,11 @@ func TestLauncher(t *testing.T) {
 				}
 
 				out := new(bytes.Buffer)
-				opts, err := app.NewFakeOpts(out, tt.objs...)
+				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
 
-				cmd, cmdOpts := LauncherCmd(opts, lcmd)
+				cmdOpts := &LauncherOptions{}
+				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
@@ -137,7 +129,7 @@ func TestLauncher(t *testing.T) {
 				mockPodController(opts, cmdOpts)
 
 				// Set debug flag (that root cmd otherwise sets)
-				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", true, "debug flag")
+				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
 
 				t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 
@@ -150,7 +142,7 @@ func TestLauncher(t *testing.T) {
 }
 
 // When a run create event occurs create a pod
-func mockRunController(opts *app.Options, o *LauncherOptions) {
+func mockRunController(opts *cmdutil.Options, o *LauncherOptions) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 		pod := testPod(run.GetNamespace(), run.GetName())
@@ -163,7 +155,7 @@ func mockRunController(opts *app.Options, o *LauncherOptions) {
 
 // ...and when launcher retrieves a watch event for the pod, update pod's status to show it has
 // exited successfully
-func mockPodController(opts *app.Options, o *LauncherOptions) {
+func mockPodController(opts *cmdutil.Options, o *LauncherOptions) {
 	watcher := watch.NewFake()
 	pod := testPod(o.Namespace, o.RunName)
 	watcher.Add(pod)

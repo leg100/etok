@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/testutil"
 	"github.com/leg100/stok/version"
 	"github.com/stretchr/testify/assert"
@@ -62,6 +62,22 @@ func TestRoot(t *testing.T) {
 			name: "workspace",
 			args: []string{"workspace"},
 		},
+		{
+			name: "state",
+			args: []string{"state"},
+		},
+		{
+			name: "apply",
+			args: []string{"apply", "-h"},
+		},
+		{
+			name: "plan",
+			args: []string{"plan", "-h"},
+		},
+		{
+			name: "shell",
+			args: []string{"sh", "-h"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -71,7 +87,7 @@ func TestRoot(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			opts, err := app.NewFakeOpts(out)
+			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
 			cmd := RootCmd(opts)

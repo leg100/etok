@@ -7,10 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leg100/stok/api/run"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
@@ -18,7 +16,6 @@ import (
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
-	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -36,7 +33,7 @@ const (
 )
 
 type LauncherOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	args []string
 
@@ -67,69 +64,6 @@ type LauncherOptions struct {
 	TimeoutEnqueue time.Duration `default:"10s"`
 }
 
-func LauncherCmds(opts *app.Options) (cmds []*cobra.Command) {
-	for k, v := range run.TerraformCommandMap {
-		if len(v) > 0 {
-			// Terraform 'family' of commands, i.e. terraform show mv|rm|pull|push|show
-			parent := &cobra.Command{
-				Use:   k,
-				Short: fmt.Sprintf("terraform %s family of commands", k),
-			}
-			for _, child := range v {
-				cmd, _ := LauncherCmd(opts, child)
-				parent.AddCommand(cmd)
-			}
-		} else {
-			cmd, _ := LauncherCmd(opts, k)
-			cmds = append(cmds, cmd)
-		}
-	}
-	return cmds
-}
-
-func LauncherCmd(opts *app.Options, tfcmd string) (*cobra.Command, *LauncherOptions) {
-	o := &LauncherOptions{Options: opts}
-	cmd := &cobra.Command{
-		Use:   fmt.Sprintf("%s [flags] -- [%s args]", tfcmd, tfcmd),
-		Short: launcherShortHelp(tfcmd),
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.Command = tfcmd
-
-			if tfcmd == "sh" {
-				// Wrap shell args into a single command string
-				o.args = wrapShellArgs(args)
-			} else {
-				o.args = args
-			}
-
-			o.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
-
-			o.Client, err = opts.Create(o.KubeContext)
-			if err != nil {
-				return err
-			}
-
-			if err := o.lookupEnvFile(cmd); err != nil {
-				return err
-			}
-
-			return o.Run(cmd.Context())
-		},
-	}
-
-	flags.AddPathFlag(cmd, &o.Path)
-	flags.AddNamespaceFlag(cmd, &o.Namespace)
-	flags.AddKubeContextFlag(cmd, &o.KubeContext)
-
-	cmd.Flags().DurationVar(&o.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
-	cmd.Flags().DurationVar(&o.TimeoutClient, "timeout-client", defaultTimeoutClient, "timeout for client to signal readiness")
-	cmd.Flags().DurationVar(&o.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
-	cmd.Flags().DurationVar(&o.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
-	cmd.Flags().StringVar(&o.Workspace, "workspace", defaultWorkspace, "Stok workspace")
-
-	return cmd, o
-}
-
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 	stokenv, err := env.ReadStokEnv(o.Path)
 	if err != nil {
@@ -147,14 +81,6 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 		}
 	}
 	return nil
-}
-
-func launcherShortHelp(tfcmd string) string {
-	if tfcmd == "sh" {
-		return "Run shell commands in workspace"
-	} else {
-		return fmt.Sprintf("Run terraform %s", tfcmd)
-	}
 }
 
 // Wrap shell args into a single command string
@@ -234,9 +160,9 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 
 	go func() {
 		if isTTY {
-			errch <- o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), app.MagicString, app.ContainerName)
+			errch <- o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName)
 		} else {
-			errch <- logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, app.ContainerName)
+			errch <- logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, cmdutil.ContainerName)
 		}
 	}()
 

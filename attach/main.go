@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/signals"
 	"golang.org/x/crypto/ssh/terminal"
 	corev1 "k8s.io/api/core/v1"
@@ -34,7 +34,7 @@ func main() {
 		panic(fmt.Errorf("Interrupt received, exiting..."))
 	}()
 
-	opts, err := app.NewOpts(os.Stdout, os.Stderr, os.Stdin)
+	opts, err := cmdutil.NewOpts(os.Stdout, os.Stderr, os.Stdin)
 	if err != nil {
 		log.Fatal(err)
 	}

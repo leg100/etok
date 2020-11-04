@@ -5,7 +5,7 @@ package k8s
 //		name       string
 //		err        bool
 //		tty        bool
-//		assertions func(opts *app.Options)
+//		assertions func(opts *cmdutil.Options)
 //		out        string
 //	}{
 //		{
@@ -22,7 +22,7 @@ package k8s
 //	for _, tt := range tests {
 //		testutil.Run(t, tt.name, func(t *testutil.T) {
 //			out := new(bytes.Buffer)
-//			opts, err := app.NewFakeOptsWithClients(out)
+//			opts, err := cmdutil.NewFakeOptsWithClients(out)
 //
 //			if tt.tty {
 //				_, tty, err := pty.Open()

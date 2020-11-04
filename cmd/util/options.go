@@ -1,4 +1,4 @@
-package app
+package util
 
 import (
 	"io"
@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// TODO: move constants somewhere more appropriately
+// TODO: move constants somewhere more appropriate
 const (
 	// MagicString is the string that the runner expects to receive prior to invoking its process.
 	// Only take affects if RequireMagicString is true.
@@ -45,15 +45,6 @@ type IOStreams struct {
 	// ErrOut think, os.Stderr
 	ErrOut io.Writer
 }
-
-//func (opts *Options) SetDefaults() {
-//	if defaults.CanUpdate(opts.Image) {
-//		opts.Image = version.Image
-//	}
-//	if defaults.CanUpdate(opts.RunName) {
-//		opts.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
-//	}
-//}
 
 func NewOpts(out, errout io.Writer, in io.Reader) (*Options, error) {
 	opts := &Options{

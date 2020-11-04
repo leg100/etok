@@ -1,11 +1,11 @@
 package generate
 
 import (
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/spf13/cobra"
 )
 
-func GenerateCmd(opts *app.Options) *cobra.Command {
+func GenerateCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Generate deployment resources",

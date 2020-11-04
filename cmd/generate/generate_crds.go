@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +15,7 @@ const allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
 var allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
 
 type GenerateCRDOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	// Path to local concatenated CRD schema
 	LocalCRDPath string
@@ -27,7 +27,7 @@ type GenerateCRDOptions struct {
 	debug bool
 }
 
-func GenerateCRDCmd(opts *app.Options) (*cobra.Command, *GenerateCRDOptions) {
+func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions) {
 	o := &GenerateCRDOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "crds",
