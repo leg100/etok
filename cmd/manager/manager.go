@@ -10,8 +10,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"github.com/leg100/stok/cmd/flags"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/controllers"
-	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
@@ -30,7 +30,7 @@ func printVersion() {
 }
 
 type ManagerOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	KubeContext string
 
@@ -52,7 +52,7 @@ type ManagerOptions struct {
 	debug bool
 }
 
-func ManagerCmd(opts *app.Options) *cobra.Command {
+func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 	o := &ManagerOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:    "operator",

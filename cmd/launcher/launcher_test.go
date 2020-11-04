@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
@@ -116,7 +116,7 @@ func TestLauncher(t *testing.T) {
 				}
 
 				out := new(bytes.Buffer)
-				opts, err := app.NewFakeOpts(out, tt.objs...)
+				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
 
 				cmdOpts := &LauncherOptions{}
@@ -140,7 +140,7 @@ func TestLauncher(t *testing.T) {
 }
 
 // When a run create event occurs create a pod
-func mockRunController(opts *app.Options, o *LauncherOptions) {
+func mockRunController(opts *cmdutil.Options, o *LauncherOptions) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 		pod := testPod(run.GetNamespace(), run.GetName())

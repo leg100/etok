@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
@@ -28,7 +28,7 @@ const (
 )
 
 type LauncherOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	args []string
 
@@ -113,9 +113,9 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	}
 
 	if isTTY {
-		return o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), app.MagicString, app.ContainerName)
+		return o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName)
 	} else {
-		return logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, app.ContainerName)
+		return logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, cmdutil.ContainerName)
 	}
 }
 

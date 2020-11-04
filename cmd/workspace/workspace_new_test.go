@@ -9,7 +9,7 @@ import (
 
 	"github.com/kr/pty"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/logstreamer"
@@ -29,7 +29,7 @@ func TestNewWorkspace(t *testing.T) {
 		args       []string
 		err        bool
 		objs       []runtime.Object
-		setOpts    func(*app.Options)
+		setOpts    func(*cmdutil.Options)
 		assertions func(*NewOptions)
 	}{
 		{
@@ -99,7 +99,7 @@ func TestNewWorkspace(t *testing.T) {
 			name: "cleanup resources upon error",
 			args: []string{"foo"},
 			err:  true,
-			setOpts: func(o *app.Options) {
+			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
 				}
@@ -119,7 +119,7 @@ func TestNewWorkspace(t *testing.T) {
 			name: "do not cleanup resources upon error",
 			args: []string{"foo", "--no-cleanup"},
 			err:  true,
-			setOpts: func(o *app.Options) {
+			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
 				}
@@ -187,7 +187,7 @@ func TestNewWorkspace(t *testing.T) {
 		{
 			name: "attach",
 			args: []string{"foo"},
-			setOpts: func(o *app.Options) {
+			setOpts: func(o *cmdutil.Options) {
 				// Create pseudoterminal slave to trigger tty detection
 				_, pts, err := pty.Open()
 				require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestNewWorkspace(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			out := new(bytes.Buffer)
-			opts, err := app.NewFakeOpts(out, tt.objs...)
+			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 			require.NoError(t, err)
 
 			if tt.setOpts != nil {
@@ -232,7 +232,7 @@ func TestNewWorkspace(t *testing.T) {
 }
 
 // When a workspace create event occurs create a pod
-func mockWorkspaceController(opts *app.Options, o *NewOptions) {
+func mockWorkspaceController(opts *cmdutil.Options, o *NewOptions) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		ws := action.(testcore.CreateAction).GetObject().(*v1alpha1.Workspace)
 		pod := testPod(ws.GetNamespace(), ws.GetName())

@@ -13,7 +13,7 @@ import (
 
 	"github.com/kr/pty"
 	"github.com/leg100/stok/cmd/envvars"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/testutil"
@@ -113,7 +113,7 @@ func TestRunner(t *testing.T) {
 			t.SetEnvs(tt.envs)
 
 			out := new(bytes.Buffer)
-			opts, err := app.NewFakeOpts(out, tt.objs...)
+			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 			require.NoError(t, err)
 
 			if tt.in != nil {

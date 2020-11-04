@@ -8,7 +8,7 @@ import (
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/monitors"
 	"github.com/leg100/stok/version"
@@ -34,7 +34,7 @@ const (
 )
 
 type NewOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	*client.Client
 
@@ -62,7 +62,7 @@ type NewOptions struct {
 	createdSecret         bool
 }
 
-func NewCmd(opts *app.Options) (*cobra.Command, *NewOptions) {
+func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	o := &NewOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "new <workspace>",
@@ -150,12 +150,12 @@ func (o *NewOptions) run(ctx context.Context) error {
 			return fmt.Errorf("getting pod %s/%s: %w", o.Namespace, ws.PodName(), err)
 		}
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), app.MagicString+"\n", app.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString+"\n", cmdutil.ContainerName); err != nil {
 			return err
 		}
 	} else {
 		log.Debug("Retrieving pod's log stream")
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), app.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), cmdutil.ContainerName); err != nil {
 			return err
 		}
 	}

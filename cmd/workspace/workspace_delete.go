@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func DeleteCmd(opts *app.Options) *cobra.Command {
+func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
 	var namespace, kubeContext string
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",

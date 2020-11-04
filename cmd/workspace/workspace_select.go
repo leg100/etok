@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/spf13/cobra"
 )
 
-func SelectCmd(opts *app.Options) *cobra.Command {
+func SelectCmd(opts *cmdutil.Options) *cobra.Command {
 	var path string
 
 	cmd := &cobra.Command{

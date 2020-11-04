@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	v1alpha1types "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
@@ -62,7 +62,7 @@ func TestListWorkspaces(t *testing.T) {
 
 			out := new(bytes.Buffer)
 
-			opts, err := app.NewFakeOpts(out, tt.objs...)
+			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 			require.NoError(t, err)
 
 			cmd := ListCmd(opts)

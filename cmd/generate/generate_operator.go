@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
+	cmdutil "github.com/leg100/stok/cmd/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -18,7 +18,7 @@ import (
 )
 
 type GenerateOperatorOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	Name      string
 	Namespace string
@@ -27,7 +27,7 @@ type GenerateOperatorOptions struct {
 	debug bool
 }
 
-func GenerateOperatorCmd(opts *app.Options) (*cobra.Command, *GenerateOperatorOptions) {
+func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperatorOptions) {
 	o := &GenerateOperatorOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "operator",

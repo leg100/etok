@@ -5,14 +5,14 @@ import (
 	"github.com/leg100/stok/cmd/launcher"
 	"github.com/leg100/stok/cmd/manager"
 	"github.com/leg100/stok/cmd/runner"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/cmd/workspace"
-	"github.com/leg100/stok/pkg/app"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 )
 
-func RootCmd(opts *app.Options) *cobra.Command {
+func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "stok",
 		Version: version.PrintableVersion(),

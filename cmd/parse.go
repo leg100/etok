@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/leg100/stok/cmd/envvars"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 )
 
 // ParseArgs parses CLI args and executes the select command
-func ParseArgs(ctx context.Context, args []string, opts *app.Options) error {
+func ParseArgs(ctx context.Context, args []string, opts *cmdutil.Options) error {
 	// Build root command
 	cmd := RootCmd(opts)
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,7 +40,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			opts, err := app.NewFakeOpts(new(bytes.Buffer), tt.objs...)
+			opts, err := cmdutil.NewFakeOpts(new(bytes.Buffer), tt.objs...)
 			require.NoError(t, err)
 
 			cmd := DeleteCmd(opts)

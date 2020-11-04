@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
 )
 
 // Add commands to root as subcommands (and subcommands' subcommands, and so on)
-func AddCommandsToRoot(root *cobra.Command, opts *app.Options) {
+func AddCommandsToRoot(root *cobra.Command, opts *cmdutil.Options) {
 	// Add terraform commands other than state
 	for _, cmd := range nonStateCommands() {
 		root.AddCommand(cmd.create(opts, &LauncherOptions{}))
@@ -94,7 +94,7 @@ func shellCommand() *cmd {
 }
 
 // Spawn cobra command from launcher command factory
-func (c *cmd) create(opts *app.Options, o *LauncherOptions) *cobra.Command {
+func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	o.Options = opts
 	o.Command = c.command
 

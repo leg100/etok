@@ -25,7 +25,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/leg100/stok/cmd"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/signals"
 )
 
@@ -45,7 +45,7 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 	signals.CatchCtrlC(cancel)
 
 	// Construct options and their defaults
-	opts, err := app.NewOpts(out, errout, in)
+	opts, err := cmdutil.NewOpts(out, errout, in)
 	if err != nil {
 		return err
 	}

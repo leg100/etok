@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/app"
+	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/spf13/cobra"
@@ -22,7 +22,7 @@ const (
 )
 
 type RunnerOptions struct {
-	*app.Options
+	*cmdutil.Options
 
 	Path               string
 	Tarball            string
@@ -33,7 +33,7 @@ type RunnerOptions struct {
 	args []string
 }
 
-func RunnerCmd(opts *app.Options) (*cobra.Command, *RunnerOptions) {
+func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 	o := &RunnerOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:    "runner [command (args)]",
@@ -112,7 +112,7 @@ func (o *RunnerOptions) withRawMode(ctx context.Context, f func(context.Context)
 // timeout, or anything other than magic string is received, then an error is
 // returned.
 func (o *RunnerOptions) receiveMagicString(ctx context.Context) error {
-	buf := make([]byte, len(app.MagicString))
+	buf := make([]byte, len(cmdutil.MagicString))
 	errch := make(chan error)
 
 	// FIXME: Occasionally read() blocks awaiting a newline, despite stdin being in raw mode. I
@@ -143,8 +143,8 @@ func (o *RunnerOptions) receiveMagicString(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if string(buf) != app.MagicString {
-			return fmt.Errorf("expected magic string '%s' but received: %s", app.MagicString, string(buf))
+		if string(buf) != cmdutil.MagicString {
+			return fmt.Errorf("expected magic string '%s' but received: %s", cmdutil.MagicString, string(buf))
 		}
 	}
 	log.Debugf("[runner] magic string received\r\n")
