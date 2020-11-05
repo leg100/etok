@@ -125,8 +125,7 @@ func TestLauncher(t *testing.T) {
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				//mockRunController(opts, cmdOpts)
-				mockPodController(opts, cmdOpts)
+				mockControllers(opts, cmdOpts)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
@@ -141,29 +140,29 @@ func TestLauncher(t *testing.T) {
 	}
 }
 
-// When a run create event occurs create a pod
-func mockRunController(opts *cmdutil.Options, o *LauncherOptions) {
+// Mock controllers:
+// (a) Runs controller: When a run is created, create a pod
+// (b) Pods controller: Simulate pod completing successfully
+func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
+	watcher := watch.NewFake()
+	opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher, nil))
+
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
+
 		pod := testPod(run.GetNamespace(), run.GetName())
-		pod, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+
+		// create pod
+		// update pod status to show it has completed
+		go func() {
+			watcher.Add(pod)
+			watcher.Modify(updatePodWithSuccessfulExit(pod))
+		}()
+
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
 	opts.ClientCreator.(*client.FakeClientCreator).PrependStokReactor("create", "runs", createPodAction)
-}
-
-// ...and when launcher retrieves a watch event for the pod, update pod's status to show it has
-// exited successfully
-func mockPodController(opts *cmdutil.Options, o *LauncherOptions) {
-	watcher := watch.NewFake()
-	pod := testPod(o.Namespace, o.RunName)
-	watcher.Add(pod)
-	opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher, nil))
-
-	//watcher2 := watch.NewFake()
-	//watcher2.Modify(updatePodWithSuccessfulExit(pod))
-	//opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher2, nil))
 }
 
 func updatePodWithSuccessfulExit(pod *corev1.Pod) *corev1.Pod {
