@@ -75,6 +75,26 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		instance.Status.Queue = []string{}
 	}
 
+	if instance.GetDeletionTimestamp().IsZero() {
+		// Workspace not being deleted
+		if !slice.ContainsString(instance.GetFinalizers(), metav1.FinalizerDeleteDependents) {
+			// Instruct garbage collector to only delete workspace once its dependents are deleted
+			instance.SetFinalizers([]string{metav1.FinalizerDeleteDependents})
+			if err := r.Update(context.TODO(), instance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// Workspace is being deleted
+		instance.Status.Phase = v1alpha1.WorkspacePhaseDeleting
+		if err := r.Status().Update(context.TODO(), instance); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Cease reconciliation
+		return ctrl.Result{}, nil
+	}
+
 	// Manage Role for workspace
 	role := newRoleForCR(instance)
 	if err := r.manageControllee(instance, reqLogger, role); err != nil {
