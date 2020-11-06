@@ -197,6 +197,20 @@ func TestNewWorkspace(t *testing.T) {
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
 			},
 		},
+		{
+			name: "disable tty",
+			args: []string{"foo", "--no-tty"},
+			setOpts: func(o *cmdutil.Options) {
+				// Ensure tty is overridden
+				_, pts, err := pty.Open()
+				require.NoError(t, err)
+				o.In = pts
+			},
+			assertions: func(o *NewOptions) {
+				// With tty disabled, it should stream logs not attach
+				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
+			},
+		},
 	}
 
 	for _, tt := range tests {

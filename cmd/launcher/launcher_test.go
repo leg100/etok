@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kr/pty"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
@@ -25,7 +26,8 @@ func TestLauncher(t *testing.T) {
 		env        env.StokEnv
 		err        bool
 		objs       []runtime.Object
-		assertions func(o *LauncherOptions)
+		setOpts    func(*cmdutil.Options)
+		assertions func(*LauncherOptions)
 	}{
 		{
 			name: "defaults",
@@ -99,6 +101,34 @@ func TestLauncher(t *testing.T) {
 			name: "workspace does not exist",
 			err:  true,
 		},
+		{
+			name: "with tty",
+			objs: []runtime.Object{testWorkspace("default", "default")},
+			setOpts: func(opts *cmdutil.Options) {
+				var err error
+				opts.In, _, err = pty.Open()
+				require.NoError(t, err)
+			},
+			assertions: func(o *LauncherOptions) {
+				// With a tty, launcher should attach not stream logs
+				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
+			},
+		},
+		{
+			name: "disable tty",
+			args: []string{"--no-tty"},
+			objs: []runtime.Object{testWorkspace("default", "default")},
+			setOpts: func(opts *cmdutil.Options) {
+				// Ensure tty is overridden
+				var err error
+				_, opts.In, err = pty.Open()
+				require.NoError(t, err)
+			},
+			assertions: func(o *LauncherOptions) {
+				// With tty disabled, launcher should stream logs not attach
+				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -118,8 +148,12 @@ func TestLauncher(t *testing.T) {
 				out := new(bytes.Buffer)
 				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
+				if tt.setOpts != nil {
+					tt.setOpts(opts)
+				}
 
 				cmdOpts := &LauncherOptions{}
+				// create cobra command
 				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)

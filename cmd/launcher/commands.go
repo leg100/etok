@@ -127,6 +127,7 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	flags.AddNamespaceFlag(cmd, &o.Namespace)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 
+	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
 	cmd.Flags().DurationVar(&o.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.TimeoutClient, "timeout-client", defaultTimeoutClient, "timeout for client to signal readiness")
 	cmd.Flags().DurationVar(&o.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")

@@ -57,6 +57,9 @@ type LauncherOptions struct {
 	// TODO: rename to timeout-pending (enqueue is too similar sounding to queue)
 	// timeout waiting to be queued
 	TimeoutEnqueue time.Duration `default:"10s"`
+
+	// Disable TTY detection
+	DisableTTY bool
 }
 
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
@@ -98,7 +101,7 @@ func isFlagPassed(fs *pflag.FlagSet, name string) (found bool) {
 }
 
 func (o *LauncherOptions) Run(ctx context.Context) error {
-	isTTY := term.IsTerminal(o.In)
+	isTTY := !o.DisableTTY && term.IsTerminal(o.In)
 
 	// Tar up local config and deploy k8s resources
 	run, err := o.deploy(ctx, isTTY)
