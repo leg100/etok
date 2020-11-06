@@ -2,12 +2,15 @@ package workspace
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
@@ -28,7 +31,19 @@ func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
 				return fmt.Errorf("failed to delete workspace: %w", err)
 			}
 
-			log.Infof("deleted workspace %s/%s\n", namespace, ws)
+			// Wait for workspace (and its dependents) to be deleted
+			log.Info("Waiting for workspace to be deleted...")
+			wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+				if _, err := client.WorkspacesClient(namespace).Get(cmd.Context(), ws, metav1.GetOptions{}); err != nil {
+					if errors.IsNotFound(err) {
+						return true, nil
+					}
+					return false, fmt.Errorf("waiting for workspace to be deleted: %w", err)
+				}
+				return false, nil
+			})
+
+			log.Infof("Deleted workspace %s/%s\n", namespace, ws)
 
 			return nil
 		},

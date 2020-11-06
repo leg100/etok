@@ -56,6 +56,9 @@ type NewOptions struct {
 	// Disable default behaviour of deleting resources upon error
 	DisableResourceCleanup bool
 
+	// Disable TTY detection
+	DisableTTY bool
+
 	// Recall if resources are created so that if error occurs they can be cleaned up
 	createdWorkspace      bool
 	createdServiceAccount bool
@@ -99,6 +102,8 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
 
+	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
+
 	return cmd, o
 }
 
@@ -118,7 +123,7 @@ func (o *NewOptions) name() string {
 }
 
 func (o *NewOptions) run(ctx context.Context) error {
-	isTTY := detectTTY(o.In)
+	isTTY := !o.DisableTTY && detectTTY(o.In)
 
 	if !o.DisableCreateServiceAccount {
 		if err := o.createServiceAccountIfMissing(ctx); err != nil {

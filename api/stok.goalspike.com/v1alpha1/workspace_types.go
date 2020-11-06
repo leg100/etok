@@ -104,6 +104,7 @@ const (
 	WorkspacePhaseReady        WorkspacePhase = "ready"
 	WorkspacePhaseError        WorkspacePhase = "error"
 	WorkspacePhaseUnknown      WorkspacePhase = "unknown"
+	WorkspacePhaseDeleting     WorkspacePhase = "deleting"
 
 	WorkspaceDefaultCacheSize = "1Gi"
 
