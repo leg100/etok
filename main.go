@@ -56,8 +56,7 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 // Print error message unless the error originated from executing a program (which would have
 // printed its own message)
 func handleError(err error, out io.Writer) int {
-	var exiterr errors.ExitError
-	if errors.As(err, &exiterr) {
+	if exiterr, ok := err.(errors.ExitError); ok {
 		return exiterr.ExitCode()
 	}
 	fmt.Fprintf(out, "%s %s\n", color.HiRedString("Error:"), err.Error())

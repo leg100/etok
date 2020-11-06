@@ -21,6 +21,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/leg100/stok/pkg/log"
 )
 
 func CatchCtrlC(cancel context.CancelFunc) {
@@ -33,7 +35,8 @@ func CatchCtrlC(cancel context.CancelFunc) {
 	)
 
 	go func() {
-		<-signals
+		sig := <-signals
+		log.Debugf("Signal received: %s\n", sig.String())
 		signal.Stop(signals)
 		cancel()
 	}()

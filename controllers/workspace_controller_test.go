@@ -141,6 +141,13 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "workspace-1",
 				},
+				Status: v1alpha1.WorkspaceStatus{
+					Queue: []string{
+						"plan-3",
+						"plan-1",
+						"plan-2",
+					},
+				},
 			},
 			objs: []runtime.Object{
 				runtime.Object(&planCompleted),

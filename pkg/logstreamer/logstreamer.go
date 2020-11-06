@@ -14,17 +14,17 @@ import (
 type GetLogsFunc func(context.Context, Options) (io.ReadCloser, error)
 
 type Options struct {
-	podsClient    typedv1.PodInterface
-	podName       string
-	podLogOptions *corev1.PodLogOptions
+	PodsClient    typedv1.PodInterface
+	PodName       string
+	PodLogOptions *corev1.PodLogOptions
 }
 
 func Stream(ctx context.Context, f GetLogsFunc, out io.Writer, podsClient typedv1.PodInterface, podName, containerName string) error {
 	log.Debug("Streaming logs")
 	stream, err := f(ctx, Options{
-		podsClient:    podsClient,
-		podName:       podName,
-		podLogOptions: &corev1.PodLogOptions{Follow: true, Container: containerName},
+		PodsClient:    podsClient,
+		PodName:       podName,
+		PodLogOptions: &corev1.PodLogOptions{Follow: true, Container: containerName},
 	})
 	if err != nil {
 		return err
@@ -35,5 +35,5 @@ func Stream(ctx context.Context, f GetLogsFunc, out io.Writer, podsClient typedv
 }
 
 func GetLogs(ctx context.Context, opts Options) (io.ReadCloser, error) {
-	return opts.podsClient.GetLogs(opts.podName, opts.podLogOptions).Stream(ctx)
+	return opts.PodsClient.GetLogs(opts.PodName, opts.PodLogOptions).Stream(ctx)
 }

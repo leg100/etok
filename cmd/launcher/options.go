@@ -102,31 +102,6 @@ func isFlagPassed(fs *pflag.FlagSet, name string) (found bool) {
 	return found
 }
 
-type podExitCodeMonitor struct {
-	pod *corev1.Pod
-}
-
-func (pm *podExitCodeMonitor) handler(event watch.Event) (bool, error) {
-	pod := event.Object.(*corev1.Pod)
-
-	// ListWatcher field selector filters out other pods but the fake client doesn't implement the
-	// field selector, so the following is necessary purely for testing purposes
-	if pod.GetName() != pm.pod.GetName() {
-		return false, nil
-	}
-
-	switch event.Type {
-	case watch.Deleted:
-		return false, fmt.Errorf("pod resource deleted")
-	}
-
-	switch pod.Status.Phase {
-	case corev1.PodSucceeded, corev1.PodFailed:
-		return true, nil
-	default:
-		return false, nil
-	}
-}
 func (o *LauncherOptions) Run(ctx context.Context) error {
 	isTTY := term.IsTerminal(o.In)
 
@@ -142,52 +117,29 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	// monitor exit code
-	exitch := make(chan error)
-	errch := make(chan error)
-	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: pod.GetName(), Namespace: pod.GetNamespace()}
-	go func() {
-		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, (&podExitCodeMonitor{pod: pod}).handler)
-		if err != nil {
-			exitch <- fmt.Errorf("failed to retrieve exit code: %w", err)
-		} else {
-			pod := event.Object.(*corev1.Pod)
-			exitch <- errors.NewExitError(
-				int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode),
-			)
-		}
-	}()
+	// Monitor exit code; non-blocking
+	exit := o.monitorExit(ctx)
 
-	go func() {
-		if isTTY {
-			errch <- o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName)
-		} else {
-			errch <- logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, cmdutil.ContainerName)
+	// Connect to pod
+	if isTTY {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName); err != nil {
+			return err
 		}
-	}()
+	} else {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, cmdutil.ContainerName); err != nil {
+			return err
+		}
+	}
 
-	// Exit code
-	var exiterr error
-	var completed, exited bool
-	var timeout <-chan time.Time
-	for {
-		if completed && exited {
-			return exiterr
+	// Return container's exit code
+	select {
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("timed out waiting for exit code handler to finish")
+	case code := <-exit:
+		if err := ctx.Err(); err != nil {
+			log.Debugf("context error: %s\n", err.Error())
 		}
-		select {
-		case err := <-errch:
-			if err != nil {
-				// attach/streamer failure
-				return err
-			}
-			completed = true
-			// Start timer ticking to wait for exit code
-			timeout = time.After(10 * time.Second)
-		case exiterr = <-exitch:
-			exited = true
-		case <-timeout:
-			return fmt.Errorf("timed out waiting for exit code handler to finish")
-		}
+		return code
 	}
 }
 
@@ -205,19 +157,19 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run) (*core
 	}()
 
 	// Non-blocking; watch workspace queue, check timeouts are not exceeded, and log run's queue position
-	(&queueMonitor{
-		run:            run,
-		workspace:      o.Workspace,
-		client:         o.StokClient,
-		timeoutEnqueue: o.TimeoutEnqueue,
-		timeoutQueue:   o.TimeoutQueue,
-	}).monitor(ctx, errch)
+	//(&queueMonitor{
+	//	run:            run,
+	//	workspace:      o.Workspace,
+	//	client:         o.StokClient,
+	//	timeoutEnqueue: o.TimeoutEnqueue,
+	//	timeoutQueue:   o.TimeoutQueue,
+	//}).monitor(ctx, errch)
 
 	// Non-blocking; watch run, log status updates
-	(&runMonitor{
-		run:    run,
-		client: o.StokClient,
-	}).monitor(ctx, errch)
+	//(&runMonitor{
+	//	run:    run,
+	//	client: o.StokClient,
+	//}).monitor(ctx, errch)
 
 	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
 	// error on fatal pod errors
@@ -270,4 +222,42 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 	})
 
 	return run, g.Wait()
+}
+
+// Wait for the pod to complete and propagate its error, it has one. The error implements
+// errors.ExitError if there is an error, which contains the non-zero exit code of the container.
+// Non-blocking, the error is reported via the returned error channel.
+func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
+	exit := make(chan error)
+	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: o.RunName, Namespace: o.Namespace}
+	go func() {
+		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
+			pod := event.Object.(*corev1.Pod)
+
+			// ListWatcher field selector filters out other pods but the fake client doesn't implement the
+			// field selector, so the following is necessary purely for testing purposes
+			if pod.GetName() != o.RunName {
+				return false, nil
+			}
+
+			switch pod.Status.Phase {
+			case corev1.PodSucceeded, corev1.PodFailed:
+				return true, nil
+			default:
+				return false, nil
+			}
+		})
+
+		if err != nil {
+			exit <- fmt.Errorf("failed to retrieve exit code: %w", err)
+		} else {
+			pod := event.Object.(*corev1.Pod)
+			if code := int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode); code != 0 {
+				exit <- errors.NewExitError(code)
+			} else {
+				exit <- nil
+			}
+		}
+	}()
+	return exit
 }

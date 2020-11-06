@@ -3,19 +3,21 @@ package launcher
 import (
 	"bytes"
 	"context"
+	"io"
+	"io/ioutil"
 	"testing"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
 	testcore "k8s.io/client-go/testing"
 )
 
@@ -120,6 +122,17 @@ func TestLauncher(t *testing.T) {
 				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
 
+				opts.GetLogsFunc = func(ctx context.Context, lsOpts logstreamer.Options) (io.ReadCloser, error) {
+					pod, err := lsOpts.PodsClient.Get(context.Background(), lsOpts.PodName, metav1.GetOptions{})
+					require.NoError(t, err)
+
+					// update pod status to show it has completed
+					_, err = lsOpts.PodsClient.Update(context.Background(), updatePodWithSuccessfulExit(pod), metav1.UpdateOptions{})
+					require.NoError(t, err)
+
+					return ioutil.NopCloser(bytes.NewBufferString("fake logs")), nil
+				}
+
 				cmdOpts := &LauncherOptions{}
 				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
@@ -144,20 +157,11 @@ func TestLauncher(t *testing.T) {
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
 func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
-	watcher := watch.NewFake()
-	opts.ClientCreator.(*client.FakeClientCreator).PrependKubeWatchReactor("pods", testcore.DefaultWatchReactor(watcher, nil))
-
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
 		pod := testPod(run.GetNamespace(), run.GetName())
-
-		// create pod
-		// update pod status to show it has completed
-		go func() {
-			watcher.Add(pod)
-			watcher.Modify(updatePodWithSuccessfulExit(pod))
-		}()
+		_, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
 
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}

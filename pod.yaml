@@ -6,7 +6,7 @@ spec:
   containers:
   - command:
     - sh
-    image: leg100/stok:v0.2.10-20-g16a099e-dirty
+    image: alpine
     imagePullPolicy: Never
     name: sh
     stdin: true
