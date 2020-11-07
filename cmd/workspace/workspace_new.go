@@ -10,6 +10,8 @@ import (
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
+	stokerrors "github.com/leg100/stok/pkg/errors"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/monitors"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
@@ -20,6 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
+	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/kubectl/pkg/util/term"
 )
 
@@ -149,6 +153,9 @@ func (o *NewOptions) run(ctx context.Context) error {
 		return err
 	}
 
+	// Monitor exit code; non-blocking
+	exit := o.monitorExit(ctx)
+
 	if isTTY {
 		pod, err := o.PodsClient(o.Namespace).Get(ctx, ws.PodName(), metav1.GetOptions{})
 		if err != nil {
@@ -165,7 +172,17 @@ func (o *NewOptions) run(ctx context.Context) error {
 		}
 	}
 
-	return env.NewStokEnv(o.Namespace, o.Workspace).Write(o.Path)
+	if err := env.NewStokEnv(o.Namespace, o.Workspace).Write(o.Path); err != nil {
+		return err
+	}
+
+	// Return container's exit code
+	select {
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("timed out waiting for exit code")
+	case code := <-exit:
+		return code
+	}
 }
 
 func (o *NewOptions) cleanup() {
@@ -341,6 +358,43 @@ func (o *NewOptions) monitor(ctx context.Context, ws *v1alpha1.Workspace, attach
 	case err := <-errch:
 		return err
 	}
+}
+
+// Wait for the pod to complete and propagate its error, it has one. The error implements
+// errors.ExitError if there is an error, which contains the non-zero exit code of the container.
+// Non-blocking, the error is reported via the returned error channel.
+func (o *NewOptions) monitorExit(ctx context.Context) chan error {
+	var code int
+	exit := make(chan error)
+	go func() {
+		lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: v1alpha1.WorkspacePodName(o.Workspace), Namespace: o.Namespace}
+		_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
+			pod := event.Object.(*corev1.Pod)
+
+			// ListWatcher field selector filters out other pods but the fake client doesn't implement the
+			// field selector, so the following is necessary purely for testing purposes
+			if pod.GetName() != v1alpha1.WorkspacePodName(o.Workspace) {
+				return false, nil
+			}
+
+			if len(pod.Status.InitContainerStatuses) > 0 {
+				if pod.Status.InitContainerStatuses[0].State.Terminated != nil {
+					code = int(pod.Status.InitContainerStatuses[0].State.Terminated.ExitCode)
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+
+		if err != nil {
+			exit <- fmt.Errorf("failed to retrieve exit code: %w", err)
+		} else if code != 0 {
+			exit <- stokerrors.NewExitError(code)
+		} else {
+			exit <- nil
+		}
+	}()
+	return exit
 }
 
 func detectTTY(in interface{}) bool {

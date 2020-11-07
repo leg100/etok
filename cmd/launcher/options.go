@@ -137,7 +137,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	// Return container's exit code
 	select {
 	case <-time.After(10 * time.Second):
-		return fmt.Errorf("timed out waiting for exit code handler to finish")
+		return fmt.Errorf("timed out waiting for exit code")
 	case code := <-exit:
 		return code
 	}
@@ -228,10 +228,11 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 // errors.ExitError if there is an error, which contains the non-zero exit code of the container.
 // Non-blocking, the error is reported via the returned error channel.
 func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
+	var code int
 	exit := make(chan error)
 	go func() {
 		lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: o.RunName, Namespace: o.Namespace}
-		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
+		_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
 			pod := event.Object.(*corev1.Pod)
 
 			// ListWatcher field selector filters out other pods but the fake client doesn't implement the
@@ -242,6 +243,7 @@ func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
 
 			if len(pod.Status.ContainerStatuses) > 0 {
 				if pod.Status.ContainerStatuses[0].State.Terminated != nil {
+					code = int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode)
 					return true, nil
 				}
 			}
@@ -250,13 +252,10 @@ func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
 
 		if err != nil {
 			exit <- fmt.Errorf("failed to retrieve exit code: %w", err)
+		} else if code != 0 {
+			exit <- errors.NewExitError(code)
 		} else {
-			pod := event.Object.(*corev1.Pod)
-			if code := int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode); code != 0 {
-				exit <- errors.NewExitError(code)
-			} else {
-				exit <- nil
-			}
+			exit <- nil
 		}
 	}()
 	return exit

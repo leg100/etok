@@ -268,8 +268,15 @@ func testPod(namespace, name string) *corev1.Pod {
 			Phase: corev1.PodPending,
 			InitContainerStatuses: []corev1.ContainerStatus{
 				{
+					// NOTE: The pod is both running and terminated in order to pass tests. The
+					// alternative is to use a complicated set of reactors, which are known not to
+					// play well with k8s informers:
+					// https://github.com/kubernetes/kubernetes/pull/95897
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{},
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+						},
 					},
 				},
 			},
