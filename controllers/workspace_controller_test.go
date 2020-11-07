@@ -407,10 +407,6 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 				assert.Equal(t, []corev1.EnvVar{
 					{
-						Name:  "TF_WORKSPACE",
-						Value: "workspace-1",
-					},
-					{
 						Name:  "STOK_REQUIRE_MAGIC_STRING",
 						Value: "true",
 					},

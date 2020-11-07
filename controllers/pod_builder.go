@@ -244,14 +244,6 @@ func (pb *PodBuilder) AddBackendConfig(workspacename string) *PodBuilder {
 	return pb
 }
 
-func (pb *PodBuilder) SetWorkspaceEnvVar(workspace string) *PodBuilder {
-	pb.envs = append(pb.envs, corev1.EnvVar{
-		Name:  "TF_WORKSPACE",
-		Value: workspace,
-	})
-	return pb
-}
-
 func (pb *PodBuilder) MountTarball(configmapname, configmapkey string) *PodBuilder {
 	pb.envs = append(pb.envs, corev1.EnvVar{
 		Name:  "STOK_PATH",
