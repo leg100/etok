@@ -257,6 +257,30 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
+			name: "Sets workspace environment variable",
+			run: &v1alpha1.Run{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "plan-1",
+					Namespace: "operator-test",
+				},
+				RunSpec: v1alpha1.RunSpec{
+					Workspace: "workspace-1",
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&workspaceQueueOfOne),
+			},
+			assertions: func(pod *corev1.Pod) {
+				want := "workspace-1"
+				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "TF_WORKSPACE")
+				if !ok {
+					t.Errorf("Could not find env var with name TF_WORKSPACE")
+				} else {
+					assert.Equal(t, want, got)
+				}
+			},
+		},
+		{
 			name: "Image name",
 			run: &v1alpha1.Run{
 				ObjectMeta: metav1.ObjectMeta{
