@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +25,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/leg100/stok/cmd"
 	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/errors"
+	stokerrors "github.com/leg100/stok/pkg/errors"
 	"github.com/leg100/stok/pkg/signals"
 )
 
@@ -56,8 +57,9 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 // Print error message unless the error originated from executing a program (which would have
 // printed its own message)
 func handleError(err error, out io.Writer) int {
-	if exiterr, ok := err.(errors.ExitError); ok {
-		return exiterr.ExitCode()
+	var exit stokerrors.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode()
 	}
 	fmt.Fprintf(out, "%s %s\n", color.HiRedString("Error:"), err.Error())
 	return 1
