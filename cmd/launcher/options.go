@@ -139,9 +139,6 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timed out waiting for exit code handler to finish")
 	case code := <-exit:
-		if err := ctx.Err(); err != nil {
-			log.Debugf("context error: %s\n", err.Error())
-		}
 		return code
 	}
 }
@@ -160,19 +157,19 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run) (*core
 	}()
 
 	// Non-blocking; watch workspace queue, check timeouts are not exceeded, and log run's queue position
-	//(&queueMonitor{
-	//	run:            run,
-	//	workspace:      o.Workspace,
-	//	client:         o.StokClient,
-	//	timeoutEnqueue: o.TimeoutEnqueue,
-	//	timeoutQueue:   o.TimeoutQueue,
-	//}).monitor(ctx, errch)
+	(&queueMonitor{
+		run:            run,
+		workspace:      o.Workspace,
+		client:         o.StokClient,
+		timeoutEnqueue: o.TimeoutEnqueue,
+		timeoutQueue:   o.TimeoutQueue,
+	}).monitor(ctx, errch)
 
 	// Non-blocking; watch run, log status updates
-	//(&runMonitor{
-	//	run:    run,
-	//	client: o.StokClient,
-	//}).monitor(ctx, errch)
+	(&runMonitor{
+		run:    run,
+		client: o.StokClient,
+	}).monitor(ctx, errch)
 
 	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
 	// error on fatal pod errors
@@ -232,8 +229,8 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 // Non-blocking, the error is reported via the returned error channel.
 func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
 	exit := make(chan error)
-	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: o.RunName, Namespace: o.Namespace}
 	go func() {
+		lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: o.RunName, Namespace: o.Namespace}
 		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
 			pod := event.Object.(*corev1.Pod)
 
@@ -243,12 +240,12 @@ func (o *LauncherOptions) monitorExit(ctx context.Context) chan error {
 				return false, nil
 			}
 
-			switch pod.Status.Phase {
-			case corev1.PodSucceeded, corev1.PodFailed:
-				return true, nil
-			default:
-				return false, nil
+			if len(pod.Status.ContainerStatuses) > 0 {
+				if pod.Status.ContainerStatuses[0].State.Terminated != nil {
+					return true, nil
+				}
 			}
+			return false, nil
 		})
 
 		if err != nil {

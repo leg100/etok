@@ -3,8 +3,6 @@ package launcher
 import (
 	"bytes"
 	"context"
-	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/kr/pty"
@@ -12,7 +10,6 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,17 +152,6 @@ func TestLauncher(t *testing.T) {
 					tt.setOpts(opts)
 				}
 
-				opts.GetLogsFunc = func(ctx context.Context, lsOpts logstreamer.Options) (io.ReadCloser, error) {
-					pod, err := lsOpts.PodsClient.Get(context.Background(), lsOpts.PodName, metav1.GetOptions{})
-					require.NoError(t, err)
-
-					// update pod status to show it has completed
-					_, err = lsOpts.PodsClient.Update(context.Background(), updatePodWithSuccessfulExit(pod), metav1.UpdateOptions{})
-					require.NoError(t, err)
-
-					return ioutil.NopCloser(bytes.NewBufferString("fake logs")), nil
-				}
-
 				cmdOpts := &LauncherOptions{}
 				// create cobra command
 				cmd := f.create(opts, cmdOpts)
@@ -187,7 +173,7 @@ func TestLauncher(t *testing.T) {
 	}
 }
 
-// Mock controllers:
+// Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
 func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
@@ -203,20 +189,6 @@ func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
 	opts.ClientCreator.(*client.FakeClientCreator).PrependStokReactor("create", "runs", createPodAction)
 }
 
-func updatePodWithSuccessfulExit(pod *corev1.Pod) *corev1.Pod {
-	pod.Status.Phase = corev1.PodSucceeded
-	pod.Status.ContainerStatuses = []corev1.ContainerStatus{
-		{
-			State: corev1.ContainerState{
-				Terminated: &corev1.ContainerStateTerminated{
-					ExitCode: 0,
-				},
-			},
-		},
-	}
-	return pod
-}
-
 func testPod(namespace, name string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -229,6 +201,15 @@ func testPod(namespace, name string) *corev1.Pod {
 				{
 					Type:   corev1.PodReady,
 					Status: corev1.ConditionTrue,
+				},
+			},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+						},
+					},
 				},
 			},
 		},
