@@ -186,7 +186,7 @@ func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
-	opts.ClientCreator.(*client.FakeClientCreator).PrependStokReactor("create", "runs", createPodAction)
+	opts.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
 }
 
 func testPod(namespace, name string) *corev1.Pod {
