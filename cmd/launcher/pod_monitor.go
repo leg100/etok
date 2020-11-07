@@ -14,8 +14,9 @@ import (
 
 // The podMonitor object has various handlers for monitoring a run's pod
 type podMonitor struct {
-	run    *v1alpha1.Run
-	client kubernetes.Interface
+	run       *v1alpha1.Run
+	client    kubernetes.Interface
+	attaching bool
 }
 
 func (pm *podMonitor) monitor(ctx context.Context, pod chan<- *corev1.Pod, errch chan<- error) {
@@ -45,11 +46,21 @@ func (pm *podMonitor) podRunningAndReadyHandler(event watch.Event) (bool, error)
 		return false, fmt.Errorf("pod resource deleted")
 	}
 
+	// If attaching to pod, then it needs to be running; otherwise completed is ok (because its logs can
+	// still be obtained).
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded:
-		return false, fmt.Errorf("pod prematurely succeeded")
+		if pm.attaching {
+			return false, fmt.Errorf("pod prematurely succeeded")
+		} else {
+			return true, nil
+		}
 	case corev1.PodFailed:
-		return false, fmt.Errorf(pod.Status.ContainerStatuses[0].State.Terminated.Message)
+		if pm.attaching {
+			return false, fmt.Errorf(pod.Status.ContainerStatuses[0].State.Terminated.Message)
+		} else {
+			return true, nil
+		}
 	case corev1.PodRunning:
 		if pod.Status.Conditions == nil {
 			return false, nil

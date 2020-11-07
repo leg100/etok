@@ -115,7 +115,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	}
 
 	// Monitor resources, wait until pod is running and ready
-	pod, err := o.monitor(ctx, run)
+	pod, err := o.monitor(ctx, run, isTTY)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	}
 }
 
-func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run) (*corev1.Pod, error) {
+func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run, isTTY bool) (*corev1.Pod, error) {
 	var workspaceExists bool
 	var pod *corev1.Pod
 	errch := make(chan error)
@@ -171,11 +171,12 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run) (*core
 		client: o.StokClient,
 	}).monitor(ctx, errch)
 
-	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
-	// error on fatal pod errors
+	// Non-blocking; watch pod; if tty then wait til pod is running (and then attach); if
+	// no tty then wait til pod is running or completed (and then stream logs from)
 	(&podMonitor{
-		run:    run,
-		client: o.KubeClient,
+		run:       run,
+		client:    o.KubeClient,
+		attaching: isTTY,
 	}).monitor(ctx, podch, errch)
 
 	// Wait for pod to be ready and workspace confirmed to exist

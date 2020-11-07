@@ -26,6 +26,7 @@ func TestLauncher(t *testing.T) {
 		env        env.StokEnv
 		err        bool
 		objs       []runtime.Object
+		podPhase   corev1.PodPhase
 		setOpts    func(*cmdutil.Options)
 		assertions func(*LauncherOptions)
 	}{
@@ -129,6 +130,22 @@ func TestLauncher(t *testing.T) {
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
 			},
 		},
+		{
+			name:     "pod completed with no tty",
+			objs:     []runtime.Object{testWorkspace("default", "default")},
+			podPhase: corev1.PodSucceeded,
+		},
+		{
+			name: "pod completed with tty",
+			objs: []runtime.Object{testWorkspace("default", "default")},
+			setOpts: func(opts *cmdutil.Options) {
+				var err error
+				_, opts.In, err = pty.Open()
+				require.NoError(t, err)
+			},
+			podPhase: corev1.PodSucceeded,
+			err:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -158,7 +175,7 @@ func TestLauncher(t *testing.T) {
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				mockControllers(opts, cmdOpts)
+				mockControllers(opts, cmdOpts, tt.podPhase)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
@@ -176,11 +193,11 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
+func mockControllers(opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
-		pod := testPod(run.GetNamespace(), run.GetName())
+		pod := testPod(run.GetNamespace(), run.GetName(), phase)
 		_, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
 
 		return false, action.(testcore.CreateAction).GetObject(), nil
@@ -189,14 +206,17 @@ func mockControllers(opts *cmdutil.Options, o *LauncherOptions) {
 	opts.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
 }
 
-func testPod(namespace, name string) *corev1.Pod {
+func testPod(namespace, name string, phase corev1.PodPhase) *corev1.Pod {
+	if phase == "" {
+		phase = corev1.PodRunning
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
+			Phase: phase,
 			Conditions: []corev1.PodCondition{
 				{
 					Type:   corev1.PodReady,
