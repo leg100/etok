@@ -4,7 +4,7 @@ ENV STOK_BIN=/usr/local/bin/stok \
     USER_UID=1001 \
     USER_NAME=stok
 
-ENV TERRAFORM_VERSION=0.12.27
+ENV TERRAFORM_VERSION=0.13.5
 
 # install terraform
 RUN apk add curl && \
