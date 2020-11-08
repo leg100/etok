@@ -162,7 +162,7 @@ func (o *NewOptions) run(ctx context.Context) error {
 			return fmt.Errorf("getting pod %s/%s: %w", o.Namespace, ws.PodName(), err)
 		}
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString+"\n", cmdutil.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName); err != nil {
 			return err
 		}
 	} else {
