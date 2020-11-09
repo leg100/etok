@@ -11,7 +11,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	operatorstatus "github.com/operator-framework/operator-sdk/pkg/status"
 )
 
 type podOpts struct {
@@ -43,12 +42,6 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, opts *podOpts) (reconcile.
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
 		opts.run.SetPhase(v1alpha1.RunPhaseCompleted)
-		opts.run.GetConditions().SetCondition(operatorstatus.Condition{
-			Type:    v1alpha1.ConditionCompleted,
-			Status:  corev1.ConditionTrue,
-			Reason:  v1alpha1.ReasonPodCompleted,
-			Message: fmt.Sprintf("Pod completed with phase %s", pod.Status.Phase),
-		})
 	case corev1.PodRunning:
 		opts.run.SetPhase(v1alpha1.RunPhaseRunning)
 	case corev1.PodPending:

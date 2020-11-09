@@ -148,7 +148,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		// Filter out completed commands
-		if run.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
+		if run.GetPhase() == v1alpha1.RunPhaseCompleted {
 			return nil
 		}
 

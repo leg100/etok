@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/creasty/defaults"
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -92,9 +91,8 @@ func (ws *Workspace) SetDebug(debug bool) { ws.Spec.Debug = debug }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	Queue      []string          `json:"queue"`
-	Conditions status.Conditions `json:"conditions,omitempty"`
-	Phase      WorkspacePhase    `json:"phase"`
+	Queue []string       `json:"queue"`
+	Phase WorkspacePhase `json:"phase"`
 }
 
 type WorkspacePhase string

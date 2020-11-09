@@ -51,7 +51,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Run completed, nothing more to be done
-	if run.GetConditions().IsTrueFor(v1alpha1.ConditionCompleted) {
+	if run.GetPhase() == v1alpha1.RunPhaseCompleted {
 		return ctrl.Result{}, nil
 	}
 

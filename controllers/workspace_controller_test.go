@@ -6,7 +6,6 @@ import (
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -58,12 +57,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			Workspace: "workspace-1",
 		},
 		RunStatus: v1alpha1.RunStatus{
-			Conditions: status.Conditions{
-				status.Condition{
-					Type:   v1alpha1.ConditionCompleted,
-					Status: corev1.ConditionTrue,
-				},
-			},
+			Phase: v1alpha1.RunPhaseCompleted,
 		},
 	}
 

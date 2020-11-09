@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"github.com/operator-framework/operator-sdk/pkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -78,14 +77,10 @@ func (c *RunSpec) SetWorkspace(ws string) { c.Workspace = ws }
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {
-	Conditions status.Conditions `json:"conditions,omitempty"`
-	Phase      RunPhase          `json:"phase"`
+	Phase RunPhase `json:"phase"`
 }
 
 type RunPhase string
-
-func (c *RunStatus) GetConditions() *status.Conditions          { return &c.Conditions }
-func (c *RunStatus) SetConditions(conditions status.Conditions) { c.Conditions = conditions }
 
 // Get/Set Phase functions
 func (c *RunStatus) GetPhase() RunPhase      { return c.Phase }
@@ -97,9 +92,6 @@ const (
 	RunPhaseProvisioning RunPhase = "provisioning"
 	RunPhaseRunning      RunPhase = "running"
 	RunPhaseCompleted    RunPhase = "completed"
-
-	ConditionCompleted status.ConditionType   = "Completed"
-	ReasonPodCompleted status.ConditionReason = "PodCompleted"
 
 	RunDefaultConfigMapKey = "config.tar.gz"
 )
