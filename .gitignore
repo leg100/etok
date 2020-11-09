@@ -3,8 +3,6 @@ example/
 # docker push artefacts
 /push.out
 /stok.digest
-# hacks
-hack/
 # terraform
 .terraform
 # direnv
