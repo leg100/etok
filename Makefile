@@ -30,76 +30,79 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-.PHONY: local kind-deploy kind-context deploy-crds delete \
-	create-namespace create-secret \
-	e2e e2e-run \
-	clean delete-command-resources delete-crds \
-	unit \
-	install install-latest-release \
-	build cli-test cli-install \
-	operator-build image push \
-	manifests \
-	generate \
-	controller-gen \
-	fmt vet \
-	kustomize
-
 # Even though operator runs outside the cluster, it still creates pods. So an image still needs to
 # be built and pushed/loaded first.
+.PHONY: local
 local: image push
 	STOK_IMAGE=$(IMG) $(BUILD_BIN) operator --context $(KUBECTX)
 
 # Same as above - image still needs to be built and pushed/loaded
+.PHONY: deploy-operator
 deploy-operator: image push
 	$(BUILD_BIN) generate operator --image $(IMG) | $(KUBECTL) apply -f -
 	$(KUBECTL) rollout status --timeout=10s deployment/stok-operator
 
+.PHONY: delete-operator
 delete-operator: build
 	$(BUILD_BIN) generate operator | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
+.PHONY: deploy-crds
 deploy-crds: build manifests
 	$(BUILD_BIN) generate crds --local | $(KUBECTL) create -f -
 
+.PHONY: delete-crds
 delete-crds: build
 	$(BUILD_BIN) generate crds --local | $(KUBECTL) delete -f - --ignore-not-found
 
+.PHONY: create-namespace
 create-namespace:
 	$(KUBECTL) get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || $(KUBECTL) create ns $(NAMESPACE)
 
+.PHONY: create-secret
 create-secret:
 	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret stok || \
 		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
 			--from-file=google-credentials.json=$(GOOGLE_APPLICATION_CREDENTIALS)
 
+.PHONY: delete-secret
 delete-secret:
 	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret stok --ignore-not-found=true
 
+.PHONY: e2e
 e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
 
+.PHONY: e2e-clean
 e2e-clean: delete-custom-resources delete-operator delete-crds delete-secret
 
+.PHONY: e2e-run
 e2e-run:
 	go test -v ./test/e2e -context $(KUBECTX)
 
 # delete all stok custom resources
+.PHONY: delete-custom-resources
 delete-custom-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all $$($(KUBECTL) api-resources \
 		--api-group=stok.goalspike.com -o name \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
 # delete all stok custom resources except workspace
+.PHONY: delete-run-resources
 delete-run-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.stok.goalspike.com
 
+.PHONY: unit
 unit:
 	go test ./ ./cmd/... ./controllers/... ./pkg/... ./util/...
 
+.PHONY: build
 build:
 	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
 
+.PHONY: install
 install:
 	go install -ldflags $(LD_FLAGS) github.com/leg100/stok
 
+.PHONY: install-latest-release
 install-latest-release:
 	curl -s https://api.github.com/repos/leg100/stok/releases/latest \
 		| jq -r '.assets[] | select(.name | test(".*_linux_amd64$$")) | .browser_download_url' \
@@ -107,9 +110,11 @@ install-latest-release:
 	chmod +x /tmp/stok
 	mv /tmp/stok ~/go/bin/
 
+.PHONY: image
 image: build
 	docker build -f build/Dockerfile -t $(IMG) .
 
+.PHONY: push
 push:
 ifeq ($(ENV),gke)
 	docker push $(IMG)
@@ -120,6 +125,7 @@ endif
 # Generate manifests e.g. CRD, RBAC etc.
 # add app=stok label to each crd
 # combine crd yamls into one
+.PHONY: manifests
 manifests: controller-gen
 	@{ \
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
@@ -131,19 +137,23 @@ manifests: controller-gen
 	}
 
 # Run go fmt against code
+.PHONY: fmt
 fmt:
 	go fmt ./...
 
 # Run go vet against code
+.PHONY: vet
 vet:
 	go vet ./...
 
 # Generate code (deep-copy funcs)
+.PHONY: generate
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # find or download controller-gen
 # download controller-gen if necessary
+.PHONY: local
 controller-gen:
 ifeq (, $(shell which controller-gen))
 	@{ \
@@ -159,6 +169,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
+.PHONY: generate-clientset
 generate-clientset: client-gen
 	@{ \
 	set -e ;\
@@ -175,6 +186,7 @@ generate-clientset: client-gen
 
 # find or download client-gen
 # download client-gen if necessary
+.PHONY: client-gen
 client-gen:
 ifeq (, $(shell which client-gen))
 	@{ \
@@ -190,6 +202,7 @@ else
 CLIENT_GEN=$(shell which client-gen)
 endif
 
+.PHONY: kustomize
 kustomize:
 ifeq (, $(shell which kustomize))
 	@{ \
