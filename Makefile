@@ -81,7 +81,7 @@ e2e-run:
 # delete all stok custom resources
 .PHONY: delete-custom-resources
 delete-custom-resources:
-	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all $$($(KUBECTL) api-resources \
+	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all --wait $$($(KUBECTL) api-resources \
 		--api-group=stok.goalspike.com -o name \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
