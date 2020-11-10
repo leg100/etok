@@ -36,15 +36,14 @@ type RunList struct {
 // RunSpec defines the desired state of Run
 type RunSpec struct {
 	// +kubebuilder:validation:Enum={"apply","destroy","force-unlock","get","import","init","output","plan","refresh","sh","state list","state mv","state pull","state push","state rm","state show","taint","untaint","validate"}
-	Command       string   `json:"command"`
-	Args          []string `json:"args,omitempty"`
-	TimeoutClient string   `json:"timeoutClient"`
-	Debug         bool     `json:"debug,omitempty"`
-	ConfigMap     string   `json:"configMap"`
-	ConfigMapKey  string   `json:"configMapKey"`
-	Workspace     string   `json:"workspace"`
+	Command      string   `json:"command"`
+	Args         []string `json:"args,omitempty"`
+	Debug        bool     `json:"debug,omitempty"`
+	ConfigMap    string   `json:"configMap"`
+	ConfigMapKey string   `json:"configMapKey"`
+	Workspace    string   `json:"workspace"`
 
-	AttachSpec `json:",attach"`
+	AttachSpec `json:",inline"`
 }
 
 // Get/Set Command functions
@@ -54,10 +53,6 @@ func (c *RunSpec) SetCommand(cmd string) { c.Command = cmd }
 // Get/Set Args functions
 func (c *RunSpec) GetArgs() []string     { return c.Args }
 func (c *RunSpec) SetArgs(args []string) { c.Args = args }
-
-// Get/Set TimeoutClient functions
-func (c *RunSpec) GetTimeoutClient() string        { return c.TimeoutClient }
-func (c *RunSpec) SetTimeoutClient(timeout string) { c.TimeoutClient = timeout }
 
 // Get/Set Debug functions
 func (c *RunSpec) GetDebug() bool      { return c.Debug }

@@ -12,10 +12,9 @@ import (
 
 // TODO: move constants somewhere more appropriate
 const (
-	// MagicString is the string that the runner expects to receive prior to invoking its process.
-	// Only take affects if RequireMagicString is true.
-	MagicString = "magicstring"
-	// The name of the container on the runner pod that invokes the runner
+	// HandshakeString is the string that the runner expects to receive via stdin prior to running.
+	HandshakeString = "opensesame"
+	// The name of the container on the runner pod that runs the runner
 	ContainerName = "runner"
 )
 

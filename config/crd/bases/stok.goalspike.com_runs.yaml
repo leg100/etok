@@ -77,9 +77,13 @@ spec:
                 type: string
               debug:
                 type: boolean
-              requireMagicString:
+              handshake:
+                description: Toggle whether runner should wait for a handshake from
+                  client
                 type: boolean
-              timeoutClient:
+              handshakeTimeout:
+                default: 10s
+                description: How long to wait for handshake before timing out
                 type: string
               workspace:
                 type: string
@@ -87,7 +91,8 @@ spec:
             - command
             - configMap
             - configMapKey
-            - timeoutClient
+            - handshake
+            - handshakeTimeout
             - workspace
             type: object
           status:

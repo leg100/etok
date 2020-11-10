@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
@@ -17,18 +18,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	defaultTimeoutClient = 10 * time.Second
-)
-
 type RunnerOptions struct {
 	*cmdutil.Options
 
-	Path               string
-	Tarball            string
-	RequireMagicString bool
+	Path    string
+	Tarball string
 
-	TimeoutClient time.Duration
+	Handshake        bool
+	HandshakeTimeout time.Duration
 
 	args []string
 }
@@ -51,8 +48,8 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 	flags.AddPathFlag(cmd, &o.Path)
 
 	cmd.Flags().StringVar(&o.Tarball, "tarball", o.Tarball, "Tarball filename")
-	cmd.Flags().BoolVar(&o.RequireMagicString, "require-magic-string", false, "Await magic string on stdin")
-	cmd.Flags().DurationVar(&o.TimeoutClient, "timeout", defaultTimeoutClient, "Timeout for client to signal readiness")
+	cmd.Flags().BoolVar(&o.Handshake, "handshake", false, "Await handshake string on stdin")
+	cmd.Flags().DurationVar(&o.HandshakeTimeout, "timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	return cmd, o
 }
@@ -75,10 +72,10 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 		})
 	}
 
-	// Concurrently wait for client to send magic string
-	if o.RequireMagicString {
+	// Concurrently wait for client to handshake
+	if o.Handshake {
 		g.Go(func() error {
-			return o.withRawMode(gctx, o.receiveMagicString)
+			return o.withRawMode(gctx, o.handshake)
 		})
 	}
 
@@ -108,12 +105,14 @@ func (o *RunnerOptions) withRawMode(ctx context.Context, f func(context.Context)
 	return f(ctx)
 }
 
-// Receive magic string from client. If magic string is not received within
-// timeout, or anything other than magic string is received, then an error is
+// Receive handshake string from client. If handshake string is not received within
+// timeout, or anything other than handshake string is received, then an error is
 // returned.
-func (o *RunnerOptions) receiveMagicString(ctx context.Context) error {
-	buf := make([]byte, len(cmdutil.MagicString))
+func (o *RunnerOptions) handshake(ctx context.Context) error {
+	buf := make([]byte, len(cmdutil.HandshakeString))
 	errch := make(chan error)
+	// In raw mode both carriage return and newline characters are necessary
+	log.Debugf("[runner] awaiting handshake\r\n")
 
 	// FIXME: Occasionally read() blocks awaiting a newline, despite stdin being in raw mode. I
 	// suspect terminal.MakeRaw is only asynchronously taking affect, and the stdin is
@@ -126,9 +125,9 @@ func (o *RunnerOptions) receiveMagicString(ctx context.Context) error {
 			if read == len(buf) {
 				errch <- nil
 			} else if err == io.EOF {
-				errch <- fmt.Errorf("reached EOF while reading magic string")
+				errch <- fmt.Errorf("handshake: reached EOF")
 			} else if err != nil {
-				errch <- fmt.Errorf("encountered error reading magic string: %w", err)
+				errch <- fmt.Errorf("handshake: %w", err)
 			} else {
 				continue
 			}
@@ -137,17 +136,17 @@ func (o *RunnerOptions) receiveMagicString(ctx context.Context) error {
 	}()
 
 	select {
-	case <-time.After(o.TimeoutClient):
-		return fmt.Errorf("timed out waiting for magic string")
+	case <-time.After(o.HandshakeTimeout):
+		return fmt.Errorf("timed out waiting for handshake")
 	case err := <-errch:
 		if err != nil {
 			return err
 		}
-		if string(buf) != cmdutil.MagicString {
-			return fmt.Errorf("expected magic string '%s' but received: %s", cmdutil.MagicString, string(buf))
+		if string(buf) != cmdutil.HandshakeString {
+			return fmt.Errorf("handshake: expected '%s' but received: %s", cmdutil.HandshakeString, string(buf))
 		}
 	}
-	log.Debugf("[runner] magic string received\r\n")
+	log.Debugf("[runner] handshake completed\r\n")
 	return nil
 }
 

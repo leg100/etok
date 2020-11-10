@@ -18,10 +18,10 @@ import (
 type AttachFunc func(io.Writer, rest.Config, *corev1.Pod, *os.File, string, string) error
 
 // Attach appropriates the behaviour of 'kubectl attach', adding a workaround for
-// https://github.com/kubernetes/kubernetes/issues/27264. A 'magic string' is sent, to inform the
+// https://github.com/kubernetes/kubernetes/issues/27264. A 'handshake string' is sent, to inform the
 // runner on the pod that the client has attached and, only then, will the runner invoke the
 // process.
-func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, magicString, containerName string) error {
+func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handshake, containerName string) error {
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -33,9 +33,9 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, magicS
 
 	var oldState *terminal.State
 	go func() {
-		log.Info("Sending magic string")
+		log.Info("Handshaking")
 		// Blocks until read from stdinR
-		_, err := stdinW.Write([]byte(magicString))
+		_, err := stdinW.Write([]byte(handshake))
 		if err != nil {
 			panic(err)
 		}

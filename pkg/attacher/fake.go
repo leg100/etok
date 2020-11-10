@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func FakeAttach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, containerName, magicString string) error {
+func FakeAttach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, containerName, handshake string) error {
 	out.Write([]byte("fake attach"))
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"runtime"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -32,9 +31,6 @@ type ManagerOptions struct {
 
 	KubeContext string
 
-	Path        string
-	MagicString string
-	Tarball     string
 	// Docker image used for both the operator and the runner
 	Image string
 
@@ -42,8 +38,6 @@ type ManagerOptions struct {
 	MetricsAddress string
 	// Toggle operator leader election
 	EnableLeaderElection bool
-
-	TimeoutClient time.Duration
 
 	args []string
 
