@@ -12,7 +12,6 @@ import (
 	"github.com/leg100/stok/pkg/client"
 	stokerrors "github.com/leg100/stok/pkg/errors"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/monitors"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
@@ -150,8 +149,9 @@ func (o *NewOptions) run(ctx context.Context) error {
 	o.createdWorkspace = true
 	log.Infof("Created workspace %s\n", o.name())
 
-	// Monitor resources, wait until pod is running and ready
-	if err := o.monitor(ctx, ws, isTTY); err != nil {
+	// Monitor pod until it is running and ready
+	pod, err := o.monitor(ctx, ws, isTTY)
+	if err != nil {
 		return err
 	}
 
@@ -159,10 +159,6 @@ func (o *NewOptions) run(ctx context.Context) error {
 	exit := o.monitorExit(ctx)
 
 	if isTTY {
-		pod, err := o.PodsClient(o.Namespace).Get(ctx, ws.PodName(), metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("getting pod %s/%s: %w", o.Namespace, ws.PodName(), err)
-		}
 		log.Debug("Attaching to pod")
 		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName); err != nil {
 			return err
@@ -343,23 +339,53 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
 
-func (o *NewOptions) monitor(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) error {
-	errch := make(chan error)
-	ready := make(chan struct{})
+// Return true if pod is both running and ready
+func (o *NewOptions) monitor(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) (*corev1.Pod, error) {
+	// Current pod phase
+	var phase corev1.PodPhase
+	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.GetNamespace()}
 
-	// Non-blocking; watch run's pod, sends to ready when pod is running and ready to attach to, or
-	// error on fatal pod errors
-	monitors.NewWorkspacePodMonitor(o.KubeClient, ws, attaching).Monitor(ctx, errch, ready)
+	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(event watch.Event) (bool, error) {
+		pod := event.Object.(*corev1.Pod)
 
-	// Wait for pod to be ready
-	select {
-	case <-ready:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errch:
-		return err
-	}
+		// ListWatcher field selector filters out other pods but the fake client doesn't implement the
+		// field selector, so the following is necessary purely for testing purposes
+		if pod.GetName() != ws.PodName() {
+			return false, nil
+		}
+
+		if event.Type == watch.Deleted {
+			return false, fmt.Errorf("workspace pod resource deleted")
+		}
+
+		if pod.Status.Phase != phase {
+			log.Debugf("Pod phase shift: %s -> %s\n", pod.Status.Phase, phase)
+			phase = pod.Status.Phase
+		}
+
+		switch phase {
+		case corev1.PodRunning:
+			return false, fmt.Errorf("workspace pod unexpectedly running")
+		case corev1.PodSucceeded:
+			return false, fmt.Errorf("workspace pod unexpectedly succeeded")
+		case corev1.PodFailed:
+			return false, fmt.Errorf(pod.Status.InitContainerStatuses[0].State.Terminated.Message)
+		case corev1.PodPending:
+			if len(pod.Status.InitContainerStatuses) > 0 {
+				state := pod.Status.InitContainerStatuses[0].State
+				if state.Running != nil {
+					// Pod is both attachable and streamable
+					return true, nil
+				}
+				if state.Terminated != nil && !attaching {
+					// Pod is streamable (but not attachable)
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	})
+	return event.Object.(*corev1.Pod), err
 }
 
 // Wait for the pod to complete and propagate its error, it has one. The error implements
