@@ -6,6 +6,7 @@ import (
 
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
+	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
 )
@@ -98,10 +99,18 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	o.Options = opts
 	o.Command = c.command
 
+	// <namespace>/<workspace>
+	var namespacedWorkspace string
+
 	cmd := &cobra.Command{
 		Use:   fmt.Sprintf("%s [flags] -- [%s args]", c.name, c.name),
 		Short: c.short,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			o.Namespace, o.Workspace, err = env.ValidateAndParse(namespacedWorkspace)
+			if err != nil {
+				return err
+			}
+
 			if c.argsConverter != nil {
 				o.args = c.argsConverter(args)
 			} else {
@@ -124,7 +133,6 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	}
 
 	flags.AddPathFlag(cmd, &o.Path)
-	flags.AddNamespaceFlag(cmd, &o.Namespace)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 
 	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
@@ -132,7 +140,7 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	cmd.Flags().DurationVar(&o.TimeoutClient, "timeout-client", defaultTimeoutClient, "timeout for client to signal readiness")
 	cmd.Flags().DurationVar(&o.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
 	cmd.Flags().DurationVar(&o.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
-	cmd.Flags().StringVar(&o.Workspace, "workspace", defaultWorkspace, "Stok workspace")
+	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "Stok workspace")
 
 	return cmd
 }

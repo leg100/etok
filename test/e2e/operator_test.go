@@ -29,10 +29,10 @@ const (
 	wsNamespace = "default"
 
 	// Name of workspace to be created
-	wsName = "foo"
+	wsName = "default/foo"
 
 	// Name of second workspace to be created
-	wsName2 = "bar"
+	wsName2 = "default/bar"
 )
 
 var kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
@@ -78,7 +78,7 @@ func TestStok(t *testing.T) {
 			name:            "list workspaces",
 			args:            []string{"workspace", "list", "--path", "workspace", "--context", *kubectx},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s/%s\n\t%s/%s", wsNamespace, wsName2, wsNamespace, wsName)),
+			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s\n\t%s", wsName2, wsName)),
 			pty:             false,
 		},
 		{
@@ -92,7 +92,7 @@ func TestStok(t *testing.T) {
 			name:            "show current workspace",
 			args:            []string{"workspace", "show", "--path", "workspace"},
 			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(wsNamespace + "/" + wsName),
+			wantStdoutRegex: regexp.MustCompile(wsName),
 			pty:             false,
 		},
 		{

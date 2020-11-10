@@ -271,7 +271,7 @@ func TestRunReconciler(t *testing.T) {
 				runtime.Object(&workspaceQueueOfOne),
 			},
 			assertions: func(pod *corev1.Pod) {
-				want := "workspace-1"
+				want := "operator-test-workspace-1"
 				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "TF_WORKSPACE")
 				if !ok {
 					t.Errorf("Could not find env var with name TF_WORKSPACE")

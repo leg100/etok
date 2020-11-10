@@ -244,10 +244,10 @@ func (pb *PodBuilder) AddBackendConfig(workspacename string) *PodBuilder {
 	return pb
 }
 
-func (pb *PodBuilder) SetWorkspaceEnvVar(workspace string) *PodBuilder {
+func (pb *PodBuilder) SetWorkspaceEnvVar(namespace, workspace string) *PodBuilder {
 	pb.envs = append(pb.envs, corev1.EnvVar{
 		Name:  "TF_WORKSPACE",
-		Value: workspace,
+		Value: namespace + "-" + workspace,
 	})
 	return pb
 }

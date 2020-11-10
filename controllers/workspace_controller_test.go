@@ -396,7 +396,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t,
-					[]string{"--", "sh", "-c", "terraform init -backend-config=backend.ini; terraform workspace select workspace-1 || terraform workspace new workspace-1"},
+					[]string{"--", "sh", "-c", "terraform init -backend-config=backend.ini; terraform workspace select controller-test-workspace-1 || terraform workspace new controller-test-workspace-1"},
 					pod.Spec.InitContainers[0].Args)
 
 				assert.Equal(t, []corev1.EnvVar{

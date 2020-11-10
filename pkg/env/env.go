@@ -14,33 +14,24 @@ const (
 )
 
 var (
-	stokenvRegex = regexp.MustCompile("^([a-z0-9-]+/)?[a-z0-9-]+$")
+	stokenvRegex = regexp.MustCompile("^[a-z0-9-]+/[a-z0-9-]+$")
 )
 
 // A string identifying a namespaced workspace, according to the format $namespace/$workspace, with
 // helper functions to read and write the string to the file .terraform/environment
 type StokEnv string
 
-func ValidateAndParse(stokenv string) (workspace string, namespace string, err error) {
+func ValidateAndParse(stokenv string) (namespace string, workspace string, err error) {
 	if err = Validate(stokenv); err != nil {
 		return workspace, namespace, err
 	}
 	parts := strings.Split(stokenv, "/")
-	switch len(parts) {
-	case 2:
-		// <ws>/<ns> -> ns, ws
-		return parts[1], parts[0], nil
-	case 1:
-		// <ns> -> ws, ""
-		return parts[0], "", nil
-	default:
-		return "", "", fmt.Errorf("could not parse stok environment string: %s", stokenv)
-	}
+	return parts[0], parts[1], nil
 }
 
 func Validate(stokenv string) error {
 	if !stokenvRegex.MatchString(stokenv) {
-		return fmt.Errorf("stok env doesn't match regex %s: %s", stokenvRegex.String(), stokenv)
+		return fmt.Errorf("workspace must match pattern %s", stokenvRegex.String())
 	}
 	return nil
 }
@@ -91,4 +82,18 @@ func (env StokEnv) Write(path string) error {
 	}
 
 	return ioutil.WriteFile(envPath, []byte(string(env)), 0644)
+}
+
+func WriteEnvFile(path, content string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	envPath := filepath.Join(absPath, environmentFile)
+	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(envPath, []byte(content), 0644)
 }

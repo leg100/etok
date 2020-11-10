@@ -12,7 +12,8 @@ import (
 )
 
 func ListCmd(opts *cmdutil.Options) *cobra.Command {
-	var path, kubeContext, namespace string
+	var path, kubeContext string
+	var namespace = "default"
 	var workspace = "default"
 
 	cmd := &cobra.Command{
@@ -55,7 +56,6 @@ func ListCmd(opts *cmdutil.Options) *cobra.Command {
 	}
 
 	flags.AddPathFlag(cmd, &path)
-	flags.AddNamespaceFlag(cmd, &namespace)
 	flags.AddKubeContextFlag(cmd, &kubeContext)
 
 	return cmd

@@ -72,11 +72,14 @@ type NewOptions struct {
 func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	o := &NewOptions{Options: opts}
 	cmd := &cobra.Command{
-		Use:   "new <workspace>",
+		Use:   "new <namespace/workspace>",
 		Short: "Create a new stok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.Workspace = args[0]
+			o.Namespace, o.Workspace, err = env.ValidateAndParse(args[0])
+			if err != nil {
+				return err
+			}
 
 			o.Client, err = opts.Create(o.KubeContext)
 			if err != nil {
@@ -88,7 +91,6 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	}
 
 	flags.AddPathFlag(cmd, &o.Path)
-	flags.AddNamespaceFlag(cmd, &o.Namespace)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 
 	cmd.Flags().BoolVar(&o.DisableResourceCleanup, "no-cleanup", o.DisableResourceCleanup, "Do not delete kubernetes resources upon error")

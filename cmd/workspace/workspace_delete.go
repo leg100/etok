@@ -6,6 +6,7 @@ import (
 
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
+	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,8 +20,11 @@ func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
 		Use:   "delete <workspace>",
 		Short: "Deletes a stok workspace",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			ws := args[0]
+		RunE: func(cmd *cobra.Command, args []string) error {
+			namespace, ws, err := env.ValidateAndParse(args[0])
+			if err != nil {
+				return err
+			}
 
 			client, err := opts.Create(kubeContext)
 			if err != nil {

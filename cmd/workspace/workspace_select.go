@@ -13,15 +13,17 @@ func SelectCmd(opts *cmdutil.Options) *cobra.Command {
 	var path string
 
 	cmd := &cobra.Command{
-		Use:   "select <[namespace/]workspace>",
+		Use:   "select <namespace/workspace>",
 		Short: "Select a stok workspace",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			stokenv := env.WithOptionalNamespace(args[0])
-			if err := stokenv.Write(path); err != nil {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := env.Validate(args[0]); err != nil {
 				return err
 			}
-			fmt.Fprintf(opts.Out, "Current workspace now: %s\n", stokenv)
+			if err := env.WriteEnvFile(path, args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintf(opts.Out, "Current workspace now: %s\n", args[0])
 			return nil
 		},
 	}

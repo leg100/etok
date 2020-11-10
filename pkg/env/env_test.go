@@ -20,7 +20,5 @@ func TestStokEnv(t *testing.T) {
 
 func TestStokEnvValidate(t *testing.T) {
 	assert.NoError(t, Validate("default/foo"))
-	assert.NoError(t, Validate("foo"))
-	assert.Error(t, Validate("foo$"))
 	assert.Error(t, Validate("defaul/foo/"))
 }

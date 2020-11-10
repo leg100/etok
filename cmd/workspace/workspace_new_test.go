@@ -37,7 +37,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "create workspace",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				// Confirm workspace resource has been created
@@ -53,7 +53,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "create default secret and service account",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
@@ -64,7 +64,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "create custom secret and service account",
-			args: []string{"foo", "--service-account", "foo", "--secret", "bar"},
+			args: []string{"default/foo", "--service-account", "foo", "--secret", "bar"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.ServiceAccountsClient(o.Namespace).Get(context.Background(), "foo", metav1.GetOptions{})
@@ -75,7 +75,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not create secret",
-			args: []string{"foo", "--no-create-secret"},
+			args: []string{"default/foo", "--no-create-secret"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
@@ -84,7 +84,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not create service account",
-			args: []string{"foo", "--no-create-service-account"},
+			args: []string{"default/foo", "--no-create-service-account"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
@@ -93,7 +93,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "non-default namespace",
-			args: []string{"foo", "--namespace", "bar"},
+			args: []string{"bar/foo"},
 			objs: []runtime.Object{testPod("foo", namespace("bar"))},
 			assertions: func(o *NewOptions) {
 				assert.Equal(t, "bar", o.Namespace)
@@ -101,7 +101,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "cleanup resources upon error",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo")},
 			err:  true,
 			setOpts: func(o *cmdutil.Options) {
@@ -122,7 +122,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not cleanup resources upon error",
-			args: []string{"foo", "--no-cleanup"},
+			args: []string{"default/foo", "--no-cleanup"},
 			objs: []runtime.Object{testPod("foo")},
 			err:  true,
 			setOpts: func(o *cmdutil.Options) {
@@ -143,7 +143,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with existing custom secret and service account",
-			args: []string{"foo", "--secret", "foo", "--service-account", "bar"},
+			args: []string{"default/foo", "--secret", "foo", "--service-account", "bar"},
 			objs: []runtime.Object{
 				testPod("foo"),
 				&corev1.Secret{
@@ -162,7 +162,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with cache settings",
-			args: []string{"foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
+			args: []string{"default/foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				assert.Equal(t, "999Gi", o.WorkspaceSpec.Cache.Size)
@@ -171,7 +171,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with kube context flag",
-			args: []string{"foo", "--context", "oz-cluster"},
+			args: []string{"default/foo", "--context", "oz-cluster"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				assert.Equal(t, "oz-cluster", o.KubeContext)
@@ -179,7 +179,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "debug flag",
-			args: []string{"foo", "--debug"},
+			args: []string{"default/foo", "--debug"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
@@ -189,7 +189,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "log stream output",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo")},
 			assertions: func(o *NewOptions) {
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
@@ -197,7 +197,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "attach",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo")},
 			setOpts: func(o *cmdutil.Options) {
 				// Create pseudoterminal slave to trigger tty detection
@@ -211,7 +211,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "disable tty",
-			args: []string{"foo", "--no-tty"},
+			args: []string{"default/foo", "--no-tty"},
 			objs: []runtime.Object{testPod("foo")},
 			setOpts: func(o *cmdutil.Options) {
 				// Ensure tty is overridden
@@ -226,7 +226,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "non-zero exit code",
-			args: []string{"foo"},
+			args: []string{"default/foo"},
 			objs: []runtime.Object{testPod("foo", exitCode(5))},
 			err:  true,
 		},

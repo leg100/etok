@@ -32,7 +32,7 @@ resource "random_id" "test" {
 Create a workspace:
 
 ```bash
-stok workspace new default
+stok workspace new default/default
 ```
 
 Run terraform commands:

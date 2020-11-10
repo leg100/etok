@@ -343,9 +343,9 @@ func (r *WorkspaceReconciler) newWorkspaceCommand(cr *v1alpha1.Workspace) []stri
 	b := new(strings.Builder)
 	b.WriteString("terraform init -backend-config=" + v1alpha1.BackendConfigFilename)
 	b.WriteString("; ")
-	b.WriteString("terraform workspace select " + cr.GetName())
+	b.WriteString("terraform workspace select " + cr.GetNamespace() + "-" + cr.GetName())
 	b.WriteString(" || ")
-	b.WriteString("terraform workspace new " + cr.GetName())
+	b.WriteString("terraform workspace new " + cr.GetNamespace() + "-" + cr.GetName())
 	return []string{"sh", "-c", b.String()}
 }
 

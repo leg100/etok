@@ -29,7 +29,7 @@ import (
 
 const (
 	defaultTimeoutClient = 10 * time.Second
-	defaultWorkspace     = "default"
+	defaultWorkspace     = "default/default"
 )
 
 type LauncherOptions struct {
@@ -75,11 +75,8 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 			return err
 		}
 	} else {
-		// Override only if user has not set via flags
-		if !isFlagPassed(cmd.Flags(), "namespace") {
-			o.Namespace = stokenv.Namespace()
-		}
 		if !isFlagPassed(cmd.Flags(), "workspace") {
+			o.Namespace = stokenv.Namespace()
 			o.Workspace = stokenv.Workspace()
 		}
 	}

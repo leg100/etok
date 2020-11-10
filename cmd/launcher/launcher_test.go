@@ -49,8 +49,8 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
-			name: "specific namespace and workspace flags",
-			args: []string{"--namespace", "foo", "--workspace", "bar"},
+			name: "workspace flag",
+			args: []string{"--workspace", "foo/bar"},
 			objs: []runtime.Object{testWorkspace("foo", "bar")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {

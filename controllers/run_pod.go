@@ -74,7 +74,7 @@ func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		AddBackendConfig(opts.workspaceName).
 		AddCredentials(opts.secretName).
 		HasServiceAccount(opts.serviceAccountName).
-		SetWorkspaceEnvVar(opts.workspaceName).
+		SetWorkspaceEnvVar(opts.run.GetNamespace(), opts.workspaceName).
 		MountTarball(opts.configMapName, opts.configMapKey).
 		RequireMagicString(opts.run.RequireMagicString, opts.run.GetTimeoutClient()).
 		EnableDebug(opts.run.GetDebug()).
