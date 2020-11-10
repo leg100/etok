@@ -103,7 +103,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Backend.Type, "backend-type", defaultBackendType, "Set backend type")
 	cmd.Flags().StringToStringVar(&o.WorkspaceSpec.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "timeout-client", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
+	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
