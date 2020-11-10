@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	defaultTimeoutClient       = "10s"
 	defaultTimeoutWorkspace    = 10 * time.Second
 	defaultTimeoutWorkspacePod = 60 * time.Second
 	defaultBackendType         = "local"
@@ -56,6 +55,8 @@ type NewOptions struct {
 	TimeoutWorkspace time.Duration
 	// Timeout for workspace pod to be running and ready
 	TimeoutWorkspacePod time.Duration
+	// Timeout for wait for handshake
+	HandshakeTimeout time.Duration
 	// Disable default behaviour of deleting resources upon error
 	DisableResourceCleanup bool
 
@@ -102,7 +103,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Backend.Type, "backend-type", defaultBackendType, "Set backend type")
 	cmd.Flags().StringToStringVar(&o.WorkspaceSpec.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.TimeoutClient, "timeout-client", defaultTimeoutClient, "timeout for client to signal readiness")
+	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
@@ -160,7 +161,7 @@ func (o *NewOptions) run(ctx context.Context) error {
 
 	if isTTY {
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, cmdutil.ContainerName); err != nil {
 			return err
 		}
 	} else {
@@ -229,7 +230,8 @@ func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 	ws.SetDebug(o.Debug)
 
 	if term.IsTerminal(o.In) {
-		ws.Spec.AttachSpec.RequireMagicString = true
+		ws.Spec.AttachSpec.Handshake = true
+		ws.Spec.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
 	}
 
 	return o.WorkspacesClient(o.Namespace).Create(ctx, ws, metav1.CreateOptions{})

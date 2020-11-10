@@ -91,9 +91,9 @@ func (pb *PodBuilder) SetLabels(name, workspace, command, component string) *Pod
 	return pb
 }
 
-func (pb *PodBuilder) RequireMagicString(required bool, timeout string) *PodBuilder {
-	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_REQUIRE_MAGIC_STRING", Value: strconv.FormatBool(required)})
-	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_TIMEOUT", Value: timeout})
+func (pb *PodBuilder) Handshake(required bool, timeout string) *PodBuilder {
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_HANDSHAKE", Value: strconv.FormatBool(required)})
+	pb.envs = append(pb.envs, corev1.EnvVar{Name: "STOK_HANDSHAKE_TIMEOUT", Value: timeout})
 
 	return pb
 }

@@ -76,7 +76,7 @@ func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		HasServiceAccount(opts.serviceAccountName).
 		SetWorkspaceEnvVar(opts.run.GetNamespace(), opts.workspaceName).
 		MountTarball(opts.configMapName, opts.configMapKey).
-		RequireMagicString(opts.run.RequireMagicString, opts.run.GetTimeoutClient()).
+		Handshake(opts.run.Handshake, opts.run.HandshakeTimeout).
 		EnableDebug(opts.run.GetDebug()).
 		Build(false)
 

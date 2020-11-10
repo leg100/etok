@@ -358,7 +358,7 @@ func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 		AddBackendConfig(cr.GetName()).
 		AddCredentials(cr.Spec.SecretName).
 		HasServiceAccount(cr.Spec.ServiceAccountName).
-		RequireMagicString(cr.Spec.RequireMagicString, cr.Spec.TimeoutClient).
+		Handshake(cr.Spec.Handshake, cr.Spec.HandshakeTimeout).
 		EnableDebug(cr.GetDebug()).
 		Build(true)
 }

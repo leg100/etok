@@ -42,7 +42,6 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	})
 	run.SetWorkspace(o.Workspace)
 
-	run.SetTimeoutClient(o.TimeoutClient.String())
 	run.SetCommand(o.Command)
 	run.SetArgs(o.args)
 	run.SetDebug(o.Debug)
@@ -50,7 +49,8 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
 
 	if isTTY {
-		run.AttachSpec.RequireMagicString = true
+		run.AttachSpec.Handshake = true
+		run.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
 	}
 
 	run, err := o.RunsClient(o.Namespace).Create(ctx, run, metav1.CreateOptions{})

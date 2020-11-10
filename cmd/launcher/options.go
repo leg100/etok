@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	defaultTimeoutClient = 10 * time.Second
-	defaultWorkspace     = "default/default"
+	defaultWorkspace = "default/default"
 )
 
 type LauncherOptions struct {
@@ -53,8 +52,8 @@ type LauncherOptions struct {
 	DisableCreateServiceAccount bool
 	// Create a secret if it does not exist
 	DisableCreateSecret bool
-	// Timeout for runner to wait for magic string
-	TimeoutClient time.Duration
+	// Timeout for wait for handshake
+	HandshakeTimeout time.Duration
 	// Timeout for run pod to be running and ready
 	TimeoutPod time.Duration
 	// timeout waiting in workspace queue
@@ -122,7 +121,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 
 	// Connect to pod
 	if isTTY {
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.MagicString, cmdutil.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, cmdutil.ContainerName); err != nil {
 			return err
 		}
 	} else {

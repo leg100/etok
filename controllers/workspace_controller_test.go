@@ -389,9 +389,9 @@ func TestReconcileWorkspacePod(t *testing.T) {
 				},
 				Spec: v1alpha1.WorkspaceSpec{
 					AttachSpec: v1alpha1.AttachSpec{
-						RequireMagicString: true,
+						Handshake:        true,
+						HandshakeTimeout: "10s",
 					},
-					TimeoutClient: "10s",
 				},
 			},
 			assertions: func(pod *corev1.Pod) {
@@ -401,11 +401,11 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 				assert.Equal(t, []corev1.EnvVar{
 					{
-						Name:  "STOK_REQUIRE_MAGIC_STRING",
+						Name:  "STOK_HANDSHAKE",
 						Value: "true",
 					},
 					{
-						Name:  "STOK_TIMEOUT",
+						Name:  "STOK_HANDSHAKE_TIMEOUT",
 						Value: "10s",
 					},
 				}, pod.Spec.InitContainers[0].Env)

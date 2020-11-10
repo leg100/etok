@@ -64,45 +64,43 @@ func TestRunner(t *testing.T) {
 			err:  true,
 		},
 		{
-			name: "magic string",
+			name: "handshake",
 			args: []string{"--debug", "--", "sh", "-c", "echo -n hallelujah"},
 			envs: map[string]string{
-				"STOK_REQUIRE_MAGIC_STRING": "true",
-				"STOK_DEBUG":                "true",
+				"STOK_HANDSHAKE": "true",
+				"STOK_DEBUG":     "true",
 			},
-			in:  bytes.NewBufferString("magicstring\n"),
+			in:  bytes.NewBufferString("opensesame\n"),
 			out: "hallelujah",
 		},
 		{
-			name: "bad magic string",
+			name: "bad handshake",
 			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
-				"STOK_REQUIRE_MAGIC_STRING": "true",
+				"STOK_HANDSHAKE": "true",
 			},
 			in:   bytes.NewBufferString("mag)J)Fring\n"),
 			code: 1,
 			err:  true,
 		},
 		{
-			name: "EOF while waiting for magic string",
+			name: "EOF while waiting for handshake",
 			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
-				"STOK_REQUIRE_MAGIC_STRING": "true",
+				"STOK_HANDSHAKE": "true",
 			},
 			in:   &eofReader{},
 			code: 1,
 			err:  true,
 		},
 		{
-			name: "time out waiting for magic string",
+			name: "time out waiting for handshake",
 			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
-				"STOK_REQUIRE_MAGIC_STRING": "true",
+				"STOK_HANDSHAKE":         "true",
+				"STOK_HANDSHAKE_TIMEOUT": "20ms",
 			},
-			in: &delayedReader{time.Millisecond * 100},
-			setOpts: func(o *RunnerOptions) {
-				o.TimeoutClient = time.Millisecond * 20
-			},
+			in:   &delayedReader{time.Millisecond * 100},
 			code: 1,
 			err:  true,
 		},
@@ -209,5 +207,5 @@ type delayedReader struct {
 
 func (e *delayedReader) Read(p []byte) (int, error) {
 	time.Sleep(e.delay)
-	return len("magicstring"), nil
+	return len("opensesame"), nil
 }

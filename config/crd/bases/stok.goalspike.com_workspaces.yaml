@@ -82,21 +82,24 @@ spec:
                 type: object
               debug:
                 type: boolean
-              inline:
-                properties:
-                  requireMagicString:
-                    type: boolean
-                type: object
+              handshake:
+                description: Toggle whether runner should wait for a handshake from
+                  client
+                type: boolean
+              handshakeTimeout:
+                default: 10s
+                description: How long to wait for handshake before timing out
+                type: string
               secretName:
+                default: stok
                 type: string
               serviceAccountName:
-                type: string
-              timeoutClient:
+                default: stok
                 type: string
             required:
             - backend
-            - inline
-            - timeoutClient
+            - handshake
+            - handshakeTimeout
             type: object
           status:
             description: WorkspaceStatus defines the observed state of Workspace
