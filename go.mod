@@ -8,6 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.3-0.20191028180845-3492b2aff503 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.1-0.20191028180845-3492b2aff503 // indirect
 	github.com/Sirupsen/logrus v0.0.0-00010101000000-000000000000 // indirect
+	github.com/bmatcuk/doublestar v1.3.3
 	github.com/creasty/defaults v1.5.1
 	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
@@ -18,6 +19,7 @@ require (
 	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
 	github.com/gophercloud/gophercloud v0.6.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
+	github.com/hashicorp/terraform-config-inspect v0.0.0-20201102131242-0c45ba392e51
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
