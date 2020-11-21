@@ -55,6 +55,10 @@ func (ws *Workspace) PodName() string {
 	return WorkspacePodName(ws.GetName())
 }
 
+func (ws *Workspace) PVCName() string {
+	return ws.GetName()
+}
+
 func WorkspacePodName(name string) string {
 	return "workspace-" + name
 }

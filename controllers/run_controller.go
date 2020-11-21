@@ -71,17 +71,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	switch {
 	case pos == 0:
 		// Currently scheduled to run; get or create pod
-		opts := podOpts{
-			run:                run,
-			workspaceName:      ws.GetName(),
-			serviceAccountName: ws.Spec.ServiceAccountName,
-			secretName:         ws.Spec.SecretName,
-			pvcName:            ws.GetName(),
-			configMapName:      run.GetConfigMap(),
-			configMapKey:       run.GetConfigMapKey(),
-			configMapPath:      run.GetConfigMapPath(),
-		}
-		return r.reconcilePod(req, &opts)
+		return r.reconcilePod(req, run, ws)
 	case pos > 0:
 		// Queued
 		run.SetPhase(v1alpha1.RunPhaseQueued)

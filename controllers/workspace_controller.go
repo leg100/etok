@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/runner"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
 	"github.com/leg100/stok/version"
@@ -338,29 +338,8 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 	return &pvc
 }
 
-func (r *WorkspaceReconciler) newWorkspaceCommand(cr *v1alpha1.Workspace) []string {
-	b := new(strings.Builder)
-	b.WriteString("terraform init -backend-config=" + v1alpha1.BackendConfigFilename)
-	b.WriteString("; ")
-	b.WriteString("terraform workspace select " + cr.GetNamespace() + "-" + cr.GetName())
-	b.WriteString(" || ")
-	b.WriteString("terraform workspace new " + cr.GetNamespace() + "-" + cr.GetName())
-	return []string{"sh", "-c", b.String()}
-}
-
 func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
-	return NewPodBuilder(cr.GetNamespace(), cr.PodName(), r.Image).
-		SetLabels(cr.GetName(), "", "", "workspace").
-		AddRunnerContainer(r.newWorkspaceCommand(cr)).
-		AddWorkspace().
-		WorkingDir("/workspace").
-		AddCache(cr.GetName()).
-		AddBackendConfig(cr.GetName(), "").
-		AddCredentials(cr.Spec.SecretName).
-		HasServiceAccount(cr.Spec.ServiceAccountName).
-		Handshake(cr.Spec.Handshake, cr.Spec.HandshakeTimeout).
-		EnableDebug(cr.GetDebug()).
-		Build(true)
+	return runner.WorkspacePod(cr, r.Image)
 }
 
 func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
