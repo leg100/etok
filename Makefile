@@ -72,13 +72,13 @@ delete-secret:
 e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
 
 .PHONY: e2e-clean
-e2e-clean: delete-custom-resources delete-operator delete-crds delete-secret
+e2e-clean: delete-workspaces delete-operator delete-crds delete-secret
 
 .PHONY: e2e-run
 e2e-run:
 	go test -v ./test/e2e -context $(KUBECTX)
 
-# delete all stok custom resources
+# delete all stok custom resources (via kubectl)
 .PHONY: delete-custom-resources
 delete-custom-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all --wait $$($(KUBECTL) api-resources \
@@ -89,6 +89,13 @@ delete-custom-resources:
 .PHONY: delete-run-resources
 delete-run-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.stok.goalspike.com
+
+# delete all stok workspaces
+.PHONY: delete-workspaces
+delete-workspaces: build
+	# Using stok bin rather than kubectl because stok bin will wait for workspaces' dependents
+	# to be deleted first before deleting the workspace itself.
+	$(BUILD_BIN) workspace list | awk '{ print $$NF }' | xargs -IWS $(BUILD_BIN) workspace delete WS
 
 .PHONY: unit
 unit:
