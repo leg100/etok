@@ -79,6 +79,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			pvcName:            ws.GetName(),
 			configMapName:      run.GetConfigMap(),
 			configMapKey:       run.GetConfigMapKey(),
+			configMapPath:      run.GetConfigMapPath(),
 		}
 		return r.reconcilePod(req, &opts)
 	case pos > 0:

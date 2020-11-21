@@ -2,7 +2,6 @@ package archive
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -11,44 +10,107 @@ import (
 	"strings"
 
 	"github.com/leg100/stok/pkg/log"
+	"github.com/leg100/stok/util/path"
 )
 
-// Meta provides detailed information about a slug.
-type Meta struct {
-	// The list of files contained in the slug.
-	Files []string
-
-	// Total size of the slug in bytes.
-	Size int64
+type archive struct {
+	// Absolute path to root module on client
+	root string
+	// Absolute paths to local modules on client, including root module
+	mods []string
+	// Common prefix shared by all modules
+	base string
+	// Maximum permitted size of compressed archive
+	maxSize int64
 }
 
-// PackPaths creates a gzipped tarball. The paths are expected to be relative to
+func NewArchive(root string, opts ...func(*archive)) (*archive, error) {
+	root, err := path.EnsureAbs(root)
+	if err != nil {
+		return nil, err
+	}
+	arc := &archive{
+		root: root,
+		mods: []string{root},
+		base: root,
+	}
+
+	for _, o := range opts {
+		o(arc)
+	}
+
+	return arc, nil
+}
+
+func MaxSize(size int64) func(*archive) {
+	return func(a *archive) {
+		a.maxSize = size
+	}
+}
+
+// Walk returns a list of local modules starting with the root module, including
+// those called from the root module, directly and indirectly.
+func (a *archive) Walk() error {
+	mods, err := walk(a.root)
+	if err != nil {
+		return err
+	}
+	// Walk returns relative paths, and we need absolute paths
+	for _, m := range mods {
+		abs, err := filepath.Abs(m)
+		if err != nil {
+			return err
+		}
+		a.mods = append(a.mods, abs)
+	}
+
+	// Now that we've walked all modules their common prefix can be determined
+	a.base, err = path.CommonPrefix(a.mods)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *archive) RootPath() (string, error) {
+	// Get relative path to root module from the base directory
+	rootPath, err := filepath.Rel(a.base, a.root)
+	if err != nil {
+		return "", err
+	}
+
+	return rootPath, nil
+}
+
+// Archive creates a compressed tarball containing not only the root module but
+// local module calls too, including transitive calls. Returns the contents of
+// the tarball and the relative path to the root module within the tarball.
+
+// Pack creates a gzipped tarball. The paths are expected to be relative to
 // to the base directory. The paths are walked recursively for files and
 // subdirectories, which are either added to the tarball, or ignored accordingly
 // to a ruleset. During creation if the size of the tarball exceeds maxSize an
 // error is returned.
-func PackPaths(base, root string, mods []string, maxSize int) ([]byte, error) {
-	// tar > gzip > buf
-	w := new(bytes.Buffer)
-	zw := gzip.NewWriter(w)
+func (a *archive) Pack(w io.Writer) (*Meta, error) {
+	// tar > gzip > max size watcher > buf
+	mw := NewMaxWriter(w, a.maxSize)
+	zw := gzip.NewWriter(mw)
 	tw := tar.NewWriter(zw)
 
-	// Load the ignore rule configuration, which will use defaults if no
-	// .terraformignore is configured
-	ignoreRules := parseIgnoreFile(root)
+	// Get rules from .terraformignore or default rules if not found
+	ignoreRules := ParseIgnoreFile(a.root)
 
 	// Track the metadata details as we go.
 	meta := &Meta{}
 
-	// Walk the root module's tree
-	err := filepath.Walk(root, packWalkFn(base, root, root, tw, meta, true, ignoreRules))
-	if err != nil {
-		return nil, err
-	}
+	// Remove nested modules (they're walked recursively so we want to avoid
+	// walking paths more than once)
+	unnested := path.RemoveNestedPaths(a.mods)
 
-	// Walk other module trees
-	for _, mod := range mods {
-		err := filepath.Walk(mod, packWalkFn(base, mod, mod, tw, meta, true, ignoreRules))
+	// Walk directory trees
+	for _, path := range unnested {
+		err := filepath.Walk(path, packWalkFn(a.base, path, path, tw, meta, true, ignoreRules))
 		if err != nil {
 			return nil, err
 		}
@@ -56,16 +118,18 @@ func PackPaths(base, root string, mods []string, maxSize int) ([]byte, error) {
 
 	// Flush tar writer
 	if err := tw.Close(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to close tar writer: %w", err)
 	}
 
 	// Flush gzip writer
 	if err := zw.Close(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
 
-	log.Debugf("archived %d files totalling %d bytes\n", meta.Files, w.Len())
-	return w.Bytes(), nil
+	// Record number of compressed bytes written
+	meta.CompressedSize = mw.tally
+
+	return meta, nil
 }
 
 func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignoreRules []rule) filepath.WalkFunc {
@@ -77,8 +141,9 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 		// Get the relative path from the current src directory.
 		subpath, err := filepath.Rel(src, path)
 		if err != nil {
-			return fmt.Errorf("Failed to get relative path for file %q: %v", path, err)
+			return fmt.Errorf("failed to get relative path for file %q: %w", path, err)
 		}
+
 		if subpath == "." {
 			return nil
 		}
@@ -98,7 +163,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 		// Get the relative path from the base directory.
 		subpath, err = filepath.Rel(base, strings.Replace(path, src, dst, 1))
 		if err != nil {
-			return fmt.Errorf("Failed to get relative path for file %q: %v", path, err)
+			return fmt.Errorf("failed to get relative path for file %q: %w", path, err)
 		}
 		if subpath == "." {
 			return nil
@@ -129,7 +194,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 		case fm&os.ModeSymlink != 0:
 			target, err := filepath.EvalSymlinks(path)
 			if err != nil {
-				return fmt.Errorf("Failed to get symbolic link destination for %q: %v", path, err)
+				return fmt.Errorf("failed to get symbolic link destination for %q: %w", path, err)
 			}
 
 			// If the target is within the current source, we
@@ -137,7 +202,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			if strings.Contains(target, src) {
 				link, err := filepath.Rel(filepath.Dir(path), target)
 				if err != nil {
-					return fmt.Errorf("Failed to get relative path for symlink destination %q: %v", target, err)
+					return fmt.Errorf("failed to get relative path for symlink destination %q: %w", target, err)
 				}
 
 				header.Typeflag = tar.TypeSymlink
@@ -157,7 +222,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			// Get the file info for the target.
 			info, err = os.Lstat(target)
 			if err != nil {
-				return fmt.Errorf("Failed to get file info from file %q: %v", target, err)
+				return fmt.Errorf("failed to get file info from file %q: %w", target, err)
 			}
 
 			// If the target is a directory we can recurse into the target
@@ -180,7 +245,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 
 		// Write the header first to the archive.
 		if err := tarW.WriteHeader(header); err != nil {
-			return fmt.Errorf("Failed writing archive header for file %q: %v", path, err)
+			return fmt.Errorf("failed writing archive header for file %q: %w", path, err)
 		}
 
 		// Account for the file in the list.
@@ -193,13 +258,13 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 
 		f, err := os.Open(path)
 		if err != nil {
-			return fmt.Errorf("Failed opening file %q for archiving: %v", path, err)
+			return fmt.Errorf("failed opening file %q for archiving: %w", path, err)
 		}
 		defer f.Close()
 
 		size, err := io.Copy(tarW, f)
 		if err != nil {
-			return fmt.Errorf("Failed copying file %q to archive: %v", path, err)
+			return fmt.Errorf("failed copying file %q to archive: %w", path, err)
 		}
 
 		// Add the size we copied to the body.
@@ -209,13 +274,23 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 	}
 }
 
-// Unpack is used to read and extract the contents of a slug to
-// the dst directory. Returns any errors.
+// Meta provides detailed information about a slug.
+type Meta struct {
+	// The list of files contained in the slug.
+	Files []string
+
+	// Total size of the slug in bytes.
+	Size int64
+
+	// Total size of the slug in bytes after compression.
+	CompressedSize int64
+}
+
 func Unpack(r io.Reader, dst string) error {
 	// Decompress as we read.
 	uncompressed, err := gzip.NewReader(r)
 	if err != nil {
-		return fmt.Errorf("Failed to uncompress slug: %v", err)
+		return fmt.Errorf("failed to uncompress slug: %w", err)
 	}
 
 	// Untar as we read.
@@ -228,7 +303,7 @@ func Unpack(r io.Reader, dst string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("Failed to untar slug: %v", err)
+			return fmt.Errorf("failed to untar archive: %w", err)
 		}
 
 		// Get rid of absolute paths.
@@ -238,16 +313,18 @@ func Unpack(r io.Reader, dst string) error {
 		}
 		path = filepath.Join(dst, path)
 
+		log.Debugf("extracting %s to %s\n", header.Name, path)
+
 		// Make the directories to the path.
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("Failed to create directory %q: %v", dir, err)
+			return fmt.Errorf("failed to create directory %q: %w", dir, err)
 		}
 
 		// If we have a symlink, just link it.
 		if header.Typeflag == tar.TypeSymlink {
 			if err := os.Symlink(header.Linkname, path); err != nil {
-				return fmt.Errorf("Failed creating symlink %q => %q: %v",
+				return fmt.Errorf("failed creating symlink %q => %q: %w",
 					path, header.Linkname, err)
 			}
 			continue
@@ -257,7 +334,7 @@ func Unpack(r io.Reader, dst string) error {
 		if header.Typeflag == tar.TypeDir {
 			continue
 		} else if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
-			return fmt.Errorf("Failed creating %q: unsupported type %c", path,
+			return fmt.Errorf("failed creating %q: unsupported type %c", path,
 				header.Typeflag)
 		}
 
@@ -273,7 +350,7 @@ func Unpack(r io.Reader, dst string) error {
 			}
 
 			if err != nil {
-				return fmt.Errorf("Failed creating file %q: %v", path, err)
+				return fmt.Errorf("failed creating file %q: %w", path, err)
 			}
 		}
 
@@ -281,14 +358,14 @@ func Unpack(r io.Reader, dst string) error {
 		_, err = io.Copy(fh, untar)
 		fh.Close()
 		if err != nil {
-			return fmt.Errorf("Failed to copy slug file %q: %v", path, err)
+			return fmt.Errorf("failed to copy slug file %q: %w", path, err)
 		}
 
 		// Restore the file mode. We have to do this after writing the file,
 		// since it is possible we have a read-only mode.
 		mode := header.FileInfo().Mode()
 		if err := os.Chmod(path, mode); err != nil {
-			return fmt.Errorf("Failed setting permissions on %q: %v", path, err)
+			return fmt.Errorf("failed setting permissions on %q: %w", path, err)
 		}
 	}
 	return nil
@@ -309,16 +386,4 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 	}
 
 	return false, false
-}
-
-// ConfigMap/etcd only supports data payload of up to 1MB, which limits the size of the config that
-// can be can be uploaded (after compression).
-// https://github.com/kubernetes/kubernetes/issues/19781
-const MaxConfigSize = 1024 * 1024
-
-func checkSize(size int) error {
-	if size > MaxConfigSize {
-		return fmt.Errorf("max config size exceeded: %d > %d", size, MaxConfigSize)
-	}
-	return nil
 }

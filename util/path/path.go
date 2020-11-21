@@ -33,40 +33,31 @@ func CommonPrefix(paths []string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		// Add trailing sep to path
+		v += string(os.PathSeparator)
 
 		// Find first non-common byte and truncate c
 		if len(v) < len(c) {
-			for i := 0; i < len(c); i++ {
-				if v[i] != c[i] {
-					c = c[:i]
-					break
-				}
-			}
+			c = c[:len(v)]
 		}
-
-		// Remove trailing non-separator characters
-		for i := len(c) - 1; i >= 0; i-- {
-			if c[i] == os.PathSeparator {
+		for i := 0; i < len(c); i++ {
+			if v[i] != c[i] {
 				c = c[:i]
 				break
 			}
 		}
 	}
 
+	// Remove trailing non-separator characters and the separator
+	for i := len(c) - 1; i >= 0; i-- {
+		if c[i] == os.PathSeparator {
+			c = c[:i]
+			break
+		}
+	}
+
 	return c, nil
 }
-
-// MakeRelativeTo makes all paths relative to base
-// func MakeRelativeTo(base string, paths []string) ([]string, error) {
-// 	for _, p := range paths {
-// 		var err error
-// 		p, err = filepath.Rel
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return paths, nil
-// }
 
 // EnsureAllAbs ensures all paths are absolute paths
 func EnsureAllAbs(paths []string) (updated []string, err error) {
@@ -86,6 +77,23 @@ func EnsureAbs(path string) (string, error) {
 		return filepath.Abs(path)
 	}
 	return path, nil
+}
+
+// RelToWorkingDir turns all absolute paths into relative paths relative to the
+// current working directory.
+func RelToWorkingDir(paths []string) (updated []string, err error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range paths {
+		rel, err := filepath.Rel(wd, p)
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, rel)
+	}
+	return updated, nil
 }
 
 // Remove paths which are nested within another path

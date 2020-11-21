@@ -36,12 +36,13 @@ type RunList struct {
 // RunSpec defines the desired state of Run
 type RunSpec struct {
 	// +kubebuilder:validation:Enum={"apply","destroy","force-unlock","get","import","init","output","plan","refresh","sh","state list","state mv","state pull","state push","state rm","state show","taint","untaint","validate"}
-	Command      string   `json:"command"`
-	Args         []string `json:"args,omitempty"`
-	Debug        bool     `json:"debug,omitempty"`
-	ConfigMap    string   `json:"configMap"`
-	ConfigMapKey string   `json:"configMapKey"`
-	Workspace    string   `json:"workspace"`
+	Command       string   `json:"command"`
+	Args          []string `json:"args,omitempty"`
+	Debug         bool     `json:"debug,omitempty"`
+	ConfigMap     string   `json:"configMap"`
+	ConfigMapKey  string   `json:"configMapKey"`
+	ConfigMapPath string   `json:"configMapPath"`
+	Workspace     string   `json:"workspace"`
 
 	AttachSpec `json:",inline"`
 }
@@ -65,6 +66,10 @@ func (c *RunSpec) SetConfigMap(name string) { c.ConfigMap = name }
 // Get/Set ConfigMapKey functions
 func (c *RunSpec) GetConfigMapKey() string    { return c.ConfigMapKey }
 func (c *RunSpec) SetConfigMapKey(key string) { c.ConfigMapKey = key }
+
+// Get/Set ConfigMapPath functions
+func (c *RunSpec) GetConfigMapPath() string     { return c.ConfigMapPath }
+func (c *RunSpec) SetConfigMapPath(path string) { c.ConfigMapPath = path }
 
 // Get/Set Workspace functions
 func (c *RunSpec) GetWorkspace() string   { return c.Workspace }

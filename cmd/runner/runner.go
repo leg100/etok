@@ -23,6 +23,7 @@ type RunnerOptions struct {
 
 	Path    string
 	Tarball string
+	Dest    string
 
 	Handshake        bool
 	HandshakeTimeout time.Duration
@@ -47,6 +48,7 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 
 	flags.AddPathFlag(cmd, &o.Path)
 
+	cmd.Flags().StringVar(&o.Dest, "dest", "/workspace", "Destination path for tarball extraction")
 	cmd.Flags().StringVar(&o.Tarball, "tarball", o.Tarball, "Tarball filename")
 	cmd.Flags().BoolVar(&o.Handshake, "handshake", false, "Await handshake string on stdin")
 	cmd.Flags().DurationVar(&o.HandshakeTimeout, "timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
@@ -67,8 +69,17 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	// Concurrently extract tarball
 	if o.Tarball != "" {
 		g.Go(func() error {
-			_, err := archive.Extract(o.Tarball, o.Path)
-			return err
+			f, err := os.Open(o.Tarball)
+			if err != nil {
+				return fmt.Errorf("failed to open tarball: %w", err)
+			}
+			defer f.Close()
+
+			if err := archive.Unpack(f, o.Dest); err != nil {
+				return fmt.Errorf("failed to extract tarball: %w", err)
+			}
+
+			return nil
 		})
 	}
 

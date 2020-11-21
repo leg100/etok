@@ -11,7 +11,7 @@ import (
 	"text/scanner"
 )
 
-func parseIgnoreFile(rootPath string) []rule {
+func ParseIgnoreFile(rootPath string) []rule {
 	// Look for .terraformignore at our root path/src
 	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
 	defer file.Close()

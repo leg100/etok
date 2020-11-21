@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -201,20 +202,40 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run, isTTY 
 func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1.Run, err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Compile tarball of terraform module, embed in configmap and deploy
+	// Construct new archive
+	arc, err := archive.NewArchive(o.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add local module references to archive
+	if err := arc.Walk(); err != nil {
+		return nil, err
+	}
+
+	// Get relative path to root module within archive
+	root, err := arc.RootPath()
+	if err != nil {
+		return nil, err
+	}
+
+	// Compile tarball of local terraform modules, embed in configmap and deploy
 	g.Go(func() error {
-		tarball, err := archive.Create(o.Path)
+		w := new(bytes.Buffer)
+		meta, err := arc.Pack(w)
 		if err != nil {
 			return err
 		}
 
+		log.Debugf("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+
 		// Construct and deploy ConfigMap resource
-		return o.createConfigMap(ctx, tarball, o.RunName, v1alpha1.RunDefaultConfigMapKey)
+		return o.createConfigMap(ctx, w.Bytes(), o.RunName, v1alpha1.RunDefaultConfigMapKey)
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.RunName, o.RunName, isTTY)
+		run, err = o.createRun(ctx, o.RunName, o.RunName, isTTY, root)
 		return err
 	})
 

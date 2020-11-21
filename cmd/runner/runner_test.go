@@ -1,11 +1,13 @@
 package runner
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -14,7 +16,6 @@ import (
 	"github.com/kr/pty"
 	"github.com/leg100/stok/cmd/envvars"
 	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
@@ -140,6 +141,7 @@ func TestRunner(t *testing.T) {
 
 			// Always run runner in unique temp dir
 			cmdOpts.Path = t.NewTempDir().Chdir().Root()
+			cmdOpts.Dest = cmdOpts.Path
 
 			if tt.createTarball != nil {
 				tt.createTarball(t, cmdOpts.Path)
@@ -163,21 +165,21 @@ func TestRunner(t *testing.T) {
 }
 
 func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
-	path := t.NewTempDir().Root()
+	f, err := os.Create(name)
+	zw := gzip.NewWriter(f)
+	tw := tar.NewWriter(zw)
 
-	// Create dummy zero-sized files to be included in archive
-	for _, f := range filenames {
-		fpath := filepath.Join(path, f)
-		ioutil.WriteFile(fpath, []byte{}, 0644)
+	for _, fname := range filenames {
+		err = tw.WriteHeader(&tar.Header{
+			Name: fname,
+			Mode: 0600,
+		})
+		require.NoError(t, err)
 	}
 
-	// Create test tarball
-	tar, err := archive.Create(path)
-	require.NoError(t, err)
-
-	// Write tarball to current path
-	err = ioutil.WriteFile(name, tar, 0644)
-	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+	require.NoError(t, zw.Close())
+	require.NoError(t, f.Close())
 }
 
 // Unwrap exit code from error message

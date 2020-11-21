@@ -75,6 +75,8 @@ spec:
                 type: string
               configMapKey:
                 type: string
+              configMapPath:
+                type: string
               debug:
                 type: boolean
               handshake:
@@ -91,6 +93,7 @@ spec:
             - command
             - configMap
             - configMapKey
+            - configMapPath
             - handshake
             - handshakeTimeout
             - workspace

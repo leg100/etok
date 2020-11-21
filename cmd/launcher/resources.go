@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool) (*v1alpha1.Run, error) {
+func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
 	run := &v1alpha1.Run{}
 	run.SetNamespace(o.Namespace)
 	run.SetName(name)
@@ -47,6 +47,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	run.SetDebug(o.Debug)
 	run.SetConfigMap(configMapName)
 	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
+	run.SetConfigMapPath(relPathToRoot)
 
 	if isTTY {
 		run.AttachSpec.Handshake = true

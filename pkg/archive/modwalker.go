@@ -1,4 +1,4 @@
-package modwalker
+package archive
 
 import (
 	"path/filepath"
@@ -7,16 +7,9 @@ import (
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 )
 
-// Walk returns a list of local modules starting with the root
-// module, including those called from the root module, directly
-// and indirectly.
-func Walk(root string) ([]string, error) {
-	return walk(root)
-}
-
-// On each iteration, parse the module for calls, add those calls
-// to list of found modules, and then recurse over those modules.
-// Return the final list of all found modules.
+// On each iteration, parse the module for calls, add those calls to list of
+// found modules, and then recurse over those modules.  Return the final list of
+// all found modules.
 func walk(path string) ([]string, error) {
 	var found []string
 	// parse module for calls

@@ -1,8 +1,6 @@
 FROM alpine:3.12
 
-ENV STOK_BIN=/usr/local/bin/stok \
-    USER_UID=1001 \
-    USER_NAME=stok
+ENV STOK_BIN=/usr/local/bin/stok
 
 ENV TERRAFORM_VERSION=0.13.5
 
@@ -21,8 +19,5 @@ COPY stok ${STOK_BIN}
 
 # Copy over adjunct scripts, i.e. entrypoint and user_setup
 COPY build/bin /usr/local/bin
-RUN  /usr/local/bin/user_setup
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
-
-USER ${USER_UID}
