@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
+	"sort"
 	"testing"
 
 	"github.com/leg100/stok/testutil"
@@ -88,9 +89,12 @@ func TestWalk(t *testing.T) {
 	got, err := path.RelToWorkingDir(arc.mods)
 	require.NoError(t, err)
 
+	// Module walk is non-deterministic
+	sort.Strings(got)
+
 	want := []string{
-		"testdata/modtree/root/mod",
 		"testdata/modtree/outer/mods/m1",
+		"testdata/modtree/root/mod",
 		"testdata/modtree/root/mod/inner/mods/m2",
 		"testdata/modtree/root/mod/inner/mods/m3",
 	}
