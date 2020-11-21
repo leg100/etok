@@ -12,7 +12,6 @@ import (
 	"github.com/leg100/stok/util/slice"
 	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -42,6 +41,19 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 		Image:  image,
 	}
 }
+
+// +kubebuilder:rbac:resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+
+// for metrics:
+// +kubebuilder:rbac:resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get
+// +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
+
+// +kubebuilder:rbac:groups=goalspike.com,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile reads that state of the cluster for a Workspace object and makes changes based on the state read
 // and what is in the Workspace.Spec
@@ -93,18 +105,6 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		// Cease reconciliation
 		return ctrl.Result{}, nil
-	}
-
-	// Manage Role for workspace
-	role := newRoleForCR(instance)
-	if err := r.manageControllee(instance, reqLogger, role); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Manage RoleBinding for workspace
-	binding := newRoleBindingForCR(instance, role)
-	if err := r.manageControllee(instance, reqLogger, binding); err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Manage ConfigMap for workspace
@@ -340,110 +340,6 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 
 func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 	return runner.WorkspacePod(cr, r.Image)
-}
-
-func newRoleForCR(cr *v1alpha1.Workspace) *rbacv1.Role {
-	// Need TypeMeta in order to extract Kind in manageControllee()
-	return &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Role",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok-workspace-" + cr.GetName(),
-			Namespace: cr.GetNamespace(),
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-operator",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": cr.GetName(),
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{"stok.goalspike.com"},
-				Resources: []string{"*"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-		},
-	}
-}
-
-func newRoleBindingForCR(cr *v1alpha1.Workspace, role *rbacv1.Role) *rbacv1.RoleBinding {
-	// Need TypeMeta in order to extract Kind in manageControllee()
-	binding := rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "RoleBinding",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "stok-workspace-" + cr.GetName(),
-			Namespace: cr.GetNamespace(),
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-operator",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": cr.GetName(),
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "Role",
-			Name:     role.GetName(),
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-	}
-
-	if cr.Spec.ServiceAccountName != "" {
-		binding.Subjects = []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      cr.Spec.ServiceAccountName,
-				Namespace: cr.GetNamespace(),
-			},
-		}
-	} else {
-		binding.Subjects = []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      "default",
-				Namespace: cr.GetNamespace(),
-			},
-		}
-	}
-
-	return &binding
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {

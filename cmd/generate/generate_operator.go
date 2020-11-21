@@ -3,6 +3,8 @@ package generate
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 
 	"github.com/leg100/stok/cmd/flags"
@@ -17,12 +19,23 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const clusterRolePath = "config/rbac/role.yaml"
+
+var clusterRoleURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + clusterRolePath
+
 type GenerateOperatorOptions struct {
 	*cmdutil.Options
 
 	Name      string
 	Namespace string
 	Image     string
+
+	// Path to local generated cluster role definition
+	LocalClusterRolePath string
+	// Toggle reading cluster role from local file
+	LocalClusterRoleToggle bool
+	// URL to cluster role definition
+	RemoteClusterRoleURL string
 
 	debug bool
 }
@@ -41,14 +54,21 @@ func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperat
 	cmd.Flags().StringVar(&o.Name, "name", "stok-operator", "Name for kubernetes resources")
 	cmd.Flags().StringVar(&o.Image, "image", version.Image, "Docker image used for both the operator and the runner")
 
+	cmd.Flags().BoolVar(&o.LocalClusterRoleToggle, "local", false, "Read cluster role definition from local file (default false)")
+	cmd.Flags().StringVar(&o.LocalClusterRolePath, "path", clusterRolePath, "Path to local cluster role definition")
+	cmd.Flags().StringVar(&o.RemoteClusterRoleURL, "url", clusterRoleURL, "URL for cluster role definition")
+
 	return cmd, o
 }
 
 func (o *GenerateOperatorOptions) Generate() error {
+	if err := o.clusterRole(); err != nil {
+		return err
+	}
+
 	resources := []interface{}{
 		o.deployment(),
 		o.serviceAccount(),
-		o.clusterRole(),
 		o.clusterRoleBinding(),
 	}
 
@@ -66,111 +86,35 @@ func (o *GenerateOperatorOptions) Generate() error {
 	return nil
 }
 
-// Operator's ClusterRole.
-//
-// Some of these permissions are necessary for the operator's
-// metrics service:
-// * services: c/d/g/l/p/u/w
-// * deployments: g
-// * replicasets: g
-//
-// The workspace controller manages:
-// * roles
-// * rolebindings
-// * pvcs
-func (o *GenerateOperatorOptions) clusterRole() *rbacv1.ClusterRole {
-	return &rbacv1.ClusterRole{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterRole",
-			APIVersion: "rbac.authorization.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: o.Name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
+// Operator's ClusterRole. Unlike the other resources this is read from a YAML file in the repo,
+// which in turn is generated with `make manifests`.
+func (o *GenerateOperatorOptions) clusterRole() error {
+	var clusterRole []byte
 
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
+	if o.LocalClusterRoleToggle {
+		var err error
+		clusterRole, err = ioutil.ReadFile(o.LocalClusterRolePath)
+		if err != nil {
+			return err
+		}
+	} else {
+		resp, err := http.Get(o.RemoteClusterRoleURL)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("failed to retrieve %s: status code: %d", o.RemoteClusterRoleURL, resp.StatusCode)
+		}
 
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": "stok",
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "operator",
-				"app.kubernetes.io/component": "operator",
-			},
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{
-					"pods",
-					"persistentvolumeclaims",
-					"configmaps",
-					"secrets",
-					"services",
-					"serviceaccounts",
-				},
-				Verbs: []string{
-					"create",
-					"delete",
-					"get",
-					"list",
-					"patch",
-					"update",
-					"watch",
-				},
-			},
-			{
-				APIGroups: []string{"apps"},
-				Resources: []string{
-					"deployments",
-					"replicasets",
-				},
-				Verbs: []string{
-					"get",
-				},
-			},
-			{
-				APIGroups: []string{"rbac.authorization.k8s.io"},
-				Resources: []string{
-					"roles",
-					"rolebindings",
-				},
-				Verbs: []string{
-					"create",
-					"delete",
-					"get",
-					"list",
-					"patch",
-					"update",
-					"watch",
-				},
-			},
-			{
-				APIGroups: []string{"stok.goalspike.com"},
-				Resources: []string{"*"},
-				Verbs: []string{
-					"create",
-					"delete",
-					"get",
-					"list",
-					"patch",
-					"update",
-					"watch",
-				},
-			},
-		},
+		clusterRole, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
 	}
+
+	fmt.Fprint(o.Out, string(clusterRole))
+
+	return nil
 }
 
 func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
