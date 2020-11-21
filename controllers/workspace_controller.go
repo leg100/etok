@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/leg100/stok/api"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/util/slice"
@@ -210,7 +209,7 @@ func getKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, erro
 	return gvks[0].Kind, nil
 }
 
-func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee api.Object) error {
+func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee controllerutil.Object) error {
 	kind, err := getKindFromObject(r.Scheme, controllee)
 	if err != nil {
 		return err
@@ -283,7 +282,7 @@ func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
 	}
 }
 
-func newPVCForCR(cr *v1alpha1.Workspace) api.Object {
+func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 	size := v1alpha1.WorkspaceDefaultCacheSize
 	if cr.Spec.Cache.Size != "" {
 		size = cr.Spec.Cache.Size

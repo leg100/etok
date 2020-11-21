@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tj/assert"
 )
 
 func TestStokEnv(t *testing.T) {
