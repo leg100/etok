@@ -46,8 +46,8 @@ func TestStok(t *testing.T) {
 	require.NoError(t, err)
 	bkt := sclient.Bucket(backendBucket)
 	// ignore errors
-	bkt.Object(backendPrefix + "/default.tfstate").Delete(goctx.Background())
-	bkt.Object(backendPrefix + "/default.tflock").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default-foo.tfstate").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default-foo.tflock").Delete(goctx.Background())
 
 	tests := []struct {
 		name            string
@@ -139,7 +139,7 @@ func TestStok(t *testing.T) {
 			wantExitCode: 0,
 			pty:          true,
 			batch: []expect.Batcher{
-				&expect.BExp{R: `\$`},
+				&expect.BExp{R: `#`},
 				&expect.BSnd{S: "uname; exit\n"},
 				&expect.BExp{R: `Linux`},
 			},

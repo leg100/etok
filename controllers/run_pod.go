@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +22,7 @@ type podOpts struct {
 	pvcName            string
 	configMapName      string
 	configMapKey       string
+	configMapPath      string
 }
 
 func (r *RunReconciler) reconcilePod(request reconcile.Request, opts *podOpts) (reconcile.Result, error) {
@@ -70,8 +72,9 @@ func (r RunReconciler) create(opts *podOpts) (reconcile.Result, error) {
 		SetLabels(opts.run.GetName(), opts.workspaceName, opts.run.Command, "runner").
 		AddRunnerContainer(prependTerraformToArgs(opts.run, args)).
 		AddWorkspace().
+		WorkingDir(filepath.Join("/workspace", opts.configMapPath)).
 		AddCache(opts.pvcName).
-		AddBackendConfig(opts.workspaceName).
+		AddBackendConfig(opts.workspaceName, opts.configMapPath).
 		AddCredentials(opts.secretName).
 		HasServiceAccount(opts.serviceAccountName).
 		SetWorkspaceEnvVar(opts.run.GetNamespace(), opts.workspaceName).

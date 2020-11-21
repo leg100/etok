@@ -444,6 +444,39 @@ func TestReconcileWorkspacePod(t *testing.T) {
 			},
 		},
 		{
+			name: "Pod Paths",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+			},
+			assertions: func(pod *corev1.Pod) {
+				assert.Equal(t, "/workspace", pod.Spec.InitContainers[0].WorkingDir)
+
+				var backendtf, backendini, dotterraform bool
+				for _, vm := range pod.Spec.InitContainers[0].VolumeMounts {
+					if vm.Name == "backendconfig" && vm.MountPath == "/workspace/backend.tf" {
+						backendtf = true
+					}
+					if vm.Name == "backendconfig" && vm.MountPath == "/workspace/backend.ini" {
+						backendini = true
+					}
+					if vm.Name == "cache" && vm.MountPath == "/workspace/.terraform" {
+						dotterraform = true
+					}
+				}
+				if !backendtf {
+					t.Error("failed to find correct volume mount for backend.tf")
+				}
+				if !backendini {
+					t.Error("failed to find correct volume mount for backend.ini")
+				}
+				if !dotterraform {
+					t.Error("failed to find correct volume mount for .terraform/")
+				}
+			},
+		},
+		{
 			name: "With service account",
 			objs: []runtime.Object{
 				&corev1.ServiceAccount{

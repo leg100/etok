@@ -354,8 +354,9 @@ func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 		SetLabels(cr.GetName(), "", "", "workspace").
 		AddRunnerContainer(r.newWorkspaceCommand(cr)).
 		AddWorkspace().
+		WorkingDir("/workspace").
 		AddCache(cr.GetName()).
-		AddBackendConfig(cr.GetName()).
+		AddBackendConfig(cr.GetName(), "").
 		AddCredentials(cr.Spec.SecretName).
 		HasServiceAccount(cr.Spec.ServiceAccountName).
 		Handshake(cr.Spec.Handshake, cr.Spec.HandshakeTimeout).

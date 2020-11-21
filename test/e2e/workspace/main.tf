@@ -1,9 +1,10 @@
 variable "suffix" {}
 
-resource "random_id" "test" {
-  byte_length = 2
+module "random" {
+  source = "../modules/random"
+  suffix = var.suffix
 }
 
 output "random_string" {
-  value = "${random_id.test.hex}-${var.suffix}"
+  value = module.random.random_string
 }

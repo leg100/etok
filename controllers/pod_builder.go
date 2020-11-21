@@ -11,19 +11,17 @@ import (
 )
 
 type PodBuilder struct {
-	pod      *corev1.Pod
-	runner   corev1.Container
-	volumes  []corev1.Volume
-	mounts   []corev1.VolumeMount
-	envs     []corev1.EnvVar
-	envFroms []corev1.EnvFromSource
-	image    string
+	pod        *corev1.Pod
+	runner     corev1.Container
+	volumes    []corev1.Volume
+	mounts     []corev1.VolumeMount
+	envs       []corev1.EnvVar
+	envFroms   []corev1.EnvFromSource
+	image      string
+	workingDir string
 }
 
 func NewPodBuilder(namespace, name, image string) *PodBuilder {
-	fsgroup := new(int64)
-	*fsgroup = 2000
-
 	pod := &corev1.Pod{
 		// Need TypeMeta in order to extract Kind later on
 		TypeMeta: metav1.TypeMeta{
@@ -35,9 +33,6 @@ func NewPodBuilder(namespace, name, image string) *PodBuilder {
 			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
-			SecurityContext: &corev1.PodSecurityContext{
-				FSGroup: fsgroup,
-			},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
@@ -179,7 +174,15 @@ func (pb *PodBuilder) AddCredentials(secretname string) *PodBuilder {
 	return pb
 }
 
+func (pb *PodBuilder) WorkingDir(dir string) *PodBuilder {
+	pb.runner.WorkingDir = dir
+	pb.workingDir = dir
+	return pb
+}
+
 func (pb *PodBuilder) AddWorkspace() *PodBuilder {
+	// TODO: EmptyDir is unnecessary and probably can be removed - it might be a
+	// hangover from when files needed to be shared between multiple containers.
 	pb.volumes = append(pb.volumes, corev1.Volume{
 		Name: "workspace",
 		VolumeSource: corev1.VolumeSource{
@@ -191,8 +194,6 @@ func (pb *PodBuilder) AddWorkspace() *PodBuilder {
 		Name:      "workspace",
 		MountPath: "/workspace",
 	})
-
-	pb.runner.WorkingDir = "/workspace"
 
 	return pb
 }
@@ -209,13 +210,13 @@ func (pb *PodBuilder) AddCache(pvcname string) *PodBuilder {
 
 	pb.mounts = append(pb.mounts, corev1.VolumeMount{
 		Name:      "cache",
-		MountPath: "/workspace/.terraform",
+		MountPath: filepath.Join(pb.workingDir, ".terraform"),
 	})
 
 	return pb
 }
 
-func (pb *PodBuilder) AddBackendConfig(workspacename string) *PodBuilder {
+func (pb *PodBuilder) AddBackendConfig(workspacename, workingdir string) *PodBuilder {
 	pb.volumes = append(pb.volumes, corev1.Volume{
 		Name: "backendconfig",
 		VolumeSource: corev1.VolumeSource{
@@ -230,13 +231,13 @@ func (pb *PodBuilder) AddBackendConfig(workspacename string) *PodBuilder {
 	pb.mounts = append(pb.mounts,
 		corev1.VolumeMount{
 			Name:      "backendconfig",
-			MountPath: "/workspace/" + v1alpha1.BackendTypeFilename,
+			MountPath: filepath.Join("/workspace", workingdir, v1alpha1.BackendTypeFilename),
 			SubPath:   v1alpha1.BackendTypeFilename,
 			ReadOnly:  true,
 		},
 		corev1.VolumeMount{
 			Name:      "backendconfig",
-			MountPath: "/workspace/" + v1alpha1.BackendConfigFilename,
+			MountPath: filepath.Join("/workspace", workingdir, v1alpha1.BackendConfigFilename),
 			SubPath:   v1alpha1.BackendConfigFilename,
 			ReadOnly:  true,
 		},
