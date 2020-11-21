@@ -48,32 +48,32 @@ type RunSpec struct {
 }
 
 // Get/Set Command functions
-func (c *RunSpec) GetCommand() string    { return c.Command }
-func (c *RunSpec) SetCommand(cmd string) { c.Command = cmd }
+func (r *RunSpec) GetCommand() string    { return r.Command }
+func (r *RunSpec) SetCommand(cmd string) { r.Command = cmd }
 
 // Get/Set Args functions
-func (c *RunSpec) GetArgs() []string     { return c.Args }
-func (c *RunSpec) SetArgs(args []string) { c.Args = args }
+func (r *RunSpec) GetArgs() []string     { return r.Args }
+func (r *RunSpec) SetArgs(args []string) { r.Args = args }
 
 // Get/Set Debug functions
-func (c *RunSpec) GetDebug() bool      { return c.Debug }
-func (c *RunSpec) SetDebug(debug bool) { c.Debug = debug }
+func (r *RunSpec) GetDebug() bool      { return r.Debug }
+func (r *RunSpec) SetDebug(debug bool) { r.Debug = debug }
 
 // Get/Set ConfigMap functions
-func (c *RunSpec) GetConfigMap() string     { return c.ConfigMap }
-func (c *RunSpec) SetConfigMap(name string) { c.ConfigMap = name }
+func (r *RunSpec) GetConfigMap() string     { return r.ConfigMap }
+func (r *RunSpec) SetConfigMap(name string) { r.ConfigMap = name }
 
 // Get/Set ConfigMapKey functions
-func (c *RunSpec) GetConfigMapKey() string    { return c.ConfigMapKey }
-func (c *RunSpec) SetConfigMapKey(key string) { c.ConfigMapKey = key }
+func (r *RunSpec) GetConfigMapKey() string    { return r.ConfigMapKey }
+func (r *RunSpec) SetConfigMapKey(key string) { r.ConfigMapKey = key }
 
 // Get/Set ConfigMapPath functions
-func (c *RunSpec) GetConfigMapPath() string     { return c.ConfigMapPath }
-func (c *RunSpec) SetConfigMapPath(path string) { c.ConfigMapPath = path }
+func (r *RunSpec) GetConfigMapPath() string     { return r.ConfigMapPath }
+func (r *RunSpec) SetConfigMapPath(path string) { r.ConfigMapPath = path }
 
 // Get/Set Workspace functions
-func (c *RunSpec) GetWorkspace() string   { return c.Workspace }
-func (c *RunSpec) SetWorkspace(ws string) { c.Workspace = ws }
+func (r *RunSpec) GetWorkspace() string   { return r.Workspace }
+func (r *RunSpec) SetWorkspace(ws string) { r.Workspace = ws }
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {
@@ -83,8 +83,8 @@ type RunStatus struct {
 type RunPhase string
 
 // Get/Set Phase functions
-func (c *RunStatus) GetPhase() RunPhase      { return c.Phase }
-func (c *RunStatus) SetPhase(phase RunPhase) { c.Phase = phase }
+func (r *RunStatus) GetPhase() RunPhase      { return r.Phase }
+func (r *RunStatus) SetPhase(phase RunPhase) { r.Phase = phase }
 
 const (
 	RunPhasePending      RunPhase = "pending"
