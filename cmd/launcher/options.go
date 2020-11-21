@@ -17,6 +17,7 @@ import (
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
+	"github.com/leg100/stok/pkg/runner"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -122,11 +123,11 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 
 	// Connect to pod
 	if isTTY {
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, cmdutil.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, runner.ContainerName); err != nil {
 			return err
 		}
 	} else {
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, cmdutil.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, runner.ContainerName); err != nil {
 			return err
 		}
 	}

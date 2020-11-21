@@ -66,6 +66,34 @@ func (ws *Workspace) PVCName() string {
 	return ws.GetName()
 }
 
+func (ws *Workspace) GetHandshake() bool          { return ws.Spec.AttachSpec.Handshake }
+func (ws *Workspace) GetHandshakeTimeout() string { return ws.Spec.AttachSpec.HandshakeTimeout }
+
+func (ws *Workspace) ContainerArgs() []string {
+	b := new(strings.Builder)
+	b.WriteString("terraform init -backend-config=" + BackendConfigFilename)
+	b.WriteString("; ")
+	b.WriteString("terraform workspace select " + ws.GetNamespace() + "-" + ws.GetName())
+	b.WriteString(" || ")
+	b.WriteString("terraform workspace new " + ws.GetNamespace() + "-" + ws.GetName())
+
+	args := []string{"sh", "-c", b.String()}
+
+	// The runner process expects args to come after --
+	args = append([]string{"--"}, args...)
+
+	if ws.Spec.Debug {
+		// Enable debug logging for the runner process
+		args = append([]string{"--debug"}, args...)
+	}
+
+	return args
+}
+
+func (ws *Workspace) WorkingDir() string {
+	return "/workspace"
+}
+
 func WorkspacePodName(name string) string {
 	return "workspace-" + name
 }

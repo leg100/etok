@@ -14,8 +14,6 @@ import (
 const (
 	// HandshakeString is the string that the runner expects to receive via stdin prior to running.
 	HandshakeString = "opensesame"
-	// The name of the container on the runner pod that runs the runner
-	ContainerName = "runner"
 )
 
 // Options pertaining to stok apps

@@ -1,6 +1,9 @@
 package v1alpha1
 
 import (
+	"path/filepath"
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -74,6 +77,35 @@ func (r *RunSpec) SetConfigMapPath(path string) { r.ConfigMapPath = path }
 // Get/Set Workspace functions
 func (r *RunSpec) GetWorkspace() string   { return r.Workspace }
 func (r *RunSpec) SetWorkspace(ws string) { r.Workspace = ws }
+
+func (r *Run) GetHandshake() bool          { return r.AttachSpec.Handshake }
+func (r *Run) GetHandshakeTimeout() string { return r.AttachSpec.HandshakeTimeout }
+
+func (r *Run) WorkingDir() string {
+	return filepath.Join("/workspace", r.ConfigMapPath)
+}
+
+// Run's pod shares its name
+func (r *Run) PodName() string { return r.Name }
+
+// ContainerArgs returns the args for a run's container
+func (r *Run) ContainerArgs() []string {
+	args := append(strings.Split(r.Command, " "), r.Args...)
+
+	if r.Command != "sh" {
+		// Any command other than sh is a terraform command
+		args = append([]string{"terraform"}, args...)
+	}
+
+	// The runner process expects args to come after --
+	args = append([]string{"--"}, args...)
+
+	if r.Debug {
+		// Enable debug logging for the runner process
+		args = append([]string{"--debug"}, args...)
+	}
+	return args
+}
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {

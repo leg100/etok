@@ -12,6 +12,7 @@ import (
 	"github.com/leg100/stok/pkg/client"
 	stokerrors "github.com/leg100/stok/pkg/errors"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/runner"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
@@ -161,12 +162,12 @@ func (o *NewOptions) run(ctx context.Context) error {
 
 	if isTTY {
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, cmdutil.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, runner.ContainerName); err != nil {
 			return err
 		}
 	} else {
 		log.Debug("Retrieving pod's log stream")
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), cmdutil.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), runner.ContainerName); err != nil {
 			return err
 		}
 	}

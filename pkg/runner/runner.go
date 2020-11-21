@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/version"
@@ -14,51 +13,61 @@ import (
 )
 
 const (
+	ContainerName = "runner"
+
 	cacheVolumeName         = "cache"
 	backendConfigVolumeName = "backendconfig"
 	credentialsVolumeName   = "credentials"
-	ContainerName           = "runner"
-	workingDirParent        = "/workspace"
 )
 
-func Container(obj controllerutil.Object, ws *v1alpha1.Workspace, attach *v1alpha1.AttachSpec, workingdir, image string) corev1.Container {
+type Runner interface {
+	controllerutil.Object
+	ContainerArgs() []string
+	GetHandshake() bool
+	GetHandshakeTimeout() string
+	WorkingDir() string
+	PodName() string
+}
+
+func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container {
 	container := corev1.Container{
 		Env: []corev1.EnvVar{
 			{
 				Name:  "STOK_HANDSHAKE",
-				Value: strconv.FormatBool(attach.Handshake),
+				Value: strconv.FormatBool(r.GetHandshake()),
 			},
 			{
 				Name:  "STOK_HANDSHAKE_TIMEOUT",
-				Value: attach.HandshakeTimeout,
+				Value: r.GetHandshakeTimeout(),
 			},
 		},
 		Name:                     ContainerName,
 		Image:                    image,
 		ImagePullPolicy:          corev1.PullIfNotPresent,
 		Command:                  []string{"stok", "runner"},
+		Args:                     r.ContainerArgs(),
 		Stdin:                    true,
 		TTY:                      true,
 		TerminationMessagePolicy: "FallbackToLogsOnError",
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      backendConfigVolumeName,
-				MountPath: filepath.Join(workingdir, v1alpha1.BackendTypeFilename),
+				MountPath: filepath.Join(r.WorkingDir(), v1alpha1.BackendTypeFilename),
 				SubPath:   v1alpha1.BackendTypeFilename,
 				ReadOnly:  true,
 			},
 			{
 				Name:      backendConfigVolumeName,
-				MountPath: filepath.Join(workingdir, v1alpha1.BackendConfigFilename),
+				MountPath: filepath.Join(r.WorkingDir(), v1alpha1.BackendConfigFilename),
 				SubPath:   v1alpha1.BackendConfigFilename,
 				ReadOnly:  true,
 			},
 			{
 				Name:      cacheVolumeName,
-				MountPath: filepath.Join(workingdir, ".terraform"),
+				MountPath: filepath.Join(r.WorkingDir(), ".terraform"),
 			},
 		},
-		WorkingDir: workingdir,
+		WorkingDir: r.WorkingDir(),
 	}
 
 	if ws.Spec.SecretName != "" {
@@ -89,10 +98,11 @@ func Container(obj controllerutil.Object, ws *v1alpha1.Workspace, attach *v1alph
 	return container
 }
 
-func Pod(obj controllerutil.Object, ws *v1alpha1.Workspace, name, image string) *corev1.Pod {
+func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: obj.GetNamespace(),
+			Name:      r.PodName(),
+			Namespace: r.GetNamespace(),
 			Labels: map[string]string{
 				// Name of the application
 				"app":                    "stok",
@@ -105,7 +115,7 @@ func Pod(obj controllerutil.Object, ws *v1alpha1.Workspace, name, image string) 
 				"app.kubernetes.io/managed-by": "stok-operator",
 
 				// Unique name of instance within application
-				"app.kubernetes.io/instance": name,
+				"app.kubernetes.io/instance": r.GetName(),
 
 				// Current version of application
 				"version":                   version.Version,
@@ -152,20 +162,16 @@ func Pod(obj controllerutil.Object, ws *v1alpha1.Workspace, name, image string) 
 }
 
 func WorkspacePod(ws *v1alpha1.Workspace, image string) *corev1.Pod {
-	pod := Pod(ws, ws, ws.Name, image)
-	pod.SetName(ws.PodName())
+	pod := Pod(ws, ws, image)
 
 	// Component within architecture
 	pod.Labels["component"] = "workspace"
 	pod.Labels["app.kubernetes.io/component"] = "workspace"
 
 	pod.Spec.InitContainers = []corev1.Container{
-		Container(ws, ws, &ws.Spec.AttachSpec, workingDirParent, image),
+		Container(ws, ws, image),
 	}
-	pod.Spec.InitContainers[0].Args = append([]string{"--"}, newWorkspaceCommand(ws)...)
-	if ws.Spec.Debug {
-		pod.Spec.InitContainers[0].Args = append([]string{"--debug"}, pod.Spec.InitContainers[0].Args...)
-	}
+
 	// A container that simply idles i.e.  sleeps for infinity, and restarts upon error.
 	pod.Spec.Containers = []corev1.Container{
 		{
@@ -179,19 +185,8 @@ func WorkspacePod(ws *v1alpha1.Workspace, image string) *corev1.Pod {
 	return pod
 }
 
-func newWorkspaceCommand(cr *v1alpha1.Workspace) []string {
-	b := new(strings.Builder)
-	b.WriteString("terraform init -backend-config=" + v1alpha1.BackendConfigFilename)
-	b.WriteString("; ")
-	b.WriteString("terraform workspace select " + cr.GetNamespace() + "-" + cr.GetName())
-	b.WriteString(" || ")
-	b.WriteString("terraform workspace new " + cr.GetNamespace() + "-" + cr.GetName())
-	return []string{"sh", "-c", b.String()}
-}
-
 func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod {
-	pod := Pod(run, ws, run.Name, image)
-	pod.SetName(run.Name)
+	pod := Pod(run, ws, image)
 
 	// Component within architecture
 	pod.Labels["component"] = "runner"
@@ -203,8 +198,7 @@ func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 	pod.Labels["command"] = run.Command
 	pod.Labels["stok.goalspike.com/command"] = run.Command
 
-	workingdir := filepath.Join(workingDirParent, run.ConfigMapPath)
-	container := Container(run, ws, &run.AttachSpec, workingdir, image)
+	container := Container(run, ws, image)
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  "TF_WORKSPACE",
 		Value: fmt.Sprintf("%s-%s", run.GetNamespace(), ws.GetName()),
@@ -222,17 +216,6 @@ func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 		MountPath: filepath.Join("/tarball", run.ConfigMapKey),
 		SubPath:   run.ConfigMapKey,
 	})
-
-	args := strings.Split(run.Command, " ")
-	args = append(args, run.GetArgs()...)
-	if run.Command != "sh" {
-		args = append([]string{"terraform"}, args...)
-	}
-	args = append([]string{"--"}, args...)
-	if run.Debug {
-		args = append([]string{"--debug"}, args...)
-	}
-	container.Args = args
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
 		Name: "tarball",
