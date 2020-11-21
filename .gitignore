@@ -82,4 +82,5 @@ tags
 ### VisualStudioCode ###
 .vscode/*
 .history
-# End of https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
+# allow anything under testdata
+!**/testdata/**
