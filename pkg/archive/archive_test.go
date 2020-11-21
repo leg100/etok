@@ -47,7 +47,6 @@ func TestArchive(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{
-		"root/mod/.terraform/modules/README",
 		"root/mod/.terraformignore",
 		"root/mod/.terraformrc",
 		"root/mod/bar.txt",

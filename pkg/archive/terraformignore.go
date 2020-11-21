@@ -191,7 +191,6 @@ func (r *rule) compile() error {
 	Default rules as they would appear in .terraformignore:
 	.git/
 	.terraform/
-	!.terraform/modules/
 */
 
 var defaultExclusions = []rule{
@@ -202,10 +201,6 @@ var defaultExclusions = []rule{
 	{
 		val:      filepath.Join("**", ".terraform", "**"),
 		excluded: false,
-	},
-	{
-		val:      filepath.Join("**", ".terraform", "modules", "**"),
-		excluded: true,
 	},
 }
 

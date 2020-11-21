@@ -7,7 +7,7 @@ import (
 func TestTerraformIgnore(t *testing.T) {
 	// path to directory without .terraformignore
 	p := ParseIgnoreFile("testdata/external-dir")
-	if len(p) != 3 {
+	if len(p) != 2 {
 		t.Fatal("A directory without .terraformignore should get the default patterns")
 	}
 
