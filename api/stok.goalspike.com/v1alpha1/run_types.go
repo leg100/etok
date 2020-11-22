@@ -89,21 +89,23 @@ func (r *Run) WorkingDir() string {
 func (r *Run) PodName() string { return r.Name }
 
 // ContainerArgs returns the args for a run's container
-func (r *Run) ContainerArgs() []string {
-	args := append(strings.Split(r.Command, " "), r.Args...)
-
-	if r.Command != "sh" {
-		// Any command other than sh is a terraform command
-		args = append([]string{"terraform"}, args...)
+func (r *Run) ContainerArgs() (args []string) {
+	if r.Debug {
+		// Enable debug logging for the runner process
+		args = append(args, "--debug")
 	}
 
 	// The runner process expects args to come after --
-	args = append([]string{"--"}, args...)
+	args = append(args, "--")
 
-	if r.Debug {
-		// Enable debug logging for the runner process
-		args = append([]string{"--debug"}, args...)
+	if r.Command != "sh" {
+		// Any command other than sh is a terraform command
+		args = append(args, "terraform")
 	}
+
+	args = append(args, strings.Split(r.Command, " ")...)
+	args = append(args, r.Args...)
+
 	return args
 }
 
