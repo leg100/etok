@@ -46,6 +46,9 @@ func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions)
 				if err != nil {
 					return err
 				}
+				if resp.StatusCode != 200 {
+					return fmt.Errorf("failed to retrieve %s: status code: %d", o.RemoteCRDURL, resp.StatusCode)
+				}
 
 				crds, err = ioutil.ReadAll(resp.Body)
 				if err != nil {

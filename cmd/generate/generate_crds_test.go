@@ -49,6 +49,18 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 				assert.Equal(t, "---\ntest: yaml\n", out.String())
 			},
 		},
+		{
+			name: "remote failure",
+			args: []string{"generate", "crds"},
+			setup: func(t *testutil.T, o *GenerateCRDOptions) {
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusNotFound)
+				}))
+				o.RemoteCRDURL = ts.URL
+				t.Cleanup(ts.Close)
+			},
+			err: true,
+		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
