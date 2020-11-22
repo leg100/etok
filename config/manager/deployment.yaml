@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stok-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: operator
+      app.kubernetes.io/name: stok
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: operator
+        app.kubernetes.io/name: stok
+    spec:
+      containers:
+      - args:
+        - operator
+        command:
+        - stok
+        env:
+        - name: WATCH_NAMESPACE
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: stok
+        - name: STOK_IMAGE
+          value: leg100/stok:v0.2.12-dirty
+        image: leg100/stok:v0.2.12-dirty
+        imagePullPolicy: IfNotPresent
+        name: stok-operator
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: stok-operator
+      serviceAccountName: stok-operator
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2020-11-22T10:11:47Z"
+    lastUpdateTime: "2020-11-22T10:11:47Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2020-11-22T10:11:44Z"
+    lastUpdateTime: "2020-11-22T10:11:47Z"
+    message: ReplicaSet "stok-operator-749885b49b" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
