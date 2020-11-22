@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kr/pty"
+	"github.com/creack/pty"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"

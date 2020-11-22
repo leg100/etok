@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kr/pty"
+	"github.com/creack/pty"
 	"github.com/leg100/stok/cmd/envvars"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/log"
