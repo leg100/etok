@@ -36,7 +36,7 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 }
 
 // +kubebuilder:rbac:groups=goalspike.com,resources=runs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	reqLogger := r.Log.WithValues("run", req.NamespacedName)

@@ -42,14 +42,14 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 	}
 }
 
-// +kubebuilder:rbac:resources=pods,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 
 // for metrics:
-// +kubebuilder:rbac:resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
 

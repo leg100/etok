@@ -39,12 +39,12 @@ local: image push
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy-operator
 deploy-operator: image push
-	$(BUILD_BIN) generate operator --image $(IMG) | $(KUBECTL) apply -f -
+	$(BUILD_BIN) generate operator --local --image $(IMG) | $(KUBECTL) apply -f -
 	$(KUBECTL) rollout status --timeout=10s deployment/stok-operator
 
 .PHONY: delete-operator
 delete-operator: build
-	$(BUILD_BIN) generate operator | $(KUBECTL) delete -f - --wait --ignore-not-found=true
+	$(BUILD_BIN) generate operator --local | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
 .PHONY: deploy-crds
 deploy-crds: build manifests
@@ -135,7 +135,7 @@ endif
 .PHONY: manifests
 manifests: controller-gen
 	@{ \
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=stok-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
 	for f in ./config/crd/bases/*.yaml; do \
 		$(KUBECTL) label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml;\
  		mv crd_with_label.yaml $$f;\
