@@ -91,7 +91,7 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - goalspike.com
+  - stok.goalspike.com
   resources:
   - runs
   verbs:
@@ -103,7 +103,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - goalspike.com
+  - stok.goalspike.com
+  resources:
+  - runs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - stok.goalspike.com
   resources:
   - workspaces
   verbs:
@@ -114,3 +122,11 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - stok.goalspike.com
+  resources:
+  - workspaces/status
+  verbs:
+  - get
+  - patch
+  - update
