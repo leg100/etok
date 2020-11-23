@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
@@ -131,51 +130,9 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("Unable to set workspace phase: %w", err)
 	}
 
-	// Fetch all run resources
-	runlist := &v1alpha1.RunList{}
-	if err := r.List(context.TODO(), runlist, client.InNamespace(req.Namespace)); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Filter runs
-	incomplete := []string{}
-	meta.EachListItem(runlist, func(o runtime.Object) error {
-		run := o.(*v1alpha1.Run)
-
-		// Filter out commands belonging to other workspaces
-		if run.GetWorkspace() != instance.GetName() {
-			return nil
-		}
-
-		// Filter out completed commands
-		if run.GetPhase() == v1alpha1.RunPhaseCompleted {
-			return nil
-		}
-
-		incomplete = append(incomplete, run.GetName())
-		return nil
-	})
-
-	// Retain only incomplete runs in queue
-	queue := instance.Status.Queue[:0]
-	for _, run := range instance.Status.Queue {
-		if idx := slice.StringIndex(incomplete, run); idx > -1 {
-			queue = append(queue, run)
-			// And remove from list of incomplete runs
-			incomplete = append(incomplete[:idx], incomplete[idx+1:]...)
-		}
-	}
-
-	// Append incomplete runs to queue
-	queue = append(queue, incomplete...)
-
-	// update status if queue has changed
-	if !reflect.DeepEqual(queue, instance.Status.Queue) {
-		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", queue))
-		instance.Status.Queue = queue
-		if err := r.Status().Update(context.TODO(), instance); err != nil {
-			return ctrl.Result{}, fmt.Errorf("Failed to update queue status: %w", err)
-		}
+	// Update run queue
+	if err := updateQueue(r.Client, instance); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update queue: %w", err)
 	}
 
 	return ctrl.Result{}, nil
