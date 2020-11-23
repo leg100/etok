@@ -164,21 +164,17 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func (r *WorkspaceReconciler) setPhase(ws *v1alpha1.Workspace, pod *corev1.Pod) error {
-	var phase v1alpha1.WorkspacePhase
 	switch pod.Status.Phase {
 	case corev1.PodPending:
-		phase = v1alpha1.WorkspacePhaseInitializing
+		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
 	case corev1.PodRunning:
-		phase = v1alpha1.WorkspacePhaseReady
+		ws.Status.Phase = v1alpha1.WorkspacePhaseReady
 	case corev1.PodSucceeded, corev1.PodFailed:
-		phase = v1alpha1.WorkspacePhaseError
+		ws.Status.Phase = v1alpha1.WorkspacePhaseError
 	default:
-		phase = v1alpha1.WorkspacePhaseUnknown
+		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
 	}
-	if phase != ws.Status.Phase {
-		return r.Status().Update(context.TODO(), ws)
-	}
-	return nil
+	return r.Status().Update(context.TODO(), ws)
 }
 
 // For a given go object, return the corresponding Kind. A wrapper for scheme.ObjectKinds, which
