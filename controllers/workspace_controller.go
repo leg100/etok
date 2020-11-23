@@ -57,7 +57,8 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
 
-// +kubebuilder:rbac:groups=goalspike.com,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=stok.goalspike.com,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=stok.goalspike.com,resources=workspaces/status,verbs=get;update;patch
 
 // Reconcile reads that state of the cluster for a Workspace object and makes changes based on the state read
 // and what is in the Workspace.Spec
