@@ -14,17 +14,6 @@ import (
 )
 
 func TestUpdateQueue(t *testing.T) {
-	plan1 := v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "plan-1",
-			Namespace: "default",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command:   "plan",
-			Workspace: "workspace-1",
-		},
-	}
-
 	tests := []struct {
 		name       string
 		workspace  *v1alpha1.Workspace
@@ -40,11 +29,56 @@ func TestUpdateQueue(t *testing.T) {
 			},
 		},
 		{
-			name:      "Single run",
+			name:      "One new run",
 			workspace: testWorkspaceQueue("default", "workspace-1"),
-			runs:      []runtime.Object{&plan1},
+			runs: []runtime.Object{
+				testRun("default", "plan-1", "plan", "workspace-1"),
+			},
 			assertions: func(queue []string) {
 				require.Equal(t, []string{"plan-1"}, queue)
+			},
+		},
+		{
+			name:      "Two new runs",
+			workspace: testWorkspaceQueue("default", "workspace-1"),
+			runs: []runtime.Object{
+				testRun("default", "plan-1", "plan", "workspace-1"),
+				testRun("default", "plan-2", "plan", "workspace-1"),
+			},
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
+			},
+		},
+		{
+			name:      "One existing run one new run",
+			workspace: testWorkspaceQueue("default", "workspace-1", WithExistingQueue([]string{"plan-1"})),
+			runs: []runtime.Object{
+				testRun("default", "plan-1", "plan", "workspace-1"),
+				testRun("default", "plan-2", "plan", "workspace-1"),
+			},
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
+			},
+		},
+		{
+			name:      "One completed run",
+			workspace: testWorkspaceQueue("default", "workspace-1", WithExistingQueue([]string{"plan-1"})),
+			runs: []runtime.Object{
+				testRun("default", "plan-1", "plan", "workspace-1", WithPhase(v1alpha1.RunPhaseCompleted)),
+			},
+			assertions: func(queue []string) {
+				require.Equal(t, []string{}, queue)
+			},
+		},
+		{
+			name:      "One completed run one running run",
+			workspace: testWorkspaceQueue("default", "workspace-1", WithExistingQueue([]string{"plan-1", "plan-2"})),
+			runs: []runtime.Object{
+				testRun("default", "plan-1", "plan", "workspace-1", WithPhase(v1alpha1.RunPhaseCompleted)),
+				testRun("default", "plan-2", "plan", "workspace-1", WithPhase(v1alpha1.RunPhaseRunning)),
+			},
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-2"}, queue)
 			},
 		},
 	}
@@ -87,5 +121,28 @@ func WithExistingQueue(runs []string) func(*v1alpha1.Workspace) {
 func WithPrivilegedCommands(cmds []string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.PrivilegedCommands = cmds
+	}
+}
+
+func testRun(namespace, name, command, workspace string, opts ...func(*v1alpha1.Run)) *v1alpha1.Run {
+	run := &v1alpha1.Run{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		RunSpec: v1alpha1.RunSpec{
+			Command:   command,
+			Workspace: workspace,
+		},
+	}
+	for _, o := range opts {
+		o(run)
+	}
+	return run
+}
+
+func WithPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		run.Phase = phase
 	}
 }
