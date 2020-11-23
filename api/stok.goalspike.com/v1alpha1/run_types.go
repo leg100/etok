@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -83,6 +84,17 @@ func (r *Run) GetHandshakeTimeout() string { return r.AttachSpec.HandshakeTimeou
 
 func (r *Run) WorkingDir() string {
 	return filepath.Join("/workspace", r.ConfigMapPath)
+}
+
+// ApprovedAnnotationKey is the key to be set on a workspace's annotations to
+// indicate that this run is approved. Only necessary if the workspace has
+// categorised the run's command as privileged.
+func (r *Run) ApprovedAnnotationKey() string {
+	return ApprovedAnnotationKey(r.Name)
+}
+
+func ApprovedAnnotationKey(runName string) string {
+	return fmt.Sprintf("approvals.stok.goalspike.com/%s", runName)
 }
 
 // Run's pod shares its name

@@ -18,6 +18,7 @@ import (
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/pkg/runner"
+	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -148,10 +149,30 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run, isTTY 
 	podch := make(chan *corev1.Pod)
 	workspace := make(chan error)
 
-	// Check workspace exists
+	// Check workspace exists, and approve command if listed as privileged
 	go func() {
-		_, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
-		workspace <- err
+		ws, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
+		if err != nil {
+			workspace <- err
+			return
+		}
+		if slice.ContainsString(ws.Spec.PrivilegedCommands, o.Command) {
+			log.Debug("'%s' is a privileged command on workspace")
+			annotations := ws.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string)
+			}
+			annotations[fmt.Sprintf("approvals.stok.goalspike.com/%s", o.RunName)] = "approved"
+			ws.SetAnnotations(annotations)
+
+			_, err := o.WorkspacesClient(o.Namespace).Update(ctx, ws, metav1.UpdateOptions{})
+			if err != nil {
+				workspace <- fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
+				return
+			}
+			log.Debug("successfully approved run with workspace")
+		}
+		workspace <- nil
 	}()
 
 	// Non-blocking; watch workspace queue, check timeouts are not exceeded, and log run's queue position

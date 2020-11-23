@@ -12,6 +12,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var allCommands = []string{
+	"apply",
+	"destroy",
+	"force-unlock",
+	"get",
+	"import",
+	"init",
+	"output",
+	"plan",
+	"refresh",
+	"sh",
+	"show",
+	"state mv",
+	"state pull",
+	"state push",
+	"state rm",
+	"state show",
+	"taint",
+	"untaint",
+	"validate",
+}
+
 // Add commands to root as subcommands (and subcommands' subcommands, and so on)
 func AddCommandsToRoot(root *cobra.Command, opts *cmdutil.Options) {
 	// Add terraform commands other than state

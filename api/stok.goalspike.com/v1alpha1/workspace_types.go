@@ -49,6 +49,8 @@ type WorkspaceSpec struct {
 	Backend BackendSpec        `json:"backend"`
 	Debug   bool               `json:"debug,omitempty"`
 
+	PrivilegedCommands []string `json:"privilegedCommands"`
+
 	AttachSpec `json:",inline"`
 }
 
@@ -92,6 +94,16 @@ func (ws *Workspace) ContainerArgs() (args []string) {
 
 func (ws *Workspace) WorkingDir() string {
 	return "/workspace"
+}
+
+func (ws *Workspace) IsRunApproved(run *Run) bool {
+	if annotations := ws.Annotations; annotations != nil {
+		status, exists := annotations[run.ApprovedAnnotationKey()]
+		if exists && status == "approved" {
+			return true
+		}
+	}
+	return false
 }
 
 func WorkspacePodName(name string) string {

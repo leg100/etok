@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
@@ -25,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.stok.goalspike.com/[-a-z0-9]+")
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -130,50 +134,28 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, fmt.Errorf("Unable to set workspace phase: %w", err)
 	}
 
-	// Fetch all run resources
-	runlist := &v1alpha1.RunList{}
-	if err := r.List(context.TODO(), runlist, client.InNamespace(req.Namespace)); err != nil {
-		return ctrl.Result{}, err
+	// Update run queue
+	if err := updateQueue(r.Client, instance); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update queue: %w", err)
 	}
 
-	// Filter runs
-	incomplete := []string{}
-	meta.EachListItem(runlist, func(o runtime.Object) error {
-		run := o.(*v1alpha1.Run)
-
-		// Filter out commands belonging to other workspaces
-		if run.GetWorkspace() != instance.GetName() {
-			return nil
+	// Garbage collect approval annotations
+	if annotations := instance.Annotations; annotations != nil {
+		updatedAnnotations := make(map[string]string)
+		for k, v := range annotations {
+			if approvalAnnotationKeyRegex.MatchString(k) {
+				run := strings.Split(k, "/")[1]
+				if slice.ContainsString(instance.Status.Queue, run) {
+					// Run is still enqueued so keep its annotation
+					updatedAnnotations[k] = v
+				}
+			}
 		}
-
-		// Filter out completed commands
-		if run.GetPhase() == v1alpha1.RunPhaseCompleted {
-			return nil
-		}
-
-		incomplete = append(incomplete, run.GetName())
-		return nil
-	})
-
-	// Retain only incomplete runs in queue
-	queue := instance.Status.Queue[:0]
-	for _, run := range instance.Status.Queue {
-		if idx := slice.StringIndex(incomplete, run); idx > -1 {
-			queue = append(queue, run)
-			// And remove from list of incomplete runs
-			incomplete = append(incomplete[:idx], incomplete[idx+1:]...)
-		}
-	}
-
-	// Append incomplete runs to queue
-	queue = append(queue, incomplete...)
-
-	// update status if queue has changed
-	if !reflect.DeepEqual(queue, instance.Status.Queue) {
-		reqLogger.Info("Queue updated", "Old", fmt.Sprintf("%#v", instance.Status.Queue), "New", fmt.Sprintf("%#v", queue))
-		instance.Status.Queue = queue
-		if err := r.Status().Update(context.TODO(), instance); err != nil {
-			return ctrl.Result{}, fmt.Errorf("Failed to update queue status: %w", err)
+		if !reflect.DeepEqual(annotations, updatedAnnotations) {
+			instance.Annotations = updatedAnnotations
+			if err := r.Update(context.TODO(), instance); err != nil {
+				return ctrl.Result{}, fmt.Errorf("Failed to update approval annotations: %w", err)
+			}
 		}
 	}
 
@@ -181,17 +163,21 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func (r *WorkspaceReconciler) setPhase(ws *v1alpha1.Workspace, pod *corev1.Pod) error {
+	var phase v1alpha1.WorkspacePhase
 	switch pod.Status.Phase {
 	case corev1.PodPending:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
+		phase = v1alpha1.WorkspacePhaseInitializing
 	case corev1.PodRunning:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseReady
+		phase = v1alpha1.WorkspacePhaseReady
 	case corev1.PodSucceeded, corev1.PodFailed:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseError
+		phase = v1alpha1.WorkspacePhaseError
 	default:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
+		phase = v1alpha1.WorkspacePhaseUnknown
 	}
-	return r.Status().Update(context.TODO(), ws)
+	if phase != ws.Status.Phase {
+		return r.Status().Update(context.TODO(), ws)
+	}
+	return nil
 }
 
 // For a given go object, return the corresponding Kind. A wrapper for scheme.ObjectKinds, which

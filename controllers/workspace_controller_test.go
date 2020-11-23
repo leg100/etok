@@ -153,6 +153,60 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			},
 		},
 		{
+			name: "Unapproved privileged command",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					PrivilegedCommands: []string{"plan"},
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Approved privileged command",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+					Annotations: map[string]string{
+						"approvals.stok.goalspike.com/plan-1": "approved",
+					},
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					PrivilegedCommands: []string{"plan"},
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+			},
+		},
+		{
+			name: "Garbage collected approval annotation",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+					Annotations: map[string]string{
+						"approvals.stok.goalspike.com/plan-1": "approved",
+					},
+				},
+				Spec: v1alpha1.WorkspaceSpec{
+					PrivilegedCommands: []string{"plan"},
+				},
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, map[string]string(nil), ws.Annotations)
+			},
+		},
+		{
 			name:      "Initializing phase",
 			workspace: testWorkspace("workspace-1"),
 			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodPending)},
@@ -213,10 +267,11 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			_, err := r.Reconcile(req)
 			require.NoError(t, err)
 
-			err = r.Get(context.TODO(), req.NamespacedName, tt.workspace)
-			require.NoError(t, err)
+			// Fetch fresh workspace for assertions
+			ws := &v1alpha1.Workspace{}
+			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
 
-			tt.assertions(tt.workspace)
+			tt.assertions(ws)
 		})
 	}
 }

@@ -210,6 +210,10 @@ spec:
                 default: 10s
                 description: How long to wait for handshake before timing out
                 type: string
+              privilegedCommands:
+                items:
+                  type: string
+                type: array
               secretName:
                 default: stok
                 type: string
@@ -220,6 +224,7 @@ spec:
             - backend
             - handshake
             - handshakeTimeout
+            - privilegedCommands
             type: object
           status:
             description: WorkspaceStatus defines the observed state of Workspace

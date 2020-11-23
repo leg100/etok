@@ -91,6 +91,21 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
+			name: "approved",
+			args: []string{"--debug"},
+			objs: []runtime.Object{testWorkspace("default", "default", WithPrivilegedCommands(allCommands))},
+			assertions: func(o *LauncherOptions) {
+				// Get run
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+				// Check run's approval annotation is set on workspace
+				assert.Equal(t, true, ws.IsRunApproved(run))
+			},
+		},
+		{
 			name: "without env file",
 			objs: []runtime.Object{testWorkspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
@@ -236,11 +251,21 @@ func testPod(namespace, name string, phase corev1.PodPhase) *corev1.Pod {
 	}
 }
 
-func testWorkspace(namespace, name string) *v1alpha1.Workspace {
-	return &v1alpha1.Workspace{
+func testWorkspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alpha1.Workspace {
+	ws := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
+	}
+	for _, o := range opts {
+		o(ws)
+	}
+	return ws
+}
+
+func WithPrivilegedCommands(cmds []string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.PrivilegedCommands = cmds
 	}
 }
