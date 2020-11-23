@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
@@ -167,7 +168,11 @@ func (o *LauncherOptions) monitor(ctx context.Context, run *v1alpha1.Run, isTTY 
 
 			_, err := o.WorkspacesClient(o.Namespace).Update(ctx, ws, metav1.UpdateOptions{})
 			if err != nil {
-				workspace <- fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
+				if kerrors.IsForbidden(err) {
+					workspace <- fmt.Errorf("running privileged command forbidden")
+				} else {
+					workspace <- fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
+				}
 				return
 			}
 			log.Debug("successfully approved run with workspace")
