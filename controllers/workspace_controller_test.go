@@ -153,6 +153,25 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			},
 		},
 		{
+			name: "Completed command replaced by incomplete command",
+			workspace: &v1alpha1.Workspace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "workspace-1",
+				},
+				Status: v1alpha1.WorkspaceStatus{
+					Queue: []string{
+						"plan-3",
+					},
+				},
+			},
+			objs: []runtime.Object{
+				runtime.Object(&plan1),
+			},
+			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+			},
+		},
+		{
 			name:      "Initializing phase",
 			workspace: testWorkspace("workspace-1"),
 			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodPending)},
