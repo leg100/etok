@@ -10,6 +10,7 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/runner"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -128,6 +129,12 @@ func TestLauncher(t *testing.T) {
 			assertions: func(o *LauncherOptions) {
 				// With a tty, launcher should attach not stream logs
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
+
+				// Get run
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// With a tty, a handshake is required
+				assert.True(t, run.Handshake)
 			},
 		},
 		{
@@ -143,6 +150,12 @@ func TestLauncher(t *testing.T) {
 			assertions: func(o *LauncherOptions) {
 				// With tty disabled, launcher should stream logs not attach
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
+
+				// Get run
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				// With tty disabled, there should be no handshake
+				assert.False(t, run.Handshake)
 			},
 		},
 		{
@@ -240,6 +253,7 @@ func testPod(namespace, name string, phase corev1.PodPhase) *corev1.Pod {
 			},
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
+					Name: runner.ContainerName,
 					State: corev1.ContainerState{
 						Terminated: &corev1.ContainerStateTerminated{
 							ExitCode: 0,

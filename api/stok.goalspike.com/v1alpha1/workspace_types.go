@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/leg100/stok/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -94,6 +95,10 @@ func (ws *Workspace) ContainerArgs() (args []string) {
 
 func (ws *Workspace) WorkingDir() string {
 	return "/workspace"
+}
+
+func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {
+	return slice.ContainsString(ws.Spec.PrivilegedCommands, cmd)
 }
 
 func (ws *Workspace) IsRunApproved(run *Run) bool {

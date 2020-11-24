@@ -12,6 +12,7 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
 	"github.com/leg100/stok/pkg/logstreamer"
+	"github.com/leg100/stok/pkg/runner"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -207,6 +208,12 @@ func TestNewWorkspace(t *testing.T) {
 			},
 			assertions: func(o *NewOptions) {
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
+
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+				// With a tty, a handshake is required
+				assert.True(t, ws.Spec.Handshake)
 			},
 		},
 		{
@@ -222,6 +229,12 @@ func TestNewWorkspace(t *testing.T) {
 			assertions: func(o *NewOptions) {
 				// With tty disabled, it should stream logs not attach
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
+
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+				// With tty disabled, there should be no handshake
+				assert.False(t, ws.Spec.Handshake)
 			},
 		},
 		{
@@ -276,6 +289,7 @@ func testPod(name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 					// alternative is to use a complicated set of reactors, which are known not to
 					// play well with k8s informers:
 					// https://github.com/kubernetes/kubernetes/pull/95897
+					Name: runner.ContainerName,
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{},
 						Terminated: &corev1.ContainerStateTerminated{
