@@ -203,7 +203,7 @@ func TestLauncher(t *testing.T) {
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				mockControllers(opts, cmdOpts, tt.podPhase)
+				mockControllers(t, opts, cmdOpts, tt.podPhase)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
@@ -221,12 +221,14 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase) {
+// (c) Workspace controller: Enqueue run onto queue
+func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
 		pod := testPod(run.GetNamespace(), run.GetName(), phase)
-		_, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+		_, err := o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
 
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
