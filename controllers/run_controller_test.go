@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -17,102 +17,6 @@ import (
 )
 
 func TestRunReconciler(t *testing.T) {
-	plan1 := v1alpha1.Run{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "stok.goalspike.com/v1alpha1",
-			Kind:       "Run",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "plan-1",
-			Namespace: "operator-test",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Workspace: "workspace-1",
-		},
-	}
-
-	var secret = corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "secret-1",
-			Namespace: "operator-test",
-		},
-		StringData: map[string]string{
-			"google_application_credentials.json": "abc",
-		},
-	}
-
-	var workspaceEmptyQueue = v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
-			Namespace: "operator-test",
-		},
-		Spec: v1alpha1.WorkspaceSpec{
-			SecretName: "secret-1",
-		},
-	}
-
-	var workspaceQueueOfOne = v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
-			Namespace: "operator-test",
-		},
-		Spec: v1alpha1.WorkspaceSpec{
-			SecretName: "secret-1",
-		},
-		Status: v1alpha1.WorkspaceStatus{
-			Queue: []string{"plan-1"},
-		},
-	}
-
-	var workspaceBackOfQueue = v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
-			Namespace: "operator-test",
-		},
-		Spec: v1alpha1.WorkspaceSpec{
-			SecretName: "secret-1",
-		},
-		Status: v1alpha1.WorkspaceStatus{
-			Queue: []string{"plan-0", "plan-1"},
-		},
-	}
-
-	var pod = corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "plan-1",
-			Namespace: "operator-test",
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodPending,
-		},
-	}
-
-	var podRunningAndReady = corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "plan-1",
-			Namespace: "operator-test",
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			Conditions: []corev1.PodCondition{
-				{
-					Type:   corev1.PodReady,
-					Status: corev1.ConditionTrue,
-				},
-			},
-		},
-	}
-
-	var successfullyCompletedPod = corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "plan-1",
-			Namespace: "operator-test",
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodSucceeded,
-		},
-	}
-
 	tests := []struct {
 		name           string
 		run            *v1alpha1.Run
@@ -122,16 +26,16 @@ func TestRunReconciler(t *testing.T) {
 	}{
 		{
 			name:           "Missing workspace",
-			run:            &plan1,
+			run:            testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			reconcileError: true,
 			assertions:     func(run *v1alpha1.Run) {},
 		},
 		{
 			name: "Pending",
-			run:  &plan1,
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceEmptyQueue),
-				runtime.Object(&pod),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
+				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhasePending, run.GetPhase())
@@ -139,10 +43,10 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Queued",
-			run:  &plan1,
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceBackOfQueue),
-				runtime.Object(&pod),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-0", "plan-1")),
+				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseQueued, run.GetPhase())
@@ -150,18 +54,10 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Running",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&podRunningAndReady),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.RunPod("operator-test", "plan-1"),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseRunning, run.GetPhase())
@@ -169,10 +65,10 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Completed",
-			run:  &plan1,
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&successfullyCompletedPod),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseCompleted, run.GetPhase())
@@ -215,17 +111,9 @@ func TestRunReconciler(t *testing.T) {
 	}{
 		{
 			name: "Creates pod",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.NotEqual(t, &corev1.Pod{}, pod)
@@ -233,18 +121,10 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Sets google credentials",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
-				runtime.Object(&secret),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1"), testobj.WithSecret("secret-1")),
+				testobj.Secret("operator-test", "secret-1", testobj.WithStringData("google_application_credentials.json", "abc")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				want := "/credentials/google-credentials.json"
@@ -258,17 +138,9 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Sets workspace environment variable",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				want := "operator-test-workspace-1"
@@ -282,17 +154,9 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Image name",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
@@ -300,18 +164,9 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Sets container args",
-			run: &v1alpha1.Run{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "plan-1",
-					Namespace: "operator-test",
-				},
-				RunSpec: v1alpha1.RunSpec{
-					Command:   "plan",
-					Workspace: "workspace-1",
-				},
-			},
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				runtime.Object(&workspaceQueueOfOne),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				require.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)

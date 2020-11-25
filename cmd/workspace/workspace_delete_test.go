@@ -5,22 +5,14 @@ import (
 	"context"
 	"testing"
 
-	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
+	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestDeleteWorkspace(t *testing.T) {
-	ws1 := &v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
-			Namespace: "default",
-		},
-	}
-
 	tests := []struct {
 		name string
 		args []string
@@ -30,7 +22,7 @@ func TestDeleteWorkspace(t *testing.T) {
 		{
 			name: "With workspace",
 			args: []string{"default/workspace-1"},
-			objs: []runtime.Object{ws1},
+			objs: []runtime.Object{testobj.Workspace("default", "workspace-1")},
 		},
 		{
 			name: "Without workspace",

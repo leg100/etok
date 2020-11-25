@@ -5,30 +5,16 @@ import (
 	"context"
 	"testing"
 
-	v1alpha1types "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestListWorkspaces(t *testing.T) {
-	ws1 := &v1alpha1types.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-1",
-			Namespace: "default",
-		},
-	}
-	ws2 := &v1alpha1types.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "workspace-2",
-			Namespace: "dev",
-		},
-	}
-
 	tests := []struct {
 		name string
 		objs []runtime.Object
@@ -39,14 +25,20 @@ func TestListWorkspaces(t *testing.T) {
 	}{
 		{
 			name: "WithEnvironmentFile",
-			objs: []runtime.Object{ws1, ws2},
+			objs: []runtime.Object{
+				testobj.Workspace("default", "workspace-1"),
+				testobj.Workspace("dev", "workspace-2"),
+			},
 			args: []string{},
 			env:  env.StokEnv("default/workspace-1"),
 			out:  "*\tdefault/workspace-1\n\tdev/workspace-2\n",
 		},
 		{
 			name: "WithoutEnvironmentFile",
-			objs: []runtime.Object{ws1, ws2},
+			objs: []runtime.Object{
+				testobj.Workspace("default", "workspace-1"),
+				testobj.Workspace("dev", "workspace-2"),
+			},
 			args: []string{},
 			out:  "\tdefault/workspace-1\n\tdev/workspace-2\n",
 		},
