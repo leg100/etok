@@ -51,7 +51,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 		Short:  "Run the stok operator",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+			ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
 
 			printVersion()
 
