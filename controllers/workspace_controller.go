@@ -15,7 +15,6 @@ import (
 	"github.com/leg100/stok/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -294,22 +293,6 @@ func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.serviceAccountName", func(o runtime.Object) []string {
-		serviceaccount := o.(*v1alpha1.Workspace).Spec.ServiceAccountName
-		if serviceaccount == "" {
-			return nil
-		}
-		return []string{serviceaccount}
-	})
-
-	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Workspace{}, "spec.secretName", func(o runtime.Object) []string {
-		secret := o.(*v1alpha1.Workspace).Spec.SecretName
-		if secret == "" {
-			return nil
-		}
-		return []string{secret}
-	})
-
 	blder := ctrl.NewControllerManagedBy(mgr)
 
 	// Watch for changes to primary resource Workspace
@@ -323,54 +306,6 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch owned pods
 	blder = blder.Owns(&corev1.Pod{})
-
-	// Watch for changes to service accounts and secrets, because they may affect the functionality
-	// of a Workspace (e.g. the deletion of a service account)
-	blder = blder.Watches(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			var reqs []reconcile.Request
-			wsList := &v1alpha1.WorkspaceList{}
-			// TODO: this fieldselector won't work
-			filter := client.MatchingFields{"spec.serviceAccountName": a.Meta.GetName()}
-			err := r.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
-			if err != nil {
-				return reqs
-			}
-			meta.EachListItem(wsList, func(ws runtime.Object) error {
-				reqs = append(reqs, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name:      ws.(*v1alpha1.Workspace).GetName(),
-						Namespace: a.Meta.GetNamespace(),
-					},
-				})
-				return nil
-			})
-			return reqs
-		}),
-	})
-
-	blder = blder.Watches(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			var reqs []reconcile.Request
-			wsList := &v1alpha1.WorkspaceList{}
-			// TODO: this fieldselector won't work
-			filter := client.MatchingFields{"spec.secretName": a.Meta.GetName()}
-			err := r.List(context.TODO(), wsList, client.InNamespace(a.Meta.GetNamespace()), filter)
-			if err != nil {
-				return reqs
-			}
-			meta.EachListItem(wsList, func(ws runtime.Object) error {
-				reqs = append(reqs, reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name:      ws.(*v1alpha1.Workspace).GetName(),
-						Namespace: a.Meta.GetNamespace(),
-					},
-				})
-				return nil
-			})
-			return reqs
-		}),
-	})
 
 	// Watch for changes to run resources and requeue the associated Workspace.
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestsFromMapFunc{

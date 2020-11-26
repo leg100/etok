@@ -94,8 +94,7 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch for changes to secondary resource Pods and requeue the owner run resource
 	blder = blder.Owns(&corev1.Pod{})
 
-	// Index field Spec.Workspace in order for the filtered watch below to work (I don't think it
-	// works without this...)
+	// Index field Spec.Workspace in order for the filtered watch below to work
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Run{}, "spec.workspace", func(o runtime.Object) []string {
 		ws := o.(*v1alpha1.Run).GetWorkspace()
 		if ws == "" {
@@ -107,10 +106,6 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch for changes to resource Workspace and requeue the associated runs
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			// TODO: MatchingFields will not work....I don't think this is filtering, and so this
-			// watch will trigger a reconcile on *all* run resources, not just those belonging to
-			// the changed workspace. Instead, we need to enumerate the result of this list and
-			// filter.
 			runlist := &v1alpha1.RunList{}
 			err := r.List(context.TODO(), runlist, client.InNamespace(a.Meta.GetNamespace()), client.MatchingFields{
 				"spec.workspace": a.Meta.GetName(),
