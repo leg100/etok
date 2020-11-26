@@ -43,6 +43,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 		return nil, err
 	}
 
+	o.createdRun = true
 	log.Debugf("created run %s/%s\n", o.Namespace, o.RunName)
 
 	return run, nil
@@ -73,6 +74,7 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 		return err
 	}
 
+	o.createdArchive = true
 	log.Debugf("Created config map %s/%s\n", o.Namespace, name)
 
 	return nil

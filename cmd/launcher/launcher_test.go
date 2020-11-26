@@ -3,6 +3,8 @@ package launcher
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/creack/pty"
@@ -10,11 +12,13 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	testcore "k8s.io/client-go/testing"
@@ -29,7 +33,9 @@ func TestLauncher(t *testing.T) {
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
 		// Size of content to be archived
-		size       int
+		size int
+		// Mock exit code of runner pod
+		code       int32
 		setOpts    func(*cmdutil.Options)
 		assertions func(*LauncherOptions)
 	}{
@@ -119,6 +125,55 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "workspace does not exist",
 			err:  true,
+		},
+		{
+			name: "cleanup resources upon error",
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			setOpts: func(o *cmdutil.Options) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+					return nil, fmt.Errorf("fake error")
+				}
+			},
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.True(t, errors.IsNotFound(err))
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.True(t, errors.IsNotFound(err))
+			},
+		},
+		{
+			name: "disable cleanup resources upon error",
+			args: []string{"--no-cleanup"},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			setOpts: func(o *cmdutil.Options) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+					return nil, fmt.Errorf("fake error")
+				}
+			},
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "resources are not cleaned up upon exit code error",
+			args: []string{},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			code: int32(5),
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+			},
 		},
 		{
 			name: "with tty",
@@ -213,7 +268,7 @@ func TestLauncher(t *testing.T) {
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				mockControllers(t, opts, cmdOpts, tt.podPhase)
+				mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
@@ -231,11 +286,11 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase) {
+func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase, exitCode int32) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
-		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase))
+		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithExitCode(exitCode))
 		_, err := o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
 

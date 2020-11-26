@@ -2,6 +2,7 @@ package testobj
 
 import (
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/runner"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -155,7 +156,7 @@ func WithPhase(phase corev1.PodPhase) func(*corev1.Pod) {
 
 func WithExitCode(code int32) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
-		pod.Status.InitContainerStatuses[0].State.Terminated.ExitCode = code
+		k8s.ContainerStatusByName(pod, runner.ContainerName).State.Terminated.ExitCode = code
 	}
 }
 

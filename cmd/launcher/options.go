@@ -57,6 +57,9 @@ type LauncherOptions struct {
 	// Create a secret if it does not exist
 	DisableCreateSecret bool
 
+	// Disable default behaviour of deleting resources upon error
+	DisableResourceCleanup bool
+
 	// Timeout for wait for handshake
 	HandshakeTimeout time.Duration
 	// Timeout for run pod to be running and ready
@@ -66,6 +69,10 @@ type LauncherOptions struct {
 
 	// Disable TTY detection
 	DisableTTY bool
+
+	// Recall if resources are created so that if error occurs they can be cleaned up
+	createdRun     bool
+	createdArchive bool
 }
 
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
@@ -290,6 +297,15 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 	})
 
 	return run, g.Wait()
+}
+
+func (o *LauncherOptions) cleanup() {
+	if o.createdRun {
+		o.RunsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+	}
+	if o.createdArchive {
+		o.ConfigMapsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+	}
 }
 
 func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {

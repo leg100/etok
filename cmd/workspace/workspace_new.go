@@ -86,14 +86,20 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 				return err
 			}
 
-			return o.Run(cmd.Context())
+			err = o.Run(cmd.Context())
+			if err != nil {
+				if !o.DisableResourceCleanup {
+					o.cleanup()
+				}
+			}
+			return err
 		},
 	}
 
 	flags.AddPathFlag(cmd, &o.Path)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.DisableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.DisableResourceCleanup, "no-cleanup", o.DisableResourceCleanup, "Do not delete kubernetes resources upon error")
 	cmd.Flags().BoolVar(&o.DisableCreateServiceAccount, "no-create-service-account", o.DisableCreateServiceAccount, "Create service account if missing")
 	cmd.Flags().BoolVar(&o.DisableCreateSecret, "no-create-secret", o.DisableCreateSecret, "Create secret if missing")
 
@@ -115,22 +121,11 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	return cmd, o
 }
 
-// TODO: refactor to use a wrapper function, i.e. cleanupOnError()
-func (o *NewOptions) Run(ctx context.Context) error {
-	if err := o.run(ctx); err != nil {
-		if !o.DisableResourceCleanup {
-			o.cleanup()
-		}
-		return err
-	}
-	return nil
-}
-
 func (o *NewOptions) name() string {
 	return fmt.Sprintf("%s/%s", o.Namespace, o.Workspace)
 }
 
-func (o *NewOptions) run(ctx context.Context) error {
+func (o *NewOptions) Run(ctx context.Context) error {
 	isTTY := !o.DisableTTY && detectTTY(o.In)
 
 	if !o.DisableCreateServiceAccount {
