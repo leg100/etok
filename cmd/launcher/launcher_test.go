@@ -178,7 +178,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "config too big",
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			size: 1024*1024 + 1,
 			err:  true,
 		},
