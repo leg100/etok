@@ -22,12 +22,14 @@ import (
 
 func TestLauncher(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		env        env.StokEnv
-		err        bool
-		objs       []runtime.Object
-		podPhase   corev1.PodPhase
+		name     string
+		args     []string
+		env      env.StokEnv
+		err      bool
+		objs     []runtime.Object
+		podPhase corev1.PodPhase
+		// Size of content to be archived
+		size       int
 		setOpts    func(*cmdutil.Options)
 		assertions func(*LauncherOptions)
 	}{
@@ -174,6 +176,12 @@ func TestLauncher(t *testing.T) {
 			podPhase: corev1.PodSucceeded,
 			err:      true,
 		},
+		{
+			name: "config too big",
+			objs: []runtime.Object{testWorkspace("default", "default")},
+			size: 1024*1024 + 1,
+			err:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -183,7 +191,7 @@ func TestLauncher(t *testing.T) {
 
 		for _, f := range cmdFactories {
 			testutil.Run(t, tt.name+"/"+f.name, func(t *testutil.T) {
-				path := t.NewTempDir().Chdir().Root()
+				path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
 				// Write .terraform/environment
 				if tt.env != "" {
@@ -193,11 +201,13 @@ func TestLauncher(t *testing.T) {
 				out := new(bytes.Buffer)
 				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
+
 				if tt.setOpts != nil {
 					tt.setOpts(opts)
 				}
 
 				cmdOpts := &LauncherOptions{}
+
 				// create cobra command
 				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
