@@ -12,8 +12,8 @@ import (
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/labels"
 	"github.com/leg100/stok/pkg/runner"
-	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
 	"github.com/leg100/stok/pkg/env"
@@ -203,31 +203,15 @@ func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Workspace,
 			Namespace: o.Namespace,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-operator",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 		Spec: o.WorkspaceSpec,
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(ws)
+	// Permit filtering secrets by workspace
+	labels.SetLabel(ws, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(ws, labels.WorkspaceComponent)
 
 	ws.SetDebug(o.Debug)
 
@@ -283,30 +267,14 @@ func (o *NewOptions) createSecret(ctx context.Context, name string) (*corev1.Sec
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(secret)
+	// Permit filtering secrets by workspace
+	labels.SetLabel(secret, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(secret, labels.WorkspaceComponent)
 
 	return o.SecretsClient(o.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 }
@@ -315,30 +283,14 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(serviceAccount)
+	// Permit filtering service accounts by workspace
+	labels.SetLabel(serviceAccount, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
 
 	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
