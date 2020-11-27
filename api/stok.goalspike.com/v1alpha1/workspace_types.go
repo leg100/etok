@@ -18,6 +18,7 @@ func init() {
 // Workspace is the Schema for the workspaces API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced
+// +kubebuilder:printcolumn:name="Active",type="string",JSONPath=".status.active"
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +kubebuilder:printcolumn:name="Backend",type="string",JSONPath=".spec.backend.type"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
@@ -121,8 +122,9 @@ func (ws *Workspace) SetDebug(debug bool) { ws.Spec.Debug = debug }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	Queue []string       `json:"queue"`
-	Phase WorkspacePhase `json:"phase"`
+	Active string         `json:"active"`
+	Queue  []string       `json:"queue"`
+	Phase  WorkspacePhase `json:"phase"`
 }
 
 type WorkspacePhase string

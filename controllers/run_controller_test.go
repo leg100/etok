@@ -45,7 +45,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Queued",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-0", "plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-0"), testobj.WithQueue("plan-1")),
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -56,7 +56,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Running",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 				testobj.RunPod("operator-test", "plan-1"),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -67,7 +67,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Completed",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded)),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -113,7 +113,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Creates pod",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.NotEqual(t, &corev1.Pod{}, pod)
@@ -123,7 +123,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Sets google credentials",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1"), testobj.WithSecret("secret-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1"), testobj.WithSecret("secret-1")),
 				testobj.Secret("operator-test", "secret-1", testobj.WithStringData("google_application_credentials.json", "abc")),
 			},
 			assertions: func(pod *corev1.Pod) {
@@ -140,7 +140,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Sets workspace environment variable",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				want := "operator-test-workspace-1"
@@ -156,7 +156,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Image name",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
@@ -166,7 +166,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Sets container args",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithActive("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				require.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)

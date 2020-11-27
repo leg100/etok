@@ -201,8 +201,8 @@ func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 	return ch
 }
 
-// Wait until run has been enqueued onto workspace queue, or until timeout has
-// been reached.
+// Wait until run has be activated or enqueued onto workspace, or until timeout
+// has been reached.
 func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run, errch chan error) chan *v1alpha1.Workspace {
 	ch := make(chan *v1alpha1.Workspace)
 	go func() {
@@ -210,36 +210,14 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 		defer cancel()
 
 		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
-		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
+		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsActive(run.Name), handlers.IsQueued(run.Name))
 		if err != nil {
 			if errors.Is(err, wait.ErrWaitTimeout) {
-				err = fmt.Errorf("timed out waiting for run to be added to workspace queue")
+				err = fmt.Errorf("timed out waiting for run to be enqueued or activated")
 			}
 			errch <- err
 		} else {
 			ch <- ev.Object.(*v1alpha1.Workspace)
-		}
-	}()
-	return ch
-}
-
-// Wait until run has reached first position in workspace queue, or until
-// timeout is reached.
-func (o *LauncherOptions) waitForFirstPos(ctx context.Context, run *v1alpha1.Run, errch chan error) chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		ctx, cancel := watchtools.ContextWithOptionalTimeout(ctx, o.EnqueueTimeout)
-		defer cancel()
-
-		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
-		_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsFirstPlace(run.Name))
-		if err != nil {
-			if errors.Is(err, wait.ErrWaitTimeout) {
-				err = fmt.Errorf("timed out waiting for run to reach first place in workspace queue")
-			}
-			errch <- err
-		} else {
-			ch <- struct{}{}
 		}
 	}()
 	return ch

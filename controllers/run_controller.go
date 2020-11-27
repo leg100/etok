@@ -70,16 +70,17 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	// Check workspace queue position
-	pos := slice.StringIndex(ws.Status.Queue, run.GetName())
-	switch {
-	case pos == 0:
+	// Check if workspace has activated run
+	if ws.Status.Active == run.GetName() {
 		// Currently scheduled to run; get or create pod
 		return r.reconcilePod(req, run, ws)
-	case pos > 0:
+	}
+
+	// Check if workspace has enqueued run
+	if slice.ContainsString(ws.Status.Queue, run.GetName()) {
 		// Queued
 		run.SetPhase(v1alpha1.RunPhaseQueued)
-	case pos < 0:
+	} else {
 		// Not yet queued
 		run.SetPhase(v1alpha1.RunPhasePending)
 	}
