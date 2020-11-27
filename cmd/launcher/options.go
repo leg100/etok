@@ -126,6 +126,8 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	// Watch and log run updates
 	o.watchRun(ctx, run)
 
+	// Watch and log queue updates o.watchQueue(ctx, run)
+
 	// Wait for pod to be ready
 	podch := o.waitForPod(ctx, run, isTTY, errch)
 
@@ -231,6 +233,16 @@ func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 		// upgrade the logger to something that does, and then log any error
 		// here as a warning.
 		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.LogRunPhase())
+	}()
+}
+
+func (o *LauncherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
+	go func() {
+		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
+		// Ignore errors TODO: the current logger has no warning level. We
+		// should probably upgrade the logger to something that does, and then
+		// log any error here as a warning.
+		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsActive(run.Name), handlers.LogQueuePosition(run.Name))
 	}()
 }
 
