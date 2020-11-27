@@ -120,19 +120,26 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	var pod *corev1.Pod
-	errch := make(chan error)
-
 	// Watch and log run updates
 	o.watchRun(ctx, run)
 
-	// Wait for pod to be ready
-	podch := o.waitForPod(ctx, run, isTTY, errch)
+	// Watch and log queue updates
+	o.watchQueue(ctx, run)
 
-	// Wait for run to be enqueued onto workspace queue
-	enqueued := o.waitForEnqueued(ctx, run, errch)
+	g, gctx := errgroup.WithContext(ctx)
 
-	// Check workspace exists
+	// Wait for pod and when ready send pod on chan
+	podch := make(chan *corev1.Pod, 1)
+	g.Go(func() error {
+		return o.waitForPod(gctx, run, isTTY, podch)
+	})
+
+	// Wait for run to be enqueued
+	g.Go(func() error {
+		return o.waitForEnqueued(ctx, run)
+	})
+
+	// In the meantime, check workspace exists
 	ws, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -144,17 +151,13 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		}
 	}
 
-OuterLoop:
-	for {
-		select {
-		case pod = <-podch:
-			break OuterLoop
-		case <-enqueued:
-			log.Debug("run enqueued within enqueue timeout")
-		case err := <-errch:
-			return err
-		}
+	// Carry on waiting for run to be enqueued and for pod to be ready
+	if err := g.Wait(); err != nil {
+		return err
 	}
+
+	// Receive ready pod
+	pod := <-podch
 
 	// Monitor exit code; non-blocking
 	exit := runner.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace)
@@ -181,46 +184,39 @@ OuterLoop:
 
 // Non-blocking; watch pod; if tty then wait til pod is running (and then attach); if
 // no tty then wait til pod is running or completed (and then stream logs from)
-func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, errch chan error) chan *corev1.Pod {
-	ch := make(chan *corev1.Pod)
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
-		defer cancel()
+func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, podch chan<- *corev1.Pod) error {
+	ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+	defer cancel()
 
-		lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: run.Name, Namespace: run.Namespace}
-		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, handlers.ContainerReady(run.Name, globals.RunnerContainerName, false, isTTY))
-		if err != nil {
-			if errors.Is(err, wait.ErrWaitTimeout) {
-				err = fmt.Errorf("timed out waiting for pod to be ready")
-			}
-			errch <- err
-		} else {
-			ch <- event.Object.(*corev1.Pod)
+	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: run.Name, Namespace: run.Namespace}
+	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, handlers.ContainerReady(run.Name, globals.RunnerContainerName, false, isTTY))
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			err = fmt.Errorf("timed out waiting for pod to be ready")
 		}
-	}()
-	return ch
+		return err
+	}
+	log.Debug("pod ready")
+	podch <- event.Object.(*corev1.Pod)
+	return nil
 }
 
 // Wait until run has be activated or enqueued onto workspace, or until timeout
 // has been reached.
-func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run, errch chan error) chan *v1alpha1.Workspace {
-	ch := make(chan *v1alpha1.Workspace)
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
-		defer cancel()
+func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run) error {
+	ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
+	defer cancel()
 
-		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
-		ev, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsActiveOrQueued(run.Name))
-		if err != nil {
-			if errors.Is(err, wait.ErrWaitTimeout) {
-				err = fmt.Errorf("timed out waiting for run to be enqueued or activated")
-			}
-			errch <- err
-		} else {
-			ch <- ev.Object.(*v1alpha1.Workspace)
+	lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsActiveOrQueued(run.Name))
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			err = fmt.Errorf("timed out waiting for run to be enqueued or activated")
 		}
-	}()
-	return ch
+		return err
+	}
+	log.Debug("run enqueued within enqueue timeout")
+	return nil
 }
 
 func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
@@ -231,6 +227,16 @@ func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 		// upgrade the logger to something that does, and then log any error
 		// here as a warning.
 		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.LogRunPhase())
+	}()
+}
+
+func (o *LauncherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
+	go func() {
+		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
+		// Ignore errors TODO: the current logger has no warning level. We
+		// should probably upgrade the logger to something that does, and then
+		// log any error here as a warning.
+		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.LogQueuePosition(run.Name))
 	}()
 }
 

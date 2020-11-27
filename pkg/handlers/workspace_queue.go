@@ -3,20 +3,31 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/fatih/color"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/util/slice"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
-// Log queue position - purely informative, never exits
+// Log queue position - exits once run is active
 func LogQueuePosition(runName string) watchtools.ConditionFunc {
 	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
+		if ws.Status.Active == runName {
+			return true, nil
+		}
 		// Report on queue position
-		if pos := slice.StringIndex(ws.Status.Queue, runName); pos >= 0 {
-			// TODO: print current run in bold
-			log.Infof("Queued: %v\n", ws.Status.Queue)
+		if slice.ContainsString(ws.Status.Queue, runName) {
+			boldCyan := color.New(color.FgCyan, color.Bold).SprintFunc()
+			var printedQueue []string
+			for _, run := range ws.Status.Queue {
+				if run == runName {
+					printedQueue = append(printedQueue, boldCyan(run))
+				} else {
+					printedQueue = append(printedQueue, run)
+				}
+			}
+			fmt.Printf("Queued: %v\n", printedQueue)
 		}
 		return false, nil
 	})

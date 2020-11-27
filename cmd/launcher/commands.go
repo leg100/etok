@@ -142,7 +142,10 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 				o.args = args
 			}
 
-			o.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			// Tests override run name
+			if o.RunName == "" {
+				o.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			}
 
 			o.Client, err = opts.Create(o.KubeContext)
 			if err != nil {
