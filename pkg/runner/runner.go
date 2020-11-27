@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,11 +14,12 @@ import (
 )
 
 const (
-	ContainerName = "runner"
-
 	cacheVolumeName         = "cache"
 	backendConfigVolumeName = "backendconfig"
 	credentialsVolumeName   = "credentials"
+
+	dotTerraformPath        = ".terraform/"
+	localTerraformStatePath = "terraform.tfstate.d/"
 )
 
 type Runner interface {
@@ -41,7 +43,7 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 				Value: r.GetHandshakeTimeout(),
 			},
 		},
-		Name:                     ContainerName,
+		Name:                     globals.RunnerContainerName,
 		Image:                    image,
 		ImagePullPolicy:          corev1.PullIfNotPresent,
 		Command:                  []string{"stok", "runner"},
@@ -64,10 +66,19 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 			},
 			{
 				Name:      cacheVolumeName,
-				MountPath: filepath.Join(r.WorkingDir(), ".terraform"),
+				MountPath: filepath.Join(r.WorkingDir(), dotTerraformPath),
+				SubPath:   dotTerraformPath,
 			},
 		},
 		WorkingDir: r.WorkingDir(),
+	}
+
+	if ws.Spec.Backend.Type == "" || ws.Spec.Backend.Type == "local" {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      cacheVolumeName,
+			MountPath: filepath.Join(r.WorkingDir(), localTerraformStatePath),
+			SubPath:   localTerraformStatePath,
+		})
 	}
 
 	if ws.Spec.SecretName != "" {

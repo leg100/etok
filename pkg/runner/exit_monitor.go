@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	stokerrors "github.com/leg100/stok/pkg/errors"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -33,7 +34,7 @@ func ExitMonitor(ctx context.Context, client kubernetes.Interface, name, namespa
 				return false, fmt.Errorf("pod was unexpectedly deleted")
 			}
 
-			if status := k8s.ContainerStatusByName(pod, ContainerName); status != nil {
+			if status := k8s.ContainerStatusByName(pod, globals.RunnerContainerName); status != nil {
 				if status.State.Terminated != nil {
 					code = int(status.State.Terminated.ExitCode)
 					return true, nil

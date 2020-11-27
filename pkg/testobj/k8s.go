@@ -2,8 +2,8 @@ package testobj
 
 import (
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/runner"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -97,7 +97,7 @@ func RunPod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 					// alternative is to use a complicated set of reactors, which are known not to
 					// play well with k8s informers:
 					// https://github.com/kubernetes/kubernetes/pull/95897
-					Name: runner.ContainerName,
+					Name: globals.RunnerContainerName,
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{},
 						Terminated: &corev1.ContainerStateTerminated{
@@ -128,7 +128,7 @@ func WorkspacePod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod
 					// alternative is to use a complicated set of reactors, which are known not to
 					// play well with k8s informers:
 					// https://github.com/kubernetes/kubernetes/pull/95897
-					Name: runner.ContainerName,
+					Name: globals.RunnerContainerName,
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{},
 						Terminated: &corev1.ContainerStateTerminated{
@@ -156,7 +156,7 @@ func WithPhase(phase corev1.PodPhase) func(*corev1.Pod) {
 
 func WithExitCode(code int32) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
-		k8s.ContainerStatusByName(pod, runner.ContainerName).State.Terminated.ExitCode = code
+		k8s.ContainerStatusByName(pod, globals.RunnerContainerName).State.Terminated.ExitCode = code
 	}
 }
 

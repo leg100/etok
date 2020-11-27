@@ -10,6 +10,7 @@ import (
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/labels"
@@ -158,12 +159,12 @@ func (o *NewOptions) Run(ctx context.Context) error {
 
 	if isTTY {
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, runner.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	} else {
 		log.Debug("Retrieving pod's log stream")
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), runner.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), globals.RunnerContainerName); err != nil {
 			return err
 		}
 	}
@@ -294,7 +295,7 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 // attached/stream to/from
 func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) (*corev1.Pod, error) {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.GetNamespace()}
-	hdlr := handlers.ContainerReady(ws.PodName(), runner.ContainerName, true, attaching)
+	hdlr := handlers.ContainerReady(ws.PodName(), globals.RunnerContainerName, true, attaching)
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	return event.Object.(*corev1.Pod), err
 }
