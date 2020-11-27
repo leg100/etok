@@ -29,6 +29,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "No runs",
 			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(ws *v1alpha1.Workspace) {
+				require.Equal(t, "", ws.Status.Active)
 				require.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
@@ -39,7 +40,8 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				require.Equal(t, "plan-1", ws.Status.Active)
+				require.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
 		{
@@ -51,7 +53,8 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-2")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				require.Equal(t, "plan-1", ws.Status.Active)
+				require.Equal(t, []string{"plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -62,50 +65,8 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Completed command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3", "plan-1", "plan-2")),
-			objs: []runtime.Object{
-				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Completed command replaced by incomplete command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3")),
-			objs: []runtime.Object{
-				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Unapproved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan")),
-			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Approved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithQueue("plan-1"), testobj.WithApprovals("plan-1")),
-			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				require.Equal(t, "plan-1", ws.Status.Active)
+				require.Equal(t, []string{"plan-2"}, ws.Status.Queue)
 			},
 		},
 		{

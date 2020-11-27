@@ -12,10 +12,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// updateQueue queries Runs and updates the Workspace queue accordingly,
+// including the active run.
 func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 	// New queue to be built and compared to old (existing) queue
 	newQ := []string{}
-	oldQ := ws.Status.Queue
+	oldQ := append([]string{ws.Status.Active}, ws.Status.Queue...)
 
 	// Fetch run resources
 	runlist := &v1alpha1.RunList{}
@@ -67,7 +69,14 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 
 	// Update status if queue has changed
 	if !reflect.DeepEqual(newQ, oldQ) {
-		ws.Status.Queue = newQ
+		switch len(newQ) {
+		case 0:
+			ws.Status.Active = ""
+			ws.Status.Queue = []string{}
+		default:
+			ws.Status.Active = newQ[0]
+			ws.Status.Queue = newQ[1:]
+		}
 		if err := c.Status().Update(context.TODO(), ws); err != nil {
 			return fmt.Errorf("Failed to update queue: %w", err)
 		}
