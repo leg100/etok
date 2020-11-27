@@ -10,10 +10,11 @@ import (
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/stok/pkg/labels"
 	"github.com/leg100/stok/pkg/runner"
-	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
 	"github.com/leg100/stok/pkg/env"
@@ -86,14 +87,20 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 				return err
 			}
 
-			return o.Run(cmd.Context())
+			err = o.Run(cmd.Context())
+			if err != nil {
+				if !o.DisableResourceCleanup {
+					o.cleanup()
+				}
+			}
+			return err
 		},
 	}
 
 	flags.AddPathFlag(cmd, &o.Path)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.DisableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.DisableResourceCleanup, "no-cleanup", o.DisableResourceCleanup, "Do not delete kubernetes resources upon error")
 	cmd.Flags().BoolVar(&o.DisableCreateServiceAccount, "no-create-service-account", o.DisableCreateServiceAccount, "Create service account if missing")
 	cmd.Flags().BoolVar(&o.DisableCreateSecret, "no-create-secret", o.DisableCreateSecret, "Create secret if missing")
 
@@ -115,22 +122,11 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	return cmd, o
 }
 
-// TODO: refactor to use a wrapper function, i.e. cleanupOnError()
-func (o *NewOptions) Run(ctx context.Context) error {
-	if err := o.run(ctx); err != nil {
-		if !o.DisableResourceCleanup {
-			o.cleanup()
-		}
-		return err
-	}
-	return nil
-}
-
 func (o *NewOptions) name() string {
 	return fmt.Sprintf("%s/%s", o.Namespace, o.Workspace)
 }
 
-func (o *NewOptions) run(ctx context.Context) error {
+func (o *NewOptions) Run(ctx context.Context) error {
 	isTTY := !o.DisableTTY && detectTTY(o.In)
 
 	if !o.DisableCreateServiceAccount {
@@ -163,12 +159,12 @@ func (o *NewOptions) run(ctx context.Context) error {
 
 	if isTTY {
 		log.Debug("Attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, runner.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	} else {
 		log.Debug("Retrieving pod's log stream")
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), runner.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), globals.RunnerContainerName); err != nil {
 			return err
 		}
 	}
@@ -203,31 +199,15 @@ func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Workspace,
 			Namespace: o.Namespace,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-operator",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 		Spec: o.WorkspaceSpec,
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(ws)
+	// Permit filtering secrets by workspace
+	labels.SetLabel(ws, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(ws, labels.WorkspaceComponent)
 
 	ws.SetDebug(o.Debug)
 
@@ -283,30 +263,14 @@ func (o *NewOptions) createSecret(ctx context.Context, name string) (*corev1.Sec
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(secret)
+	// Permit filtering secrets by workspace
+	labels.SetLabel(secret, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(secret, labels.WorkspaceComponent)
 
 	return o.SecretsClient(o.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 }
@@ -315,30 +279,14 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": o.Workspace,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "workspace",
-				"app.kubernetes.io/component": "workspace",
-			},
 		},
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(serviceAccount)
+	// Permit filtering service accounts by workspace
+	labels.SetLabel(serviceAccount, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
 
 	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
@@ -347,7 +295,7 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 // attached/stream to/from
 func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) (*corev1.Pod, error) {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.GetNamespace()}
-	hdlr := handlers.ContainerReady(ws.PodName(), runner.ContainerName, true, attaching)
+	hdlr := handlers.ContainerReady(ws.PodName(), globals.RunnerContainerName, true, attaching)
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	return event.Object.(*corev1.Pod), err
 }

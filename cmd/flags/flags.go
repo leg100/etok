@@ -15,3 +15,7 @@ func AddNamespaceFlag(cmd *cobra.Command, namespace *string) {
 func AddKubeContextFlag(cmd *cobra.Command, kubeContext *string) {
 	cmd.Flags().StringVar(kubeContext, "context", "", "Set kube context (defaults to kubeconfig current context)")
 }
+
+func AddDisableResourceCleanupFlag(cmd *cobra.Command, disable *bool) {
+	cmd.Flags().BoolVar(disable, "no-cleanup", false, "Do not delete kubernetes resources upon error")
+}

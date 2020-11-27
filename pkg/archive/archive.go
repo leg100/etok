@@ -30,9 +30,10 @@ func NewArchive(root string, opts ...func(*archive)) (*archive, error) {
 		return nil, err
 	}
 	arc := &archive{
-		root: root,
-		mods: []string{root},
-		base: root,
+		root:    root,
+		mods:    []string{root},
+		base:    root,
+		maxSize: MaxConfigSize,
 	}
 
 	for _, o := range opts {

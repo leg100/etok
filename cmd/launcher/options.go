@@ -14,12 +14,12 @@ import (
 	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/k8s"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/pkg/runner"
-	"github.com/leg100/stok/util/slice"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -57,18 +57,23 @@ type LauncherOptions struct {
 	DisableCreateServiceAccount bool
 	// Create a secret if it does not exist
 	DisableCreateSecret bool
+
+	// Disable default behaviour of deleting resources upon error
+	DisableResourceCleanup bool
+
 	// Timeout for wait for handshake
 	HandshakeTimeout time.Duration
 	// Timeout for run pod to be running and ready
-	TimeoutPod time.Duration
-	// timeout waiting in workspace queue
-	TimeoutQueue time.Duration `default:"1h"`
-	// TODO: rename to timeout-pending (enqueue is too similar sounding to queue)
+	PodTimeout time.Duration
 	// timeout waiting to be queued
-	TimeoutEnqueue time.Duration `default:"10s"`
+	EnqueueTimeout time.Duration `default:"10s"`
 
 	// Disable TTY detection
 	DisableTTY bool
+
+	// Recall if resources are created so that if error occurs they can be cleaned up
+	createdRun     bool
+	createdArchive bool
 }
 
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
@@ -125,7 +130,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	podch := o.waitForPod(ctx, run, isTTY, errch)
 
 	// Wait for run to be enqueued onto workspace queue
-	enqueuech := o.waitForEnqueued(ctx, run, errch)
+	enqueued := o.waitForEnqueued(ctx, run, errch)
 
 	// Check workspace exists
 	ws, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
@@ -139,21 +144,13 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	var firstposch chan struct{}
 OuterLoop:
 	for {
 		select {
 		case pod = <-podch:
-			log.Debug("pod ready")
 			break OuterLoop
-		case ws = <-enqueuech:
+		case <-enqueued:
 			log.Debug("run enqueued within enqueue timeout")
-			if slice.StringIndex(ws.Status.Queue, run.Name) != 0 {
-				// Run is not yet in first place in queue; wait for it to do so
-				firstposch = o.waitForFirstPos(ctx, run, errch)
-			}
-		case <-firstposch:
-			log.Debug("run is in first place within queue timeout")
 		case err := <-errch:
 			return err
 		}
@@ -164,11 +161,11 @@ OuterLoop:
 
 	// Connect to pod
 	if isTTY {
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, runner.ContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	} else {
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, runner.ContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	}
@@ -187,9 +184,15 @@ OuterLoop:
 func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, errch chan error) chan *corev1.Pod {
 	ch := make(chan *corev1.Pod)
 	go func() {
+		ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+		defer cancel()
+
 		lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: run.Name, Namespace: run.Namespace}
-		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, handlers.ContainerReady(run.Name, runner.ContainerName, false, isTTY))
+		event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, handlers.ContainerReady(run.Name, globals.RunnerContainerName, false, isTTY))
 		if err != nil {
+			if errors.Is(err, wait.ErrWaitTimeout) {
+				err = fmt.Errorf("timed out waiting for pod to be ready")
+			}
 			errch <- err
 		} else {
 			ch <- event.Object.(*corev1.Pod)
@@ -203,7 +206,7 @@ func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run, errch chan error) chan *v1alpha1.Workspace {
 	ch := make(chan *v1alpha1.Workspace)
 	go func() {
-		ctx, cancel := watchtools.ContextWithOptionalTimeout(ctx, o.TimeoutEnqueue)
+		ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
 		defer cancel()
 
 		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
@@ -225,7 +228,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 func (o *LauncherOptions) waitForFirstPos(ctx context.Context, run *v1alpha1.Run, errch chan error) chan struct{} {
 	ch := make(chan struct{})
 	go func() {
-		ctx, cancel := watchtools.ContextWithOptionalTimeout(ctx, o.TimeoutEnqueue)
+		ctx, cancel := watchtools.ContextWithOptionalTimeout(ctx, o.EnqueueTimeout)
 		defer cancel()
 
 		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
@@ -295,6 +298,15 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 	})
 
 	return run, g.Wait()
+}
+
+func (o *LauncherOptions) cleanup() {
+	if o.createdRun {
+		o.RunsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+	}
+	if o.createdArchive {
+		o.ConfigMapsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+	}
 }
 
 func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {

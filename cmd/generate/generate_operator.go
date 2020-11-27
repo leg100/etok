@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/leg100/stok/cmd/flags"
+	"github.com/leg100/stok/pkg/labels"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
 
@@ -118,35 +119,13 @@ func (o *GenerateOperatorOptions) clusterRole() error {
 }
 
 func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
-	return &rbacv1.ClusterRoleBinding{
+	binding := &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterRoleBinding",
 			APIVersion: "rbac.authorization.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: o.Name,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": "stok",
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "operator",
-				"app.kubernetes.io/component": "operator",
-			},
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -161,10 +140,16 @@ func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBindin
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
+	// Set stok's common labels
+	labels.SetCommonLabels(binding)
+	// Permit filtering stok resources by component
+	labels.SetLabel(binding, labels.OperatorComponent)
+
+	return binding
 }
 
 func (o *GenerateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
-	return &corev1.ServiceAccount{
+	serviceAccount := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ServiceAccount",
 			APIVersion: "v1",
@@ -172,34 +157,19 @@ func (o *GenerateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Name,
 			Namespace: o.Namespace,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": "stok",
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "operator",
-				"app.kubernetes.io/component": "operator",
-			},
 		},
 	}
+
+	// Set stok's common labels
+	labels.SetCommonLabels(serviceAccount)
+	// Permit filtering stok resources by component
+	labels.SetLabel(serviceAccount, labels.OperatorComponent)
+
+	return serviceAccount
 }
 
 func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
-	return &appsv1.Deployment{
+	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
 			APIVersion: "apps/v1",
@@ -207,44 +177,10 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Name,
 			Namespace: o.Namespace,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-cli",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": "stok",
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "operator",
-				"app.kubernetes.io/component": "operator",
-			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(1),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/component": "operator",
-					"app.kubernetes.io/name":      "stok",
-				},
-			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/component": "operator",
-						"app.kubernetes.io/name":      "stok",
-					},
-				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: o.Name,
 					Containers: []corev1.Container{
@@ -283,6 +219,21 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 			},
 		},
 	}
+
+	// Set stok's common labels
+	labels.SetCommonLabels(deployment)
+	// Permit filtering stok resources by component
+	labels.SetLabel(deployment, labels.OperatorComponent)
+
+	// Label selector for operator pod.  It must match the pod template's labels.
+	selector := labels.MakeLabels(
+		labels.App,
+		labels.OperatorComponent,
+	)
+	deployment.Spec.Selector = &metav1.LabelSelector{MatchLabels: selector}
+	deployment.Spec.Template.Labels = selector
+
+	return deployment
 }
 
 // Convert struct to YAML, leveraging JSON struct tags by first converting to JSON

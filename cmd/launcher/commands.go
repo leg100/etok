@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/env"
+	stokerrors "github.com/leg100/stok/pkg/errors"
 	"github.com/leg100/stok/util"
 	"github.com/spf13/cobra"
 )
@@ -151,18 +153,31 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 				return err
 			}
 
-			return o.Run(cmd.Context())
+			err = o.Run(cmd.Context())
+			if err != nil {
+				// Cleanup resources upon error. An exit code error means the
+				// runner ran successfully but the program it executed failed
+				// with a non-zero exit code. In this case, resources are not
+				// cleaned up.
+				var exit stokerrors.ExitError
+				if !errors.As(err, &exit) {
+					if !o.DisableResourceCleanup {
+						o.cleanup()
+					}
+				}
+			}
+			return err
 		},
 	}
 
 	flags.AddPathFlag(cmd, &o.Path)
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.DisableResourceCleanup)
 
 	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
-	cmd.Flags().DurationVar(&o.TimeoutPod, "timeout-pod", time.Minute, "timeout for pod to be ready and running")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
-	cmd.Flags().DurationVar(&o.TimeoutQueue, "timeout-queue", time.Hour, "timeout waiting in workspace queue")
-	cmd.Flags().DurationVar(&o.TimeoutEnqueue, "timeout-enqueue", 10*time.Second, "timeout waiting to be queued")
+	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
+	cmd.Flags().DurationVar(&o.EnqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
 	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "Stok workspace")
 
 	return cmd

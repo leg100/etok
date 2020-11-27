@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,49 +19,6 @@ import (
 )
 
 func TestReconcileWorkspaceStatus(t *testing.T) {
-	plan1 := v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "plan-1",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command:   "plan",
-			Workspace: "workspace-1",
-		},
-	}
-
-	plan2 := v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "plan-2",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command:   "plan",
-			Workspace: "workspace-1",
-		},
-	}
-
-	plan3 := v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "plan-3",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command:   "plan",
-			Workspace: "workspace-2",
-		},
-	}
-
-	planCompleted := v1alpha1.Run{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "plan-3",
-		},
-		RunSpec: v1alpha1.RunSpec{
-			Command:   "plan",
-			Workspace: "workspace-1",
-		},
-		RunStatus: v1alpha1.RunStatus{
-			Phase: v1alpha1.RunPhaseCompleted,
-		},
-	}
-
 	tests := []struct {
 		name       string
 		workspace  *v1alpha1.Workspace
@@ -68,203 +26,131 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 		assertions func(ws *v1alpha1.Workspace)
 	}{
 		{
-			name: "No runs",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
-			objs: []runtime.Object{},
+			name:      "No runs",
+			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Single command",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
+			name:      "Single command",
+			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
-				runtime.Object(&plan1),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Three commands, one of which is unrelated to this workspace",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
+			name:      "Three commands, one of which is unrelated to this workspace",
+			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
-				runtime.Object(&plan1),
-				runtime.Object(&plan2),
-				runtime.Object(&plan3),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-2")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Existing queue",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Status: v1alpha1.WorkspaceStatus{
-					Queue: []string{
-						"plan-1",
-					},
-				},
-			},
+			name:      "Existing queue",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-1")),
 			objs: []runtime.Object{
-				runtime.Object(&plan1),
-				runtime.Object(&plan2),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Completed command",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Status: v1alpha1.WorkspaceStatus{
-					Queue: []string{
-						"plan-3",
-						"plan-1",
-						"plan-2",
-					},
-				},
-			},
+			name:      "Completed command",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3", "plan-1", "plan-2")),
 			objs: []runtime.Object{
-				runtime.Object(&planCompleted),
-				runtime.Object(&plan1),
-				runtime.Object(&plan2),
+				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Completed command replaced by incomplete command",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Status: v1alpha1.WorkspaceStatus{
-					Queue: []string{"plan-3"},
-				},
-			},
+			name:      "Completed command replaced by incomplete command",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3")),
 			objs: []runtime.Object{
-				runtime.Object(&planCompleted),
-				runtime.Object(&plan1),
+				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Unapproved privileged command",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					PrivilegedCommands: []string{"plan"},
-				},
-			},
+			name:      "Unapproved privileged command",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan")),
 			objs: []runtime.Object{
-				runtime.Object(&plan1),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Approved privileged command",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-					Annotations: map[string]string{
-						"approvals.stok.goalspike.com/plan-1": "approved",
-					},
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					PrivilegedCommands: []string{"plan"},
-				},
-				Status: v1alpha1.WorkspaceStatus{
-					Queue: []string{
-						"plan-1",
-					},
-				},
-			},
+			name:      "Approved privileged command",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithQueue("plan-1"), testobj.WithApprovals("plan-1")),
 			objs: []runtime.Object{
-				runtime.Object(&plan1),
+				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
-			name: "Garbage collected approval annotation",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-					Annotations: map[string]string{
-						"approvals.stok.goalspike.com/plan-1": "approved",
-					},
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					PrivilegedCommands: []string{"plan"},
-				},
-			},
+			name:      "Garbage collected approval annotation",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithApprovals("plan-1")),
 			assertions: func(ws *v1alpha1.Workspace) {
 				require.Equal(t, map[string]string(nil), ws.Annotations)
 			},
 		},
 		{
 			name:      "Initializing phase",
-			workspace: testWorkspace("workspace-1"),
-			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodPending)},
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1")},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
 			},
 		},
 		{
 			name:      "Ready phase",
-			workspace: testWorkspace("workspace-1"),
-			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodRunning)},
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning))},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseReady, ws.Status.Phase)
 			},
 		},
 		{
 			name:      "Error phase",
-			workspace: testWorkspace("workspace-1"),
-			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodSucceeded)},
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodSucceeded))},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
 		},
 		{
 			name:      "Error phase",
-			workspace: testWorkspace("workspace-1"),
-			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodFailed)},
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodFailed))},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
 		},
 		{
 			name:      "Unknown phase",
-			workspace: testWorkspace("workspace-1"),
-			objs:      []runtime.Object{testWorkspacePod("workspace-workspace-1", corev1.PodUnknown)},
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodUnknown))},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseUnknown, ws.Status.Phase)
 			},
@@ -306,29 +192,16 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 		assertions func(pvc *corev1.PersistentVolumeClaim)
 	}{
 		{
-			name: "Default size",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
+			name:      "Default size",
+			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
 				size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 				require.Equal(t, "1Gi", size.String())
 			},
 		},
 		{
-			name: "Custom storage class",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					Cache: v1alpha1.WorkspaceCacheSpec{
-						StorageClass: "local-path",
-					},
-				},
-			},
+			name:      "Custom storage class",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass("local-path")),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
 				require.Equal(t, "local-path", *pvc.Spec.StorageClassName)
 			},
@@ -365,52 +238,27 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 		assertions func(configmap *corev1.ConfigMap)
 	}{
 		{
-			name: "Default",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					Backend: v1alpha1.BackendSpec{
-						Type: "local",
-					},
-				},
-			},
+			name:      "Default",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithBackendType("local")),
 			assertions: func(configmap *corev1.ConfigMap) {
 				require.Equal(t, map[string]string{
-					"backend.tf": `terraform {
-  backend "local" {}
-}
-`,
+					"backend.tf":  "terraform {\n  backend \"local\" {}\n}\n",
 					"backend.ini": "",
 				}, configmap.Data)
 			},
 		},
 		{
 			name: "GCS backend",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithBackendType("gcs"), testobj.WithBackendConfig(
+				map[string]string{
+					"bucket": "workspace-1-state",
+					"prefix": "dev",
 				},
-				Spec: v1alpha1.WorkspaceSpec{
-					Backend: v1alpha1.BackendSpec{
-						Type: "gcs",
-						Config: map[string]string{
-							"bucket": "workspace-1-state",
-							"prefix": "dev",
-						},
-					},
-				},
-			},
+			)),
 			assertions: func(configmap *corev1.ConfigMap) {
 				require.Equal(t, map[string]string{
-					"backend.tf": `terraform {
-  backend "gcs" {}
-}
-`,
-					"backend.ini": `bucket	= "workspace-1-state"
-prefix	= "dev"
-`,
+					"backend.tf": "terraform {\n  backend \"gcs\" {}\n}\n",
+					"backend.ini": "bucket	= \"workspace-1-state\"\nprefix	= \"dev\"\n",
 				}, configmap.Data)
 			},
 		},
@@ -459,19 +307,8 @@ func TestReconcileWorkspacePod(t *testing.T) {
 		assertions func(pod *corev1.Pod)
 	}{
 		{
-			name: "Default",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "workspace-1",
-					Namespace: "controller-test",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					AttachSpec: v1alpha1.AttachSpec{
-						Handshake:        true,
-						HandshakeTimeout: "10s",
-					},
-				},
-			},
+			name:      "Default",
+			workspace: testobj.Workspace("controller-test", "workspace-1", testobj.WithHandshake("10s")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t,
 					[]string{"--", "sh", "-c", "terraform init -backend-config=backend.ini; terraform workspace select controller-test-workspace-1 || terraform workspace new controller-test-workspace-1"},
@@ -503,14 +340,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 					},
 				},
 			},
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					SecretName: "stok",
-				},
-			},
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithSecret("stok")),
 			assertions: func(pod *corev1.Pod) {
 				got, ok := getEnvValueForName(&pod.Spec.InitContainers[0], "GOOGLE_APPLICATION_CREDENTIALS")
 				if !ok {
@@ -522,12 +352,8 @@ func TestReconcileWorkspacePod(t *testing.T) {
 			},
 		},
 		{
-			name: "Pod Paths",
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-			},
+			name:      "Pod Paths",
+			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t, "/workspace", pod.Spec.InitContainers[0].WorkingDir)
 
@@ -563,14 +389,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 					},
 				},
 			},
-			workspace: &v1alpha1.Workspace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "workspace-1",
-				},
-				Spec: v1alpha1.WorkspaceSpec{
-					ServiceAccountName: "stok",
-				},
-			},
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithServiceAccount("stok")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t, "stok", pod.Spec.ServiceAccountName)
 			},
@@ -601,24 +420,5 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 			tt.assertions(pod)
 		})
-	}
-}
-
-func testWorkspacePod(name string, phase corev1.PodPhase) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Status: corev1.PodStatus{
-			Phase: phase,
-		},
-	}
-}
-
-func testWorkspace(name string) *v1alpha1.Workspace {
-	return &v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
 	}
 }

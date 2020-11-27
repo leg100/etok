@@ -3,6 +3,8 @@ package launcher
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/creack/pty"
@@ -10,11 +12,13 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/runner"
+	"github.com/leg100/stok/pkg/logstreamer"
+	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	testcore "k8s.io/client-go/testing"
@@ -22,19 +26,23 @@ import (
 
 func TestLauncher(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		env        env.StokEnv
-		err        bool
-		objs       []runtime.Object
-		podPhase   corev1.PodPhase
+		name     string
+		args     []string
+		env      env.StokEnv
+		err      bool
+		objs     []runtime.Object
+		podPhase corev1.PodPhase
+		// Size of content to be archived
+		size int
+		// Mock exit code of runner pod
+		code       int32
 		setOpts    func(*cmdutil.Options)
 		assertions func(*LauncherOptions)
 	}{
 		{
 			name: "defaults",
 			env:  env.StokEnv("default/default"),
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
@@ -43,7 +51,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "specific namespace and workspace",
 			env:  env.StokEnv("foo/bar"),
-			objs: []runtime.Object{testWorkspace("foo", "bar")},
+			objs: []runtime.Object{testobj.Workspace("foo", "bar")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
 				assert.Equal(t, "bar", o.Workspace)
@@ -52,7 +60,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "workspace flag",
 			args: []string{"--workspace", "foo/bar"},
-			objs: []runtime.Object{testWorkspace("foo", "bar")},
+			objs: []runtime.Object{testobj.Workspace("foo", "bar")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
@@ -62,7 +70,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "arbitrary terraform flag",
 			args: []string{"--", "-input", "false"},
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				if o.Command == "sh" {
@@ -75,7 +83,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "context flag",
 			args: []string{"--context", "oz-cluster"},
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			env:  env.StokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "oz-cluster", o.KubeContext)
@@ -84,7 +92,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "debug",
 			args: []string{"--debug"},
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
 				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				require.NoError(t, err)
@@ -94,7 +102,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "approved",
 			args: []string{"--debug"},
-			objs: []runtime.Object{testWorkspace("default", "default", WithPrivilegedCommands(allCommands))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithPrivilegedCommands(allCommands...))},
 			assertions: func(o *LauncherOptions) {
 				// Get run
 				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
@@ -108,7 +116,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "without env file",
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
@@ -119,8 +127,57 @@ func TestLauncher(t *testing.T) {
 			err:  true,
 		},
 		{
+			name: "cleanup resources upon error",
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			setOpts: func(o *cmdutil.Options) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+					return nil, fmt.Errorf("fake error")
+				}
+			},
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.True(t, errors.IsNotFound(err))
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.True(t, errors.IsNotFound(err))
+			},
+		},
+		{
+			name: "disable cleanup resources upon error",
+			args: []string{"--no-cleanup"},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			setOpts: func(o *cmdutil.Options) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+					return nil, fmt.Errorf("fake error")
+				}
+			},
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+			},
+		},
+		{
+			name: "resources are not cleaned up upon exit code error",
+			args: []string{},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			err:  true,
+			code: int32(5),
+			assertions: func(o *LauncherOptions) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				assert.NoError(t, err)
+			},
+		},
+		{
 			name: "with tty",
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			setOpts: func(opts *cmdutil.Options) {
 				var err error
 				opts.In, _, err = pty.Open()
@@ -140,7 +197,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "disable tty",
 			args: []string{"--no-tty"},
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			setOpts: func(opts *cmdutil.Options) {
 				// Ensure tty is overridden
 				var err error
@@ -160,12 +217,12 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name:     "pod completed with no tty",
-			objs:     []runtime.Object{testWorkspace("default", "default")},
+			objs:     []runtime.Object{testobj.Workspace("default", "default")},
 			podPhase: corev1.PodSucceeded,
 		},
 		{
 			name: "pod completed with tty",
-			objs: []runtime.Object{testWorkspace("default", "default")},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			setOpts: func(opts *cmdutil.Options) {
 				var err error
 				_, opts.In, err = pty.Open()
@@ -173,6 +230,12 @@ func TestLauncher(t *testing.T) {
 			},
 			podPhase: corev1.PodSucceeded,
 			err:      true,
+		},
+		{
+			name: "config too big",
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			size: 1024*1024 + 1,
+			err:  true,
 		},
 	}
 
@@ -183,7 +246,7 @@ func TestLauncher(t *testing.T) {
 
 		for _, f := range cmdFactories {
 			testutil.Run(t, tt.name+"/"+f.name, func(t *testutil.T) {
-				path := t.NewTempDir().Chdir().Root()
+				path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
 				// Write .terraform/environment
 				if tt.env != "" {
@@ -193,17 +256,19 @@ func TestLauncher(t *testing.T) {
 				out := new(bytes.Buffer)
 				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 				require.NoError(t, err)
+
 				if tt.setOpts != nil {
 					tt.setOpts(opts)
 				}
 
 				cmdOpts := &LauncherOptions{}
+
 				// create cobra command
 				cmd := f.create(opts, cmdOpts)
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
-				mockControllers(opts, cmdOpts, tt.podPhase)
+				mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
 
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
@@ -221,65 +286,16 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase) {
+func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase, exitCode int32) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
-		pod := testPod(run.GetNamespace(), run.GetName(), phase)
-		_, _ = o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithExitCode(exitCode))
+		_, err := o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err)
 
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
 	opts.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
-}
-
-func testPod(namespace, name string, phase corev1.PodPhase) *corev1.Pod {
-	if phase == "" {
-		phase = corev1.PodRunning
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Status: corev1.PodStatus{
-			Phase: phase,
-			Conditions: []corev1.PodCondition{
-				{
-					Type:   corev1.PodReady,
-					Status: corev1.ConditionTrue,
-				},
-			},
-			ContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name: runner.ContainerName,
-					State: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{
-							ExitCode: 0,
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func testWorkspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alpha1.Workspace {
-	ws := &v1alpha1.Workspace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-	for _, o := range opts {
-		o(ws)
-	}
-	return ws
-}
-
-func WithPrivilegedCommands(cmds []string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.PrivilegedCommands = cmds
-	}
 }

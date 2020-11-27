@@ -6,18 +6,20 @@ import (
 	"strconv"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/version"
+	"github.com/leg100/stok/pkg/globals"
+	"github.com/leg100/stok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
-	ContainerName = "runner"
-
 	cacheVolumeName         = "cache"
 	backendConfigVolumeName = "backendconfig"
 	credentialsVolumeName   = "credentials"
+
+	dotTerraformPath        = ".terraform/"
+	localTerraformStatePath = "terraform.tfstate.d/"
 )
 
 type Runner interface {
@@ -41,7 +43,7 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 				Value: r.GetHandshakeTimeout(),
 			},
 		},
-		Name:                     ContainerName,
+		Name:                     globals.RunnerContainerName,
 		Image:                    image,
 		ImagePullPolicy:          corev1.PullIfNotPresent,
 		Command:                  []string{"stok", "runner"},
@@ -64,10 +66,19 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 			},
 			{
 				Name:      cacheVolumeName,
-				MountPath: filepath.Join(r.WorkingDir(), ".terraform"),
+				MountPath: filepath.Join(r.WorkingDir(), dotTerraformPath),
+				SubPath:   dotTerraformPath,
 			},
 		},
 		WorkingDir: r.WorkingDir(),
+	}
+
+	if ws.Spec.Backend.Type == "" || ws.Spec.Backend.Type == "local" {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      cacheVolumeName,
+			MountPath: filepath.Join(r.WorkingDir(), localTerraformStatePath),
+			SubPath:   localTerraformStatePath,
+		})
 	}
 
 	if ws.Spec.SecretName != "" {
@@ -103,24 +114,6 @@ func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.PodName(),
 			Namespace: r.GetNamespace(),
-			Labels: map[string]string{
-				// Name of the application
-				"app":                    "stok",
-				"app.kubernetes.io/name": "stok",
-
-				// Name of higher-level application this app is part of
-				"app.kubernetes.io/part-of": "stok",
-
-				// The tool being used to manage the operation of an application
-				"app.kubernetes.io/managed-by": "stok-operator",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": r.GetName(),
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-			},
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy:      corev1.RestartPolicyNever,
@@ -147,6 +140,12 @@ func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 			},
 		},
 	}
+
+	// Set stok's common labels
+	labels.SetCommonLabels(pod)
+	// Permit filtering pods by workspace
+	labels.SetLabel(pod, labels.Workspace(ws.Name))
+
 	if ws.Spec.SecretName != "" {
 		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
 			Name: credentialsVolumeName,
@@ -164,9 +163,8 @@ func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 func WorkspacePod(ws *v1alpha1.Workspace, image string) *corev1.Pod {
 	pod := Pod(ws, ws, image)
 
-	// Component within architecture
-	pod.Labels["component"] = "workspace"
-	pod.Labels["app.kubernetes.io/component"] = "workspace"
+	// Permit filtering stok resources by component
+	labels.SetLabel(pod, labels.WorkspaceComponent)
 
 	pod.Spec.InitContainers = []corev1.Container{
 		Container(ws, ws, image),
@@ -188,15 +186,11 @@ func WorkspacePod(ws *v1alpha1.Workspace, image string) *corev1.Pod {
 func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 	pod := Pod(run, ws, image)
 
-	// Component within architecture
-	pod.Labels["component"] = "runner"
-	pod.Labels["app.kubernetes.io/component"] = "runner"
-	// Workspace that this resource relates to
-	pod.Labels["workspace"] = run.Workspace
-	pod.Labels["stok.goalspike.com/workspace"] = run.Workspace
-	// Run that this resource relates to
-	pod.Labels["command"] = run.Command
-	pod.Labels["stok.goalspike.com/command"] = run.Command
+	// Permit filtering stok resources by component
+	labels.SetLabel(pod, labels.RunComponent)
+
+	// Permit filtering pods by the run command
+	labels.SetLabel(pod, labels.Command(run.Command))
 
 	container := Container(run, ws, image)
 	container.Env = append(container.Env, corev1.EnvVar{

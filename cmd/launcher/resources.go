@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/stok/pkg/labels"
 	"github.com/leg100/stok/pkg/log"
-	"github.com/leg100/stok/version"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -14,32 +14,16 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	run := &v1alpha1.Run{}
 	run.SetNamespace(o.Namespace)
 	run.SetName(name)
-	run.SetLabels(map[string]string{
-		// Name of the application
-		"app":                          "stok",
-		"app.kubernetes.io/name":       "stok",
-		"app.kubernetes.io/part-of":    "stok",
-		"app.kubernetes.io/managed-by": "stok",
 
-		// Unique name of instance within application
-		"app.kubernetes.io/instance": name,
+	// Set stok's common labels
+	labels.SetCommonLabels(run)
+	// Permit filtering runs by command
+	labels.SetLabel(run, labels.Command(o.Command))
+	// Permit filtering runs by workspace
+	labels.SetLabel(run, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(run, labels.RunComponent)
 
-		// Current version of application
-		"version":                   version.Version,
-		"app.kubernetes.io/version": version.Version,
-
-		// Component within architecture
-		"component":                   "command",
-		"app.kubernetes.io/component": "command",
-
-		// Workspace that this resource relates to
-		"workspace":                    o.Workspace,
-		"stok.goalspike.com/workspace": o.Workspace,
-
-		// Comamnd that this resource relates to
-		"command":                    name,
-		"stok.goalspike.com/command": name,
-	})
 	run.SetWorkspace(o.Workspace)
 
 	run.SetCommand(o.Command)
@@ -59,6 +43,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 		return nil, err
 	}
 
+	o.createdRun = true
 	log.Debugf("created run %s/%s\n", o.Namespace, o.RunName)
 
 	return run, nil
@@ -69,43 +54,27 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: o.Namespace,
-			Labels: map[string]string{
-				// Name of the application
-				"app":                          "stok",
-				"app.kubernetes.io/name":       "stok",
-				"app.kubernetes.io/part-of":    "stok",
-				"app.kubernetes.io/managed-by": "stok",
-
-				// Unique name of instance within application
-				"app.kubernetes.io/instance": name,
-
-				// Current version of application
-				"version":                   version.Version,
-				"app.kubernetes.io/version": version.Version,
-
-				// Component within architecture
-				"component":                   "archive",
-				"app.kubernetes.io/component": "archive",
-
-				// Workspace that this resource relates to
-				"workspace":                    o.Workspace,
-				"stok.goalspike.com/workspace": o.Workspace,
-
-				// Comamnd that this resource relates to
-				"command":                    name,
-				"stok.goalspike.com/command": name,
-			},
 		},
 		BinaryData: map[string][]byte{
 			keyName: tarball,
 		},
 	}
 
+	// Set stok's common labels
+	labels.SetCommonLabels(configMap)
+	// Permit filtering archives by command
+	labels.SetLabel(configMap, labels.Command(o.Command))
+	// Permit filtering archives by workspace
+	labels.SetLabel(configMap, labels.Workspace(o.Workspace))
+	// Permit filtering stok resources by component
+	labels.SetLabel(configMap, labels.RunComponent)
+
 	_, err := o.ConfigMapsClient(o.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 
+	o.createdArchive = true
 	log.Debugf("Created config map %s/%s\n", o.Namespace, name)
 
 	return nil
