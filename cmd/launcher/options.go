@@ -201,8 +201,8 @@ func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 	return nil
 }
 
-// Wait until run has be activated or enqueued onto workspace, or until timeout
-// has been reached.
+// Wait until run has been enqueued onto workspace, or until timeout has been
+// reached.
 func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run) error {
 	ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
 	defer cancel()

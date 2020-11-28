@@ -137,9 +137,6 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.active
-      name: Active
-      type: string
     - jsonPath: .status.queue
       name: Queue
       type: string
@@ -232,8 +229,6 @@ spec:
           status:
             description: WorkspaceStatus defines the observed state of Workspace
             properties:
-              active:
-                type: string
               phase:
                 type: string
               queue:
@@ -241,7 +236,6 @@ spec:
                   type: string
                 type: array
             required:
-            - active
             - phase
             - queue
             type: object

@@ -48,12 +48,6 @@ func WithHandshake(timeout string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithActive(run string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Status.Active = run
-	}
-}
-
 func WithQueue(run ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Status.Queue = run

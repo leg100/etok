@@ -18,14 +18,13 @@ func TestUpdateQueue(t *testing.T) {
 		name       string
 		workspace  *v1alpha1.Workspace
 		runs       []runtime.Object
-		assertions func(string, []string)
+		assertions func([]string)
 	}{
 		{
 			name:      "No runs",
 			workspace: testobj.Workspace("default", "workspace-1"),
 			runs:      []runtime.Object{},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "", active)
+			assertions: func(queue []string) {
 				require.Equal(t, []string{}, queue)
 			},
 		},
@@ -35,9 +34,8 @@ func TestUpdateQueue(t *testing.T) {
 			runs: []runtime.Object{
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "plan-1", active)
-				require.Equal(t, []string{}, queue)
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-1"}, queue)
 			},
 		},
 		{
@@ -47,9 +45,8 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "plan-1", active)
-				require.Equal(t, []string{"plan-2"}, queue)
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
 			},
 		},
 		{
@@ -59,9 +56,8 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "plan-1", active)
-				require.Equal(t, []string{"plan-2"}, queue)
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
 			},
 		},
 		{
@@ -70,8 +66,7 @@ func TestUpdateQueue(t *testing.T) {
 			runs: []runtime.Object{
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "", active)
+			assertions: func(queue []string) {
 				require.Equal(t, []string{}, queue)
 			},
 		},
@@ -82,31 +77,8 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseRunning)),
 			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "plan-2", active)
-				require.Equal(t, []string{}, queue)
-			},
-		},
-		{
-			name:      "Unapproved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan")),
-			runs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "", active)
-				require.Equal(t, []string{}, queue)
-			},
-		},
-		{
-			name:      "Approved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithQueue("plan-1"), testobj.WithApprovals("plan-1")),
-			runs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(active string, queue []string) {
-				require.Equal(t, "plan-1", active)
-				require.Equal(t, []string{}, queue)
+			assertions: func(queue []string) {
+				require.Equal(t, []string{"plan-2"}, queue)
 			},
 		},
 	}
@@ -122,7 +94,7 @@ func TestUpdateQueue(t *testing.T) {
 			key := types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.Name}
 			require.NoError(t, c.Get(context.TODO(), key, ws))
 
-			tt.assertions(ws.Status.Active, ws.Status.Queue)
+			tt.assertions(ws.Status.Queue)
 		})
 	}
 }

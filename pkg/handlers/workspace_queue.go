@@ -10,14 +10,14 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
-// Log queue position - exits once run is active
+// Log queue position until run is at front of queue
 func LogQueuePosition(runName string) watchtools.ConditionFunc {
 	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
-		if ws.Status.Active == runName {
+		pos := slice.StringIndex(ws.Status.Queue, runName)
+		switch {
+		case pos == 0:
 			return true, nil
-		}
-		// Report on queue position
-		if slice.ContainsString(ws.Status.Queue, runName) {
+		case pos > 0:
 			boldCyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 			var printedQueue []string
 			for _, run := range ws.Status.Queue {
@@ -28,16 +28,9 @@ func LogQueuePosition(runName string) watchtools.ConditionFunc {
 				}
 			}
 			fmt.Printf("Queued: %v\n", printedQueue)
-		}
-		return false, nil
-	})
-}
-
-// Return true if run is active
-func IsActive(runName string) watchtools.ConditionFunc {
-	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
-		if ws.Status.Active == runName {
-			return true, nil
+		default:
+			// yet to be queued
+			return false, nil
 		}
 		return false, nil
 	})
