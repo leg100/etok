@@ -293,8 +293,10 @@ func (o *LauncherOptions) cleanup() {
 	}
 }
 
+var notAuthorisedError = errors.New("you are not authorised")
+
 func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
-	log.Debug("'%s' is a privileged command on workspace")
+	log.Debugf("%s is a privileged command on workspace\n", o.Command)
 	annotations := ws.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -305,7 +307,7 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 	_, err := o.WorkspacesClient(o.Namespace).Update(ctx, ws, metav1.UpdateOptions{})
 	if err != nil {
 		if kerrors.IsForbidden(err) {
-			return fmt.Errorf("running privileged command forbidden")
+			return fmt.Errorf("attempted to run privileged command %s: %w", o.Command, notAuthorisedError)
 		} else {
 			return fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
 		}

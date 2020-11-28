@@ -3,33 +3,38 @@ package launcher
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/creack/pty"
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	cmdutil "github.com/leg100/stok/cmd/util"
+	"github.com/leg100/stok/pkg/archive"
 	"github.com/leg100/stok/pkg/client"
 	"github.com/leg100/stok/pkg/env"
+	stokerrors "github.com/leg100/stok/pkg/errors"
+	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	testcore "k8s.io/client-go/testing"
 )
 
 func TestLauncher(t *testing.T) {
+	var fakeError = errors.New("fake error")
+
 	tests := []struct {
 		name     string
 		args     []string
 		env      env.StokEnv
-		err      bool
+		err      func(err error) bool
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
 		// Size of content to be archived
@@ -124,33 +129,39 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "workspace does not exist",
-			err:  true,
+			err: func(err error) bool {
+				return kerrors.IsNotFound(err)
+			},
 		},
 		{
 			name: "cleanup resources upon error",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithActive("run-12345"))},
-			err:  true,
+			err: func(err error) bool {
+				return err == fakeError
+			},
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
-					return nil, fmt.Errorf("fake error")
+					return nil, fakeError
 				}
 			},
 			assertions: func(o *LauncherOptions) {
 				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 
 				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
 			name: "disable cleanup resources upon error",
 			args: []string{"--no-cleanup"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithActive("run-12345"))},
-			err:  true,
+			err: func(err error) bool {
+				return err == fakeError
+			},
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
-					return nil, fmt.Errorf("fake error")
+					return nil, fakeError
 				}
 			},
 			assertions: func(o *LauncherOptions) {
@@ -165,7 +176,10 @@ func TestLauncher(t *testing.T) {
 			name: "resources are not cleaned up upon exit code error",
 			args: []string{},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithActive("run-12345"))},
-			err:  true,
+			err: func(err error) bool {
+				_, ok := err.(stokerrors.ExitError)
+				return ok
+			},
 			code: int32(5),
 			assertions: func(o *LauncherOptions) {
 				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
@@ -229,13 +243,17 @@ func TestLauncher(t *testing.T) {
 				require.NoError(t, err)
 			},
 			podPhase: corev1.PodSucceeded,
-			err:      true,
+			err: func(err error) bool {
+				return err == handlers.PrematurelySucceededPodError
+			},
 		},
 		{
 			name: "config too big",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithActive("run-12345"))},
 			size: 1024*1024 + 1,
-			err:  true,
+			err: func(err error) bool {
+				return errors.Is(err, archive.MaxSizeError(archive.MaxConfigSize))
+			},
 		},
 	}
 
@@ -273,7 +291,12 @@ func TestLauncher(t *testing.T) {
 				// Set debug flag (that root cmd otherwise sets)
 				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
 
-				t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+				err = cmd.ExecuteContext(context.Background())
+				if tt.err != nil {
+					assert.True(t, tt.err(err))
+				} else {
+					assert.NoError(t, err)
+				}
 
 				if tt.assertions != nil {
 					tt.assertions(cmdOpts)

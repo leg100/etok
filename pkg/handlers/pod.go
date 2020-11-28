@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/leg100/stok/pkg/k8s"
@@ -48,6 +49,8 @@ func InitContainerAttachable(pod, container string) watchtools.ConditionFunc {
 	})
 }
 
+var PrematurelySucceededPodError = errors.New("pod prematurely succeeded")
+
 // ContainerAttachable is an event handler that returns true if a pod
 // container's TTY can be attached to, i.e. the container has started
 // and is ready to handshake (therefore it should not have finished yet).
@@ -55,7 +58,7 @@ func ContainerAttachable(pod, container string) watchtools.ConditionFunc {
 	return PodHandlerWrapper(pod, func(pod *corev1.Pod) (bool, error) {
 		switch pod.Status.Phase {
 		case corev1.PodSucceeded:
-			return false, fmt.Errorf("pod prematurely succeeded")
+			return false, PrematurelySucceededPodError
 		case corev1.PodFailed:
 			return false, fmt.Errorf(k8s.ContainerStatusByName(pod, container).State.Terminated.Message)
 		case corev1.PodRunning:

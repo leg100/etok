@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh/terminal"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,17 +31,17 @@ func TestRunner(t *testing.T) {
 		args          []string
 		envs          map[string]string
 		objs          []runtime.Object
-		err           bool
+		err           func(*testutil.T, error)
 		createTarball func(*testutil.T, string)
-		setOpts       func(*RunnerOptions)
 		assertions    func(*RunnerOptions)
 		in            io.Reader
 		out           string
-		code          int
 	}{
 		{
 			name: "no args",
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				assert.Equal(t, err.Error(), "requires at least 1 arg(s), only received 0")
+			},
 		},
 		{
 			name: "defaults",
@@ -61,8 +63,13 @@ func TestRunner(t *testing.T) {
 			name: "non-zero exit code",
 			args: []string{"--", "sh", "-c", "echo -n alienation; exit 2"},
 			out:  "alienation",
-			code: 2,
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				// want exit code 2
+				var exiterr *exec.ExitError
+				if assert.True(t, errors.As(err, &exiterr)) {
+					assert.Equal(t, 2, exiterr.ExitCode())
+				}
+			},
 		},
 		{
 			name: "handshake",
@@ -80,19 +87,10 @@ func TestRunner(t *testing.T) {
 			envs: map[string]string{
 				"STOK_HANDSHAKE": "true",
 			},
-			in:   bytes.NewBufferString("mag)J)Fring\n"),
-			code: 1,
-			err:  true,
-		},
-		{
-			name: "EOF while waiting for handshake",
-			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
-			envs: map[string]string{
-				"STOK_HANDSHAKE": "true",
+			in: bytes.NewBufferString("mag)J)Fring\n"),
+			err: func(t *testutil.T, err error) {
+				assert.EqualError(t, err, fmt.Sprintf("[runner] handshake: expected '%s' but received: %s", cmdutil.HandshakeString, "mag)J)Frin"))
 			},
-			in:   &eofReader{},
-			code: 1,
-			err:  true,
 		},
 		{
 			name: "time out waiting for handshake",
@@ -101,9 +99,10 @@ func TestRunner(t *testing.T) {
 				"STOK_HANDSHAKE":         "true",
 				"STOK_HANDSHAKE_TIMEOUT": "20ms",
 			},
-			in:   &delayedReader{time.Millisecond * 100},
-			code: 1,
-			err:  true,
+			in: &delayedReader{time.Millisecond * 100},
+			err: func(t *testutil.T, err error) {
+				assert.EqualError(t, err, "[runner] timed out waiting for handshake")
+			},
 		},
 	}
 
@@ -114,22 +113,6 @@ func TestRunner(t *testing.T) {
 			out := new(bytes.Buffer)
 			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 			require.NoError(t, err)
-
-			if tt.in != nil {
-				// create pseudoterminal to mimic TTY
-				ptm, pts, err := pty.Open()
-				require.NoError(t, err)
-				opts.In = pts
-				go func() {
-					oldState, err := terminal.MakeRaw(int(ptm.Fd()))
-					require.NoError(t, err)
-					defer func() {
-						_ = terminal.Restore(int(ptm.Fd()), oldState)
-					}()
-					// copy stdin to TTY
-					io.Copy(ptm, tt.in)
-				}()
-			}
 
 			cmd, cmdOpts := RunnerCmd(opts)
 			cmd.SetOut(out)
@@ -147,15 +130,33 @@ func TestRunner(t *testing.T) {
 				tt.createTarball(t, cmdOpts.Path)
 			}
 
-			if tt.setOpts != nil {
-				tt.setOpts(cmdOpts)
-			}
-
 			if tt.envs != nil {
 				envvars.SetFlagsFromEnvVariables(cmd)
 			}
 
-			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+			// If handshake is enabled, mimic a TTY
+			if cmdOpts.Handshake {
+				// create pseudoterminal to mimic TTY
+				ptm, pts, err := pty.Open()
+				require.NoError(t, err)
+				opts.In = pts
+				go func() {
+					oldState, err := terminal.MakeRaw(int(ptm.Fd()))
+					require.NoError(t, err)
+					defer func() {
+						_ = terminal.Restore(int(ptm.Fd()), oldState)
+					}()
+					// copy stdin to TTY
+					io.Copy(ptm, tt.in)
+				}()
+			}
+
+			err = cmd.ExecuteContext(context.Background())
+			if tt.err != nil {
+				tt.err(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 
 			if tt.assertions != nil {
 				tt.assertions(cmdOpts)
@@ -180,26 +181,6 @@ func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
 	require.NoError(t, tw.Close())
 	require.NoError(t, zw.Close())
 	require.NoError(t, f.Close())
-}
-
-// Unwrap exit code from error message
-func unwrapCode(err error) int {
-	if err != nil {
-		var exiterr *exec.ExitError
-		if errors.As(err, &exiterr) {
-			return exiterr.ExitCode()
-		}
-		return 1
-	}
-	return 0
-}
-
-// eofReader mocks terminal sending Ctrl-D
-type eofReader struct{}
-
-func (e *eofReader) Read(p []byte) (int, error) {
-	p[0] = 0x4
-	return 1, nil
 }
 
 // delayedReader mocks reader that only returns read call after delay

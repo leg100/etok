@@ -51,7 +51,7 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 	cmd.Flags().StringVar(&o.Dest, "dest", "/workspace", "Destination path for tarball extraction")
 	cmd.Flags().StringVar(&o.Tarball, "tarball", o.Tarball, "Tarball filename")
 	cmd.Flags().BoolVar(&o.Handshake, "handshake", false, "Await handshake string on stdin")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
+	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	return cmd, o
 }

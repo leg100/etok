@@ -3,9 +3,12 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
+
+	stokerrors "github.com/leg100/stok/pkg/errors"
 
 	"github.com/creack/pty"
 	cmdutil "github.com/leg100/stok/cmd/util"
@@ -16,16 +19,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestNewWorkspace(t *testing.T) {
+	var fakeError = errors.New("fake error")
+
 	tests := []struct {
 		name       string
 		args       []string
-		err        bool
+		err        func(*testutil.T, error)
 		objs       []runtime.Object
 		setOpts    func(*cmdutil.Options)
 		assertions func(*NewOptions)
@@ -33,7 +38,9 @@ func TestNewWorkspace(t *testing.T) {
 		{
 			name: "missing workspace name",
 			args: []string{},
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				assert.Equal(t, err.Error(), "accepts 1 arg(s), received 0")
+			},
 		},
 		{
 			name: "create workspace",
@@ -80,7 +87,7 @@ func TestNewWorkspace(t *testing.T) {
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
@@ -89,7 +96,7 @@ func TestNewWorkspace(t *testing.T) {
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *NewOptions) {
 				_, err := o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
@@ -104,7 +111,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "cleanup resources upon error",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				assert.Equal(t, fakeError, err)
+			},
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
@@ -112,20 +121,22 @@ func TestNewWorkspace(t *testing.T) {
 			},
 			assertions: func(o *NewOptions) {
 				_, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 
 				_, err = o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 
 				_, err = o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.True(t, errors.IsNotFound(err))
+				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
 			name: "do not cleanup resources upon error",
 			args: []string{"default/foo", "--no-cleanup"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				assert.Equal(t, fakeError, err)
+			},
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
@@ -241,7 +252,13 @@ func TestNewWorkspace(t *testing.T) {
 			name: "non-zero exit code",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo", testobj.WithExitCode(5))},
-			err:  true,
+			err: func(t *testutil.T, err error) {
+				// want exit code 5
+				var exiterr stokerrors.ExitError
+				if assert.True(t, errors.As(err, &exiterr)) {
+					assert.Equal(t, 5, exiterr.ExitCode())
+				}
+			},
 		},
 	}
 
@@ -266,7 +283,12 @@ func TestNewWorkspace(t *testing.T) {
 			// Set debug flag (that root cmd otherwise sets)
 			cmd.Flags().BoolVar(&opts.Debug, "debug", false, "debug flag")
 
-			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+			err = cmd.ExecuteContext(context.Background())
+			if tt.err != nil {
+				tt.err(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 
 			if tt.assertions != nil {
 				tt.assertions(cmdOpts)
