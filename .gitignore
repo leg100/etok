@@ -1,3 +1,5 @@
+# run stok in root of repo without uploading the whole repo
+/.terraformignore
 # example terraform
 example/
 # docker push artefacts
