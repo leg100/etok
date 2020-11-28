@@ -208,10 +208,10 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 	defer cancel()
 
 	lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
-	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsActiveOrQueued(run.Name))
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
-			err = fmt.Errorf("timed out waiting for run to be enqueued or activated")
+			err = fmt.Errorf("timed out waiting for run to be enqueued")
 		}
 		return err
 	}

@@ -33,12 +33,19 @@ func LogQueuePosition(runName string) watchtools.ConditionFunc {
 	})
 }
 
-// Return true if run is either active or queued
-func IsActiveOrQueued(runName string) watchtools.ConditionFunc {
+// Return true if run is active
+func IsActive(runName string) watchtools.ConditionFunc {
 	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
 		if ws.Status.Active == runName {
 			return true, nil
 		}
+		return false, nil
+	})
+}
+
+// Return true if run is queued
+func IsQueued(runName string) watchtools.ConditionFunc {
+	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
 		if slice.ContainsString(ws.Status.Queue, runName) {
 			return true, nil
 		}
