@@ -14,8 +14,9 @@ func TestStokEnv(t *testing.T) {
 
 	env, err := ReadStokEnv(path)
 	require.NoError(t, err)
-	require.Equal(t, "default", env.Namespace())
-	require.Equal(t, "test-env", env.Workspace())
+
+	assert.Equal(t, "default", env.Namespace())
+	assert.Equal(t, "test-env", env.Workspace())
 }
 
 func TestStokEnvValidate(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/testobj"
 	"github.com/leg100/stok/scheme"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,7 +26,7 @@ func TestUpdateQueue(t *testing.T) {
 			workspace: testobj.Workspace("default", "workspace-1"),
 			runs:      []runtime.Object{},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{}, queue)
+				assert.Equal(t, []string{}, queue)
 			},
 		},
 		{
@@ -46,7 +47,7 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
+				assert.Equal(t, []string{"plan-1", "plan-2"}, queue)
 			},
 		},
 		{
@@ -57,7 +58,7 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, queue)
+				assert.Equal(t, []string{"plan-1", "plan-2"}, queue)
 			},
 		},
 		{
@@ -67,7 +68,7 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 			},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{}, queue)
+				assert.Equal(t, []string{}, queue)
 			},
 		},
 		{
@@ -78,7 +79,7 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseRunning)),
 			},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{"plan-2"}, queue)
+				assert.Equal(t, []string{"plan-2"}, queue)
 			},
 		},
 	}

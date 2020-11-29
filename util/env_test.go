@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/leg100/stok/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,6 +14,7 @@ func TestEnvironmentFile(t *testing.T) {
 
 	namespace, workspace, err := ReadEnvironmentFile(dest.Root())
 	require.NoError(t, err)
-	require.Equal(t, "default", namespace)
-	require.Equal(t, "test-env", workspace)
+
+	assert.Equal(t, "default", namespace)
+	assert.Equal(t, "test-env", workspace)
 }

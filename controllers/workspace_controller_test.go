@@ -29,7 +29,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "No runs",
 			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{}, ws.Status.Queue)
+				assert.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
 		{
@@ -39,7 +39,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -51,7 +51,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-2")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -62,7 +62,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -74,7 +74,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -85,7 +85,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{}, ws.Status.Queue)
+				assert.Equal(t, []string{}, ws.Status.Queue)
 			},
 		},
 		{
@@ -105,14 +105,14 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Garbage collected approval annotation",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithApprovals("plan-1")),
 			assertions: func(ws *v1alpha1.Workspace) {
-				require.Equal(t, map[string]string(nil), ws.Annotations)
+				assert.Equal(t, map[string]string(nil), ws.Annotations)
 			},
 		},
 		{
@@ -196,14 +196,14 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 			workspace: testobj.Workspace("", "workspace-1"),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
 				size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-				require.Equal(t, "1Gi", size.String())
+				assert.Equal(t, "1Gi", size.String())
 			},
 		},
 		{
 			name:      "Custom storage class",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass("local-path")),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
-				require.Equal(t, "local-path", *pvc.Spec.StorageClassName)
+				assert.Equal(t, "local-path", *pvc.Spec.StorageClassName)
 			},
 		},
 	}
@@ -241,7 +241,7 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 			name:      "Default",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithBackendType("local")),
 			assertions: func(configmap *corev1.ConfigMap) {
-				require.Equal(t, map[string]string{
+				assert.Equal(t, map[string]string{
 					"backend.tf":  "terraform {\n  backend \"local\" {}\n}\n",
 					"backend.ini": "",
 				}, configmap.Data)
@@ -256,7 +256,7 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 				},
 			)),
 			assertions: func(configmap *corev1.ConfigMap) {
-				require.Equal(t, map[string]string{
+				assert.Equal(t, map[string]string{
 					"backend.tf": "terraform {\n  backend \"gcs\" {}\n}\n",
 					"backend.ini": "bucket	= \"workspace-1-state\"\nprefix	= \"dev\"\n",
 				}, configmap.Data)

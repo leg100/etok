@@ -159,7 +159,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
-				require.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
+				assert.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
 			},
 		},
 		{
@@ -169,7 +169,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
-				require.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)
+				assert.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)
 			},
 		},
 	}
