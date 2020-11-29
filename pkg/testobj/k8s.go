@@ -66,6 +66,12 @@ func WithBackendType(t string) func(*v1alpha1.Workspace) {
 	}
 }
 
+func WithTerraformVersion(version string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.TerraformVersion = version
+	}
+}
+
 func WithBackendConfig(cfg map[string]string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.Backend.Config = cfg
