@@ -23,8 +23,6 @@ type GenerateCRDOptions struct {
 	LocalCRDToggle bool
 	// URL to concatenated CRD schema
 	RemoteCRDURL string
-
-	debug bool
 }
 
 func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions) {

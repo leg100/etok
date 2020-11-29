@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/util/path"
+	"k8s.io/klog/v2"
 )
 
 type archive struct {
@@ -314,7 +314,7 @@ func Unpack(r io.Reader, dst string) error {
 		}
 		path = filepath.Join(dst, path)
 
-		log.Debugf("extracting %s to %s\n", header.Name, path)
+		klog.V(1).Infof("extracting %s to %s\n", header.Name, path)
 
 		// Make the directories to the path.
 		dir := filepath.Dir(path)

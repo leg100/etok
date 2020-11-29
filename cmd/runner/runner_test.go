@@ -17,7 +17,6 @@ import (
 	"github.com/creack/pty"
 	"github.com/leg100/stok/cmd/envvars"
 	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,10 +72,9 @@ func TestRunner(t *testing.T) {
 		},
 		{
 			name: "handshake",
-			args: []string{"--debug", "--", "sh", "-c", "echo -n hallelujah"},
+			args: []string{"--", "sh", "-c", "echo -n hallelujah"},
 			envs: map[string]string{
 				"STOK_HANDSHAKE": "true",
-				"STOK_DEBUG":     "true",
 			},
 			in:  bytes.NewBufferString("opensesame\n"),
 			out: "hallelujah",
@@ -117,10 +115,6 @@ func TestRunner(t *testing.T) {
 			cmd, cmdOpts := RunnerCmd(opts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
-
-			// Set debug flag (that root cmd otherwise sets)
-			cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
-			log.SetLevel(log.DebugLevel)
 
 			// Always run runner in unique temp dir
 			cmdOpts.Path = t.NewTempDir().Chdir().Root()

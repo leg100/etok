@@ -30,7 +30,7 @@ func TestMain(t *testing.T) {
 		},
 		{
 			name: "version",
-			args: []string{"-v"},
+			args: []string{"version"},
 			out:  "stok version 123\txyz\n",
 			setup: func() {
 				version.Version = "123"
@@ -38,8 +38,8 @@ func TestMain(t *testing.T) {
 			},
 		},
 		{
-			name: "debug",
-			args: []string{"--debug"},
+			name: "increased verbosity",
+			args: []string{"-v=5"},
 		},
 		{
 			name: "invalid",

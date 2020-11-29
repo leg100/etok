@@ -5,9 +5,9 @@ import (
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
 	"github.com/leg100/stok/pkg/labels"
-	"github.com/leg100/stok/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
@@ -28,10 +28,11 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 
 	run.SetCommand(o.Command)
 	run.SetArgs(o.args)
-	run.SetDebug(o.Debug)
 	run.SetConfigMap(configMapName)
 	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
 	run.SetConfigMapPath(relPathToRoot)
+
+	run.Verbosity = o.Verbosity
 
 	if isTTY {
 		run.AttachSpec.Handshake = true
@@ -44,7 +45,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	}
 
 	o.createdRun = true
-	log.Debugf("created run %s/%s\n", o.Namespace, o.RunName)
+	klog.V(1).Infof("created run %s/%s\n", o.Namespace, o.RunName)
 
 	return run, nil
 }
@@ -75,7 +76,7 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	}
 
 	o.createdArchive = true
-	log.Debugf("Created config map %s/%s\n", o.Namespace, name)
+	klog.V(1).Infof("Created config map %s/%s\n", o.Namespace, name)
 
 	return nil
 }

@@ -5,9 +5,9 @@ import (
 
 	"github.com/leg100/stok/pkg/attacher"
 	"github.com/leg100/stok/pkg/client"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 )
 
 // TODO: move constants somewhere more appropriate
@@ -29,7 +29,7 @@ type Options struct {
 
 	IOStreams
 
-	Debug bool
+	Verbosity int
 }
 
 // IOStreams provides the standard names for iostreams.  This is useful for embedding and for unit testing.
@@ -55,7 +55,7 @@ func NewOpts(out, errout io.Writer, in io.Reader) (*Options, error) {
 		},
 	}
 	// Set logger output device
-	log.SetOut(opts.Out)
+	klog.SetOutput(opts.Out)
 	return opts, nil
 }
 

@@ -80,8 +80,6 @@ spec:
                   storageClass:
                     type: string
                 type: object
-              debug:
-                type: boolean
               handshake:
                 description: Toggle whether runner should wait for a handshake from
                   client
@@ -100,6 +98,8 @@ spec:
               serviceAccountName:
                 default: stok
                 type: string
+              verbosity:
+                type: integer
             required:
             - backend
             - handshake

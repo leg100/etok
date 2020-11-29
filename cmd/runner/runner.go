@@ -12,10 +12,10 @@ import (
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/pkg/archive"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/klog/v2"
 )
 
 type RunnerOptions struct {
@@ -107,9 +107,9 @@ func (o *RunnerOptions) withRawMode(ctx context.Context, f func(context.Context)
 	}
 	defer func() {
 		if err = terminal.Restore(int(o.In.(*os.File).Fd()), oldState); err != nil {
-			log.Debugf("[runner] failed to restore TTY\r\n")
+			klog.V(1).Infof("[runner] failed to restore TTY\r\n")
 		} else {
-			log.Debugf("[runner] restored TTY\r\n")
+			klog.V(1).Infof("[runner] restored TTY\r\n")
 		}
 	}()
 
@@ -123,7 +123,7 @@ func (o *RunnerOptions) handshake(ctx context.Context) error {
 	buf := make([]byte, len(cmdutil.HandshakeString))
 	errch := make(chan error)
 	// In raw mode both carriage return and newline characters are necessary
-	log.Debugf("[runner] awaiting handshake\r\n")
+	klog.V(1).Infof("[runner] awaiting handshake\r\n")
 
 	// FIXME: Occasionally read() blocks awaiting a newline, despite stdin being in raw mode. I
 	// suspect terminal.MakeRaw is only asynchronously taking affect, and the stdin is
@@ -157,7 +157,7 @@ func (o *RunnerOptions) handshake(ctx context.Context) error {
 			return fmt.Errorf("handshake: expected '%s' but received: %s", cmdutil.HandshakeString, string(buf))
 		}
 	}
-	log.Debugf("[runner] handshake completed\r\n")
+	klog.V(1).Infof("[runner] handshake completed\r\n")
 	return nil
 }
 
@@ -169,7 +169,7 @@ func (o *RunnerOptions) run(ctx context.Context, out, errout io.Writer) error {
 
 // Synchronously run command, taking first arg of args as executable, and remainder as arguments.
 func Run(ctx context.Context, args []string, path string, out, errout io.Writer) error {
-	log.Debugf("[runner] running command %v\n", args)
+	klog.V(1).Infof("[runner] running command %v\n", args)
 
 	exe := exec.CommandContext(ctx, args[0], args[1:]...)
 	exe.Dir = path

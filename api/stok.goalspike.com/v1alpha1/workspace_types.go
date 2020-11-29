@@ -48,7 +48,8 @@ type WorkspaceSpec struct {
 
 	Cache   WorkspaceCacheSpec `json:"cache,omitempty"`
 	Backend BackendSpec        `json:"backend"`
-	Debug   bool               `json:"debug,omitempty"`
+
+	Verbosity int `json:"verbosity,omitempty"`
 
 	PrivilegedCommands []string `json:"privilegedCommands"`
 
@@ -73,9 +74,9 @@ func (ws *Workspace) GetHandshake() bool          { return ws.Spec.AttachSpec.Ha
 func (ws *Workspace) GetHandshakeTimeout() string { return ws.Spec.AttachSpec.HandshakeTimeout }
 
 func (ws *Workspace) ContainerArgs() (args []string) {
-	if ws.Spec.Debug {
-		// Enable debug logging for the runner process
-		args = append(args, "--debug")
+	if ws.Spec.Verbosity > 0 {
+		// Set non-defaut verbose logging for the runner process
+		args = append(args, fmt.Sprintf("-v=%d", ws.Spec.Verbosity))
 	}
 
 	// The runner process expects args to come after --
@@ -114,10 +115,6 @@ func (ws *Workspace) IsRunApproved(run *Run) bool {
 func WorkspacePodName(name string) string {
 	return "workspace-" + name
 }
-
-// Get/Set Debug functions
-func (ws *Workspace) GetDebug() bool      { return ws.Spec.Debug }
-func (ws *Workspace) SetDebug(debug bool) { ws.Spec.Debug = debug }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {

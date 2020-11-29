@@ -14,11 +14,12 @@ import (
 
 func TestRoot(t *testing.T) {
 	tests := []struct {
-		name  string
-		args  []string
-		out   string
-		err   bool
-		setup func()
+		name       string
+		args       []string
+		out        string
+		err        bool
+		setup      func()
+		assertions func(*cmdutil.Options)
 	}{
 		{
 			name: "no args",
@@ -42,7 +43,7 @@ func TestRoot(t *testing.T) {
 		},
 		{
 			name: "version",
-			args: []string{"-v"},
+			args: []string{"version"},
 			out:  "stok version 123\txyz\n",
 			setup: func() {
 				version.Version = "123"
@@ -78,6 +79,20 @@ func TestRoot(t *testing.T) {
 			name: "shell",
 			args: []string{"sh", "-h"},
 		},
+		{
+			name: "increased verbosity",
+			args: []string{"-v=5"},
+			// Cannot assert value of Verbosity because root's persistent run
+			// hook is only executed for child commands (see below)
+		},
+		{
+			// Check -v flag is persistent
+			name: "increased verbosity on child command",
+			args: []string{"version", "-v=5"},
+			assertions: func(opts *cmdutil.Options) {
+				assert.Equal(t, 5, opts.Verbosity)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -97,6 +112,10 @@ func TestRoot(t *testing.T) {
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 
 			assert.Regexp(t, tt.out, out)
+
+			if tt.assertions != nil {
+				tt.assertions(opts)
+			}
 		})
 	}
 }

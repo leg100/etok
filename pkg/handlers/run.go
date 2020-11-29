@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/log"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 )
 
 // Log run's phase
@@ -22,7 +22,7 @@ func LogRunPhase() watchtools.ConditionFunc {
 		switch run := event.Object.(type) {
 		case *v1alpha1.Run:
 			if run.GetPhase() != phase {
-				log.Debugf("New run phase: %s\n", run.GetPhase())
+				klog.V(1).Infof("New run phase: %s\n", run.GetPhase())
 				phase = run.GetPhase()
 			}
 		}

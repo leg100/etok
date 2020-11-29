@@ -7,9 +7,9 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 
-	"github.com/leg100/stok/pkg/log"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
@@ -33,7 +33,7 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handsh
 
 	var oldState *terminal.State
 	go func() {
-		log.Debug("Handshaking")
+		klog.V(1).Info("Handshaking")
 		// Blocks until read from stdinR
 		_, err := stdinW.Write([]byte(handshake))
 		if err != nil {

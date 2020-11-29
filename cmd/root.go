@@ -1,40 +1,41 @@
 package cmd
 
 import (
+	"flag"
+	"strconv"
+
 	"github.com/leg100/stok/cmd/generate"
 	"github.com/leg100/stok/cmd/launcher"
 	"github.com/leg100/stok/cmd/manager"
 	"github.com/leg100/stok/cmd/runner"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/cmd/workspace"
-	"github.com/leg100/stok/pkg/log"
-	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
 func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "stok",
-		Version: version.PrintableVersion(),
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if opts.Debug {
-				log.SetLevel(log.DebugLevel)
-				log.Debug("Debug logging enabled")
-			}
-			return nil
-		},
+		Use:           "stok",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			opts.Verbosity, _ = strconv.Atoi(cmd.Flags().Lookup("v").Value.String())
+		},
 	}
 
 	cmd.SetUsageFunc((&templater{
 		UsageTemplate: MainUsageTemplate(),
 	}).UsageFunc())
 
-	cmd.PersistentFlags().BoolVar(&opts.Debug, "debug", false, "Enable debug logging")
+	// Pull in klog's flags
+	klogfs := flag.NewFlagSet("klog", flag.PanicOnError)
+	klog.InitFlags(klogfs)
+	cmd.PersistentFlags().AddGoFlagSet(klogfs)
 
 	cmd.SetOut(opts.Out)
 
+	cmd.AddCommand(versionCmd(opts))
 	cmd.AddCommand(workspace.WorkspaceCmd(opts))
 	cmd.AddCommand(generate.GenerateCmd(opts))
 	cmd.AddCommand(manager.ManagerCmd(opts))

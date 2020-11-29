@@ -104,7 +104,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "stok plan without pty",
-			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--debug", "--", "-no-color", "-input=false", "-var", "suffix=foo"},
+			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,

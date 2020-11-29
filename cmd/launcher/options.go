@@ -17,7 +17,6 @@ import (
 	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/handlers"
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	"github.com/leg100/stok/pkg/runner"
 	"github.com/spf13/cobra"
@@ -29,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 )
 
@@ -196,7 +196,7 @@ func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 		}
 		return err
 	}
-	log.Debug("pod ready")
+	klog.V(1).Info("pod ready")
 	podch <- event.Object.(*corev1.Pod)
 	return nil
 }
@@ -215,7 +215,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 		}
 		return err
 	}
-	log.Debug("run enqueued within enqueue timeout")
+	klog.V(1).Info("run enqueued within enqueue timeout")
 	return nil
 }
 
@@ -269,7 +269,7 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 			return err
 		}
 
-		log.Debugf("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+		klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
 
 		// Construct and deploy ConfigMap resource
 		return o.createConfigMap(ctx, w.Bytes(), o.RunName, v1alpha1.RunDefaultConfigMapKey)
@@ -296,7 +296,7 @@ func (o *LauncherOptions) cleanup() {
 var notAuthorisedError = errors.New("you are not authorised")
 
 func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
-	log.Debugf("%s is a privileged command on workspace\n", o.Command)
+	klog.V(1).Infof("%s is a privileged command on workspace\n", o.Command)
 	annotations := ws.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -312,7 +312,7 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 			return fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
 		}
 	}
-	log.Debug("successfully approved run with workspace")
+	klog.V(1).Info("successfully approved run with workspace")
 
 	return nil
 }

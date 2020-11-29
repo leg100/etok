@@ -95,18 +95,7 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
-			name: "debug",
-			args: []string{"--debug"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			assertions: func(o *LauncherOptions) {
-				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, true, run.GetDebug())
-			},
-		},
-		{
 			name: "approved",
-			args: []string{"--debug"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands(allCommands...))},
 			assertions: func(o *LauncherOptions) {
 				// Get run
@@ -287,9 +276,6 @@ func TestLauncher(t *testing.T) {
 				cmd.SetArgs(tt.args)
 
 				mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
-
-				// Set debug flag (that root cmd otherwise sets)
-				cmd.Flags().BoolVar(&cmdOpts.Debug, "debug", false, "debug flag")
 
 				err = cmd.ExecuteContext(context.Background())
 				if tt.err != nil {

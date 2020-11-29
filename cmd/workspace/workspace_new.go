@@ -18,12 +18,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/pkg/logstreamer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 )
 
@@ -146,7 +146,7 @@ func (o *NewOptions) Run(ctx context.Context) error {
 		return err
 	}
 	o.createdWorkspace = true
-	log.Infof("Created workspace %s\n", o.name())
+	fmt.Printf("Created workspace %s\n", o.name())
 
 	// Wait until container can be attached/streamed to/from
 	pod, err := o.waitForContainer(ctx, ws, isTTY)
@@ -158,12 +158,12 @@ func (o *NewOptions) Run(ctx context.Context) error {
 	exit := runner.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace)
 
 	if isTTY {
-		log.Debug("Attaching to pod")
+		klog.V(1).Info("Attaching to pod")
 		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	} else {
-		log.Debug("Retrieving pod's log stream")
+		klog.V(1).Info("Retrieving pod's log stream")
 		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), globals.RunnerContainerName); err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1
 	// Permit filtering stok resources by component
 	labels.SetLabel(ws, labels.WorkspaceComponent)
 
-	ws.SetDebug(o.Debug)
+	ws.Spec.Verbosity = o.Verbosity
 
 	if isTTY {
 		ws.Spec.AttachSpec.Handshake = true
@@ -302,10 +302,10 @@ func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspac
 
 func detectTTY(in interface{}) bool {
 	if term.IsTerminal(in) {
-		log.Debug("Detected TTY on stdin")
+		klog.V(1).Info("Detected TTY on stdin")
 		return true
 	} else {
-		log.Debug("TTY not detected on stdin")
+		klog.V(1).Info("TTY not detected on stdin")
 		return false
 	}
 }

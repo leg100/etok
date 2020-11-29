@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 )
 
 // ContainerReady returns an appropriate event handler for determining when pod
@@ -120,7 +120,7 @@ func PodHandlerWrapper(name string, h podHandler) watchtools.ConditionFunc {
 		}
 
 		if pod.Status.Phase != phase {
-			log.Debugf("Pod phase shift: %s -> %s\n", phase, pod.Status.Phase)
+			klog.V(1).Infof("Pod phase shift: %s -> %s\n", phase, pod.Status.Phase)
 			phase = pod.Status.Phase
 		}
 

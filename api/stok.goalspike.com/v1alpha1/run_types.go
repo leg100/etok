@@ -42,11 +42,12 @@ type RunSpec struct {
 	// +kubebuilder:validation:Enum={"apply","destroy","force-unlock","get","import","init","output","plan","refresh","sh","state list","state mv","state pull","state push","state rm","state show","taint","untaint","validate"}
 	Command       string   `json:"command"`
 	Args          []string `json:"args,omitempty"`
-	Debug         bool     `json:"debug,omitempty"`
 	ConfigMap     string   `json:"configMap"`
 	ConfigMapKey  string   `json:"configMapKey"`
 	ConfigMapPath string   `json:"configMapPath"`
 	Workspace     string   `json:"workspace"`
+
+	Verbosity int `json:"verbosity,omitempty"`
 
 	AttachSpec `json:",inline"`
 }
@@ -58,10 +59,6 @@ func (r *RunSpec) SetCommand(cmd string) { r.Command = cmd }
 // Get/Set Args functions
 func (r *RunSpec) GetArgs() []string     { return r.Args }
 func (r *RunSpec) SetArgs(args []string) { r.Args = args }
-
-// Get/Set Debug functions
-func (r *RunSpec) GetDebug() bool      { return r.Debug }
-func (r *RunSpec) SetDebug(debug bool) { r.Debug = debug }
 
 // Get/Set ConfigMap functions
 func (r *RunSpec) GetConfigMap() string     { return r.ConfigMap }
@@ -102,9 +99,9 @@ func (r *Run) PodName() string { return r.Name }
 
 // ContainerArgs returns the args for a run's container
 func (r *Run) ContainerArgs() (args []string) {
-	if r.Debug {
-		// Enable debug logging for the runner process
-		args = append(args, "--debug")
+	if r.Verbosity > 0 {
+		// Set non-defaut verbose logging for the runner process
+		args = append(args, fmt.Sprintf("-v=%d", r.Verbosity))
 	}
 
 	// The runner process expects args to come after --

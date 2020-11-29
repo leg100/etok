@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/leg100/stok/pkg/log"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 
 	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
@@ -20,7 +20,7 @@ type Options struct {
 }
 
 func Stream(ctx context.Context, f GetLogsFunc, out io.Writer, podsClient typedv1.PodInterface, podName, containerName string) error {
-	log.Debug("Streaming logs")
+	klog.V(1).Info("Streaming logs")
 	stream, err := f(ctx, Options{
 		PodsClient:    podsClient,
 		PodName:       podName,

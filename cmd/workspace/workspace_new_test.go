@@ -190,16 +190,6 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
-			name: "debug flag",
-			args: []string{"default/foo", "--debug"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
-				assert.NoError(t, err)
-				assert.Equal(t, true, ws.GetDebug())
-			},
-		},
-		{
 			name: "log stream output",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
@@ -279,9 +269,6 @@ func TestNewWorkspace(t *testing.T) {
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
 			cmdOpts.Path = path
-
-			// Set debug flag (that root cmd otherwise sets)
-			cmd.Flags().BoolVar(&opts.Debug, "debug", false, "debug flag")
 
 			err = cmd.ExecuteContext(context.Background())
 			if tt.err != nil {

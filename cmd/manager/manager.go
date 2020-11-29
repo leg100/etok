@@ -7,11 +7,11 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog/v2"
 
 	"github.com/leg100/stok/cmd/flags"
 	cmdutil "github.com/leg100/stok/cmd/util"
 	"github.com/leg100/stok/controllers"
-	"github.com/leg100/stok/pkg/log"
 	"github.com/leg100/stok/scheme"
 	"github.com/leg100/stok/version"
 	"github.com/spf13/cobra"
@@ -21,9 +21,9 @@ import (
 )
 
 func printVersion() {
-	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+	klog.V(0).Info(fmt.Sprintf("Operator Version: %s", version.Version))
+	klog.V(0).Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
+	klog.V(0).Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
 }
 
 type ManagerOptions struct {
@@ -40,8 +40,6 @@ type ManagerOptions struct {
 	EnableLeaderElection bool
 
 	args []string
-
-	debug bool
 }
 
 func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
@@ -71,7 +69,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 				return fmt.Errorf("unable to start manager: %w", err)
 			}
 
-			log.Info("Runner image: " + o.Image)
+			klog.V(0).Info("Runner image: " + o.Image)
 
 			// Setup workspace ctrl with mgr
 			if err := controllers.NewWorkspaceReconciler(mgr.GetClient(), o.Image).SetupWithManager(mgr); err != nil {
@@ -83,7 +81,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 				return fmt.Errorf("unable to create run controller: %w", err)
 			}
 
-			log.Info("starting manager")
+			klog.V(0).Info("starting manager")
 			if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 				return fmt.Errorf("problem running manager: %w", err)
 			}

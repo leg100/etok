@@ -37,8 +37,6 @@ type GenerateOperatorOptions struct {
 	LocalClusterRoleToggle bool
 	// URL to cluster role definition
 	RemoteClusterRoleURL string
-
-	debug bool
 }
 
 func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperatorOptions) {
