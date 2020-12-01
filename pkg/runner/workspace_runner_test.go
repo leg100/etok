@@ -3,8 +3,8 @@ package runner
 import (
 	"testing"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/testobj"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -25,7 +25,7 @@ func TestWorkspaceRunner(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertions(NewWorkspacePod(tt.workspace, "stok:latest"))
+			tt.assertions(NewWorkspacePod(tt.workspace, "etok:latest"))
 		})
 	}
 }

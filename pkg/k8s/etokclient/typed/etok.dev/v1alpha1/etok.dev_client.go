@@ -17,32 +17,32 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/k8s/stokclient/scheme"
+	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/k8s/etokclient/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
-type StokV1alpha1Interface interface {
+type EtokV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	RunsGetter
 	WorkspacesGetter
 }
 
-// StokV1alpha1Client is used to interact with features provided by the stok.goalspike.com group.
-type StokV1alpha1Client struct {
+// EtokV1alpha1Client is used to interact with features provided by the etok.dev group.
+type EtokV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *StokV1alpha1Client) Runs(namespace string) RunInterface {
+func (c *EtokV1alpha1Client) Runs(namespace string) RunInterface {
 	return newRuns(c, namespace)
 }
 
-func (c *StokV1alpha1Client) Workspaces(namespace string) WorkspaceInterface {
+func (c *EtokV1alpha1Client) Workspaces(namespace string) WorkspaceInterface {
 	return newWorkspaces(c, namespace)
 }
 
-// NewForConfig creates a new StokV1alpha1Client for the given config.
-func NewForConfig(c *rest.Config) (*StokV1alpha1Client, error) {
+// NewForConfig creates a new EtokV1alpha1Client for the given config.
+func NewForConfig(c *rest.Config) (*EtokV1alpha1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -51,12 +51,12 @@ func NewForConfig(c *rest.Config) (*StokV1alpha1Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StokV1alpha1Client{client}, nil
+	return &EtokV1alpha1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new StokV1alpha1Client for the given config and
+// NewForConfigOrDie creates a new EtokV1alpha1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *StokV1alpha1Client {
+func NewForConfigOrDie(c *rest.Config) *EtokV1alpha1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -64,9 +64,9 @@ func NewForConfigOrDie(c *rest.Config) *StokV1alpha1Client {
 	return client
 }
 
-// New creates a new StokV1alpha1Client for the given RESTClient.
-func New(c rest.Interface) *StokV1alpha1Client {
-	return &StokV1alpha1Client{c}
+// New creates a new EtokV1alpha1Client for the given RESTClient.
+func New(c rest.Interface) *EtokV1alpha1Client {
+	return &EtokV1alpha1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -84,7 +84,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *StokV1alpha1Client) RESTClient() rest.Interface {
+func (c *EtokV1alpha1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

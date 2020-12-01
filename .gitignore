@@ -1,16 +1,16 @@
-# run stok in root of repo without uploading the whole repo
+# run etok in root of repo without uploading the whole repo
 /.terraformignore
 # example terraform
 example/
 # docker push artefacts
 /push.out
-/stok.digest
+/etok.digest
 # terraform
 .terraform
 # direnv
 .envrc
 # Temporary Build Files
-/stok
+/etok
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###
 # -*- mode: gitignore; -*-

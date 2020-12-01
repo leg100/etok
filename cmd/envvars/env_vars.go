@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Each flag can also be set with an env variable whose name starts with `STOK_`.
+// Each flag can also be set with an env variable whose name starts with `ETOK_`.
 func SetFlagsFromEnvVariables(cmd *cobra.Command) {
 	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
 		envVar := flagToEnvVarName(f)
@@ -23,5 +23,5 @@ func SetFlagsFromEnvVariables(cmd *cobra.Command) {
 }
 
 func flagToEnvVarName(f *pflag.Flag) string {
-	return fmt.Sprintf("STOK_%s", strings.Replace(strings.ToUpper(f.Name), "-", "_", -1))
+	return fmt.Sprintf("ETOK_%s", strings.Replace(strings.ToUpper(f.Name), "-", "_", -1))
 }

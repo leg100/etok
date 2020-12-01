@@ -17,9 +17,9 @@
 package fake
 
 import (
-	clientset "github.com/leg100/stok/pkg/k8s/stokclient"
-	stokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
-	fakestokv1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1/fake"
+	clientset "github.com/leg100/etok/pkg/k8s/etokclient"
+	etokv1alpha1 "github.com/leg100/etok/pkg/k8s/etokclient/typed/etok.dev/v1alpha1"
+	fakeetokv1alpha1 "github.com/leg100/etok/pkg/k8s/etokclient/typed/etok.dev/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -74,7 +74,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// StokV1alpha1 retrieves the StokV1alpha1Client
-func (c *Clientset) StokV1alpha1() stokv1alpha1.StokV1alpha1Interface {
-	return &fakestokv1alpha1.FakeStokV1alpha1{Fake: &c.Fake}
+// EtokV1alpha1 retrieves the EtokV1alpha1Client
+func (c *Clientset) EtokV1alpha1() etokv1alpha1.EtokV1alpha1Interface {
+	return &fakeetokv1alpha1.FakeEtokV1alpha1{Fake: &c.Fake}
 }

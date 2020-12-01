@@ -5,14 +5,14 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/version"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/version"
 	"github.com/spf13/cobra"
 )
 
-const allCrdsPath = "config/crd/bases/stok.goalspike.com_all.yaml"
+const allCrdsPath = "config/crd/bases/etok.dev_all.yaml"
 
-var allCrdsURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + allCrdsPath
+var allCrdsURL = "https://raw.githubusercontent.com/leg100/etok/v" + version.Version + "/" + allCrdsPath
 
 type GenerateCRDOptions struct {
 	*cmdutil.Options
@@ -29,7 +29,7 @@ func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions)
 	o := &GenerateCRDOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "crds",
-		Short: "Generate stok CRDs",
+		Short: "Generate etok CRDs",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			var crds []byte
 

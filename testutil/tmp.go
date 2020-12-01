@@ -53,7 +53,7 @@ type TempDir struct {
 // NewTempDir creates a temporary directory and a teardown function
 // that should be called to properly delete the directory content.
 func NewTempDir(t *testing.T) *TempDir {
-	root, err := ioutil.TempDir("", "stok")
+	root, err := ioutil.TempDir("", "etok")
 	if err != nil {
 		t.Error(err)
 	}

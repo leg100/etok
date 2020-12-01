@@ -1,9 +1,9 @@
 package testobj
 
 import (
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/globals"
-	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

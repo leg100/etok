@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/testutil"
-	"github.com/leg100/stok/version"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/testutil"
+	"github.com/leg100/etok/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,14 +37,14 @@ func TestRoot(t *testing.T) {
 			out:  "Terraform Commands:\n",
 		},
 		{
-			name: "stok command group",
+			name: "etok command group",
 			args: []string{"-h"},
-			out:  "Stok Commands:\n",
+			out:  "etok Commands:\n",
 		},
 		{
 			name: "version",
 			args: []string{"version"},
-			out:  "stok version 123\txyz\n",
+			out:  "etok version 123\txyz\n",
 			setup: func() {
 				version.Version = "123"
 				version.Commit = "xyz"

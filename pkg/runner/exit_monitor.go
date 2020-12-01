@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	stokerrors "github.com/leg100/stok/pkg/errors"
-	"github.com/leg100/stok/pkg/globals"
-	"github.com/leg100/stok/pkg/k8s"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -46,7 +46,7 @@ func ExitMonitor(ctx context.Context, client kubernetes.Interface, name, namespa
 		if err != nil {
 			exit <- fmt.Errorf("failed to retrieve exit code: %w", err)
 		} else if code != 0 {
-			exit <- stokerrors.NewExitError(code)
+			exit <- etokerrors.NewExitError(code)
 		} else {
 			exit <- nil
 		}

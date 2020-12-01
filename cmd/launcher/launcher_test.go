@@ -8,16 +8,16 @@ import (
 	"testing"
 
 	"github.com/creack/pty"
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/archive"
-	"github.com/leg100/stok/pkg/client"
-	"github.com/leg100/stok/pkg/env"
-	stokerrors "github.com/leg100/stok/pkg/errors"
-	"github.com/leg100/stok/pkg/handlers"
-	"github.com/leg100/stok/pkg/logstreamer"
-	"github.com/leg100/stok/pkg/testobj"
-	"github.com/leg100/stok/testutil"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/env"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+	"github.com/leg100/etok/pkg/handlers"
+	"github.com/leg100/etok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/testobj"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,7 @@ func TestLauncher(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
-		env      env.StokEnv
+		env      env.EtokEnv
 		err      func(err error) bool
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
@@ -46,7 +46,7 @@ func TestLauncher(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			env:  env.StokEnv("default/default"),
+			env:  env.EtokEnv("default/default"),
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
@@ -55,7 +55,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "specific namespace and workspace",
-			env:  env.StokEnv("foo/bar"),
+			env:  env.EtokEnv("foo/bar"),
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
@@ -66,7 +66,7 @@ func TestLauncher(t *testing.T) {
 			name: "workspace flag",
 			args: []string{"--workspace", "foo/bar"},
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
-			env:  env.StokEnv("default/default"),
+			env:  env.EtokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "foo", o.Namespace)
 				assert.Equal(t, "bar", o.Workspace)
@@ -76,7 +76,7 @@ func TestLauncher(t *testing.T) {
 			name: "arbitrary terraform flag",
 			args: []string{"--", "-input", "false"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			env:  env.StokEnv("default/default"),
+			env:  env.EtokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				if o.Command == "sh" {
 					assert.Equal(t, []string{"-c", "-input false"}, o.args)
@@ -89,7 +89,7 @@ func TestLauncher(t *testing.T) {
 			name: "context flag",
 			args: []string{"--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			env:  env.StokEnv("default/default"),
+			env:  env.EtokEnv("default/default"),
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "oz-cluster", o.KubeContext)
 			},
@@ -166,7 +166,7 @@ func TestLauncher(t *testing.T) {
 			args: []string{},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			err: func(err error) bool {
-				_, ok := err.(stokerrors.ExitError)
+				_, ok := err.(etokerrors.ExitError)
 				return ok
 			},
 			code: int32(5),

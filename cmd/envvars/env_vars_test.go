@@ -3,7 +3,7 @@ package envvars
 import (
 	"testing"
 
-	"github.com/leg100/stok/testutil"
+	"github.com/leg100/etok/testutil"
 	"github.com/spf13/cobra"
 	"gotest.tools/assert"
 )
@@ -18,7 +18,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "non-persistent flag",
 			envs: map[string]string{
-				"STOK_FOO": "override",
+				"ETOK_FOO": "override",
 			},
 			want: "override",
 			setFlag: func(cmd *cobra.Command) *string {
@@ -28,7 +28,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "persistent flag",
 			envs: map[string]string{
-				"STOK_FOO": "override",
+				"ETOK_FOO": "override",
 			},
 			want: "override",
 			setFlag: func(cmd *cobra.Command) *string {
@@ -38,7 +38,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "flag on child command",
 			envs: map[string]string{
-				"STOK_FOO": "override",
+				"ETOK_FOO": "override",
 			},
 			want: "override",
 			setFlag: func(parent *cobra.Command) *string {
@@ -51,7 +51,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "persistent flag on child command",
 			envs: map[string]string{
-				"STOK_FOO": "override",
+				"ETOK_FOO": "override",
 			},
 			want: "override",
 			setFlag: func(parent *cobra.Command) *string {
@@ -64,7 +64,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "flag on grandchild command",
 			envs: map[string]string{
-				"STOK_FOO": "override",
+				"ETOK_FOO": "override",
 			},
 			want: "override",
 			setFlag: func(grandparent *cobra.Command) *string {
@@ -79,7 +79,7 @@ func TestSetFlagsFromEnvVariables(t *testing.T) {
 		{
 			name: "misnamed",
 			envs: map[string]string{
-				"STOK_FOOBAR": "override",
+				"ETOK_FOOBAR": "override",
 			},
 			want: "default",
 			setFlag: func(cmd *cobra.Command) *string {

@@ -14,49 +14,49 @@ const (
 )
 
 var (
-	stokenvRegex = regexp.MustCompile("^[a-z0-9-]+/[a-z0-9-]+$")
+	etokenvRegex = regexp.MustCompile("^[a-z0-9-]+/[a-z0-9-]+$")
 )
 
 // A string identifying a namespaced workspace, according to the format $namespace/$workspace, with
 // helper functions to read and write the string to the file .terraform/environment
-type StokEnv string
+type EtokEnv string
 
-func ValidateAndParse(stokenv string) (namespace string, workspace string, err error) {
-	if err = Validate(stokenv); err != nil {
+func ValidateAndParse(etokenv string) (namespace string, workspace string, err error) {
+	if err = Validate(etokenv); err != nil {
 		return workspace, namespace, err
 	}
-	parts := strings.Split(stokenv, "/")
+	parts := strings.Split(etokenv, "/")
 	return parts[0], parts[1], nil
 }
 
-func Validate(stokenv string) error {
-	if !stokenvRegex.MatchString(stokenv) {
-		return fmt.Errorf("workspace must match pattern %s", stokenvRegex.String())
+func Validate(etokenv string) error {
+	if !etokenvRegex.MatchString(etokenv) {
+		return fmt.Errorf("workspace must match pattern %s", etokenvRegex.String())
 	}
 	return nil
 }
 
-func WithOptionalNamespace(stokenv string) StokEnv {
-	parts := strings.Split(stokenv, "/")
+func WithOptionalNamespace(etokenv string) EtokEnv {
+	parts := strings.Split(etokenv, "/")
 	if len(parts) == 1 {
-		return StokEnv(fmt.Sprintf("default/%s", parts[0]))
+		return EtokEnv(fmt.Sprintf("default/%s", parts[0]))
 	}
-	return StokEnv(stokenv)
+	return EtokEnv(etokenv)
 }
 
-func NewStokEnv(namespace, workspace string) StokEnv {
-	return StokEnv(fmt.Sprintf("%s/%s", namespace, workspace))
+func NewEtokEnv(namespace, workspace string) EtokEnv {
+	return EtokEnv(fmt.Sprintf("%s/%s", namespace, workspace))
 }
 
-func (env StokEnv) Namespace() string {
+func (env EtokEnv) Namespace() string {
 	return strings.Split(string(env), "/")[0]
 }
 
-func (env StokEnv) Workspace() string {
+func (env EtokEnv) Workspace() string {
 	return strings.Split(string(env), "/")[1]
 }
 
-func ReadStokEnv(path string) (StokEnv, error) {
+func ReadEtokEnv(path string) (EtokEnv, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -67,10 +67,10 @@ func ReadStokEnv(path string) (StokEnv, error) {
 		return "", err
 	}
 
-	return StokEnv(string(bytes)), nil
+	return EtokEnv(string(bytes)), nil
 }
 
-func (env StokEnv) Write(path string) error {
+func (env EtokEnv) Write(path string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return err

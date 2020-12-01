@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 
-	"github.com/leg100/stok/cmd/envvars"
-	cmdutil "github.com/leg100/stok/cmd/util"
+	"github.com/leg100/etok/cmd/envvars"
+	cmdutil "github.com/leg100/etok/cmd/util"
 )
 
 // ParseArgs parses CLI args and executes the select command

@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	scheme "github.com/leg100/stok/pkg/k8s/stokclient/scheme"
+	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	scheme "github.com/leg100/etok/pkg/k8s/etokclient/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -54,7 +54,7 @@ type runs struct {
 }
 
 // newRuns returns a Runs
-func newRuns(c *StokV1alpha1Client, namespace string) *runs {
+func newRuns(c *EtokV1alpha1Client, namespace string) *runs {
 	return &runs{
 		client: c.RESTClient(),
 		ns:     namespace,

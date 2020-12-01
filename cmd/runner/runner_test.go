@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/creack/pty"
-	"github.com/leg100/stok/cmd/envvars"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/testutil"
+	"github.com/leg100/etok/cmd/envvars"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh/terminal"
@@ -51,7 +51,7 @@ func TestRunner(t *testing.T) {
 			name: "extract archive",
 			args: []string{"--", "/bin/ls", "test1.tf"},
 			envs: map[string]string{
-				"STOK_TARBALL": "archive.tar.gz",
+				"ETOK_TARBALL": "archive.tar.gz",
 			},
 			createTarball: func(t *testutil.T, path string) {
 				createTarballWithFiles(t, filepath.Join(path, "archive.tar.gz"), "test1.tf")
@@ -74,7 +74,7 @@ func TestRunner(t *testing.T) {
 			name: "handshake",
 			args: []string{"--", "sh", "-c", "echo -n hallelujah"},
 			envs: map[string]string{
-				"STOK_HANDSHAKE": "true",
+				"ETOK_HANDSHAKE": "true",
 			},
 			in:  bytes.NewBufferString("opensesame\n"),
 			out: "hallelujah",
@@ -83,7 +83,7 @@ func TestRunner(t *testing.T) {
 			name: "bad handshake",
 			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
-				"STOK_HANDSHAKE": "true",
+				"ETOK_HANDSHAKE": "true",
 			},
 			in: bytes.NewBufferString("mag)J)Fring\n"),
 			err: func(t *testutil.T, err error) {
@@ -94,8 +94,8 @@ func TestRunner(t *testing.T) {
 			name: "time out waiting for handshake",
 			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
-				"STOK_HANDSHAKE":         "true",
-				"STOK_HANDSHAKE_TIMEOUT": "20ms",
+				"ETOK_HANDSHAKE":         "true",
+				"ETOK_HANDSHAKE_TIMEOUT": "20ms",
 			},
 			in: &delayedReader{time.Millisecond * 100},
 			err: func(t *testutil.T, err error) {

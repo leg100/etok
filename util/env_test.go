@@ -3,7 +3,7 @@ package util
 import (
 	"testing"
 
-	"github.com/leg100/stok/testutil"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

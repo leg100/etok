@@ -7,11 +7,11 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/controllers"
-	"github.com/leg100/stok/scheme"
-	"github.com/leg100/stok/version"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/controllers"
+	"github.com/leg100/etok/scheme"
+	"github.com/leg100/etok/version"
 	"github.com/spf13/cobra"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,7 +44,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 	o := &ManagerOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:    "operator",
-		Short:  "Run the stok operator",
+		Short:  "Run the etok operator",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
@@ -61,7 +61,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 				MetricsBindAddress: o.MetricsAddress,
 				Port:               9443,
 				LeaderElection:     o.EnableLeaderElection,
-				LeaderElectionID:   "688c905b.goalspike.com",
+				LeaderElectionID:   "688c905b.dev",
 			})
 			if err != nil {
 				return fmt.Errorf("unable to start manager: %w", err)

@@ -1,14 +1,14 @@
 package scheme
 
 import (
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
 var (
-	// Create new scheme obj to add built-in and stok schemes to below
+	// Create new scheme obj to add built-in and etok schemes to below
 	Scheme = runtime.NewScheme()
 )
 

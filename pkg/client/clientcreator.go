@@ -3,7 +3,7 @@ package client
 import (
 	"fmt"
 
-	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/etok/pkg/k8s/etokclient"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -26,9 +26,9 @@ func (cc *clientCreator) Create(kubeCtx string) (*Client, error) {
 		return nil, fmt.Errorf("getting kubernetes client config: %w", err)
 	}
 
-	sc, err := stokclient.NewForConfig(cfg)
+	sc, err := etokclient.NewForConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("creating stok kubernetes client: %w", err)
+		return nil, fmt.Errorf("creating etok kubernetes client: %w", err)
 	}
 
 	kc, err := kubernetes.NewForConfig(cfg)
@@ -38,7 +38,7 @@ func (cc *clientCreator) Create(kubeCtx string) (*Client, error) {
 
 	return &Client{
 		Config:     cfg,
-		StokClient: sc,
+		EtokClient: sc,
 		KubeClient: kc,
 	}, nil
 }

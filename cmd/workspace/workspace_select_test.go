@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,14 +16,14 @@ func TestWorkspaceSelect(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		env  env.StokEnv
+		env  env.EtokEnv
 		out  string
 		err  bool
 	}{
 		{
 			name: "defaults",
 			args: []string{"dev/networking"},
-			env:  env.StokEnv("dev/networking"),
+			env:  env.EtokEnv("dev/networking"),
 			out:  "Current workspace now: dev/networking\n",
 		},
 	}
@@ -46,9 +46,9 @@ func TestWorkspaceSelect(t *testing.T) {
 			assert.Equal(t, tt.out, out.String())
 
 			// Confirm .terraform/environment was written with expected contents
-			stokenv, err := env.ReadStokEnv(path)
+			etokenv, err := env.ReadEtokEnv(path)
 			require.NoError(t, err)
-			assert.Equal(t, tt.env, stokenv)
+			assert.Equal(t, tt.env, etokenv)
 		})
 	}
 }

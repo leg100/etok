@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

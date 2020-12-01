@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,17 +22,17 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "no args",
 			args: []string{},
-			out:  "^Stok workspace management",
+			out:  "^etok workspace management",
 		},
 		{
 			name: "help",
 			args: []string{"-h"},
-			out:  "^Stok workspace management",
+			out:  "^etok workspace management",
 		},
 		{
 			name: "new",
 			args: []string{"new", "-h"},
-			out:  "^Create a new stok workspace",
+			out:  "^Create a new etok workspace",
 		},
 		{
 			name: "list",
@@ -42,7 +42,7 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "delete",
 			args: []string{"delete", "-h"},
-			out:  "^Deletes a stok workspace",
+			out:  "^Deletes a etok workspace",
 		},
 		{
 			name: "show",
@@ -52,7 +52,7 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "select",
 			args: []string{"select", "-h"},
-			out:  "^Select a stok workspace",
+			out:  "^Select a etok workspace",
 		},
 	}
 

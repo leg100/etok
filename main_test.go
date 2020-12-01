@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/leg100/stok/testutil"
-	"github.com/leg100/stok/version"
+	"github.com/leg100/etok/testutil"
+	"github.com/leg100/etok/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +31,7 @@ func TestMain(t *testing.T) {
 		{
 			name: "version",
 			args: []string{"version"},
-			out:  "stok version 123\txyz\n",
+			out:  "etok version 123\txyz\n",
 			setup: func() {
 				version.Version = "123"
 				version.Commit = "xyz"

@@ -17,26 +17,26 @@
 package fake
 
 import (
-	v1alpha1 "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
+	v1alpha1 "github.com/leg100/etok/pkg/k8s/etokclient/typed/etok.dev/v1alpha1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeStokV1alpha1 struct {
+type FakeEtokV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeStokV1alpha1) Runs(namespace string) v1alpha1.RunInterface {
+func (c *FakeEtokV1alpha1) Runs(namespace string) v1alpha1.RunInterface {
 	return &FakeRuns{c, namespace}
 }
 
-func (c *FakeStokV1alpha1) Workspaces(namespace string) v1alpha1.WorkspaceInterface {
+func (c *FakeEtokV1alpha1) Workspaces(namespace string) v1alpha1.WorkspaceInterface {
 	return &FakeWorkspaces{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeStokV1alpha1) RESTClient() rest.Interface {
+func (c *FakeEtokV1alpha1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

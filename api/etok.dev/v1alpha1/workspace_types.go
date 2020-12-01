@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leg100/stok/util/slice"
+	"github.com/leg100/etok/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -41,9 +41,9 @@ type WorkspaceList struct {
 
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
-	// +kubebuilder:default=stok
+	// +kubebuilder:default=etok
 	SecretName string `json:"secretName,omitempty"`
-	// +kubebuilder:default=stok
+	// +kubebuilder:default=etok
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
 	Cache   WorkspaceCacheSpec `json:"cache,omitempty"`
@@ -112,8 +112,8 @@ const (
 
 	WorkspaceDefaultCacheSize = "1Gi"
 
-	WorkspaceDefaultSecretName         = "stok"
-	WorkspaceDefaultServiceAccountName = "stok"
+	WorkspaceDefaultSecretName         = "etok"
+	WorkspaceDefaultServiceAccountName = "etok"
 
 	BackendTypeFilename   = "backend.tf"
 	BackendConfigFilename = "backend.ini"

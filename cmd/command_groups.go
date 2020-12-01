@@ -5,8 +5,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/leg100/stok/cmd/launcher"
-	"github.com/leg100/stok/util/slice"
+	"github.com/leg100/etok/cmd/launcher"
+	"github.com/leg100/etok/util/slice"
 	"github.com/spf13/cobra"
 )
 
@@ -57,12 +57,12 @@ func (grps CommandGroups) String() string {
 
 func CompileCommandGroups(cmd *cobra.Command) CommandGroups {
 	if cmd == cmd.Root() {
-		var tfCmds, stokCmds []*cobra.Command
+		var tfCmds, etokCmds []*cobra.Command
 		for _, c := range cmd.Commands() {
 			if isTerraformCommand(c.Name()) {
 				tfCmds = append(tfCmds, c)
 			} else {
-				stokCmds = append(stokCmds, c)
+				etokCmds = append(etokCmds, c)
 			}
 		}
 		return CommandGroups{
@@ -72,8 +72,8 @@ func CompileCommandGroups(cmd *cobra.Command) CommandGroups {
 				Summarized: true,
 			},
 			{
-				Heading:  "Stok Commands:",
-				Commands: stokCmds,
+				Heading:  "etok Commands:",
+				Commands: etokCmds,
 			},
 		}
 	}

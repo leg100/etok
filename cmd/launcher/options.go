@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/archive"
-	"github.com/leg100/stok/pkg/client"
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/globals"
-	"github.com/leg100/stok/pkg/handlers"
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/logstreamer"
-	"github.com/leg100/stok/pkg/runner"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/handlers"
+	"github.com/leg100/etok/pkg/k8s"
+	"github.com/leg100/etok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/runner"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -51,7 +51,7 @@ type LauncherOptions struct {
 
 	// Space delimited command to be run on pod
 	Command string
-	// Stok Workspace's WorkspaceSpec
+	// etok Workspace's WorkspaceSpec
 	WorkspaceSpec v1alpha1.WorkspaceSpec
 	// Create a service acccount if it does not exist
 	DisableCreateServiceAccount bool
@@ -77,7 +77,7 @@ type LauncherOptions struct {
 }
 
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
-	stokenv, err := env.ReadStokEnv(o.Path)
+	etokenv, err := env.ReadEtokEnv(o.Path)
 	if err != nil {
 		// It's ok for envfile to not exist
 		if !os.IsNotExist(err) {
@@ -85,8 +85,8 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 		}
 	} else {
 		if !isFlagPassed(cmd.Flags(), "workspace") {
-			o.Namespace = stokenv.Namespace()
-			o.Workspace = stokenv.Workspace()
+			o.Namespace = etokenv.Namespace()
+			o.Workspace = etokenv.Workspace()
 		}
 	}
 	return nil
@@ -207,7 +207,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 	ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
 	defer cancel()
 
-	lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
+	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.Workspace, Namespace: o.Namespace}
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
@@ -221,7 +221,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 
 func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 	go func() {
-		lw := &k8s.RunListWatcher{Client: o.StokClient, Name: run.Name, Namespace: run.Namespace}
+		lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
 		// Ignore errors
 		// TODO: the current logger has no warning level. We should probably
 		// upgrade the logger to something that does, and then log any error
@@ -232,7 +232,7 @@ func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 
 func (o *LauncherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
 	go func() {
-		lw := &k8s.WorkspaceListWatcher{Client: o.StokClient, Name: o.Workspace, Namespace: o.Namespace}
+		lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.Workspace, Namespace: o.Namespace}
 		// Ignore errors TODO: the current logger has no warning level. We
 		// should probably upgrade the logger to something that does, and then
 		// log any error here as a warning.

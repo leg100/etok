@@ -1,4 +1,4 @@
-module github.com/leg100/stok
+module github.com/leg100/etok
 
 go 1.14
 

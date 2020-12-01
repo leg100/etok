@@ -5,10 +5,10 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
   labels:
-    app: stok
-  name: runs.stok.goalspike.com
+    app: etok
+  name: runs.etok.dev
 spec:
-  group: stok.goalspike.com
+  group: etok.dev
   names:
     kind: Run
     listKind: RunList
@@ -125,10 +125,10 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
   labels:
-    app: stok
-  name: workspaces.stok.goalspike.com
+    app: etok
+  name: workspaces.etok.dev
 spec:
-  group: stok.goalspike.com
+  group: etok.dev
   names:
     kind: Workspace
     listKind: WorkspaceList
@@ -213,10 +213,10 @@ spec:
                   type: string
                 type: array
               secretName:
-                default: stok
+                default: etok
                 type: string
               serviceAccountName:
-                default: stok
+                default: etok
                 type: string
               terraformVersion:
                 description: 'TODO: kubebuilder markers'

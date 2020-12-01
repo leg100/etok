@@ -4,19 +4,19 @@ import (
 	"flag"
 	"strconv"
 
-	"github.com/leg100/stok/cmd/generate"
-	"github.com/leg100/stok/cmd/launcher"
-	"github.com/leg100/stok/cmd/manager"
-	"github.com/leg100/stok/cmd/runner"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/cmd/workspace"
+	"github.com/leg100/etok/cmd/generate"
+	"github.com/leg100/etok/cmd/launcher"
+	"github.com/leg100/etok/cmd/manager"
+	"github.com/leg100/etok/cmd/runner"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/cmd/workspace"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
 
 func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "stok",
+		Use:           "etok",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {

@@ -3,9 +3,9 @@ package util
 import (
 	"io"
 
-	"github.com/leg100/stok/pkg/attacher"
-	"github.com/leg100/stok/pkg/client"
-	"github.com/leg100/stok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/attacher"
+	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/logstreamer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
@@ -16,7 +16,7 @@ const (
 	HandshakeString = "opensesame"
 )
 
-// Options pertaining to stok apps
+// Options pertaining to etok apps
 type Options struct {
 	// Deferred creation of clients
 	client.ClientCreator

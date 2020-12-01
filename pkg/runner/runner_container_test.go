@@ -3,8 +3,8 @@ package runner
 import (
 	"testing"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/testobj"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -59,12 +59,12 @@ func TestContainer(t *testing.T) {
 		{
 			name:      "Set environment variables for secrets",
 			runner:    &run{testobj.Run("default", "run-12345", "plan")},
-			workspace: testobj.Workspace("default", "foo", testobj.WithSecret("stok")),
+			workspace: testobj.Workspace("default", "foo", testobj.WithSecret("etok")),
 			assertions: func(c corev1.Container) {
 				assert.Contains(t, c.EnvFrom, corev1.EnvFromSource{
 					SecretRef: &corev1.SecretEnvSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "stok",
+							Name: "etok",
 						},
 					},
 				})
@@ -73,7 +73,7 @@ func TestContainer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertions(Container(tt.runner, tt.workspace, "stok:latest"))
+			tt.assertions(Container(tt.runner, tt.workspace, "etok:latest"))
 		})
 	}
 }

@@ -3,12 +3,12 @@ package runner
 import (
 	"bytes"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/labels"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 )
 
-// workspace implements runner, providing a pod on which to setup a new stok
+// workspace implements runner, providing a pod on which to setup a new etok
 // workspace, which runs terraform init, optionally downloading a custom version
 // of terraform, within an init container, and then it runs a standard container
 // that simply idles - expressly for performance reasons: it keeps a persistent
@@ -23,7 +23,7 @@ func NewWorkspacePod(schema *v1alpha1.Workspace, image string) *corev1.Pod {
 	ws := &workspace{schema}
 	pod := Pod(ws, ws.Workspace, image)
 
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(pod, labels.WorkspaceComponent)
 
 	pod.Spec.InitContainers = []corev1.Container{

@@ -8,14 +8,14 @@
 
 ## Install
 
-Download and install the CLI from [releases](https://github.com/leg100/stok/releases).
+Download and install the CLI from [releases](https://github.com/leg100/etok/releases).
 
 Deploy
 [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and the operator to your cluster:
 
 ```bash
-stok generate crds | kubectl create -f -
-stok generate operator | kubectl apply -f -
+etok generate crds | kubectl create -f -
+etok generate operator | kubectl apply -f -
 ```
 
 ## First run
@@ -32,16 +32,16 @@ resource "random_id" "test" {
 Create a workspace:
 
 ```bash
-stok workspace new default/default
+etok workspace new default/default
 ```
 
 Run terraform commands:
 
 ```bash
-stok init
-stok validate
-stok plan
-stok apply
+etok init
+etok validate
+etok plan
+etok apply
 ```
 
 ## Usage
@@ -49,7 +49,7 @@ stok apply
 Usage is similar to the terraform CLI:
 
 ```
-Usage: stok [command]
+Usage: etok [command]
 
 Terraform Commands:
   apply         destroy         force-unlock
@@ -58,16 +58,16 @@ Terraform Commands:
   show          state           taint
   untaint       validate
 
-Stok Commands:
+etok Commands:
   generate     Generate deployment resources
   sh           Run shell commands in workspace
   version      Print client version information
-  workspace    Stok workspace management
+  workspace    etok workspace management
 
 Flags:
       --add_dir_header                   If true, adds the file directory to the header of the log messages
       --alsologtostderr                  log to standard error as well as files
-  -h, --help                             help for stok
+  -h, --help                             help for etok
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --log_file string                  If non-empty, use this log file
@@ -80,7 +80,7 @@ ult 1800)
   -v, --v Level                          number for the log level verbosity
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
 
-Use "stok [command] --help" for more information about a command.
+Use "etok [command] --help" for more information about a command.
 
 ```
 
@@ -97,12 +97,12 @@ TODO
 
 ## Credentials
 
-Credentials placed inside a kubernetes secret named `stok` are made available to terraform as environment variables.
+Credentials placed inside a kubernetes secret named `etok` are made available to terraform as environment variables.
 
 For example, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
 
 ```
-kubectl create secret generic stok \
+kubectl create secret generic etok \
   --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"  \
   --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
 ```
@@ -112,5 +112,5 @@ kubectl create secret generic stok \
 Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
 
 ```
-kubectl create secret generic stok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
+kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```

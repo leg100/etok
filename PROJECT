@@ -1,8 +1,8 @@
-domain: goalspike.com
+domain: dev
 layout: go.kubebuilder.io/v2
-repo: github.com/leg100/stok
+repo: github.com/leg100/etok
 resources:
-- group: stok
+- group: etok
   kind: Workspace
   version: v1alpha1
 version: 3-alpha

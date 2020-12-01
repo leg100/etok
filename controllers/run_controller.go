@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/scheme"
-	"github.com/leg100/stok/util/slice"
+	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/scheme"
+	"github.com/leg100/etok/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,8 +35,8 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 	}
 }
 
-// +kubebuilder:rbac:groups=stok.goalspike.com,resources=runs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=stok.goalspike.com,resources=runs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=etok.dev,resources=runs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {

@@ -26,10 +26,10 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
 	"github.com/fatih/color"
-	"github.com/leg100/stok/cmd"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	stokerrors "github.com/leg100/stok/pkg/errors"
-	"github.com/leg100/stok/pkg/signals"
+	"github.com/leg100/etok/cmd"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+	"github.com/leg100/etok/pkg/signals"
 )
 
 func main() {
@@ -60,7 +60,7 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 // Print error message unless the error originated from executing a program (which would have
 // printed its own message)
 func handleError(err error, out io.Writer) int {
-	var exit stokerrors.ExitError
+	var exit etokerrors.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode()
 	}

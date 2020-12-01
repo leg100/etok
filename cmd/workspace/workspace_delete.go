@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +17,7 @@ func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
 	var namespace, kubeContext string
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",
-		Short: "Deletes a stok workspace",
+		Short: "Deletes a etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			namespace, ws, err := env.ValidateAndParse(args[0])

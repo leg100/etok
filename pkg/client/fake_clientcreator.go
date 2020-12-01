@@ -1,8 +1,8 @@
 package client
 
 import (
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	sfake "github.com/leg100/stok/pkg/k8s/stokclient/fake"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	sfake "github.com/leg100/etok/pkg/k8s/etokclient/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	kfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
@@ -21,24 +21,24 @@ func NewFakeClientCreator(objs ...runtime.Object) ClientCreator {
 }
 
 func (f *FakeClientCreator) Create(kubeCtx string) (*Client, error) {
-	var kubeObjs, stokObjs []runtime.Object
+	var kubeObjs, etokObjs []runtime.Object
 	for _, obj := range f.objs {
 		switch obj.(type) {
 		case *v1alpha1.Run, *v1alpha1.Workspace:
-			stokObjs = append(stokObjs, obj)
+			etokObjs = append(etokObjs, obj)
 		default:
 			kubeObjs = append(kubeObjs, obj)
 		}
 	}
 
-	stokClient := sfake.NewSimpleClientset(stokObjs...)
+	EtokClient := sfake.NewSimpleClientset(etokObjs...)
 	for _, r := range f.reactors {
-		stokClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
+		EtokClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
 	}
 
 	return &Client{
 		Config:     &rest.Config{},
-		StokClient: stokClient,
+		EtokClient: EtokClient,
 		KubeClient: kfake.NewSimpleClientset(kubeObjs...),
 	}, nil
 }

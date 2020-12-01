@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +32,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "crds",
 			args: []string{"crds", "-h"},
-			out:  "Generate stok CRDs",
+			out:  "Generate etok CRDs",
 		},
 		{
 			name: "operator",

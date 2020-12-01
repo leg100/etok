@@ -6,19 +6,19 @@ import (
 	"os"
 	"time"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/client"
-	"github.com/leg100/stok/pkg/globals"
-	"github.com/leg100/stok/pkg/handlers"
-	"github.com/leg100/stok/pkg/k8s"
-	"github.com/leg100/stok/pkg/labels"
-	"github.com/leg100/stok/pkg/runner"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/handlers"
+	"github.com/leg100/etok/pkg/k8s"
+	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/pkg/runner"
 	"github.com/spf13/cobra"
 
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/logstreamer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,8 +32,8 @@ const (
 	defaultTimeoutWorkspacePod = 60 * time.Second
 	defaultBackendType         = "local"
 	defaultCacheSize           = "1Gi"
-	defaultSecretName          = "stok"
-	defaultServiceAccountName  = "stok"
+	defaultSecretName          = "etok"
+	defaultServiceAccountName  = "etok"
 )
 
 type NewOptions struct {
@@ -46,7 +46,7 @@ type NewOptions struct {
 	Workspace   string
 	KubeContext string
 
-	// Stok Workspace's WorkspaceSpec
+	// etok Workspace's WorkspaceSpec
 	WorkspaceSpec v1alpha1.WorkspaceSpec
 	// Create a service acccount if it does not exist
 	DisableCreateServiceAccount bool
@@ -74,7 +74,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	o := &NewOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "new <namespace/workspace>",
-		Short: "Create a new stok workspace",
+		Short: "Create a new etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.Namespace, o.Workspace, err = env.ValidateAndParse(args[0])
@@ -170,7 +170,7 @@ func (o *NewOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	if err := env.NewStokEnv(o.Namespace, o.Workspace).Write(o.Path); err != nil {
+	if err := env.NewEtokEnv(o.Namespace, o.Workspace).Write(o.Path); err != nil {
 		return err
 	}
 
@@ -203,11 +203,11 @@ func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1
 		},
 		Spec: o.WorkspaceSpec,
 	}
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(ws)
 	// Permit filtering secrets by workspace
 	labels.SetLabel(ws, labels.Workspace(o.Workspace))
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(ws, labels.WorkspaceComponent)
 
 	ws.Spec.Verbosity = o.Verbosity
@@ -266,11 +266,11 @@ func (o *NewOptions) createSecret(ctx context.Context, name string) (*corev1.Sec
 			Name: name,
 		},
 	}
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(secret)
 	// Permit filtering secrets by workspace
 	labels.SetLabel(secret, labels.Workspace(o.Workspace))
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(secret, labels.WorkspaceComponent)
 
 	return o.SecretsClient(o.Namespace).Create(ctx, secret, metav1.CreateOptions{})
@@ -282,11 +282,11 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 			Name: name,
 		},
 	}
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(serviceAccount)
 	// Permit filtering service accounts by workspace
 	labels.SetLabel(serviceAccount, labels.Workspace(o.Workspace))
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
 
 	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})

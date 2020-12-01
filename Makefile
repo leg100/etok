@@ -1,10 +1,10 @@
 VERSION = $(shell git describe --tags --dirty --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
-REPO = github.com/leg100/stok
+REPO = github.com/leg100/etok
 RANDOM_SUFFIX := $(shell cat /dev/urandom | tr -dc 'a-z0-9' | head -c5)
 WORKSPACE_NAMESPACE ?= default
-ALL_CRD = ./config/crd/bases/stok.goalspike.com_all.yaml
-BUILD_BIN ?= ./stok
+ALL_CRD = ./config/crd/bases/etok.dev_all.yaml
+BUILD_BIN ?= ./etok
 KUBECTL = kubectl --context=$(KUBECTX)
 KUBE_VERSION=v0.18.2
 LD_FLAGS = " \
@@ -13,11 +13,11 @@ LD_FLAGS = " \
 	" \
 
 ifeq ($(ENV),gke)
-KUBECTX=gke_automatize-admin_europe-west2-a_stok
-IMG=eu.gcr.io/automatize-admin/stok:$(VERSION)-$(RANDOM_SUFFIX)
+KUBECTX=gke_automatize-admin_europe-west2-a_etok
+IMG=eu.gcr.io/automatize-admin/etok:$(VERSION)-$(RANDOM_SUFFIX)
 else
 KUBECTX=kind-kind
-IMG=leg100/stok:$(VERSION)
+IMG=leg100/etok:$(VERSION)
 endif
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -34,13 +34,13 @@ endif
 # be built and pushed/loaded first.
 .PHONY: local
 local: image push
-	STOK_IMAGE=$(IMG) $(BUILD_BIN) operator --context $(KUBECTX)
+	ETOK_IMAGE=$(IMG) $(BUILD_BIN) operator --context $(KUBECTX)
 
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy-operator
 deploy-operator: image push
 	$(BUILD_BIN) generate operator --local --image $(IMG) | $(KUBECTL) apply -f -
-	$(KUBECTL) rollout status --timeout=10s deployment/stok-operator
+	$(KUBECTL) rollout status --timeout=10s deployment/etok-operator
 
 .PHONY: delete-operator
 delete-operator: build
@@ -60,13 +60,13 @@ create-namespace:
 
 .PHONY: create-secret
 create-secret:
-	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret stok || \
-		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
+	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret etok || \
+		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic etok \
 			--from-file=GOOGLE_CREDENTIALS=$(GOOGLE_APPLICATION_CREDENTIALS)
 
 .PHONY: delete-secret
 delete-secret:
-	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret stok --ignore-not-found=true
+	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret etok --ignore-not-found=true
 
 .PHONY: e2e
 e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
@@ -78,22 +78,22 @@ e2e-clean: delete-workspaces delete-operator delete-crds delete-secret
 e2e-run:
 	go test -v ./test/e2e -context $(KUBECTX)
 
-# delete all stok custom resources (via kubectl)
+# delete all etok custom resources (via kubectl)
 .PHONY: delete-custom-resources
 delete-custom-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all --wait $$($(KUBECTL) api-resources \
-		--api-group=stok.goalspike.com -o name \
+		--api-group=etok.dev -o name \
 		| tr '\n' ',' | sed 's/.$$//') || true
 
-# delete all stok custom resources except workspace
+# delete all etok custom resources except workspace
 .PHONY: delete-run-resources
 delete-run-resources:
-	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.stok.goalspike.com
+	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.etok.dev
 
-# delete all stok workspaces
+# delete all etok workspaces
 .PHONY: delete-workspaces
 delete-workspaces: build
-	# Using stok bin rather than kubectl because stok bin will wait for workspaces' dependents
+	# Using etok bin rather than kubectl because etok bin will wait for workspaces' dependents
 	# to be deleted first before deleting the workspace itself.
 	$(BUILD_BIN) workspace list | awk '{ print $$NF }' | xargs -IWS $(BUILD_BIN) workspace delete WS
 
@@ -103,19 +103,19 @@ unit:
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/stok
+	CGO_ENABLED=0 go build -o $(BUILD_BIN) -ldflags $(LD_FLAGS) github.com/leg100/etok
 
 .PHONY: install
 install:
-	go install -ldflags $(LD_FLAGS) github.com/leg100/stok
+	go install -ldflags $(LD_FLAGS) github.com/leg100/etok
 
 .PHONY: install-latest-release
 install-latest-release:
-	curl -s https://api.github.com/repos/leg100/stok/releases/latest \
+	curl -s https://api.github.com/repos/leg100/etok/releases/latest \
 		| jq -r '.assets[] | select(.name | test(".*_linux_amd64$$")) | .browser_download_url' \
-		| xargs -I{} curl -Lo /tmp/stok {}
-	chmod +x /tmp/stok
-	mv /tmp/stok ~/go/bin/
+		| xargs -I{} curl -Lo /tmp/etok {}
+	chmod +x /tmp/etok
+	mv /tmp/etok ~/go/bin/
 
 .PHONY: image
 image: build
@@ -130,14 +130,14 @@ else
 endif
 
 # Generate manifests e.g. CRD, RBAC etc.
-# add app=stok label to each crd
+# add app=etok label to each crd
 # combine crd yamls into one
 .PHONY: manifests
 manifests: controller-gen
 	@{ \
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=stok-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
 	for f in ./config/crd/bases/*.yaml; do \
-		$(KUBECTL) label --overwrite -f $$f --local=true -oyaml app=stok > crd_with_label.yaml;\
+		$(KUBECTL) label --overwrite -f $$f --local=true -oyaml app=etok > crd_with_label.yaml;\
  		mv crd_with_label.yaml $$f;\
  	done;\
  	sed -se '$$s/$$/\n---/' ./config/crd/bases/*.yaml | head -n-1 > $(ALL_CRD);\
@@ -180,14 +180,14 @@ endif
 generate-clientset: client-gen
 	@{ \
 	set -e ;\
-	rm -rf pkg/k8s/stokclient ;\
+	rm -rf pkg/k8s/etokclient ;\
 	$(CLIENT_GEN) \
-		--clientset-name stokclient \
-		--input-base github.com/leg100/stok/api \
-		--input stok.goalspike.com/v1alpha1 \
+		--clientset-name etokclient \
+		--input-base github.com/leg100/etok/api \
+		--input etok.dev/v1alpha1 \
 		-h hack/boilerplate.go.txt \
-		-p github.com/leg100/stok/pkg/k8s ;\
-	mv github.com/leg100/stok/pkg/k8s/stokclient pkg/k8s/ ;\
+		-p github.com/leg100/etok/pkg/k8s ;\
+	mv github.com/leg100/etok/pkg/k8s/etokclient pkg/k8s/ ;\
 	rm -rf github.com ;\
 	}
 

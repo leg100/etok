@@ -1,8 +1,8 @@
 package runner
 
 import (
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/labels"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -39,7 +39,7 @@ func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(pod)
 	// Permit filtering pods by workspace
 	labels.SetLabel(pod, labels.Workspace(ws.Name))

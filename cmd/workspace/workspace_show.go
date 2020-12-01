@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,7 @@ func ShowCmd(opts *cmdutil.Options) *cobra.Command {
 		Use:   "show",
 		Short: "Show current workspace",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			stokenv, err := env.ReadStokEnv(path)
+			etokenv, err := env.ReadEtokEnv(path)
 			if err != nil {
 				if os.IsNotExist(err) {
 					// no .terraform/environment, so show defaults
@@ -27,7 +27,7 @@ func ShowCmd(opts *cmdutil.Options) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(opts.Out, string(stokenv))
+			fmt.Fprintln(opts.Out, string(etokenv))
 			return nil
 		},
 	}

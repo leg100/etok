@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/labels"
-	"github.com/leg100/stok/pkg/runner"
-	"github.com/leg100/stok/scheme"
-	"github.com/leg100/stok/util/slice"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/pkg/runner"
+	"github.com/leg100/etok/scheme"
+	"github.com/leg100/etok/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.stok.goalspike.com/[-a-z0-9]+")
+var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.etok.dev/[-a-z0-9]+")
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -56,8 +56,8 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
 
-// +kubebuilder:rbac:groups=stok.goalspike.com,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=stok.goalspike.com,resources=workspaces/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces/status,verbs=get;update;patch
 
 // Reconcile reads that state of the cluster for a Workspace object and makes changes based on the state read
 // and what is in the Workspace.Spec
@@ -241,9 +241,9 @@ func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(configMap)
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(configMap, labels.WorkspaceComponent)
 
 	return configMap
@@ -276,9 +276,9 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(pvc)
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(pvc, labels.WorkspaceComponent)
 
 	if cr.Spec.Cache.StorageClass != "" {

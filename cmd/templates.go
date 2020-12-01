@@ -78,7 +78,7 @@ Examples:
 Terraform Commands:{{range .Commands}}{{if isTerraformCommand .Name}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{else}}
 
-Stok Commands:{{range .Commands}}{{if and (not (isTerraformCommand .Name)) (or .IsAvailableCommand (eq .Name "help"))}}
+Etok Commands:{{range .Commands}}{{if and (not (isTerraformCommand .Name)) (or .IsAvailableCommand (eq .Name "help"))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{else}}{{ if .HasAvailableSubCommands}}
 
 Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}

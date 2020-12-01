@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/testobj"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

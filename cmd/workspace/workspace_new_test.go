@@ -8,14 +8,14 @@ import (
 	"io"
 	"testing"
 
-	stokerrors "github.com/leg100/stok/pkg/errors"
+	etokerrors "github.com/leg100/etok/pkg/errors"
 
 	"github.com/creack/pty"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/logstreamer"
-	"github.com/leg100/stok/pkg/testobj"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/testobj"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -52,10 +52,10 @@ func TestNewWorkspace(t *testing.T) {
 				require.NoError(t, err)
 
 				/// Confirm env file has been written
-				stokenv, err := env.ReadStokEnv(o.Path)
+				etokenv, err := env.ReadEtokEnv(o.Path)
 				require.NoError(t, err)
-				assert.Equal(t, "default", stokenv.Namespace())
-				assert.Equal(t, "foo", stokenv.Workspace())
+				assert.Equal(t, "default", etokenv.Namespace())
+				assert.Equal(t, "foo", etokenv.Workspace())
 			},
 		},
 		{
@@ -244,7 +244,7 @@ func TestNewWorkspace(t *testing.T) {
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo", testobj.WithExitCode(5))},
 			err: func(t *testutil.T, err error) {
 				// want exit code 5
-				var exiterr stokerrors.ExitError
+				var exiterr etokerrors.ExitError
 				if assert.True(t, errors.As(err, &exiterr)) {
 					assert.Equal(t, 5, exiterr.ExitCode())
 				}

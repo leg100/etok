@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,14 +16,14 @@ func TestWorkspaceShow(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		env  env.StokEnv
+		env  env.EtokEnv
 		out  string
 		err  bool
 	}{
 		{
 			name: "WithEnvironmentFile",
 			args: []string{"show"},
-			env:  env.StokEnv("default/workspace-1"),
+			env:  env.EtokEnv("default/workspace-1"),
 			out:  "default/workspace-1\n",
 		},
 		{

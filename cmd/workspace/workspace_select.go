@@ -3,9 +3,9 @@ package workspace
 import (
 	"fmt"
 
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ func SelectCmd(opts *cmdutil.Options) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "select <namespace/workspace>",
-		Short: "Select a stok workspace",
+		Short: "Select a etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := env.Validate(args[0]); err != nil {

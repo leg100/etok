@@ -4,7 +4,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: stok-operator
+  name: etok-operator
 rules:
 - apiGroups:
   - ""
@@ -91,7 +91,7 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - stok.goalspike.com
+  - etok.dev
   resources:
   - runs
   verbs:
@@ -103,7 +103,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - stok.goalspike.com
+  - etok.dev
   resources:
   - runs/status
   verbs:
@@ -111,7 +111,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - stok.goalspike.com
+  - etok.dev
   resources:
   - workspaces
   verbs:
@@ -123,7 +123,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - stok.goalspike.com
+  - etok.dev
   resources:
   - workspaces/status
   verbs:

@@ -5,10 +5,10 @@ import (
 	"context"
 	"testing"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
-	"github.com/leg100/stok/pkg/testobj"
-	"github.com/leg100/stok/testutil"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/testobj"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,7 +19,7 @@ func TestListWorkspaces(t *testing.T) {
 		name string
 		objs []runtime.Object
 		args []string
-		env  env.StokEnv
+		env  env.EtokEnv
 		err  bool
 		out  string
 	}{
@@ -30,7 +30,7 @@ func TestListWorkspaces(t *testing.T) {
 				testobj.Workspace("dev", "workspace-2"),
 			},
 			args: []string{},
-			env:  env.StokEnv("default/workspace-1"),
+			env:  env.EtokEnv("default/workspace-1"),
 			out:  "*\tdefault/workspace-1\n\tdev/workspace-2\n",
 		},
 		{

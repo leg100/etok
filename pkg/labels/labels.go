@@ -1,7 +1,7 @@
 package labels
 
 import (
-	"github.com/leg100/stok/version"
+	"github.com/leg100/etok/version"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -10,7 +10,7 @@ type Label struct {
 }
 
 var (
-	App                = Label{"app", "stok"}
+	App                = Label{"app", "etok"}
 	Version            = Label{"version", version.Version}
 	OperatorComponent  = Component("operator")
 	WorkspaceComponent = Component("workspace")

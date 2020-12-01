@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/leg100/stok/cmd/flags"
-	"github.com/leg100/stok/pkg/labels"
-	"github.com/leg100/stok/version"
+	"github.com/leg100/etok/cmd/flags"
+	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/version"
 	"github.com/spf13/cobra"
 
-	cmdutil "github.com/leg100/stok/cmd/util"
+	cmdutil "github.com/leg100/etok/cmd/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -22,7 +22,7 @@ import (
 
 const clusterRolePath = "config/rbac/role.yaml"
 
-var clusterRoleURL = "https://raw.githubusercontent.com/leg100/stok/v" + version.Version + "/" + clusterRolePath
+var clusterRoleURL = "https://raw.githubusercontent.com/leg100/etok/v" + version.Version + "/" + clusterRolePath
 
 type GenerateOperatorOptions struct {
 	*cmdutil.Options
@@ -50,7 +50,7 @@ func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperat
 	}
 
 	flags.AddNamespaceFlag(cmd, &o.Namespace)
-	cmd.Flags().StringVar(&o.Name, "name", "stok-operator", "Name for kubernetes resources")
+	cmd.Flags().StringVar(&o.Name, "name", "etok-operator", "Name for kubernetes resources")
 	cmd.Flags().StringVar(&o.Image, "image", version.Image, "Docker image used for both the operator and the runner")
 
 	cmd.Flags().BoolVar(&o.LocalClusterRoleToggle, "local", false, "Read cluster role definition from local file (default false)")
@@ -138,9 +138,9 @@ func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBindin
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(binding)
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(binding, labels.OperatorComponent)
 
 	return binding
@@ -158,9 +158,9 @@ func (o *GenerateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(serviceAccount)
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(serviceAccount, labels.OperatorComponent)
 
 	return serviceAccount
@@ -183,10 +183,10 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 					ServiceAccountName: o.Name,
 					Containers: []corev1.Container{
 						{
-							Name:            "stok-operator",
+							Name:            "etok-operator",
 							Image:           o.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command:         []string{"stok"},
+							Command:         []string{"etok"},
 							Args:            []string{"operator"},
 							Env: []corev1.EnvVar{
 								{
@@ -203,10 +203,10 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 								},
 								{
 									Name:  "OPERATOR_NAME",
-									Value: "stok",
+									Value: "etok",
 								},
 								{
-									Name:  "STOK_IMAGE",
+									Name:  "ETOK_IMAGE",
 									Value: o.Image,
 								},
 							},
@@ -218,9 +218,9 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(deployment)
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(deployment, labels.OperatorComponent)
 
 	// Label selector for operator pod.  It must match the pod template's labels.

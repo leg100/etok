@@ -1,8 +1,8 @@
 package client
 
 import (
-	"github.com/leg100/stok/pkg/k8s/stokclient"
-	stoktyped "github.com/leg100/stok/pkg/k8s/stokclient/typed/stok.goalspike.com/v1alpha1"
+	"github.com/leg100/etok/pkg/k8s/etokclient"
+	etoktyped "github.com/leg100/etok/pkg/k8s/etokclient/typed/etok.dev/v1alpha1"
 	"k8s.io/client-go/kubernetes"
 	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -16,8 +16,8 @@ type Client struct {
 	// Kubernetes built-in client
 	KubeClient kubernetes.Interface
 
-	// Stok generated client
-	StokClient stokclient.Interface
+	// etok generated client
+	EtokClient etokclient.Interface
 }
 
 func (c *Client) PodsClient(namespace string) typedv1.PodInterface {
@@ -36,10 +36,10 @@ func (c *Client) ConfigMapsClient(namespace string) typedv1.ConfigMapInterface {
 	return c.KubeClient.CoreV1().ConfigMaps(namespace)
 }
 
-func (c *Client) WorkspacesClient(namespace string) stoktyped.WorkspaceInterface {
-	return c.StokClient.StokV1alpha1().Workspaces(namespace)
+func (c *Client) WorkspacesClient(namespace string) etoktyped.WorkspaceInterface {
+	return c.EtokClient.EtokV1alpha1().Workspaces(namespace)
 }
 
-func (c *Client) RunsClient(namespace string) stoktyped.RunInterface {
-	return c.StokClient.StokV1alpha1().Runs(namespace)
+func (c *Client) RunsClient(namespace string) etoktyped.RunInterface {
+	return c.EtokClient.EtokV1alpha1().Runs(namespace)
 }

@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stok-operator
+  name: etok-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/component: operator
-      app.kubernetes.io/name: stok
+      app.kubernetes.io/name: etok
   template:
     metadata:
       labels:
         app.kubernetes.io/component: operator
-        app.kubernetes.io/name: stok
+        app.kubernetes.io/name: etok
     spec:
       containers:
       - args:
         - operator
         command:
-        - stok
+        - etok
         env:
         - name: WATCH_NAMESPACE
         - name: POD_NAME
@@ -27,12 +27,12 @@ spec:
               apiVersion: v1
               fieldPath: metadata.name
         - name: OPERATOR_NAME
-          value: stok
-        - name: STOK_IMAGE
-          value: leg100/stok:v0.2.12-dirty
-        image: leg100/stok:v0.2.12-dirty
+          value: etok
+        - name: ETOK_IMAGE
+          value: leg100/etok:v0.2.12-dirty
+        image: leg100/etok:v0.2.12-dirty
         imagePullPolicy: IfNotPresent
-        name: stok-operator
+        name: etok-operator
         resources: {}
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: FallbackToLogsOnError
@@ -40,8 +40,8 @@ spec:
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
-      serviceAccount: stok-operator
-      serviceAccountName: stok-operator
+      serviceAccount: etok-operator
+      serviceAccountName: etok-operator
       terminationGracePeriodSeconds: 30
 status:
   availableReplicas: 1
@@ -54,7 +54,7 @@ status:
     type: Available
   - lastTransitionTime: "2020-11-22T10:11:44Z"
     lastUpdateTime: "2020-11-22T10:11:47Z"
-    message: ReplicaSet "stok-operator-749885b49b" has successfully progressed.
+    message: ReplicaSet "etok-operator-749885b49b" has successfully progressed.
     reason: NewReplicaSetAvailable
     status: "True"
     type: Progressing

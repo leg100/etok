@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/env"
-	stokerrors "github.com/leg100/stok/pkg/errors"
-	"github.com/leg100/stok/util"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/env"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+	"github.com/leg100/etok/util"
 	"github.com/spf13/cobra"
 )
 
@@ -162,7 +162,7 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 				// runner ran successfully but the program it executed failed
 				// with a non-zero exit code. In this case, resources are not
 				// cleaned up.
-				var exit stokerrors.ExitError
+				var exit etokerrors.ExitError
 				if !errors.As(err, &exit) {
 					if !o.DisableResourceCleanup {
 						o.cleanup()
@@ -181,7 +181,7 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
 	cmd.Flags().DurationVar(&o.EnqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
-	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "Stok workspace")
+	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "etok workspace")
 
 	return cmd
 }

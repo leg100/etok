@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/cmd/flags"
-	cmdutil "github.com/leg100/stok/cmd/util"
-	"github.com/leg100/stok/pkg/archive"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/flags"
+	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/archive"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
@@ -35,8 +35,8 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 	o := &RunnerOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:    "runner [command (args)]",
-		Short:  "Run the stok runner",
-		Long:   "The stok runner is intended to be run in on pod, started by the relevant stok command controller. When invoked, it extracts a tarball containing terraform configuration files. It then waits for the command's ClientReady condition to be true. And then it invokes the relevant command, typically a terraform command.",
+		Short:  "Run the etok runner",
+		Long:   "The etok runner is intended to be run in on pod, started by the relevant etok command controller. When invoked, it extracts a tarball containing terraform configuration files. It then waits for the command's ClientReady condition to be true. And then it invokes the relevant command, typically a terraform command.",
 		Hidden: true,
 		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {

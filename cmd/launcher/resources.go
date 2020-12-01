@@ -3,8 +3,8 @@ package launcher
 import (
 	"context"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/labels"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -15,13 +15,13 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	run.SetNamespace(o.Namespace)
 	run.SetName(name)
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(run)
 	// Permit filtering runs by command
 	labels.SetLabel(run, labels.Command(o.Command))
 	// Permit filtering runs by workspace
 	labels.SetLabel(run, labels.Workspace(o.Workspace))
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(run, labels.RunComponent)
 
 	run.SetWorkspace(o.Workspace)
@@ -61,13 +61,13 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 		},
 	}
 
-	// Set stok's common labels
+	// Set etok's common labels
 	labels.SetCommonLabels(configMap)
 	// Permit filtering archives by command
 	labels.SetLabel(configMap, labels.Command(o.Command))
 	// Permit filtering archives by workspace
 	labels.SetLabel(configMap, labels.Workspace(o.Workspace))
-	// Permit filtering stok resources by component
+	// Permit filtering etok resources by component
 	labels.SetLabel(configMap, labels.RunComponent)
 
 	_, err := o.ConfigMapsClient(o.Namespace).Create(ctx, configMap, metav1.CreateOptions{})

@@ -3,7 +3,7 @@ package k8s
 import (
 	"context"
 
-	"github.com/leg100/stok/pkg/k8s/stokclient"
+	"github.com/leg100/etok/pkg/k8s/etokclient"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,35 +28,35 @@ func (plw *PodListWatcher) Watch(options metav1.ListOptions) (watch.Interface, e
 }
 
 type WorkspaceListWatcher struct {
-	Client    stokclient.Interface
+	Client    etokclient.Interface
 	Namespace string
 	Name      string
 }
 
 func (lw *WorkspaceListWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
 	setNameSelector(&options, lw.Name)
-	return lw.Client.StokV1alpha1().Workspaces(lw.Namespace).List(context.TODO(), options)
+	return lw.Client.EtokV1alpha1().Workspaces(lw.Namespace).List(context.TODO(), options)
 }
 
 func (lw *WorkspaceListWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
 	setNameSelector(&options, lw.Name)
-	return lw.Client.StokV1alpha1().Workspaces(lw.Namespace).Watch(context.TODO(), options)
+	return lw.Client.EtokV1alpha1().Workspaces(lw.Namespace).Watch(context.TODO(), options)
 }
 
 type RunListWatcher struct {
-	Client    stokclient.Interface
+	Client    etokclient.Interface
 	Namespace string
 	Name      string
 }
 
 func (lw *RunListWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
 	setNameSelector(&options, lw.Name)
-	return lw.Client.StokV1alpha1().Runs(lw.Namespace).List(context.TODO(), options)
+	return lw.Client.EtokV1alpha1().Runs(lw.Namespace).List(context.TODO(), options)
 }
 
 func (lw *RunListWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
 	setNameSelector(&options, lw.Name)
-	return lw.Client.StokV1alpha1().Runs(lw.Namespace).Watch(context.TODO(), options)
+	return lw.Client.EtokV1alpha1().Runs(lw.Namespace).Watch(context.TODO(), options)
 }
 
 func setNameSelector(options *metav1.ListOptions, name string) {

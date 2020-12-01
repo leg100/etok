@@ -7,7 +7,7 @@ import (
 var (
 	Version = "unknown"
 	Commit  = "unknown"
-	Image   = "leg100/stok:" + Version
+	Image   = "leg100/etok:" + Version
 )
 
 func PrintableVersion() string {

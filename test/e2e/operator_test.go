@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	buildPath     = "../../stok"
+	buildPath     = "../../etok"
 	workspacePath = "./workspace"
 	backendBucket = "automatize-tfstate"
 	backendPrefix = "e2e"
 
-	// Namespace in which stok workspace will be created in,
+	// Namespace in which etok workspace will be created in,
 	// and commands tested in
 	wsNamespace = "default"
 
@@ -38,7 +38,7 @@ const (
 var kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
 
 // End-to-end tests
-func TestStok(t *testing.T) {
+func TestEtok(t *testing.T) {
 	fmt.Printf("Kubernetes context set to: %s\n", *kubectx)
 
 	// we want a clean backend beforehand
@@ -96,21 +96,21 @@ func TestStok(t *testing.T) {
 			pty:             false,
 		},
 		{
-			name:            "stok init without pty",
+			name:            "etok init without pty",
 			args:            []string{"init", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
 			pty:             false,
 		},
 		{
-			name:            "stok plan without pty",
+			name:            "etok plan without pty",
 			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false", "-var", "suffix=foo"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
 			pty:             false,
 		},
 		{
-			name:         "stok plan with pty",
+			name:         "etok plan with pty",
 			args:         []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
 			wantExitCode: 0,
 			pty:          true,
@@ -121,7 +121,7 @@ func TestStok(t *testing.T) {
 			},
 		},
 		{
-			name:         "stok apply with pty",
+			name:         "etok apply with pty",
 			args:         []string{"apply", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
 			wantExitCode: 0,
 			pty:          true,
@@ -134,7 +134,7 @@ func TestStok(t *testing.T) {
 			},
 		},
 		{
-			name:         "stok sh",
+			name:         "etok sh",
 			args:         []string{"sh", "--path", "workspace", "--context", *kubectx},
 			wantExitCode: 0,
 			pty:          true,
@@ -145,7 +145,7 @@ func TestStok(t *testing.T) {
 			},
 		},
 		{
-			name:            "stok queuing",
+			name:            "etok queuing",
 			args:            []string{"sh", "--path", "workspace", "--context", *kubectx, "--", "uname;", "sleep 5"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
@@ -153,7 +153,7 @@ func TestStok(t *testing.T) {
 			queueAdditional: 1,
 		},
 		{
-			name:         "stok destroy with pty",
+			name:         "etok destroy with pty",
 			args:         []string{"destroy", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo", "-no-color"},
 			wantExitCode: 0,
 			pty:          true,
@@ -172,7 +172,7 @@ func TestStok(t *testing.T) {
 		},
 	}
 
-	// Invoke stok with each test case
+	// Invoke etok with each test case
 	for _, tt := range tests {
 		success := t.Run(tt.name, func(t *testing.T) {
 			for i := 0; i <= tt.queueAdditional; i++ {

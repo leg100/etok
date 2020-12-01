@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
+	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,13 +30,13 @@ import (
 
 // FakeWorkspaces implements WorkspaceInterface
 type FakeWorkspaces struct {
-	Fake *FakeStokV1alpha1
+	Fake *FakeEtokV1alpha1
 	ns   string
 }
 
-var workspacesResource = schema.GroupVersionResource{Group: "stok.goalspike.com", Version: "v1alpha1", Resource: "workspaces"}
+var workspacesResource = schema.GroupVersionResource{Group: "etok.dev", Version: "v1alpha1", Resource: "workspaces"}
 
-var workspacesKind = schema.GroupVersionKind{Group: "stok.goalspike.com", Version: "v1alpha1", Kind: "Workspace"}
+var workspacesKind = schema.GroupVersionKind{Group: "etok.dev", Version: "v1alpha1", Kind: "Workspace"}
 
 // Get takes name of the workspace, and returns the corresponding workspace object, and an error if there is any.
 func (c *FakeWorkspaces) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Workspace, err error) {

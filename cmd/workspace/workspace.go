@@ -1,14 +1,14 @@
 package workspace
 
 import (
-	cmdutil "github.com/leg100/stok/cmd/util"
+	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/spf13/cobra"
 )
 
 func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
-		Short: "Stok workspace management",
+		Short: "etok workspace management",
 	}
 
 	newCmd, _ := NewCmd(opts)

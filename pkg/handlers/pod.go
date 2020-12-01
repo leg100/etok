@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/leg100/stok/pkg/k8s"
+	"github.com/leg100/etok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"

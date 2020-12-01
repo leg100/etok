@@ -1,7 +1,7 @@
 package generate
 
 import (
-	cmdutil "github.com/leg100/stok/cmd/util"
+	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/spf13/cobra"
 )
 

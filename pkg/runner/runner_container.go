@@ -7,26 +7,26 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/globals"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/globals"
 )
 
 func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container {
 	container := corev1.Container{
 		Env: []corev1.EnvVar{
 			{
-				Name:  "STOK_HANDSHAKE",
+				Name:  "ETOK_HANDSHAKE",
 				Value: strconv.FormatBool(r.GetHandshake()),
 			},
 			{
-				Name:  "STOK_HANDSHAKE_TIMEOUT",
+				Name:  "ETOK_HANDSHAKE_TIMEOUT",
 				Value: r.GetHandshakeTimeout(),
 			},
 		},
 		Name:                     globals.RunnerContainerName,
 		Image:                    image,
 		ImagePullPolicy:          corev1.PullIfNotPresent,
-		Command:                  []string{"stok", "runner"},
+		Command:                  []string{"etok", "runner"},
 		Stdin:                    true,
 		TTY:                      true,
 		TerminationMessagePolicy: "FallbackToLogsOnError",
