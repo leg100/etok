@@ -98,6 +98,9 @@ spec:
               serviceAccountName:
                 default: stok
                 type: string
+              terraformVersion:
+                description: 'TODO: kubebuilder markers'
+                type: string
               verbosity:
                 type: integer
             required:
@@ -105,6 +108,7 @@ spec:
             - handshake
             - handshakeTimeout
             - privilegedCommands
+            - terraformVersion
             type: object
           status:
             description: WorkspaceStatus defines the observed state of Workspace

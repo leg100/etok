@@ -69,7 +69,7 @@ func TestStok(t *testing.T) {
 		},
 		{
 			name:            "second new workspace",
-			args:            []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx},
+			args:            []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--terraform-version", "0.12.17"},
 			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(``),
 			pty:             false,

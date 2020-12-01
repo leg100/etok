@@ -2,8 +2,6 @@ package v1alpha1
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -76,13 +74,6 @@ func (r *RunSpec) SetConfigMapPath(path string) { r.ConfigMapPath = path }
 func (r *RunSpec) GetWorkspace() string   { return r.Workspace }
 func (r *RunSpec) SetWorkspace(ws string) { r.Workspace = ws }
 
-func (r *Run) GetHandshake() bool          { return r.AttachSpec.Handshake }
-func (r *Run) GetHandshakeTimeout() string { return r.AttachSpec.HandshakeTimeout }
-
-func (r *Run) WorkingDir() string {
-	return filepath.Join("/workspace", r.ConfigMapPath)
-}
-
 // ApprovedAnnotationKey is the key to be set on a workspace's annotations to
 // indicate that this run is approved. Only necessary if the workspace has
 // categorised the run's command as privileged.
@@ -96,27 +87,6 @@ func ApprovedAnnotationKey(runName string) string {
 
 // Run's pod shares its name
 func (r *Run) PodName() string { return r.Name }
-
-// ContainerArgs returns the args for a run's container
-func (r *Run) ContainerArgs() (args []string) {
-	if r.Verbosity > 0 {
-		// Set non-defaut verbose logging for the runner process
-		args = append(args, fmt.Sprintf("-v=%d", r.Verbosity))
-	}
-
-	// The runner process expects args to come after --
-	args = append(args, "--")
-
-	if r.Command != "sh" {
-		// Any command other than sh is a terraform command
-		args = append(args, "terraform")
-	}
-
-	args = append(args, strings.Split(r.Command, " ")...)
-	args = append(args, r.Args...)
-
-	return args
-}
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {

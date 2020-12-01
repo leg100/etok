@@ -53,6 +53,9 @@ type WorkspaceSpec struct {
 
 	PrivilegedCommands []string `json:"privilegedCommands"`
 
+	// TODO: kubebuilder markers
+	TerraformVersion string `json:"terraformVersion"`
+
 	AttachSpec `json:",inline"`
 }
 
@@ -66,36 +69,12 @@ func (ws *Workspace) PodName() string {
 	return WorkspacePodName(ws.GetName())
 }
 
+func (ws *Workspace) TerraformName() string {
+	return fmt.Sprintf("%s-%s", ws.Namespace, ws.Name)
+}
+
 func (ws *Workspace) PVCName() string {
 	return ws.GetName()
-}
-
-func (ws *Workspace) GetHandshake() bool          { return ws.Spec.AttachSpec.Handshake }
-func (ws *Workspace) GetHandshakeTimeout() string { return ws.Spec.AttachSpec.HandshakeTimeout }
-
-func (ws *Workspace) ContainerArgs() (args []string) {
-	if ws.Spec.Verbosity > 0 {
-		// Set non-defaut verbose logging for the runner process
-		args = append(args, fmt.Sprintf("-v=%d", ws.Spec.Verbosity))
-	}
-
-	// The runner process expects args to come after --
-	args = append(args, "--")
-
-	b := new(strings.Builder)
-	b.WriteString("terraform init -backend-config=" + BackendConfigFilename)
-	b.WriteString("; ")
-	b.WriteString("terraform workspace select " + ws.GetNamespace() + "-" + ws.GetName())
-	b.WriteString(" || ")
-	b.WriteString("terraform workspace new " + ws.GetNamespace() + "-" + ws.GetName())
-
-	args = append(args, []string{"sh", "-c", b.String()}...)
-
-	return args
-}
-
-func (ws *Workspace) WorkingDir() string {
-	return "/workspace"
 }
 
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {

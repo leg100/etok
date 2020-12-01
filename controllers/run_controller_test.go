@@ -120,39 +120,6 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
-			name: "Sets google credentials",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1"), testobj.WithSecret("secret-1")),
-				testobj.Secret("operator-test", "secret-1", testobj.WithStringData("google_application_credentials.json", "abc")),
-			},
-			assertions: func(pod *corev1.Pod) {
-				want := "/credentials/google-credentials.json"
-				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "GOOGLE_APPLICATION_CREDENTIALS")
-				if !ok {
-					t.Errorf("Could not find env var with name GOOGLE_APPLICATION_CREDENTIALS")
-				} else {
-					assert.Equal(t, want, got)
-				}
-			},
-		},
-		{
-			name: "Sets workspace environment variable",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
-			},
-			assertions: func(pod *corev1.Pod) {
-				want := "operator-test-workspace-1"
-				got, ok := getEnvValueForName(&pod.Spec.Containers[0], "TF_WORKSPACE")
-				if !ok {
-					t.Errorf("Could not find env var with name TF_WORKSPACE")
-				} else {
-					assert.Equal(t, want, got)
-				}
-			},
-		},
-		{
 			name: "Image name",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
@@ -195,13 +162,4 @@ func TestRunReconciler(t *testing.T) {
 			tt.assertions(pod)
 		})
 	}
-}
-
-func getEnvValueForName(container *corev1.Container, name string) (string, bool) {
-	for _, env := range container.Env {
-		if env.Name == name {
-			return env.Value, true
-		}
-	}
-	return "", false
 }

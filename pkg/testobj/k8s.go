@@ -66,6 +66,12 @@ func WithBackendType(t string) func(*v1alpha1.Workspace) {
 	}
 }
 
+func WithTerraformVersion(version string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.TerraformVersion = version
+	}
+}
+
 func WithBackendConfig(cfg map[string]string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.Backend.Config = cfg
@@ -167,7 +173,12 @@ func Run(namespace, name string, command string, opts ...func(*v1alpha1.Run)) *v
 			Namespace: namespace,
 		},
 		RunSpec: v1alpha1.RunSpec{
-			Command: command,
+			Command:      command,
+			ConfigMap:    name,
+			ConfigMapKey: v1alpha1.RunDefaultConfigMapKey,
+			AttachSpec: v1alpha1.AttachSpec{
+				HandshakeTimeout: "10s",
+			},
 		},
 	}
 
@@ -190,6 +201,12 @@ func WithRunPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
 		if phase != "" {
 			run.Phase = phase
 		}
+	}
+}
+
+func WithConfigMapPath(path string) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		run.ConfigMapPath = path
 	}
 }
 
