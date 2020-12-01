@@ -45,7 +45,7 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	}
 
 	o.createdRun = true
-	klog.V(1).Infof("created run %s/%s\n", o.Namespace, o.RunName)
+	klog.V(1).Infof("created run %s\n", klog.KObj(run))
 
 	return run, nil
 }
@@ -76,7 +76,7 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	}
 
 	o.createdArchive = true
-	klog.V(1).Infof("created config map %s/%s\n", o.Namespace, name)
+	klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
 
 	return nil
 }

@@ -104,7 +104,7 @@ type podHandler func(*corev1.Pod) (bool, error)
 // PodHandlerWrapper is a wrapper for creating handlers for pod events
 func PodHandlerWrapper(name string, h podHandler) watchtools.ConditionFunc {
 	// Current pod phase
-	var phase corev1.PodPhase = corev1.PodUnknown
+	var phase = corev1.PodUnknown
 
 	return func(event watch.Event) (bool, error) {
 		pod := event.Object.(*corev1.Pod)

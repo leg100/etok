@@ -12,7 +12,8 @@ import (
 // Log run's phase
 func LogRunPhase() watchtools.ConditionFunc {
 	// Current run phase
-	var phase v1alpha1.RunPhase
+	var phase = v1alpha1.RunPhaseUnknown
+
 	return func(event watch.Event) (bool, error) {
 		switch event.Type {
 		case watch.Deleted:
@@ -22,7 +23,7 @@ func LogRunPhase() watchtools.ConditionFunc {
 		switch run := event.Object.(type) {
 		case *v1alpha1.Run:
 			if run.GetPhase() != phase {
-				klog.V(1).Infof("new run phase: %s\n", run.GetPhase())
+				klog.V(1).Infof("run phase shift: %s -> %s\n", phase, run.GetPhase())
 				phase = run.GetPhase()
 			}
 		}

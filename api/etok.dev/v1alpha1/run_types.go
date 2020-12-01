@@ -100,6 +100,7 @@ func (r *RunStatus) GetPhase() RunPhase      { return r.Phase }
 func (r *RunStatus) SetPhase(phase RunPhase) { r.Phase = phase }
 
 const (
+	RunPhaseUnknown      RunPhase = "unknown"
 	RunPhasePending      RunPhase = "pending"
 	RunPhaseQueued       RunPhase = "queued"
 	RunPhaseProvisioning RunPhase = "provisioning"
