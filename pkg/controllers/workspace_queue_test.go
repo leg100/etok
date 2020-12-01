@@ -24,7 +24,6 @@ func TestUpdateQueue(t *testing.T) {
 		{
 			name:      "No runs",
 			workspace: testobj.Workspace("default", "workspace-1"),
-			runs:      []runtime.Object{},
 			assertions: func(queue []string) {
 				assert.Equal(t, []string{}, queue)
 			},

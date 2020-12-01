@@ -282,18 +282,9 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 				Name:      "workspace-" + tt.workspace.GetName(),
 				Namespace: tt.workspace.GetNamespace(),
 			}
-			err = r.Get(context.TODO(), configmapkey, configmap)
-			require.NoError(t, err)
+			require.NoError(t, r.Get(context.TODO(), configmapkey, configmap))
 
 			tt.assertions(configmap)
 		})
 	}
-}
-
-func envsToMap(envs []corev1.EnvVar) map[string]string {
-	m := make(map[string]string, len(envs))
-	for _, ev := range envs {
-		m[ev.Name] = ev.Value
-	}
-	return m
 }

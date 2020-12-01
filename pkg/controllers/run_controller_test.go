@@ -7,6 +7,7 @@ import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
+	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -28,7 +29,6 @@ func TestRunReconciler(t *testing.T) {
 			name:           "Missing workspace",
 			run:            testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			reconcileError: true,
-			assertions:     func(run *v1alpha1.Run) {},
 		},
 		{
 			name: "Pending",
@@ -76,10 +76,9 @@ func TestRunReconciler(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := scheme.Scheme
+		testutil.Run(t, tt.name, func(t *testutil.T) {
 			objs := append(tt.objs, runtime.Object(tt.run))
-			cl := fake.NewFakeClientWithScheme(s, objs...)
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -89,17 +88,14 @@ func TestRunReconciler(t *testing.T) {
 			}
 
 			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
-			if tt.reconcileError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			t.CheckError(tt.reconcileError, err)
 
 			run := &v1alpha1.Run{}
-			err = cl.Get(context.TODO(), req.NamespacedName, run)
-			require.NoError(t, err)
+			require.NoError(t, cl.Get(context.TODO(), req.NamespacedName, run))
 
-			tt.assertions(run)
+			if tt.assertions != nil {
+				tt.assertions(run)
+			}
 		})
 	}
 
@@ -142,9 +138,8 @@ func TestRunReconciler(t *testing.T) {
 	}
 	for _, tt := range podTests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := scheme.Scheme
 			objs := append(tt.objs, runtime.Object(tt.run))
-			cl := fake.NewFakeClientWithScheme(s, objs...)
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -157,7 +152,7 @@ func TestRunReconciler(t *testing.T) {
 			assert.NoError(t, err)
 
 			pod := &corev1.Pod{}
-			_ = cl.Get(context.TODO(), req.NamespacedName, pod)
+			require.NoError(t, cl.Get(context.TODO(), req.NamespacedName, pod))
 
 			tt.assertions(pod)
 		})

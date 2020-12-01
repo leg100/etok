@@ -61,59 +61,41 @@ func TestEtok(t *testing.T) {
 		queueAdditional int
 	}{
 		{
-			name:            "new workspace",
-			args:            []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e", "--privileged-commands", "apply"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(``),
-			pty:             false,
+			name: "new workspace",
+			args: []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e", "--privileged-commands", "apply"},
 		},
 		{
-			name:            "second new workspace",
-			args:            []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--terraform-version", "0.12.17"},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(``),
-			pty:             false,
+			name: "second new workspace",
+			args: []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--terraform-version", "0.12.17"},
 		},
 		{
 			name:            "list workspaces",
 			args:            []string{"workspace", "list", "--path", "workspace", "--context", *kubectx},
-			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s\n\t%s", wsName2, wsName)),
-			pty:             false,
 		},
 		{
-			name:            "select first workspace",
-			args:            []string{"workspace", "select", "--path", "workspace", wsName},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(``),
-			pty:             false,
+			name: "select first workspace",
+			args: []string{"workspace", "select", "--path", "workspace", wsName},
 		},
 		{
 			name:            "show current workspace",
 			args:            []string{"workspace", "show", "--path", "workspace"},
-			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(wsName),
-			pty:             false,
 		},
 		{
 			name:            "etok init without pty",
 			args:            []string{"init", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false"},
-			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
-			pty:             false,
 		},
 		{
 			name:            "etok plan without pty",
 			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false", "-var", "suffix=foo"},
-			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
-			pty:             false,
 		},
 		{
-			name:         "etok plan with pty",
-			args:         []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
-			wantExitCode: 0,
-			pty:          true,
+			name: "etok plan with pty",
+			args: []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
+			pty:  true,
 			batch: []expect.Batcher{
 				&expect.BExp{R: `Enter a value:`},
 				&expect.BSnd{S: "foo\n"},
@@ -121,10 +103,9 @@ func TestEtok(t *testing.T) {
 			},
 		},
 		{
-			name:         "etok apply with pty",
-			args:         []string{"apply", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
-			wantExitCode: 0,
-			pty:          true,
+			name: "etok apply with pty",
+			args: []string{"apply", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-no-color"},
+			pty:  true,
 			batch: []expect.Batcher{
 				&expect.BExp{R: `Enter a value:`},
 				&expect.BSnd{S: "foo\n"},
@@ -134,10 +115,9 @@ func TestEtok(t *testing.T) {
 			},
 		},
 		{
-			name:         "etok sh",
-			args:         []string{"sh", "--path", "workspace", "--context", *kubectx},
-			wantExitCode: 0,
-			pty:          true,
+			name: "etok sh",
+			args: []string{"sh", "--path", "workspace", "--context", *kubectx},
+			pty:  true,
 			batch: []expect.Batcher{
 				&expect.BExp{R: `#`},
 				&expect.BSnd{S: "uname; exit\n"},
@@ -147,16 +127,13 @@ func TestEtok(t *testing.T) {
 		{
 			name:            "etok queuing",
 			args:            []string{"sh", "--path", "workspace", "--context", *kubectx, "--", "uname;", "sleep 5"},
-			wantExitCode:    0,
 			wantStdoutRegex: regexp.MustCompile(`Linux`),
-			pty:             false,
 			queueAdditional: 1,
 		},
 		{
-			name:         "etok destroy with pty",
-			args:         []string{"destroy", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo", "-no-color"},
-			wantExitCode: 0,
-			pty:          true,
+			name: "etok destroy with pty",
+			args: []string{"destroy", "--path", "workspace", "--context", *kubectx, "--", "-input=true", "-var", "suffix=foo", "-no-color"},
+			pty:  true,
 			batch: []expect.Batcher{
 				&expect.BExp{R: `Enter a value:`},
 				&expect.BSnd{S: "yes\n"},
@@ -164,11 +141,8 @@ func TestEtok(t *testing.T) {
 			},
 		},
 		{
-			name:            "delete workspace",
-			args:            []string{"workspace", "delete", wsName, "--context", *kubectx},
-			wantExitCode:    0,
-			wantStdoutRegex: regexp.MustCompile(``),
-			pty:             false,
+			name: "delete workspace",
+			args: []string{"workspace", "delete", wsName, "--context", *kubectx},
 		},
 	}
 
