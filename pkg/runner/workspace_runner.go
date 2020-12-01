@@ -1,11 +1,9 @@
 package runner
 
 import (
-	"fmt"
-	"strings"
+	"bytes"
 
 	"github.com/leg100/stok/api/stok.goalspike.com/v1alpha1"
-	"github.com/leg100/stok/pkg/globals"
 	"github.com/leg100/stok/pkg/labels"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -21,11 +19,8 @@ type workspace struct {
 	*v1alpha1.Workspace
 }
 
-func NewWorkspaceRunner(ws *v1alpha1.Workspace) *workspace {
-	return &workspace{ws}
-}
-
-func (ws *workspace) Pod(image string) *corev1.Pod {
+func NewWorkspacePod(schema *v1alpha1.Workspace, image string) *corev1.Pod {
+	ws := &workspace{schema}
 	pod := Pod(ws, ws.Workspace, image)
 
 	// Permit filtering stok resources by component
@@ -56,30 +51,10 @@ func (ws *workspace) GetVerbosity() int { return ws.Spec.Verbosity }
 func (ws *workspace) WorkingDir() string { return "/workspace" }
 
 func (ws *workspace) ContainerArgs() []string {
-	var cmds []string
-	if ws.Spec.TerraformVersion != "" {
-		cmds = ws.terraformDownloadScript()
+	buf := new(bytes.Buffer)
+	if err := generateWorkspaceScript(buf, ws.Workspace); err != nil {
+		// TODO: propagate error
+		panic(err.Error())
 	}
-	cmds = append(cmds, ws.terraformInitScript()...)
-
-	return []string{"sh", "-c", strings.Join(cmds, " && \\\n")}
-}
-
-func (ws *workspace) terraformInitScript() []string {
-	return []string{
-		fmt.Sprintf("terraform init -backend-config=%s", v1alpha1.BackendConfigFilename),
-		fmt.Sprintf("terraform workspace select %s-%s || terraform workspace new %[1]s-%[1]s", ws.Namespace, ws.Name),
-	}
-}
-
-func (ws *workspace) terraformDownloadScript() []string {
-	return []string{
-		fmt.Sprintf("curl -LOs https://releases.hashicorp.com/terraform/%s/terraform_%[1]s_linux_amd64.zip", ws.Spec.TerraformVersion),
-		fmt.Sprintf("curl -LOs https://releases.hashicorp.com/terraform/%s/terraform_%[1]s_SHA256SUMS", ws.Spec.TerraformVersion),
-		fmt.Sprintf("sed -n \"/terraform_%s_linux_amd64.zip/p\" terraform_%[1]s_SHA256SUMS | sha256sum -c", ws.Spec.TerraformVersion),
-		fmt.Sprintf("mkdir -p %s", globals.TerraformPath),
-		fmt.Sprintf("unzip terraform_%s_linux_amd64.zip -d %s", ws.Spec.TerraformVersion, globals.TerraformPath),
-		fmt.Sprintf("rm terraform_%s_linux_amd64.zip", ws.Spec.TerraformVersion),
-		fmt.Sprintf("rm terraform_%s_SHA256SUMS", ws.Spec.TerraformVersion),
-	}
+	return []string{"sh", "-c", buf.String()}
 }

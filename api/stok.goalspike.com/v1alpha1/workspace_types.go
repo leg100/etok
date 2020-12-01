@@ -69,6 +69,10 @@ func (ws *Workspace) PodName() string {
 	return WorkspacePodName(ws.GetName())
 }
 
+func (ws *Workspace) TerraformName() string {
+	return fmt.Sprintf("%s-%s", ws.Namespace, ws.Name)
+}
+
 func (ws *Workspace) PVCName() string {
 	return ws.GetName()
 }

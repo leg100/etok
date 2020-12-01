@@ -2,8 +2,7 @@ FROM alpine:3.12
 
 ENV STOK_BIN=/usr/local/bin/stok
 
-# Any change to this path must also be made to the constant TerraformPath in
-# /pkg/globals/globals.go
+# Any change to this path must also be made to the constant terraformBinMountPath in /pkg/runner/runner.go
 ENV TF_BIN_PATH=/terraform-bins
 
 ENV PATH=${TF_BIN_PATH}:${PATH}

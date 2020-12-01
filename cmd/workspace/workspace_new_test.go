@@ -250,6 +250,18 @@ func TestNewWorkspace(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "set terraform version",
+			args: []string{"default/foo", "--terraform-version", "0.12.17"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *NewOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, "0.12.17", ws.Spec.TerraformVersion)
+			},
+		},
 	}
 
 	for _, tt := range tests {

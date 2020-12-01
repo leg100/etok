@@ -9,11 +9,16 @@ const (
 	backendConfigVolumeName = "backendconfig"
 	credentialsVolumeName   = "credentials"
 
-	// SubPaths mounted from the PVC (they may well be used as the mount path
-	// too)
-	dotTerraformPath        = ".terraform/"
-	localTerraformStatePath = "terraform.tfstate.d/"
-	terraformBinPath        = "terraform-bins/"
+	// Terraform 'data' directory. Mount path is relative to working directory.
+	terraformDotPath = ".terraform/"
+
+	// Directory in which local state is maintained. Mount path is relative to
+	// working directory. Only used when a remote backend isn't configured.
+	terraformLocalStatePath = "terraform.tfstate.d/"
+
+	// Terraform binary path
+	terraformBinMountPath = "/terraform-bins"
+	terraformBinSubPath   = "terraform-bins/"
 )
 
 // Runner represents a kubernetes pod on which a run's command is executed

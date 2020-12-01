@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -14,15 +13,11 @@ import (
 // (typically terraform).
 type run struct {
 	*v1alpha1.Run
-	ws *v1alpha1.Workspace
 }
 
-func NewRunRunner(r *v1alpha1.Run, ws *v1alpha1.Workspace) *run {
-	return &run{r, ws}
-}
-
-func (r *run) Pod(image string) *corev1.Pod {
-	pod := Pod(r, r.ws, image)
+func NewRunPod(schema *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod {
+	r := &run{schema}
+	pod := Pod(r, ws, image)
 
 	// Permit filtering stok resources by component
 	labels.SetLabel(pod, labels.RunComponent)
@@ -30,10 +25,10 @@ func (r *run) Pod(image string) *corev1.Pod {
 	// Permit filtering pods by the run command
 	labels.SetLabel(pod, labels.Command(r.Command))
 
-	container := Container(r, r.ws, image)
+	container := Container(r, ws, image)
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  "TF_WORKSPACE",
-		Value: fmt.Sprintf("%s-%s", r.ws.Namespace, r.ws.Name),
+		Value: ws.TerraformName(),
 	})
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  "STOK_PATH",
@@ -69,7 +64,9 @@ func (r *run) GetHandshakeTimeout() string { return r.AttachSpec.HandshakeTimeou
 
 func (r *run) GetVerbosity() int { return r.Verbosity }
 
-func (r *run) WorkingDir() string { return "/runner" }
+func (r *run) WorkingDir() string {
+	return filepath.Join("/workspace", r.ConfigMapPath)
+}
 
 func (r *run) ContainerArgs() (args []string) {
 	if r.Command != "sh" {

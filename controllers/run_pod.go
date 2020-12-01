@@ -48,7 +48,7 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, run *v1alpha1.Run, ws *v1a
 
 // Create pod
 func (r RunReconciler) create(run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
-	pod := runner.NewRunRunner(run, ws).Pod(r.Image)
+	pod := runner.NewRunPod(run, ws, r.Image)
 
 	// Set Run instance as the owner and controller
 	if err := controllerutil.SetControllerReference(run, pod, r.Scheme); err != nil {

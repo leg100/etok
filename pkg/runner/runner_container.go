@@ -45,8 +45,8 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 			},
 			{
 				Name:      cacheVolumeName,
-				MountPath: filepath.Join(r.WorkingDir(), dotTerraformPath),
-				SubPath:   dotTerraformPath,
+				MountPath: filepath.Join(r.WorkingDir(), terraformDotPath),
+				SubPath:   terraformDotPath,
 			},
 		},
 		WorkingDir: r.WorkingDir(),
@@ -66,8 +66,8 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 	if ws.Spec.Backend.Type == "" || ws.Spec.Backend.Type == "local" {
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 			Name:      cacheVolumeName,
-			MountPath: filepath.Join(r.WorkingDir(), localTerraformStatePath),
-			SubPath:   localTerraformStatePath,
+			MountPath: filepath.Join(r.WorkingDir(), terraformLocalStatePath),
+			SubPath:   terraformLocalStatePath,
 		})
 	}
 
@@ -77,9 +77,9 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 			Name: cacheVolumeName,
 			// Path in container to mount vol at
-			MountPath: globals.TerraformPath,
+			MountPath: terraformBinMountPath,
 			// Path within PVC to mount
-			SubPath: terraformBinPath,
+			SubPath: terraformBinSubPath,
 		})
 	}
 

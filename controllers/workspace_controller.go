@@ -289,7 +289,7 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 }
 
 func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
-	return runner.WorkspacePod(cr, r.Image)
+	return runner.NewWorkspacePod(cr, r.Image)
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
