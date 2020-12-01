@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
-	"github.com/leg100/etok/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"

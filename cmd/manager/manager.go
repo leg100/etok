@@ -9,9 +9,9 @@ import (
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/controllers"
-	"github.com/leg100/etok/scheme"
-	"github.com/leg100/etok/version"
+	"github.com/leg100/etok/pkg/controllers"
+	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 
 	ctrl "sigs.k8s.io/controller-runtime"

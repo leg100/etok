@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-logr/logr"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/scheme"
-	"github.com/leg100/etok/util/slice"
+	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -6,7 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/leg100/etok/cmd/launcher"
-	"github.com/leg100/etok/util/slice"
+	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/spf13/cobra"
 )
 

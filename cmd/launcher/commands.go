@@ -10,7 +10,7 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
-	"github.com/leg100/etok/util"
+	"github.com/leg100/etok/pkg/util"
 	"github.com/spf13/cobra"
 )
 

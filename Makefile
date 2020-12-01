@@ -8,8 +8,8 @@ BUILD_BIN ?= ./etok
 KUBECTL = kubectl --context=$(KUBECTX)
 KUBE_VERSION=v0.18.2
 LD_FLAGS = " \
-	-X '$(REPO)/version.Version=$(VERSION)' \
-	-X '$(REPO)/version.Commit=$(GIT_COMMIT)' \
+	-X '$(REPO)/pkg/version.Version=$(VERSION)' \
+	-X '$(REPO)/pkg/version.Commit=$(GIT_COMMIT)' \
 	" \
 
 ifeq ($(ENV),gke)
@@ -99,7 +99,7 @@ delete-workspaces: build
 
 .PHONY: unit
 unit:
-	go test ./ ./cmd/... ./controllers/... ./pkg/... ./util/...
+	go test ./ ./cmd/... ./pkg/...
 
 .PHONY: build
 build:

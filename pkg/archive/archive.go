@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/leg100/etok/util/path"
+	"github.com/leg100/etok/pkg/util/path"
 	"k8s.io/klog/v2"
 )
 

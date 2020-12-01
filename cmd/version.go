@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/version"
+	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 )
 

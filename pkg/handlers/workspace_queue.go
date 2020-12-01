@@ -5,7 +5,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/util/slice"
+	"github.com/leg100/etok/pkg/util/slice"
 	"k8s.io/apimachinery/pkg/watch"
 	watchtools "k8s.io/client-go/tools/watch"
 )

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leg100/etok/util/slice"
+	"github.com/leg100/etok/pkg/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/leg100/etok/cmd/flags"
 	"github.com/leg100/etok/pkg/labels"
-	"github.com/leg100/etok/version"
+	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 
 	cmdutil "github.com/leg100/etok/cmd/util"

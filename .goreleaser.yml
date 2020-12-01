@@ -6,8 +6,8 @@ builds:
     env:
     - CGO_ENABLED=0
     ldflags:
-    - '-X "github.com/leg100/etok/version.Version={{ .Version }}"'
-    - '-X "github.com/leg100/etok/version.Commit={{ .Commit }}"'
+    - '-X "github.com/leg100/etok/pkg/version.Version={{ .Version }}"'
+    - '-X "github.com/leg100/etok/pkg/version.Commit={{ .Commit }}"'
     targets:
     - linux_amd64
     - darwin_amd64

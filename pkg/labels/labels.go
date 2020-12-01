@@ -1,7 +1,7 @@
 package labels
 
 import (
-	"github.com/leg100/etok/version"
+	"github.com/leg100/etok/pkg/version"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
