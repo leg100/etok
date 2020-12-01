@@ -120,7 +120,7 @@ func PodHandlerWrapper(name string, h podHandler) watchtools.ConditionFunc {
 		}
 
 		if pod.Status.Phase != phase {
-			klog.V(1).Infof("Pod phase shift: %s -> %s\n", phase, pod.Status.Phase)
+			klog.V(1).Infof("pod phase shift: %s -> %s\n", phase, pod.Status.Phase)
 			phase = pod.Status.Phase
 		}
 

@@ -33,7 +33,7 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handsh
 
 	var oldState *terminal.State
 	go func() {
-		klog.V(1).Info("Handshaking")
+		klog.V(1).Info("handshaking")
 		// Blocks until read from stdinR
 		_, err := stdinW.Write([]byte(handshake))
 		if err != nil {

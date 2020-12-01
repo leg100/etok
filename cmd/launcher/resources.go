@@ -76,7 +76,7 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	}
 
 	o.createdArchive = true
-	klog.V(1).Infof("Created config map %s/%s\n", o.Namespace, name)
+	klog.V(1).Infof("created config map %s/%s\n", o.Namespace, name)
 
 	return nil
 }
