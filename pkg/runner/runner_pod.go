@@ -44,16 +44,5 @@ func Pod(r Runner, ws *v1alpha1.Workspace, image string) *corev1.Pod {
 	// Permit filtering pods by workspace
 	labels.SetLabel(pod, labels.Workspace(ws.Name))
 
-	if ws.Spec.SecretName != "" {
-		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
-			Name: credentialsVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: ws.Spec.SecretName,
-				},
-			},
-		})
-	}
-
 	return pod
 }

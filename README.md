@@ -97,7 +97,9 @@ TODO
 
 ## Credentials
 
-Place any credentials inside a kubernetes secret named `stok`. For example, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
+Credentials placed inside a kubernetes secret named `stok` are made available to terraform as environment variables.
+
+For example, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
 
 ```
 kubectl create secret generic stok \
@@ -107,8 +109,8 @@ kubectl create secret generic stok \
 
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are then made available as environment variables.
 
-Specific support is provided for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference). The environment variable `GOOGLE_APPLICATION_CREDENTIALS` is set to the file `google-credentials.json`. To populate that file, create a secret like so:
+Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
 
 ```
-kubectl create secret generic stok --from-file=google-credentials.json=[path to service account key]
+kubectl create secret generic stok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```

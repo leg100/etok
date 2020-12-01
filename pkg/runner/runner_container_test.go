@@ -57,13 +57,16 @@ func TestContainer(t *testing.T) {
 			},
 		},
 		{
-			name:      "Sets google credentials",
+			name:      "Set environment variables for secrets",
 			runner:    &run{testobj.Run("default", "run-12345", "plan")},
 			workspace: testobj.Workspace("default", "foo", testobj.WithSecret("stok")),
 			assertions: func(c corev1.Container) {
-				assert.Contains(t, c.Env, corev1.EnvVar{
-					Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-					Value: "/credentials/google-credentials.json",
+				assert.Contains(t, c.EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "stok",
+						},
+					},
 				})
 			},
 		},

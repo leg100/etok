@@ -84,21 +84,6 @@ func Container(r Runner, ws *v1alpha1.Workspace, image string) corev1.Container 
 	}
 
 	if ws.Spec.SecretName != "" {
-		// Mount secret into a volume and set GOOGLE_APPLICATION_CREDENTIALS to
-		// the hardcoded google credentials file (whether it exists or not). Also
-		// expose the secret data via environment variables.
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			Name:      credentialsVolumeName,
-			MountPath: "/credentials",
-		})
-
-		//TODO: we set this regardless of whether google credentials exist and that
-		//doesn't cause any obvious problems but really should only set it if they exist
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: "/credentials/google-credentials.json",
-		})
-
 		container.EnvFrom = append(container.EnvFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{

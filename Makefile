@@ -62,7 +62,7 @@ create-namespace:
 create-secret:
 	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret stok || \
 		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic stok \
-			--from-file=google-credentials.json=$(GOOGLE_APPLICATION_CREDENTIALS)
+			--from-file=GOOGLE_CREDENTIALS=$(GOOGLE_APPLICATION_CREDENTIALS)
 
 .PHONY: delete-secret
 delete-secret:
