@@ -25,7 +25,7 @@ func TestUpdateQueue(t *testing.T) {
 			name:      "No runs",
 			workspace: testobj.Workspace("default", "workspace-1"),
 			assertions: func(queue []string) {
-				assert.Equal(t, []string{}, queue)
+				assert.Equal(t, []string(nil), queue)
 			},
 		},
 		{
@@ -67,7 +67,7 @@ func TestUpdateQueue(t *testing.T) {
 				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 			},
 			assertions: func(queue []string) {
-				assert.Equal(t, []string{}, queue)
+				assert.Equal(t, []string(nil), queue)
 			},
 		},
 		{

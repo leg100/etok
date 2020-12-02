@@ -121,7 +121,6 @@ spec:
                 type: array
             required:
             - phase
-            - queue
             type: object
         type: object
     served: true

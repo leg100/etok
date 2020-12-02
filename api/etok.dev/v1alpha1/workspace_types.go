@@ -97,7 +97,7 @@ func WorkspacePodName(name string) string {
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	Queue []string       `json:"queue"`
+	Queue []string       `json:"queue,omitempty"`
 	Phase WorkspacePhase `json:"phase"`
 }
 
