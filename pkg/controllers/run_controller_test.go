@@ -31,11 +31,10 @@ func TestRunReconciler(t *testing.T) {
 			reconcileError: true,
 		},
 		{
-			name: "Pending",
+			name: "Unqueued",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
-				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhasePending, run.Phase)
@@ -46,10 +45,20 @@ func TestRunReconciler(t *testing.T) {
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-0", "plan-1")),
-				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseQueued, run.Phase)
+			},
+		},
+		{
+			name: "Provisioning",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithQueue("plan-1")),
+				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
+			},
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseProvisioning, run.Phase)
 			},
 		},
 		{

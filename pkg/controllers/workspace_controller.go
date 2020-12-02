@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -23,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -65,45 +63,35 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	reqLogger := r.Log.WithValues("workspace", req.NamespacedName)
-	reqLogger.V(0).Info("Reconciling Workspace")
+	ctx := context.Background()
+	log := r.Log.WithValues("workspace", req.NamespacedName)
+	log.V(0).Info("Reconciling")
 
 	// Fetch the Workspace instance
-	instance := &v1alpha1.Workspace{}
-	err := r.Get(context.TODO(), req.NamespacedName, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		reqLogger.Error(err, "Error retrieving workspace")
-		return ctrl.Result{}, err
+	var ws v1alpha1.Workspace
+	if err := r.Get(ctx, req.NamespacedName, &ws); err != nil {
+		log.Error(err, "unable to get workspace")
+		// we'll ignore not-found errors, since they can't be fixed by an
+		// immediate requeue (we'll need to wait for a new notification), and we
+		// can get them on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Because it is a required attribute we need to set the queue status to an empty array if it
-	// is not already set
-	// TODO: need to update ws after setting these defaults
-	if instance.Status.Queue == nil {
-		instance.Status.Queue = []string{}
-	}
-
-	if instance.GetDeletionTimestamp().IsZero() {
+	if ws.GetDeletionTimestamp().IsZero() {
 		// Workspace not being deleted
-		if !slice.ContainsString(instance.GetFinalizers(), metav1.FinalizerDeleteDependents) {
+		if !slice.ContainsString(ws.GetFinalizers(), metav1.FinalizerDeleteDependents) {
 			// Instruct garbage collector to only delete workspace once its dependents are deleted
-			instance.SetFinalizers([]string{metav1.FinalizerDeleteDependents})
-			if err := r.Update(context.TODO(), instance); err != nil {
+			ws.SetFinalizers([]string{metav1.FinalizerDeleteDependents})
+			if err := r.Update(ctx, &ws); err != nil {
+				log.Error(err, "unable to set finalizer")
 				return ctrl.Result{}, err
 			}
 		}
 	} else {
 		// Workspace is being deleted
-		instance.Status.Phase = v1alpha1.WorkspacePhaseDeleting
-		if err := r.Status().Update(context.TODO(), instance); err != nil {
+		ws.Status.Phase = v1alpha1.WorkspacePhaseDeleting
+		if err := r.Status().Update(ctx, &ws); err != nil {
+			log.Error(err, "unable to set phase")
 			return ctrl.Result{}, err
 		}
 
@@ -112,49 +100,97 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Manage ConfigMap for workspace
-	configMap := newConfigMapForCR(instance)
-	if err := r.manageControllee(instance, reqLogger, configMap); err != nil {
-		return ctrl.Result{}, err
+	var configMap corev1.ConfigMap
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: v1alpha1.BackendConfigMapName(ws.Name)}, &configMap); err != nil {
+		if errors.IsNotFound(err) {
+			configMap := *newConfigMapForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &configMap, r.Scheme); err != nil {
+				log.Error(err, "unable to set config map ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &configMap); err != nil {
+				log.Error(err, "unable to create config map")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get config map")
+			return ctrl.Result{}, err
+		}
 	}
 
-	// Manage PVC for workspace cache dir
-	pvc := newPVCForCR(instance)
-	if err := r.manageControllee(instance, reqLogger, pvc); err != nil {
-		return ctrl.Result{}, err
+	// Manage PVC for workspace
+	var pvc corev1.PersistentVolumeClaim
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PVCName()}, &pvc); err != nil {
+		if errors.IsNotFound(err) {
+			pvc := *newPVCForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &pvc, r.Scheme); err != nil {
+				log.Error(err, "unable to set PVC ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &pvc); err != nil {
+				log.Error(err, "unable to create PVC")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get PVC")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Manage Pod for workspace
-	pod := r.newPodForCR(instance)
-	if err := r.manageControllee(instance, reqLogger, pod); err != nil {
-		return ctrl.Result{}, err
+	var pod corev1.Pod
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
+		if errors.IsNotFound(err) {
+			pod := *runner.NewWorkspacePod(&ws, r.Image)
+
+			if err := controllerutil.SetControllerReference(&ws, &pod, r.Scheme); err != nil {
+				log.Error(err, "unable to set pod ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &pod); err != nil {
+				log.Error(err, "unable to create pod")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get pod")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Set workspace phase status
-	if err := r.setPhase(instance, pod); err != nil {
-		return ctrl.Result{}, fmt.Errorf("Unable to set workspace phase: %w", err)
+	if err := r.setPhase(ctx, &ws, &pod); err != nil {
+		log.Error(err, "unable to set phase")
+		return ctrl.Result{}, err
 	}
 
 	// Update run queue
-	if err := updateQueue(r.Client, instance); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update queue: %w", err)
+	if err := updateQueue(r.Client, &ws); err != nil {
+		log.Error(err, "unable to update queue")
+		return ctrl.Result{}, err
 	}
 
 	// Garbage collect approval annotations
-	if annotations := instance.Annotations; annotations != nil {
+	if annotations := ws.Annotations; annotations != nil {
 		updatedAnnotations := make(map[string]string)
 		for k, v := range annotations {
 			if approvalAnnotationKeyRegex.MatchString(k) {
 				run := strings.Split(k, "/")[1]
-				if slice.ContainsString(instance.Status.Queue, run) {
+				if slice.ContainsString(ws.Status.Queue, run) {
 					// Run is still enqueued so keep its annotation
 					updatedAnnotations[k] = v
 				}
 			}
 		}
 		if !reflect.DeepEqual(annotations, updatedAnnotations) {
-			instance.Annotations = updatedAnnotations
-			if err := r.Update(context.TODO(), instance); err != nil {
-				return ctrl.Result{}, fmt.Errorf("Failed to update approval annotations: %w", err)
+			ws.Annotations = updatedAnnotations
+			if err := r.Update(ctx, &ws); err != nil {
+				log.Error(err, "failed to update approval annotations")
+				return ctrl.Result{}, err
 			}
 		}
 	}
@@ -162,7 +198,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *WorkspaceReconciler) setPhase(ws *v1alpha1.Workspace, pod *corev1.Pod) error {
+func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspace, pod *corev1.Pod) error {
 	switch pod.Status.Phase {
 	case corev1.PodPending:
 		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
@@ -173,71 +209,22 @@ func (r *WorkspaceReconciler) setPhase(ws *v1alpha1.Workspace, pod *corev1.Pod) 
 	default:
 		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
 	}
-	return r.Status().Update(context.TODO(), ws)
+	return r.Status().Update(ctx, ws)
 }
 
-// For a given go object, return the corresponding Kind. A wrapper for scheme.ObjectKinds, which
-// returns all possible GVKs for a go object, but the wrapper returns only the Kind, checking only
-// that at least one GVK exists. (The Kind should be the same for all GVKs).
-// TODO: could just use reflect.TypeOf instead...
-func getKindFromObject(scheme *runtime.Scheme, obj runtime.Object) (string, error) {
-	gvks, _, err := scheme.ObjectKinds(obj)
-	if err != nil {
-		return "", err
-	}
-	if len(gvks) == 0 {
-		return "", fmt.Errorf("no kind found for obj %v", obj)
-	}
-	return gvks[0].Kind, nil
-}
-
-func (r *WorkspaceReconciler) manageControllee(ws *v1alpha1.Workspace, logger logr.Logger, controllee controllerutil.Object) error {
-	kind, err := getKindFromObject(r.Scheme, controllee)
-	if err != nil {
-		return err
-	}
-
-	log := logger.WithValues("Controllee.Kind", kind)
-
-	// Set Workspace instance as the owner and controller
-	if err := controllerutil.SetControllerReference(ws, controllee, r.Scheme); err != nil {
-		log.Error(err, "Unable to set controller reference")
-		return err
-	}
-
-	controlleeKey, err := client.ObjectKeyFromObject(controllee)
-	if err != nil {
-		return err
-	}
-
-	err = r.Get(context.TODO(), controlleeKey, controllee)
-	if errors.IsNotFound(err) {
-		if err = r.Create(context.TODO(), controllee); err != nil {
-			log.Error(err, "Failed to create controllee", "Controllee.Name", controllee.GetName())
-			return err
-		}
-		log.Info("Created controllee", "Controllee.Name", controllee.GetName())
-	} else if err != nil {
-		log.Error(err, "Error retrieving controllee")
-		return err
-	}
-
-	return nil
-}
-
-func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
+func newConfigMapForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      v1alpha1.BackendConfigMapName(cr.GetName()),
-			Namespace: cr.Namespace,
+			Name:      v1alpha1.BackendConfigMapName(ws.GetName()),
+			Namespace: ws.Namespace,
 		},
 		Data: map[string]string{
-			v1alpha1.BackendTypeFilename:   v1alpha1.BackendEmptyConfig(cr.Spec.Backend.Type),
-			v1alpha1.BackendConfigFilename: v1alpha1.BackendConfig(cr.Spec.Backend.Config),
+			v1alpha1.BackendTypeFilename:   v1alpha1.BackendEmptyConfig(ws.Spec.Backend.Type),
+			v1alpha1.BackendConfigFilename: v1alpha1.BackendConfig(ws.Spec.Backend.Config),
 		},
 	}
 
@@ -249,10 +236,10 @@ func newConfigMapForCR(cr *v1alpha1.Workspace) *corev1.ConfigMap {
 	return configMap
 }
 
-func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
+func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	size := v1alpha1.WorkspaceDefaultCacheSize
-	if cr.Spec.Cache.Size != "" {
-		size = cr.Spec.Cache.Size
+	if ws.Spec.Cache.Size != "" {
+		size = ws.Spec.Cache.Size
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{
@@ -261,8 +248,8 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 			APIVersion: "",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
-			Namespace: cr.Namespace,
+			Name:      ws.Name,
+			Namespace: ws.Namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -281,15 +268,11 @@ func newPVCForCR(cr *v1alpha1.Workspace) controllerutil.Object {
 	// Permit filtering etok resources by component
 	labels.SetLabel(pvc, labels.WorkspaceComponent)
 
-	if cr.Spec.Cache.StorageClass != "" {
-		pvc.Spec.StorageClassName = &cr.Spec.Cache.StorageClass
+	if ws.Spec.Cache.StorageClass != "" {
+		pvc.Spec.StorageClassName = &ws.Spec.Cache.StorageClass
 	}
 
 	return pvc
-}
-
-func (r *WorkspaceReconciler) newPodForCR(cr *v1alpha1.Workspace) *corev1.Pod {
-	return runner.NewWorkspacePod(cr, r.Image)
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -309,10 +292,10 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch for changes to run resources and requeue the associated Workspace.
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []ctrl.Request {
 			run := a.Object.(*v1alpha1.Run)
 			if run.Workspace != "" {
-				return []reconcile.Request{
+				return []ctrl.Request{
 					{
 						NamespacedName: types.NamespacedName{
 							Name:      run.Workspace,
@@ -321,7 +304,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					},
 				}
 			}
-			return []reconcile.Request{}
+			return []ctrl.Request{}
 		}),
 	})
 
