@@ -31,9 +31,9 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, run *v1alpha1.Run, ws *v1a
 	// Signal pod completion to workspace
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
-		run.SetPhase(v1alpha1.RunPhaseCompleted)
+		run.Phase = v1alpha1.RunPhaseCompleted
 	case corev1.PodRunning:
-		run.SetPhase(v1alpha1.RunPhaseRunning)
+		run.Phase = v1alpha1.RunPhaseRunning
 	case corev1.PodPending:
 		return reconcile.Result{Requeue: true}, nil
 	case corev1.PodUnknown:
@@ -64,7 +64,7 @@ func (r RunReconciler) create(run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconc
 		return reconcile.Result{}, err
 	}
 
-	run.SetPhase(v1alpha1.RunPhaseProvisioning)
+	run.Phase = v1alpha1.RunPhaseProvisioning
 	if err := r.Status().Update(context.TODO(), run); err != nil {
 		return reconcile.Result{}, err
 	}

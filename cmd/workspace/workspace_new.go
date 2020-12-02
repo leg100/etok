@@ -295,7 +295,7 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 // waitForContainer returns true once the runner container can be
 // attached/stream to/from
 func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) (*corev1.Pod, error) {
-	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.GetNamespace()}
+	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
 	hdlr := handlers.ContainerReady(ws.PodName(), globals.RunnerContainerName, true, attaching)
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	return event.Object.(*corev1.Pod), err

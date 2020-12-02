@@ -168,8 +168,8 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.GetName(),
-					Namespace: tt.workspace.GetNamespace(),
+					Name:      tt.workspace.Name,
+					Namespace: tt.workspace.Namespace,
 				},
 			}
 			_, err := r.Reconcile(req)
@@ -214,8 +214,8 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.GetName(),
-					Namespace: tt.workspace.GetNamespace(),
+					Name:      tt.workspace.Name,
+					Namespace: tt.workspace.Namespace,
 				},
 			}
 			_, err := r.Reconcile(req)
@@ -270,8 +270,8 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.GetName(),
-					Namespace: tt.workspace.GetNamespace(),
+					Name:      tt.workspace.Name,
+					Namespace: tt.workspace.Namespace,
 				},
 			}
 			_, err := r.Reconcile(req)
@@ -279,8 +279,8 @@ func TestReconcileWorkspaceConfigMap(t *testing.T) {
 
 			configmap := &corev1.ConfigMap{}
 			configmapkey := types.NamespacedName{
-				Name:      "workspace-" + tt.workspace.GetName(),
-				Namespace: tt.workspace.GetNamespace(),
+				Name:      "workspace-" + tt.workspace.Name,
+				Namespace: tt.workspace.Namespace,
 			}
 			require.NoError(t, r.Get(context.TODO(), configmapkey, configmap))
 

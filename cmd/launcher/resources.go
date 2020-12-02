@@ -24,13 +24,13 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	// Permit filtering etok resources by component
 	labels.SetLabel(run, labels.RunComponent)
 
-	run.SetWorkspace(o.Workspace)
+	run.Workspace = o.Workspace
 
-	run.SetCommand(o.Command)
-	run.SetArgs(o.args)
-	run.SetConfigMap(configMapName)
-	run.SetConfigMapKey(v1alpha1.RunDefaultConfigMapKey)
-	run.SetConfigMapPath(relPathToRoot)
+	run.Command = o.Command
+	run.Args = o.args
+	run.ConfigMap = configMapName
+	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
+	run.ConfigMapPath = relPathToRoot
 
 	run.Verbosity = o.Verbosity
 

@@ -55,13 +55,13 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Run completed, nothing more to be done
-	if run.GetPhase() == v1alpha1.RunPhaseCompleted {
+	if run.Phase == v1alpha1.RunPhaseCompleted {
 		return ctrl.Result{}, nil
 	}
 
 	// Fetch its Workspace object
 	ws := &v1alpha1.Workspace{}
-	if err := r.Get(context.TODO(), types.NamespacedName{Name: run.GetWorkspace(), Namespace: req.Namespace}, ws); err != nil {
+	if err := r.Get(context.TODO(), types.NamespacedName{Name: run.Workspace, Namespace: req.Namespace}, ws); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -71,17 +71,17 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Check workspace queue position
-	pos := slice.StringIndex(ws.Status.Queue, run.GetName())
+	pos := slice.StringIndex(ws.Status.Queue, run.Name)
 	switch {
 	case pos == 0:
 		// Currently scheduled to run; get or create pod
 		return r.reconcilePod(req, run, ws)
 	case pos > 0:
 		// Queued
-		run.SetPhase(v1alpha1.RunPhaseQueued)
+		run.Phase = v1alpha1.RunPhaseQueued
 	case pos < 0:
 		// Not yet queued
-		run.SetPhase(v1alpha1.RunPhasePending)
+		run.Phase = v1alpha1.RunPhasePending
 	}
 
 	return reconcile.Result{}, r.Update(context.TODO(), run)
@@ -96,7 +96,7 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Index field Spec.Workspace in order for the filtered watch below to work
 	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Run{}, "spec.workspace", func(o runtime.Object) []string {
-		ws := o.(*v1alpha1.Run).GetWorkspace()
+		ws := o.(*v1alpha1.Run).Workspace
 		if ws == "" {
 			return nil
 		}

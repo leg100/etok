@@ -109,8 +109,8 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handsh
 func makeAttachRequest(client rest.Interface, pod *corev1.Pod, container string) *rest.Request {
 	req := client.Post().
 		Resource("pods").
-		Name(pod.GetName()).
-		Namespace(pod.GetNamespace()).
+		Name(pod.Name).
+		Namespace(pod.Namespace).
 		SubResource("attach")
 
 	return req.VersionedParams(&corev1.PodAttachOptions{

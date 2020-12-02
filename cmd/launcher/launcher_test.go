@@ -300,7 +300,7 @@ func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, p
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
 		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithExitCode(exitCode))
-		_, err := o.PodsClient(run.GetNamespace()).Create(context.Background(), pod, metav1.CreateOptions{})
+		_, err := o.PodsClient(run.Namespace).Create(context.Background(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		return false, action.(testcore.CreateAction).GetObject(), nil

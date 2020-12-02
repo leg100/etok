@@ -28,12 +28,12 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 		run := o.(*v1alpha1.Run)
 
 		// Filter out commands belonging to other workspaces
-		if run.GetWorkspace() != ws.Name {
+		if run.Workspace != ws.Name {
 			return nil
 		}
 
 		// Filter out completed commands
-		if run.GetPhase() == v1alpha1.RunPhaseCompleted {
+		if run.Phase == v1alpha1.RunPhaseCompleted {
 			return nil
 		}
 
@@ -44,7 +44,7 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 			}
 		}
 
-		newQ = append(newQ, run.GetName())
+		newQ = append(newQ, run.Name)
 		return nil
 	})
 

@@ -66,7 +66,7 @@ type WorkspaceCacheSpec struct {
 }
 
 func (ws *Workspace) PodName() string {
-	return WorkspacePodName(ws.GetName())
+	return WorkspacePodName(ws.Name)
 }
 
 func (ws *Workspace) TerraformName() string {
@@ -74,7 +74,7 @@ func (ws *Workspace) TerraformName() string {
 }
 
 func (ws *Workspace) PVCName() string {
-	return ws.GetName()
+	return ws.Name
 }
 
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {

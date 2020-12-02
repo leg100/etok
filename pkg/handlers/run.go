@@ -22,9 +22,9 @@ func LogRunPhase() watchtools.ConditionFunc {
 
 		switch run := event.Object.(type) {
 		case *v1alpha1.Run:
-			if run.GetPhase() != phase {
-				klog.V(1).Infof("run phase shift: %s -> %s\n", phase, run.GetPhase())
-				phase = run.GetPhase()
+			if run.Phase != phase {
+				klog.V(1).Infof("run phase shift: %s -> %s\n", phase, run.Phase)
+				phase = run.Phase
 			}
 		}
 		return false, nil

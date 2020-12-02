@@ -50,30 +50,6 @@ type RunSpec struct {
 	AttachSpec `json:",inline"`
 }
 
-// Get/Set Command functions
-func (r *RunSpec) GetCommand() string    { return r.Command }
-func (r *RunSpec) SetCommand(cmd string) { r.Command = cmd }
-
-// Get/Set Args functions
-func (r *RunSpec) GetArgs() []string     { return r.Args }
-func (r *RunSpec) SetArgs(args []string) { r.Args = args }
-
-// Get/Set ConfigMap functions
-func (r *RunSpec) GetConfigMap() string     { return r.ConfigMap }
-func (r *RunSpec) SetConfigMap(name string) { r.ConfigMap = name }
-
-// Get/Set ConfigMapKey functions
-func (r *RunSpec) GetConfigMapKey() string    { return r.ConfigMapKey }
-func (r *RunSpec) SetConfigMapKey(key string) { r.ConfigMapKey = key }
-
-// Get/Set ConfigMapPath functions
-func (r *RunSpec) GetConfigMapPath() string     { return r.ConfigMapPath }
-func (r *RunSpec) SetConfigMapPath(path string) { r.ConfigMapPath = path }
-
-// Get/Set Workspace functions
-func (r *RunSpec) GetWorkspace() string   { return r.Workspace }
-func (r *RunSpec) SetWorkspace(ws string) { r.Workspace = ws }
-
 // ApprovedAnnotationKey is the key to be set on a workspace's annotations to
 // indicate that this run is approved. Only necessary if the workspace has
 // categorised the run's command as privileged.
@@ -94,10 +70,6 @@ type RunStatus struct {
 }
 
 type RunPhase string
-
-// Get/Set Phase functions
-func (r *RunStatus) GetPhase() RunPhase      { return r.Phase }
-func (r *RunStatus) SetPhase(phase RunPhase) { r.Phase = phase }
 
 const (
 	RunPhaseUnknown      RunPhase = "unknown"

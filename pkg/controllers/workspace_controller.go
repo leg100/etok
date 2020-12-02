@@ -311,11 +311,11 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 			run := a.Object.(*v1alpha1.Run)
-			if run.GetWorkspace() != "" {
+			if run.Workspace != "" {
 				return []reconcile.Request{
 					{
 						NamespacedName: types.NamespacedName{
-							Name:      run.GetWorkspace(),
+							Name:      run.Workspace,
 							Namespace: a.Meta.GetNamespace(),
 						},
 					},

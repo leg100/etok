@@ -38,7 +38,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhasePending, run.GetPhase())
+				assert.Equal(t, v1alpha1.RunPhasePending, run.Phase)
 			},
 		},
 		{
@@ -49,7 +49,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseQueued, run.GetPhase())
+				assert.Equal(t, v1alpha1.RunPhaseQueued, run.Phase)
 			},
 		},
 		{
@@ -60,7 +60,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.RunPod("operator-test", "plan-1"),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseRunning, run.GetPhase())
+				assert.Equal(t, v1alpha1.RunPhaseRunning, run.Phase)
 			},
 		},
 		{
@@ -71,7 +71,7 @@ func TestRunReconciler(t *testing.T) {
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded)),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseCompleted, run.GetPhase())
+				assert.Equal(t, v1alpha1.RunPhaseCompleted, run.Phase)
 			},
 		},
 	}
@@ -82,8 +82,8 @@ func TestRunReconciler(t *testing.T) {
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.run.GetName(),
-					Namespace: tt.run.GetNamespace(),
+					Name:      tt.run.Name,
+					Namespace: tt.run.Namespace,
 				},
 			}
 
@@ -143,8 +143,8 @@ func TestRunReconciler(t *testing.T) {
 
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      tt.run.GetName(),
-					Namespace: tt.run.GetNamespace(),
+					Name:      tt.run.Name,
+					Namespace: tt.run.Namespace,
 				},
 			}
 
