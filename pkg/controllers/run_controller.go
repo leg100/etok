@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/runner"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -77,7 +80,6 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// Currently scheduled to run; get or create pod
 		return r.reconcilePod(req, run, ws)
 	case pos > 0:
-		// Queued
 		run.Phase = v1alpha1.RunPhaseQueued
 	case pos < 0:
 		// Not yet queued
@@ -85,6 +87,64 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return reconcile.Result{}, r.Update(context.TODO(), run)
+}
+
+func (r *RunReconciler) reconcilePod(request reconcile.Request, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+	// Check if pod exists already
+	pod := &corev1.Pod{}
+	err := r.Get(context.TODO(), request.NamespacedName, pod)
+	if errors.IsNotFound(err) {
+		return r.createPod(run, ws)
+	}
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	return r.updateStatus(pod, run, ws)
+}
+
+func (r *RunReconciler) updateStatus(pod *corev1.Pod, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+	// Signal pod completion to workspace
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		run.Phase = v1alpha1.RunPhaseCompleted
+	case corev1.PodRunning:
+		run.Phase = v1alpha1.RunPhaseRunning
+	case corev1.PodPending:
+		return reconcile.Result{Requeue: true}, nil
+	case corev1.PodUnknown:
+		return reconcile.Result{}, fmt.Errorf("State of pod could not be obtained")
+	default:
+		return reconcile.Result{}, fmt.Errorf("Unknown pod phase: %s", pod.Status.Phase)
+	}
+
+	err := r.Status().Update(context.TODO(), run)
+	return reconcile.Result{}, err
+}
+
+func (r RunReconciler) createPod(run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+	pod := runner.NewRunPod(run, ws, r.Image)
+
+	// Set Run instance as the owner and controller
+	if err := controllerutil.SetControllerReference(run, pod, r.Scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err := r.Create(context.TODO(), pod)
+	// ignore error wherein two reconciles in quick succession try to create obj
+	if errors.IsAlreadyExists(err) {
+		return reconcile.Result{}, nil
+	}
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	run.Phase = v1alpha1.RunPhaseProvisioning
+	if err := r.Status().Update(context.TODO(), run); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	return reconcile.Result{Requeue: true}, nil
 }
 
 func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
