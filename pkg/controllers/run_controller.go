@@ -116,9 +116,9 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			case corev1.PodPending:
 				phase = v1alpha1.RunPhaseProvisioning
 			case corev1.PodUnknown:
-				return ctrl.Result{}, fmt.Errorf("State of pod could not be obtained")
+				return ctrl.Result{}, fmt.Errorf("unknown pod phase")
 			default:
-				return ctrl.Result{}, fmt.Errorf("Unknown pod phase: %s", pod.Status.Phase)
+				return ctrl.Result{}, fmt.Errorf("unknown pod phase: %s", pod.Status.Phase)
 			}
 		}
 	case position > 0:
