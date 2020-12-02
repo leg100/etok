@@ -214,10 +214,6 @@ func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspa
 
 func newConfigMapForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v1alpha1.BackendConfigMapName(ws.GetName()),
 			Namespace: ws.Namespace,
@@ -243,10 +239,6 @@ func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	}
 
 	pvc := &corev1.PersistentVolumeClaim{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "PersistentVolumeClaim",
-			APIVersion: "",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ws.Name,
 			Namespace: ws.Namespace,
