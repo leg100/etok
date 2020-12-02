@@ -3,7 +3,7 @@ package envvars
 import (
 	"testing"
 
-	"github.com/leg100/etok/testutil"
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/spf13/cobra"
 	"gotest.tools/assert"
 )

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/leg100/etok/pkg/version"
-	"github.com/leg100/etok/testutil"
 	"github.com/stretchr/testify/assert"
 )
 

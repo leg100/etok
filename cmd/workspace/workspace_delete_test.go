@@ -7,7 +7,7 @@ import (
 
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/testobj"
-	"github.com/leg100/etok/testutil"
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 )
