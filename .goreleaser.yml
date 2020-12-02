@@ -1,0 +1,35 @@
+before:
+  hooks:
+    - make unit
+builds:
+  - id: etok
+    env:
+    - CGO_ENABLED=0
+    ldflags:
+    - '-X "github.com/leg100/etok/pkg/version.Version={{ .Version }}"'
+    - '-X "github.com/leg100/etok/pkg/version.Commit={{ .Commit }}"'
+    targets:
+    - linux_amd64
+    - darwin_amd64
+archives:
+- format: binary
+dockers:
+- goos: linux
+  goarch: amd64
+  image_templates:
+  - "leg100/etok:latest"
+  - "leg100/etok:{{ .Version }}"
+  skip_push: auto
+  dockerfile: build/Dockerfile
+  extra_files:
+    - build/bin
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
