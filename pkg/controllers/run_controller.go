@@ -43,17 +43,17 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	reqLogger := r.Log.WithValues("run", req.NamespacedName)
-	reqLogger.V(0).Info("Reconciling Run")
+	ctx := context.Background()
+	log := r.Log.WithValues("run", req.NamespacedName)
+	log.V(0).Info("Reconciling Run")
 
-	// Fetch run obj
-	run := &v1alpha1.Run{}
-	if err := r.Get(context.TODO(), req.NamespacedName, run); err != nil {
-		reqLogger.Error(err, "unable to fetch run obj")
-
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
+	// Get run obj
+	var run v1alpha1.Run
+	if err := r.Get(ctx, req.NamespacedName, &run); err != nil {
+		log.Error(err, "unable to get run")
+		// we'll ignore not-found errors, since they can't be fixed by an
+		// immediate requeue (we'll need to wait for a new notification), and we
+		// can get them on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -63,13 +63,13 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Fetch its Workspace object
-	ws := &v1alpha1.Workspace{}
-	if err := r.Get(context.TODO(), types.NamespacedName{Name: run.Workspace, Namespace: req.Namespace}, ws); err != nil {
+	var ws v1alpha1.Workspace
+	if err := r.Get(ctx, types.NamespacedName{Name: run.Workspace, Namespace: req.Namespace}, &ws); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Make workspace owner of run (so that if workspace is deleted, so are its runs)
-	if err := controllerutil.SetControllerReference(ws, run, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(&ws, &run, r.Scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -78,7 +78,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	switch {
 	case pos == 0:
 		// Currently scheduled to run; get or create pod
-		return r.reconcilePod(req, run, ws)
+		return r.reconcilePod(ctx, req, &run, &ws)
 	case pos > 0:
 		run.Phase = v1alpha1.RunPhaseQueued
 	case pos < 0:
@@ -86,24 +86,24 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		run.Phase = v1alpha1.RunPhasePending
 	}
 
-	return reconcile.Result{}, r.Update(context.TODO(), run)
+	return reconcile.Result{}, r.Update(ctx, &run)
 }
 
-func (r *RunReconciler) reconcilePod(request reconcile.Request, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+func (r *RunReconciler) reconcilePod(ctx context.Context, request reconcile.Request, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
 	// Check if pod exists already
-	pod := &corev1.Pod{}
-	err := r.Get(context.TODO(), request.NamespacedName, pod)
+	var pod corev1.Pod
+	err := r.Get(ctx, request.NamespacedName, &pod)
 	if errors.IsNotFound(err) {
-		return r.createPod(run, ws)
+		return r.createPod(ctx, run, ws)
 	}
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	return r.updateStatus(pod, run, ws)
+	return r.updateStatus(ctx, &pod, run, ws)
 }
 
-func (r *RunReconciler) updateStatus(pod *corev1.Pod, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+func (r *RunReconciler) updateStatus(ctx context.Context, pod *corev1.Pod, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
 	// Signal pod completion to workspace
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
@@ -118,11 +118,11 @@ func (r *RunReconciler) updateStatus(pod *corev1.Pod, run *v1alpha1.Run, ws *v1a
 		return reconcile.Result{}, fmt.Errorf("Unknown pod phase: %s", pod.Status.Phase)
 	}
 
-	err := r.Status().Update(context.TODO(), run)
+	err := r.Status().Update(ctx, run)
 	return reconcile.Result{}, err
 }
 
-func (r RunReconciler) createPod(run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
+func (r RunReconciler) createPod(ctx context.Context, run *v1alpha1.Run, ws *v1alpha1.Workspace) (reconcile.Result, error) {
 	pod := runner.NewRunPod(run, ws, r.Image)
 
 	// Set Run instance as the owner and controller
@@ -130,7 +130,7 @@ func (r RunReconciler) createPod(run *v1alpha1.Run, ws *v1alpha1.Workspace) (rec
 		return reconcile.Result{}, err
 	}
 
-	err := r.Create(context.TODO(), pod)
+	err := r.Create(ctx, pod)
 	// ignore error wherein two reconciles in quick succession try to create obj
 	if errors.IsAlreadyExists(err) {
 		return reconcile.Result{}, nil
@@ -140,7 +140,7 @@ func (r RunReconciler) createPod(run *v1alpha1.Run, ws *v1alpha1.Workspace) (rec
 	}
 
 	run.Phase = v1alpha1.RunPhaseProvisioning
-	if err := r.Status().Update(context.TODO(), run); err != nil {
+	if err := r.Status().Update(ctx, run); err != nil {
 		return reconcile.Result{}, err
 	}
 
