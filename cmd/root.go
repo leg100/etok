@@ -4,6 +4,7 @@ import (
 	"flag"
 	"strconv"
 
+	"github.com/leg100/etok/cmd/check"
 	"github.com/leg100/etok/cmd/generate"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/cmd/manager"
@@ -39,6 +40,7 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd.AddCommand(workspace.WorkspaceCmd(opts))
 	cmd.AddCommand(generate.GenerateCmd(opts))
 	cmd.AddCommand(manager.ManagerCmd(opts))
+	cmd.AddCommand(check.CheckCmd(opts))
 
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)

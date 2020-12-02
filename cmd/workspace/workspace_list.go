@@ -43,7 +43,7 @@ func ListCmd(opts *cmdutil.Options) *cobra.Command {
 
 			var prefix string
 			for _, ws := range workspaces.Items {
-				if ws.GetNamespace() == namespace && ws.GetName() == workspace {
+				if ws.Namespace == namespace && ws.Name == workspace {
 					prefix = "*"
 				} else {
 					prefix = ""
