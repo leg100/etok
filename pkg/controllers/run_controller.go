@@ -72,6 +72,20 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	if run.ConfigMap != "" {
+		// Fetch its ConfigMap object
+		var cm corev1.ConfigMap
+		if err := r.Get(ctx, req.NamespacedName, &cm); err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		} else {
+			// Make run owner of configmap (so that if run is deleted, so is its
+			// config map)
+			if err := controllerutil.SetControllerReference(&run, &cm, r.Scheme); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
 	// Check workspace queue position
 	position := slice.StringIndex(ws.Status.Queue, run.Name)
 

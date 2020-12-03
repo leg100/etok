@@ -235,3 +235,18 @@ func WithStringData(k, v string) func(*corev1.Secret) {
 		secret.StringData[k] = v
 	}
 }
+
+func ConfigMap(namespace, name string, opts ...func(*corev1.ConfigMap)) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	for _, o := range opts {
+		o(cm)
+	}
+
+	return cm
+}

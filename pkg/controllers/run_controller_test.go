@@ -166,4 +166,45 @@ func TestRunReconciler(t *testing.T) {
 			tt.assertions(pod)
 		})
 	}
+
+	configMapTests := []struct {
+		name       string
+		run        *v1alpha1.Run
+		objs       []runtime.Object
+		assertions func(cm *corev1.ConfigMap)
+	}{
+		{
+			name: "Set controller reference",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1"),
+				testobj.ConfigMap("operator-test", "plan-1"),
+			},
+			assertions: func(cm *corev1.ConfigMap) {
+				assert.Equal(t, "Run", cm.OwnerReferences[0].Kind)
+				assert.Equal(t, "plan-1", cm.OwnerReferences[0].Name)
+			},
+		},
+	}
+	for _, tt := range configMapTests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs := append(tt.objs, runtime.Object(tt.run))
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.run.Name,
+					Namespace: tt.run.Namespace,
+				},
+			}
+
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
+			assert.NoError(t, err)
+
+			cm := &corev1.ConfigMap{}
+			require.NoError(t, cl.Get(context.TODO(), req.NamespacedName, cm))
+
+			tt.assertions(cm)
+		})
+	}
 }
