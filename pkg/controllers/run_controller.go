@@ -67,9 +67,22 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Make workspace owner of run (so that if workspace is deleted, so are its runs)
-	if err := controllerutil.SetControllerReference(&ws, &run, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+	var owned bool
+	for _, ref := range run.OwnerReferences {
+		if ref.Kind == "Workspace" && ref.Name == ws.Name {
+			owned = true
+			break
+		}
+	}
+	if !owned {
+		// Make workspace owner of run (so that if workspace is deleted, so are
+		// its runs)
+		if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.Update(ctx, &run); err != nil {
+			log.Error(err, "unable to set workspace owner reference")
+		}
 	}
 
 	// Check workspace queue position
