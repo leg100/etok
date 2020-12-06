@@ -49,6 +49,16 @@ func TestEtok(t *testing.T) {
 	bkt.Object(backendPrefix + "/default-foo.tfstate").Delete(goctx.Background())
 	bkt.Object(backendPrefix + "/default-foo.tflock").Delete(goctx.Background())
 
+	// Trick etok into thinking parent directory is a git repo. Etok looks for a
+	// .terraformignore at the root of a git repo, but we don't want it to find
+	// a .terraformignore that a developer might place into the root of the etok
+	// repo (they might do this because they want to conveniently invoke etok
+	// from the root of the etok repo, and they don't want it to upload the
+	// contents of the repo!)
+	if _, err := os.Stat(".git"); os.IsNotExist(err) {
+		os.Mkdir(".git", 0755)
+	}
+
 	tests := []struct {
 		name            string
 		args            []string
