@@ -114,3 +114,11 @@ Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/prov
 ```
 kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```
+
+# FAQ
+
+## What does the CLI client upload to the pod when running a plan/apply?
+
+The client parses the root module for references to local modules. If no references are found then only the contents of the root module directory are uploaded. Otherwise, the references are resolved transitively, resolving referenced modules' references too, etc, until all referenced local modules are found. The local modules along with the root module are then uploaded. Note: in order for the directory structure to be replicated on the pod, the directory tree starting at the common parent directory containing all modules is uploaded, but only the files of modules' directories are uploaded.
+
+Etok supports the use of a [`.terraformignore`](https://www.terraform.io/docs/backends/types/remote.html#excluding-files-from-upload-with-terraformignore) file. The file should exist at the root of your git repository. If the file doesn't exist, then the default exclusion rules apply. The rules apply from the root of your git repository. If you're not using a git repository then they apply from the modules' common parent directory.
