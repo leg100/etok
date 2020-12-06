@@ -31,6 +31,17 @@ func TestRunReconciler(t *testing.T) {
 			reconcileError: true,
 		},
 		{
+			name: "Owned",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1"),
+			},
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, "Workspace", run.OwnerReferences[0].Kind)
+				assert.Equal(t, "workspace-1", run.OwnerReferences[0].Name)
+			},
+		},
+		{
 			name: "Unqueued",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
