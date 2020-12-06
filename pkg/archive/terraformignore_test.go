@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"os"
 	"testing"
 
 	"github.com/leg100/etok/pkg/testutil"
@@ -17,6 +18,11 @@ func TestTerraformIgnore(t *testing.T) {
 	})
 
 	testutil.Run(t, "with terraformignore", func(t *testutil.T) {
+		// Make ./testdata/archive-dir a mock git repo
+		if _, err := os.Stat("testdata/archive-dir/.git"); os.IsNotExist(err) {
+			os.Mkdir("testdata/archive-dir/.git", 0755)
+		}
+
 		ignoreRules := ParseIgnoreFile("testdata/archive-dir")
 		type file struct {
 			// the actual path, should be file path format /dir/subdir/file.extension
