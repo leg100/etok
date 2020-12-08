@@ -18,12 +18,12 @@ func TestTerraformIgnore(t *testing.T) {
 	})
 
 	testutil.Run(t, "with terraformignore", func(t *testutil.T) {
-		// Make ./testdata/archive-dir a mock git repo
-		if _, err := os.Stat("testdata/archive-dir/.git"); os.IsNotExist(err) {
-			os.Mkdir("testdata/archive-dir/.git", 0755)
+		// Make ./testdata/ a mock git repo
+		if _, err := os.Stat("testdata/.git"); os.IsNotExist(err) {
+			os.Mkdir("testdata/.git", 0755)
 		}
 
-		ignoreRules := ParseIgnoreFile("testdata/archive-dir")
+		ignoreRules := ParseIgnoreFile("testdata/m0")
 		type file struct {
 			// the actual path, should be file path format /dir/subdir/file.extension
 			path string

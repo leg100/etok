@@ -17,12 +17,13 @@ import (
 )
 
 func TestArchive(t *testing.T) {
-	// Make ./testdata/modtree a mock git repo
-	if _, err := os.Stat("testdata/modtree/.git"); os.IsNotExist(err) {
-		os.Mkdir("testdata/modtree/.git", 0755)
+	// Make ./testdata/ a mock git repo
+	if _, err := os.Stat("testdata/.git"); os.IsNotExist(err) {
+		os.Mkdir("testdata/.git", 0755)
 	}
 
-	arc, err := NewArchive("testdata/modtree/root/mod")
+	// Create archive with path to the root module (m0)
+	arc, err := NewArchive("testdata/m0")
 	require.NoError(t, err)
 
 	// Add module references to archive
@@ -53,24 +54,24 @@ func TestArchive(t *testing.T) {
 		files = append(files, hdr.Name)
 	}
 
+	// Assert that its compiled not only the root module's (m0) files and
+	// subdirectories, but those of other referenced local  modules too (m1, m2,
+	// and m3).
 	assert.Equal(t, []string{
-		"root/mod/.terraform/modules/README",
-		"root/mod/.terraformrc",
-		"root/mod/bar.txt",
-		"root/mod/exe",
-		"root/mod/foo.terraform/",
-		"root/mod/foo.terraform/bar.txt",
-		"root/mod/inner/",
-		"root/mod/inner/mods/",
-		"root/mod/inner/mods/m2/",
-		"root/mod/inner/mods/m2/main.tf",
-		"root/mod/inner/mods/m3/",
-		"root/mod/inner/mods/m3/main.tf",
-		"root/mod/main.tf",
-		"root/mod/sub/",
-		"root/mod/sub/zip.txt",
-		"outer/mods/m1/globals.tf",
-		"outer/mods/m1/main.tf",
+		"m0/.terraform/modules/README",
+		"m0/bar.txt",
+		"m0/exe",
+		"m0/foo.terraform/",
+		"m0/foo.terraform/bar.txt",
+		"m0/m2/",
+		"m0/m2/main.tf",
+		"m0/m3/",
+		"m0/m3/main.tf",
+		"m0/main.tf",
+		"m0/sub/",
+		"m0/sub/zip.txt",
+		"m1/globals.tf",
+		"m1/main.tf",
 	}, files)
 }
 
@@ -87,7 +88,7 @@ func TestMaxSize(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	arc, err := NewArchive("testdata/modtree/root/mod")
+	arc, err := NewArchive("testdata/m0")
 	require.NoError(t, err)
 
 	require.NoError(t, arc.Walk())
@@ -99,10 +100,10 @@ func TestWalk(t *testing.T) {
 	sort.Strings(got)
 
 	want := []string{
-		"testdata/modtree/outer/mods/m1",
-		"testdata/modtree/root/mod",
-		"testdata/modtree/root/mod/inner/mods/m2",
-		"testdata/modtree/root/mod/inner/mods/m3",
+		"testdata/m0",
+		"testdata/m0/m2",
+		"testdata/m0/m3",
+		"testdata/m1",
 	}
 
 	assert.Equal(t, want, got)
