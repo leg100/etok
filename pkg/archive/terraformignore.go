@@ -9,11 +9,29 @@ import (
 	"regexp"
 	"strings"
 	"text/scanner"
+
+	"github.com/leg100/etok/pkg/util/git"
+	"k8s.io/klog/v2"
 )
 
-func ParseIgnoreFile(rootPath string) []rule {
-	// Look for .terraformignore at our root path/src
-	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
+// ParseIgnoreFile parses the rules from a .terraformignore file. It expects to
+// find .terraformignore at the root of the git repository in which the
+// rootModule path is within. If the path is not within a git repository or a
+// .terraformignore file cannot be found, it'll return a default set of rules.
+func ParseIgnoreFile(rootModule string) []rule {
+	repoRoot, err := git.GetRepoRoot(rootModule)
+	if err != nil {
+		if err == git.ErrNotRepo {
+			klog.V(1).Info("local git repository not detected")
+		} else {
+			// Some other error, tell user
+			fmt.Fprintf(os.Stderr, "Error finding path to .terraformignore, default exclusions will apply %v\n", err)
+		}
+		return defaultExclusions
+	}
+
+	// Look for .terraformignore at our repo root path
+	file, err := os.Open(filepath.Join(repoRoot, ".terraformignore"))
 	defer file.Close()
 
 	// If there's any kind of file error, punt and use the default ignore patterns
@@ -201,6 +219,10 @@ var defaultExclusions = []rule{
 	{
 		val:      filepath.Join("**", ".terraform", "**"),
 		excluded: false,
+	},
+	{
+		val:      filepath.Join("**", ".terraform", "modules", "**"),
+		excluded: true,
 	},
 }
 

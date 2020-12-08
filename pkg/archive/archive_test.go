@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
+	"os"
 	"sort"
 	"testing"
 
@@ -16,6 +17,11 @@ import (
 )
 
 func TestArchive(t *testing.T) {
+	// Make ./testdata/modtree a mock git repo
+	if _, err := os.Stat("testdata/modtree/.git"); os.IsNotExist(err) {
+		os.Mkdir("testdata/modtree/.git", 0755)
+	}
+
 	arc, err := NewArchive("testdata/modtree/root/mod")
 	require.NoError(t, err)
 
@@ -48,7 +54,7 @@ func TestArchive(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{
-		"root/mod/.terraformignore",
+		"root/mod/.terraform/modules/README",
 		"root/mod/.terraformrc",
 		"root/mod/bar.txt",
 		"root/mod/exe",
