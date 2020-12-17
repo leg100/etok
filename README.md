@@ -38,8 +38,6 @@ etok workspace new default/default
 Run terraform commands:
 
 ```bash
-etok init
-etok validate
 etok plan
 etok apply
 ```
@@ -49,20 +47,18 @@ etok apply
 Usage is similar to the terraform CLI:
 
 ```
-Usage: etok [command]
+Usage:
+  etok [command]
 
-Terraform Commands:
-  apply         destroy         force-unlock
-  get           import          init
-  output        plan            refresh
-  show          state           taint
-  untaint       validate
-
-etok Commands:
-  generate     Generate deployment resources
-  sh           Run shell commands in workspace
-  version      Print client version information
-  workspace    etok workspace management
+Available Commands:
+  apply       Run terraform apply
+  destroy     Run terraform destroy
+  generate    Generate deployment resources
+  help        Help about any command
+  plan        Run terraform plan
+  sh          Open shell session
+  version     Print client version information
+  workspace   etok workspace management
 
 Flags:
       --add_dir_header                   If true, adds the file directory to the header of the log messages
@@ -117,8 +113,8 @@ kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to servi
 
 # FAQ
 
-## What does the CLI client upload to the pod when running a plan/apply?
+## What is uploaded to the pod when running a plan/apply/destroy?
 
-The client parses the root module for references to local modules. If no references are found then only the contents of the root module directory are uploaded. Otherwise, the references are resolved transitively, resolving referenced modules' references too, etc, until all referenced local modules are found. The local modules along with the root module are then uploaded. Note: in order for the directory structure to be replicated on the pod, the directory tree starting at the common parent directory containing all modules is uploaded, but only the files of modules' directories are uploaded.
+The contents of the root module (the current working directory, or the value of the `path` flag) is uploaded. Additionally, if the root module configuration contains references to other modules on the local filesystem, then these too are uploaded, along with all such modules recursively referenced (modules referencing modules, and so forth). The directory structure containing all modules is maintained on the kubernetes pod, ensuring relative references remain valid (e.g. `./modules/vpc` or `../modules/vpc`).
 
-Etok supports the use of a [`.terraformignore`](https://www.terraform.io/docs/backends/types/remote.html#excluding-files-from-upload-with-terraformignore) file. The file should exist at the root of your git repository. If the file doesn't exist, then the default exclusion rules apply. The rules apply from the root of your git repository. If you're not using a git repository then they apply from the modules' common parent directory.
+Etok supports the use of a [`.terraformignore`](https://www.terraform.io/docs/backends/types/remote.html#excluding-files-from-upload-with-terraformignore) file. Etok expects to find the file in any parent directory that contains the modules to be uploaded. If not found then the default set of rules apply.

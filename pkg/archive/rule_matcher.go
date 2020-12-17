@@ -58,10 +58,9 @@ func (rm *ruleMatcher) match(path string, isDir bool) (matched bool, err error) 
 	return matchIgnoreRule(path, rm.rules), nil
 }
 
-// searchFileInAncestors checks for existence of filename at the given path, and
-// if not found, checks the path's parent directories recursively. If successful
-// the path to the filename is returned, otherwise an empty string is returned.
-// Any other error encountered during the search is returned in error.
+// findIgnoreFile checks for existence of filename at the given path, and if not
+// found, checks the path's parent directories recursively. If successful the
+// file is returned.
 func findIgnoreFile(path string) (*os.File, error) {
 	fileinfo, err := os.Stat(filepath.Join(path, ignoreFile))
 	if os.IsNotExist(err) || fileinfo.IsDir() {
