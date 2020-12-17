@@ -96,7 +96,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "approved",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands(allCommands...))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands(Cmds.GetNames()...))},
 			assertions: func(o *LauncherOptions) {
 				// Get run
 				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
@@ -247,12 +247,8 @@ func TestLauncher(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cmdFactories := nonStateCommands()
-		cmdFactories = append(cmdFactories, stateSubCommands()...)
-		cmdFactories = append(cmdFactories, shellCommand())
-
-		for _, f := range cmdFactories {
-			testutil.Run(t, tt.name+"/"+f.name, func(t *testutil.T) {
+		for _, rc := range Cmds {
+			testutil.Run(t, tt.name+"/"+rc.name, func(t *testutil.T) {
 				path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
 				// Write .terraform/environment
@@ -271,7 +267,7 @@ func TestLauncher(t *testing.T) {
 				cmdOpts := &LauncherOptions{RunName: "run-12345"}
 
 				// create cobra command
-				cmd := f.create(opts, cmdOpts)
+				cmd := rc.cobraCommand(opts, cmdOpts)
 				cmd.SetOut(out)
 				cmd.SetArgs(tt.args)
 
@@ -299,7 +295,7 @@ func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, p
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
-		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithExitCode(exitCode))
+		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithRunnerExitCode(exitCode))
 		_, err := o.PodsClient(run.Namespace).Create(context.Background(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
 

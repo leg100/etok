@@ -53,23 +53,8 @@ spec:
                 enum:
                 - apply
                 - destroy
-                - force-unlock
-                - get
-                - import
-                - init
-                - output
                 - plan
-                - refresh
                 - sh
-                - state list
-                - state mv
-                - state pull
-                - state push
-                - state rm
-                - state show
-                - taint
-                - untaint
-                - validate
                 type: string
               configMap:
                 type: string

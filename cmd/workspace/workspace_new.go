@@ -3,18 +3,17 @@ package workspace
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/controllers"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
-	"github.com/leg100/etok/pkg/runner"
+	"github.com/leg100/etok/pkg/monitors"
 	"github.com/spf13/cobra"
 
 	"github.com/leg100/etok/pkg/env"
@@ -23,14 +22,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watchtools "k8s.io/client-go/tools/watch"
-	"k8s.io/klog/v2"
-	"k8s.io/kubectl/pkg/util/term"
 )
 
 const (
 	defaultTimeoutWorkspace    = 10 * time.Second
 	defaultTimeoutWorkspacePod = 60 * time.Second
-	defaultBackendType         = "local"
 	defaultCacheSize           = "1Gi"
 	defaultSecretName          = "etok"
 	defaultServiceAccountName  = "etok"
@@ -56,15 +52,11 @@ type NewOptions struct {
 	TimeoutWorkspace time.Duration
 	// Timeout for workspace pod to be running and ready
 	TimeoutWorkspacePod time.Duration
-	// Timeout for wait for handshake
-	HandshakeTimeout time.Duration
 	// Disable default behaviour of deleting resources upon error
 	DisableResourceCleanup bool
 
-	// Disable TTY detection
-	DisableTTY bool
-
-	// Recall if resources are created so that if error occurs they can be cleaned up
+	// Recall if resources are created so that if error occurs they can be
+	// cleaned up
 	createdWorkspace      bool
 	createdServiceAccount bool
 	createdSecret         bool
@@ -108,17 +100,12 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().StringVar(&o.WorkspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.Backend.Type, "backend-type", defaultBackendType, "Set backend type")
-	cmd.Flags().StringToStringVar(&o.WorkspaceSpec.Backend.Config, "backend-config", map[string]string{}, "Set backend config (command separated key values, e.g. bucket=gcs,prefix=dev")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.TerraformVersion, "terraform-version", "", "Set terraform version")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
 
 	cmd.Flags().StringSliceVar(&o.WorkspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
-
-	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
 
 	return cmd, o
 }
@@ -128,8 +115,6 @@ func (o *NewOptions) name() string {
 }
 
 func (o *NewOptions) Run(ctx context.Context) error {
-	isTTY := !o.DisableTTY && detectTTY(o.In)
-
 	if !o.DisableCreateServiceAccount {
 		if err := o.createServiceAccountIfMissing(ctx); err != nil {
 			return err
@@ -142,32 +127,24 @@ func (o *NewOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	ws, err := o.createWorkspace(ctx, isTTY)
+	ws, err := o.createWorkspace(ctx)
 	if err != nil {
 		return err
 	}
 	o.createdWorkspace = true
 	fmt.Printf("Created workspace %s\n", o.name())
 
-	// Wait until container can be attached/streamed to/from
-	pod, err := o.waitForContainer(ctx, ws, isTTY)
+	// Wait until container can be streamed from
+	pod, err := o.waitForContainer(ctx, ws)
 	if err != nil {
 		return err
 	}
 
 	// Monitor exit code; non-blocking
-	exit := runner.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace)
+	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, controllers.InstallerContainerName)
 
-	if isTTY {
-		klog.V(1).Info("attaching to pod")
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
-			return err
-		}
-	} else {
-		klog.V(1).Info("retrieving pod's log stream")
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), globals.RunnerContainerName); err != nil {
-			return err
-		}
+	if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), controllers.InstallerContainerName); err != nil {
+		return err
 	}
 
 	if err := env.NewEtokEnv(o.Namespace, o.Workspace).Write(o.Path); err != nil {
@@ -195,7 +172,7 @@ func (o *NewOptions) cleanup() {
 	}
 }
 
-func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1.Workspace, error) {
+func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, error) {
 	ws := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      o.Workspace,
@@ -211,11 +188,6 @@ func (o *NewOptions) createWorkspace(ctx context.Context, isTTY bool) (*v1alpha1
 	labels.SetLabel(ws, labels.WorkspaceComponent)
 
 	ws.Spec.Verbosity = o.Verbosity
-
-	if isTTY {
-		ws.Spec.AttachSpec.Handshake = true
-		ws.Spec.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
-	}
 
 	return o.WorkspacesClient(o.Namespace).Create(ctx, ws, metav1.CreateOptions{})
 }
@@ -292,21 +264,11 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
 
-// waitForContainer returns true once the runner container can be
-// attached/stream to/from
-func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, attaching bool) (*corev1.Pod, error) {
+// waitForContainer returns true once the installer container can be streamed
+// from
+func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace) (*corev1.Pod, error) {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
-	hdlr := handlers.ContainerReady(ws.PodName(), globals.RunnerContainerName, true, attaching)
+	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	return event.Object.(*corev1.Pod), err
-}
-
-func detectTTY(in interface{}) bool {
-	if term.IsTerminal(in) {
-		klog.V(1).Info("detected TTY on stdin")
-		return true
-	} else {
-		klog.V(1).Info("TTY not detected on stdin")
-		return false
-	}
 }

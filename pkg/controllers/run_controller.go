@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-logr/logr"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/pkg/runner"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -95,7 +94,7 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// doesn't exist yet
 		if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 			if errors.IsNotFound(err) {
-				pod = *runner.NewRunPod(&run, &ws, r.Image)
+				pod = *RunPod(&run, &ws, r.Image)
 
 				// Make run owner of pod
 				if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {

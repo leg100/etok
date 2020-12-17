@@ -49,16 +49,6 @@ func TestEtok(t *testing.T) {
 	bkt.Object(backendPrefix + "/default-foo.tfstate").Delete(goctx.Background())
 	bkt.Object(backendPrefix + "/default-foo.tflock").Delete(goctx.Background())
 
-	// Trick etok into thinking parent directory is a git repo. Etok looks for a
-	// .terraformignore at the root of a git repo, but we don't want it to find
-	// a .terraformignore that a developer might place into the root of the etok
-	// repo (they might do this because they want to conveniently invoke etok
-	// from the root of the etok repo, and they don't want it to upload the
-	// contents of the repo!)
-	if _, err := os.Stat(".git"); os.IsNotExist(err) {
-		os.Mkdir(".git", 0755)
-	}
-
 	tests := []struct {
 		name            string
 		args            []string
@@ -72,7 +62,7 @@ func TestEtok(t *testing.T) {
 	}{
 		{
 			name: "new workspace",
-			args: []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--backend-type", "gcs", "--backend-config", "bucket=automatize-tfstate,prefix=e2e", "--privileged-commands", "apply"},
+			args: []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--privileged-commands", "apply"},
 		},
 		{
 			name: "second new workspace",
@@ -91,11 +81,6 @@ func TestEtok(t *testing.T) {
 			name:            "show current workspace",
 			args:            []string{"workspace", "show", "--path", "workspace"},
 			wantStdoutRegex: regexp.MustCompile(wsName),
-		},
-		{
-			name:            "etok init without pty",
-			args:            []string{"init", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false"},
-			wantStdoutRegex: regexp.MustCompile(`Initializing the backend`),
 		},
 		{
 			name:            "etok plan without pty",

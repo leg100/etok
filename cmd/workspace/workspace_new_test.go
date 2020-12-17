@@ -10,7 +10,6 @@ import (
 
 	etokerrors "github.com/leg100/etok/pkg/errors"
 
-	"github.com/creack/pty"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/logstreamer"
@@ -198,50 +197,9 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
-			name: "attach",
-			args: []string{"default/foo"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			setOpts: func(o *cmdutil.Options) {
-				// Create pseudoterminal slave to trigger tty detection
-				_, pts, err := pty.Open()
-				require.NoError(t, err)
-				o.In = pts
-			},
-			assertions: func(o *NewOptions) {
-				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
-
-				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
-				require.NoError(t, err)
-				// With a tty, a handshake is required
-				assert.True(t, ws.Spec.Handshake)
-			},
-		},
-		{
-			name: "disable tty",
-			args: []string{"default/foo", "--no-tty"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			setOpts: func(o *cmdutil.Options) {
-				// Ensure tty is overridden
-				_, pts, err := pty.Open()
-				require.NoError(t, err)
-				o.In = pts
-			},
-			assertions: func(o *NewOptions) {
-				// With tty disabled, it should stream logs not attach
-				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
-
-				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
-				require.NoError(t, err)
-				// With tty disabled, there should be no handshake
-				assert.False(t, ws.Spec.Handshake)
-			},
-		},
-		{
 			name: "non-zero exit code",
 			args: []string{"default/foo"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo", testobj.WithExitCode(5))},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo", testobj.WithInstallerExitCode(5))},
 			err: func(t *testutil.T, err error) {
 				// want exit code 5
 				var exiterr etokerrors.ExitError

@@ -6,11 +6,11 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,145 +18,199 @@ import (
 	"github.com/leg100/etok/cmd/envvars"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/testutil"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh/terminal"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestRunner(t *testing.T) {
+func TestRunnerCommand(t *testing.T) {
+	testutil.Run(t, "unknown command", func(t *testutil.T) {
+		_, cmd, _ := setupRunnerCmd(t)
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{"ETOK_COMMAND": "thegoprogramminglanguage"})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		assert.True(t, errors.Is(cmd.ExecuteContext(context.Background()), errUnknownCommand))
+	})
+
+	testutil.Run(t, "shell command with args", func(t *testutil.T) {
+		out, cmd, _ := setupRunnerCmd(t, "--", "-c", "echo foo")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		assert.Equal(t, "foo", strings.TrimSpace(out.String()))
+	})
+
+	testutil.Run(t, "shell command with non-zero exit", func(t *testutil.T) {
+		_, cmd, _ := setupRunnerCmd(t, "--", "-c", "exit 101")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		// want exit code 101
+		var exiterr *exec.ExitError
+		if assert.True(t, errors.As(cmd.ExecuteContext(context.Background()), &exiterr)) {
+			assert.Equal(t, 101, exiterr.ExitCode())
+		}
+	})
+
+	testutil.Run(t, "terraform plan", func(t *testutil.T) {
+		out, cmd, opts := setupRunnerCmd(t, "--", "-out", "plan.out")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "plan",
+			"ETOK_WORKSPACE": "default-foo",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		// Override executor with one that prints out cmd+args
+		opts.exec = &fakeExecutorEchoArgs{out: out}
+
+		require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform plan -out plan.out]"
+		assert.Equal(t, want, strings.TrimSpace(out.String()))
+	})
+
+	testutil.Run(t, "terraform plan with new workspace", func(t *testutil.T) {
+		out, cmd, opts := setupRunnerCmd(t, "--", "-out", "plan.out")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "plan",
+			"ETOK_WORKSPACE": "default-foo",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		// Override executor with one that prints out cmd+args
+		opts.exec = &fakeExecutorMissingWorkspace{out: out}
+
+		require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform workspace new -no-color default-foo][terraform plan -out plan.out]"
+		assert.Equal(t, want, strings.TrimSpace(out.String()))
+	})
+
+	testutil.Run(t, "terraform apply", func(t *testutil.T) {
+		out, cmd, opts := setupRunnerCmd(t, "--", "-auto-approve")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "apply",
+			"ETOK_WORKSPACE": "default-foo",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		// Override executor with one that prints out cmd+args
+		opts.exec = &fakeExecutorEchoArgs{out: out}
+
+		require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform apply -auto-approve]"
+		assert.Equal(t, want, strings.TrimSpace(out.String()))
+	})
+}
+
+func TestRunnerHandshake(t *testing.T) {
 	tests := []struct {
-		name          string
-		args          []string
-		envs          map[string]string
-		objs          []runtime.Object
-		err           func(*testutil.T, error)
-		createTarball func(*testutil.T, string)
-		assertions    func(*RunnerOptions)
-		in            io.Reader
-		out           string
+		name string
+		envs map[string]string
+		err  error
+		in   io.Reader
 	}{
 		{
-			name: "no args",
-			err: func(t *testutil.T, err error) {
-				assert.Equal(t, err.Error(), "requires at least 1 arg(s), only received 0")
-			},
-		},
-		{
-			name: "defaults",
-			args: []string{"--", "sh", "-c", "echo -n hallelujah"},
-			out:  "hallelujah",
-		},
-		{
-			name: "extract archive",
-			args: []string{"--", "/bin/ls", "test1.tf"},
-			envs: map[string]string{
-				"ETOK_TARBALL": "archive.tar.gz",
-			},
-			createTarball: func(t *testutil.T, path string) {
-				createTarballWithFiles(t, filepath.Join(path, "archive.tar.gz"), "test1.tf")
-			},
-			out: "test1.tf\n",
-		},
-		{
-			name: "non-zero exit code",
-			args: []string{"--", "sh", "-c", "echo -n alienation; exit 2"},
-			out:  "alienation",
-			err: func(t *testutil.T, err error) {
-				// want exit code 2
-				var exiterr *exec.ExitError
-				if assert.True(t, errors.As(err, &exiterr)) {
-					assert.Equal(t, 2, exiterr.ExitCode())
-				}
-			},
-		},
-		{
 			name: "handshake",
-			args: []string{"--", "sh", "-c", "echo -n hallelujah"},
 			envs: map[string]string{
 				"ETOK_HANDSHAKE": "true",
+				"ETOK_COMMAND":   "sh",
 			},
-			in:  bytes.NewBufferString("opensesame\n"),
-			out: "hallelujah",
+			in: bytes.NewBufferString("opensesame\n"),
 		},
 		{
 			name: "bad handshake",
-			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
 				"ETOK_HANDSHAKE": "true",
+				"ETOK_COMMAND":   "sh",
 			},
-			in: bytes.NewBufferString("mag)J)Fring\n"),
-			err: func(t *testutil.T, err error) {
-				assert.EqualError(t, err, fmt.Sprintf("[runner] handshake: expected '%s' but received: %s", cmdutil.HandshakeString, "mag)J)Frin"))
-			},
+			in:  bytes.NewBufferString("mag)J)Fring\n"),
+			err: errIncorrectHandshake,
 		},
 		{
 			name: "time out waiting for handshake",
-			args: []string{"--", "sh", "-c", "echo -n this should never be printed"},
 			envs: map[string]string{
 				"ETOK_HANDSHAKE":         "true",
 				"ETOK_HANDSHAKE_TIMEOUT": "20ms",
+				"ETOK_COMMAND":           "sh",
 			},
-			in: &delayedReader{time.Millisecond * 100},
-			err: func(t *testutil.T, err error) {
-				assert.EqualError(t, err, "[runner] timed out waiting for handshake")
-			},
+			in:  &delayedReader{time.Millisecond * 100},
+			err: errHandshakeTimeout,
 		},
 	}
 
 	for _, tt := range tests {
-		testutil.Run(t, tt.name, func(t *testutil.T) {
+		testutil.Run(t, "handshake", func(t *testutil.T) {
+			_, cmd, opts := setupRunnerCmd(t)
+
+			// Set flag via env var since that's how runner is invoked on a pod
 			t.SetEnvs(tt.envs)
+			envvars.SetFlagsFromEnvVariables(cmd)
 
-			out := new(bytes.Buffer)
-			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+			// Override executor with one that does a noop
+			opts.exec = &fakeExecutor{}
+
+			// Create pseudoterminal to mimic TTY
+			ptm, pts, err := pty.Open()
 			require.NoError(t, err)
-
-			cmd, cmdOpts := RunnerCmd(opts)
-			cmd.SetOut(out)
-			cmd.SetArgs(tt.args)
-
-			// Always run runner in unique temp dir
-			cmdOpts.Path = t.NewTempDir().Chdir().Root()
-			cmdOpts.Dest = cmdOpts.Path
-
-			if tt.createTarball != nil {
-				tt.createTarball(t, cmdOpts.Path)
-			}
-
-			if tt.envs != nil {
-				envvars.SetFlagsFromEnvVariables(cmd)
-			}
-
-			// If handshake is enabled, mimic a TTY
-			if cmdOpts.Handshake {
-				// create pseudoterminal to mimic TTY
-				ptm, pts, err := pty.Open()
+			opts.In = pts
+			go func() {
+				oldState, err := terminal.MakeRaw(int(ptm.Fd()))
 				require.NoError(t, err)
-				opts.In = pts
-				go func() {
-					oldState, err := terminal.MakeRaw(int(ptm.Fd()))
-					require.NoError(t, err)
-					defer func() {
-						_ = terminal.Restore(int(ptm.Fd()), oldState)
-					}()
-					// copy stdin to TTY
-					io.Copy(ptm, tt.in)
+				defer func() {
+					_ = terminal.Restore(int(ptm.Fd()), oldState)
 				}()
-			}
+				// copy stdin to TTY
+				io.Copy(ptm, tt.in)
+			}()
 
-			err = cmd.ExecuteContext(context.Background())
-			if tt.err != nil {
-				tt.err(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			if tt.assertions != nil {
-				tt.assertions(cmdOpts)
-			}
+			// Look for wanted error in returned error chain
+			assert.True(t, errors.Is(cmd.ExecuteContext(context.Background()), tt.err))
 		})
 	}
+}
+
+func TestRunnerTarball(t *testing.T) {
+	testutil.Run(t, "tarball", func(t *testutil.T) {
+		// ls will check tarball extracted successfully and to the expected path
+		_, cmd, _ := setupRunnerCmd(t, "--", "-c", "/bin/ls test1.tf")
+
+		// Tarball path
+		tarball := filepath.Join(t.NewTempDir().Root(), "archive.tar.gz")
+		// Dest dir to extract tarball to
+		dest := t.NewTempDir()
+		// and the working dir (the pod the runner runs on will usually set
+		// this)
+		dest.Chdir()
+
+		createTarballWithFiles(t, tarball, "test1.tf")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_TARBALL": tarball,
+			"ETOK_COMMAND": "sh",
+			"ETOK_DEST":    dest.Root(),
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		assert.NoError(t, cmd.ExecuteContext(context.Background()))
+	})
 }
 
 func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
@@ -175,6 +229,17 @@ func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
 	require.NoError(t, tw.Close())
 	require.NoError(t, zw.Close())
 	require.NoError(t, f.Close())
+}
+
+func setupRunnerCmd(t *testutil.T, args ...string) (*bytes.Buffer, *cobra.Command, *RunnerOptions) {
+	out := new(bytes.Buffer)
+	cmd, cmdOpts := RunnerCmd(&cmdutil.Options{IOStreams: cmdutil.IOStreams{Out: out}})
+	cmd.SetOut(out)
+	cmd.SetArgs(args)
+
+	cmdOpts.Dest = t.NewTempDir().Chdir().Root()
+
+	return out, cmd, cmdOpts
 }
 
 // delayedReader mocks reader that only returns read call after delay

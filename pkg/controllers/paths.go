@@ -1,0 +1,18 @@
+package controllers
+
+const (
+	// binMountPath is container path to terraform binaries
+	binMountPath = "/terraform-bins"
+	// binSubPath is path within persistent volume to mount on BinMountPath
+	binSubPath = "terraform-bins/"
+
+	// pluginMountPath is container path to terraform plugin cache
+	pluginMountPath = "/plugin-cache"
+	// pluginSubPath is path within persistent volume to mount on
+	// pluginMountPath
+	pluginSubPath = "plugin-cache/"
+
+	// workspaceDir is the directory in the container where the tarball is
+	// extracted to
+	workspaceDir = "/workspace"
+)

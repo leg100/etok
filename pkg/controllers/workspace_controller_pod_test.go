@@ -1,4 +1,4 @@
-package runner
+package controllers
 
 import (
 	"testing"
@@ -6,10 +6,11 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 )
 
-func TestWorkspaceRunner(t *testing.T) {
+func TestWorkspacePod(t *testing.T) {
 	tests := []struct {
 		name       string
 		workspace  *v1alpha1.Workspace
@@ -25,7 +26,9 @@ func TestWorkspaceRunner(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertions(NewWorkspacePod(tt.workspace, "etok:latest"))
+			pod, err := WorkspacePod(tt.workspace, "etok:latest")
+			require.NoError(t, err)
+			tt.assertions(pod)
 		})
 	}
 }

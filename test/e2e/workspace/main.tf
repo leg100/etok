@@ -1,3 +1,14 @@
+terraform {
+  backend "gcs" {
+    bucket = "automatize-tfstate"
+    prefix = "e2e"
+  }
+}
+
+provider "random" {
+  version = "~> 3.0.0"
+}
+
 variable "suffix" {}
 
 module "random" {

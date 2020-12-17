@@ -9,7 +9,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/labels"
-	"github.com/leg100/etok/pkg/runner"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -99,27 +98,6 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	// Manage ConfigMap for workspace
-	var configMap corev1.ConfigMap
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: v1alpha1.BackendConfigMapName(ws.Name)}, &configMap); err != nil {
-		if errors.IsNotFound(err) {
-			configMap := *newConfigMapForWS(&ws)
-
-			if err := controllerutil.SetControllerReference(&ws, &configMap, r.Scheme); err != nil {
-				log.Error(err, "unable to set config map ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, &configMap); err != nil {
-				log.Error(err, "unable to create config map")
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get config map")
-			return ctrl.Result{}, err
-		}
-	}
-
 	// Manage PVC for workspace
 	var pvc corev1.PersistentVolumeClaim
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PVCName()}, &pvc); err != nil {
@@ -145,14 +123,18 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var pod corev1.Pod
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
 		if errors.IsNotFound(err) {
-			pod := *runner.NewWorkspacePod(&ws, r.Image)
+			pod, err := WorkspacePod(&ws, r.Image)
+			if err != nil {
+				log.Error(err, "unable to construct pod")
+				return ctrl.Result{}, err
+			}
 
-			if err := controllerutil.SetControllerReference(&ws, &pod, r.Scheme); err != nil {
+			if err := controllerutil.SetControllerReference(&ws, pod, r.Scheme); err != nil {
 				log.Error(err, "unable to set pod ownership")
 				return ctrl.Result{}, err
 			}
 
-			if err = r.Create(ctx, &pod); err != nil {
+			if err = r.Create(ctx, pod); err != nil {
 				log.Error(err, "unable to create pod")
 				return ctrl.Result{}, err
 			}
@@ -210,26 +192,6 @@ func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspa
 		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
 	}
 	return r.Status().Update(ctx, ws)
-}
-
-func newConfigMapForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      v1alpha1.BackendConfigMapName(ws.GetName()),
-			Namespace: ws.Namespace,
-		},
-		Data: map[string]string{
-			v1alpha1.BackendTypeFilename:   v1alpha1.BackendEmptyConfig(ws.Spec.Backend.Type),
-			v1alpha1.BackendConfigFilename: v1alpha1.BackendConfig(ws.Spec.Backend.Config),
-		},
-	}
-
-	// Set etok's common labels
-	labels.SetCommonLabels(configMap)
-	// Permit filtering etok resources by component
-	labels.SetLabel(configMap, labels.WorkspaceComponent)
-
-	return configMap
 }
 
 func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {

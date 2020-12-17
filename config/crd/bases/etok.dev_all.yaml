@@ -53,23 +53,8 @@ spec:
                 enum:
                 - apply
                 - destroy
-                - force-unlock
-                - get
-                - import
-                - init
-                - output
                 - plan
-                - refresh
                 - sh
-                - state list
-                - state mv
-                - state pull
-                - state push
-                - state rm
-                - state show
-                - taint
-                - untaint
-                - validate
                 type: string
               configMap:
                 type: string
@@ -142,9 +127,6 @@ spec:
     - jsonPath: .status.queue
       name: Queue
       type: string
-    - jsonPath: .spec.backend.type
-      name: Backend
-      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
@@ -168,31 +150,6 @@ spec:
           spec:
             description: WorkspaceSpec defines the desired state of Workspace
             properties:
-              backend:
-                properties:
-                  config:
-                    additionalProperties:
-                      type: string
-                    type: object
-                  type:
-                    enum:
-                    - local
-                    - remote
-                    - artifactory
-                    - azurerm
-                    - consul
-                    - cos
-                    - etcd
-                    - etcdv3
-                    - gcs
-                    - http
-                    - manta
-                    - oss
-                    - pg
-                    - s3
-                    - swift
-                    type: string
-                type: object
               cache:
                 description: WorkspaceSpec defines the desired state of Workspace's
                   cache storage
@@ -202,14 +159,6 @@ spec:
                   storageClass:
                     type: string
                 type: object
-              handshake:
-                description: Toggle whether runner should wait for a handshake from
-                  client
-                type: boolean
-              handshakeTimeout:
-                default: 10s
-                description: How long to wait for handshake before timing out
-                type: string
               privilegedCommands:
                 items:
                   type: string
@@ -221,14 +170,10 @@ spec:
                 default: etok
                 type: string
               terraformVersion:
-                description: 'TODO: kubebuilder markers'
                 type: string
               verbosity:
                 type: integer
             required:
-            - backend
-            - handshake
-            - handshakeTimeout
             - privilegedCommands
             - terraformVersion
             type: object

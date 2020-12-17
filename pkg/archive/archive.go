@@ -56,20 +56,15 @@ func (a *archive) Walk() error {
 	if err != nil {
 		return err
 	}
-	// Walk returns relative paths, and we need absolute paths
-	for _, m := range mods {
-		abs, err := filepath.Abs(m)
-		if err != nil {
-			return err
-		}
-		a.mods = append(a.mods, abs)
-	}
+	// Add modules to archive's modules
+	a.mods = append(a.mods, mods...)
 
 	// Now that we've walked all modules their common prefix can be determined
 	a.base, err = path.CommonPrefix(a.mods)
 	if err != nil {
 		return err
 	}
+	klog.V(2).Infof("base directory determined for archive: %s", a.base)
 
 	return nil
 }
@@ -99,8 +94,8 @@ func (a *archive) Pack(w io.Writer) (*Meta, error) {
 	zw := gzip.NewWriter(mw)
 	tw := tar.NewWriter(zw)
 
-	// Get rules from .terraformignore or default rules if not found
-	ignoreRules := ParseIgnoreFile(a.root)
+	// Create an ignore rule matcher. Parses .terraformignore if exists.
+	ruleMatcher := newRuleMatcher(a.base)
 
 	// Track the metadata details as we go.
 	meta := &Meta{}
@@ -111,7 +106,7 @@ func (a *archive) Pack(w io.Writer) (*Meta, error) {
 
 	// Walk directory trees
 	for _, path := range unnested {
-		err := filepath.Walk(path, packWalkFn(a.base, path, path, tw, meta, true, ignoreRules))
+		err := filepath.Walk(path, packWalkFn(a.base, path, path, tw, meta, true, ruleMatcher))
 		if err != nil {
 			return nil, err
 		}
@@ -133,36 +128,31 @@ func (a *archive) Pack(w io.Writer) (*Meta, error) {
 	return meta, nil
 }
 
-func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignoreRules []rule) filepath.WalkFunc {
+// packWalkFn returns a walker func that archives a terraform module. Base is
+// the base directory of the archive, src and dst are expected to be set to the
+// path of the module (src represents the path on the local filesystem, whereas
+// dst represents the path in the archive).  If a symlink is encountered and it
+// points to a path within the module then the symlink is archived as-is.  If
+// the symlink points to a path outside the module then depending upon whether
+// it is a file or a directory different behaviour is followed: for a file, the
+// symlink is dereferenced; for a directory, the func recurses into the target
+// directory, setting src to the target and dst to the source of the symlink.
+func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, matcher *ruleMatcher) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Get the relative path from the current src directory.
-		subpath, err := filepath.Rel(src, path)
+		matched, err := matcher.match(path, info.IsDir())
 		if err != nil {
-			return fmt.Errorf("failed to get relative path for file %q: %w", path, err)
+			return fmt.Errorf("failed to match path %s against ignore rules", path)
 		}
-
-		if subpath == "." {
+		if matched {
+			klog.V(2).Infof("ignoring path %s", path)
 			return nil
 		}
 
-		if m := matchIgnoreRule(subpath, ignoreRules); m {
-			return nil
-		}
-
-		// Catch directories so we don't end up with empty directories, the
-		// files are ignored correctly
-		if info.IsDir() {
-			if m := matchIgnoreRule(subpath+string(os.PathSeparator), ignoreRules); m {
-				return nil
-			}
-		}
-
-		// Get the relative path from the base directory.
-		subpath, err = filepath.Rel(base, strings.Replace(path, src, dst, 1))
+		subpath, err := filepath.Rel(base, strings.Replace(path, src, dst, 1))
 		if err != nil {
 			return fmt.Errorf("failed to get relative path for file %q: %w", path, err)
 		}
@@ -229,7 +219,7 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			// If the target is a directory we can recurse into the target
 			// directory by calling the packWalkFn with updated arguments.
 			if info.IsDir() {
-				return filepath.Walk(target, packWalkFn(base, target, path, tarW, meta, dereference, ignoreRules))
+				return filepath.Walk(target, packWalkFn(base, target, path, tarW, meta, dereference, matcher))
 			}
 
 			// Dereference this symlink by updating the header with the target file
@@ -251,6 +241,8 @@ func packWalkFn(base, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 
 		// Account for the file in the list.
 		meta.Files = append(meta.Files, header.Name)
+
+		klog.V(2).Infof("adding path %s", path)
 
 		// Skip writing file data for certain file types (above).
 		if !writeBody {
