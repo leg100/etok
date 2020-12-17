@@ -2,8 +2,6 @@ package v1alpha1
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/leg100/etok/pkg/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +17,6 @@ func init() {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced,shortName={ws}
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
-// +kubebuilder:printcolumn:name="Backend",type="string",JSONPath=".spec.backend.type"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +genclient
 type Workspace struct {
@@ -46,17 +43,13 @@ type WorkspaceSpec struct {
 	// +kubebuilder:default=etok
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
-	Cache   WorkspaceCacheSpec `json:"cache,omitempty"`
-	Backend BackendSpec        `json:"backend"`
+	Cache WorkspaceCacheSpec `json:"cache,omitempty"`
 
 	Verbosity int `json:"verbosity,omitempty"`
 
 	PrivilegedCommands []string `json:"privilegedCommands"`
 
-	// TODO: kubebuilder markers
 	TerraformVersion string `json:"terraformVersion"`
-
-	AttachSpec `json:",inline"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
@@ -114,41 +107,4 @@ const (
 
 	WorkspaceDefaultSecretName         = "etok"
 	WorkspaceDefaultServiceAccountName = "etok"
-
-	BackendTypeFilename   = "backend.tf"
-	BackendConfigFilename = "backend.ini"
 )
-
-type BackendSpec struct {
-	// +kubebuilder:validation:Enum=local;remote;artifactory;azurerm;consul;cos;etcd;etcdv3;gcs;http;manta;oss;pg;s3;swift
-	Type   string            `json:"type,omitempty"`
-	Config map[string]string `json:"config,omitempty"`
-}
-
-func BackendEmptyConfig(backendType string) string {
-	return fmt.Sprintf(`terraform {
-  backend "%s" {}
-}
-`, backendType)
-}
-
-// Return a terraform backend configuration file (similar to an INI file)
-func BackendConfig(cfg map[string]string) string {
-	// Sort keys into a slice, otherwise tests occasionally fail as a result of go's random iteration
-	// of maps
-	keys := make([]string, 0, len(cfg))
-	for k := range cfg {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var b strings.Builder
-	for _, k := range keys {
-		fmt.Fprintf(&b, "%s\t= \"%s\"\n", k, cfg[k])
-	}
-	return b.String()
-}
-
-func BackendConfigMapName(workspace string) string {
-	return "workspace-" + workspace
-}

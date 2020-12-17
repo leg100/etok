@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -17,8 +16,9 @@ import (
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
+	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/logstreamer"
-	"github.com/leg100/etok/pkg/runner"
+	"github.com/leg100/etok/pkg/monitors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
@@ -36,6 +36,11 @@ const (
 	defaultWorkspace = "default/default"
 )
 
+// LauncherOptions deploys a new Run. It monitors not only its progress, but
+// that of its pod and its workspace too. It stream logs from the pod to the
+// client, or, if a TTY is detected on the client, it attaches the client to the
+// pod's TTY, permitting input/output. It then awaits the completion of the pod,
+// reporting its container's exit code.
 type LauncherOptions struct {
 	*cmdutil.Options
 
@@ -90,15 +95,6 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 		}
 	}
 	return nil
-}
-
-// Wrap shell args into a single command string
-func wrapShellArgs(args []string) []string {
-	if len(args) > 0 {
-		return []string{"-c", strings.Join(args, " ")}
-	} else {
-		return []string{}
-	}
 }
 
 // Check if user has passed a flag
@@ -160,7 +156,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	pod := <-podch
 
 	// Monitor exit code; non-blocking
-	exit := runner.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace)
+	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, globals.RunnerContainerName)
 
 	// Connect to pod
 	if isTTY {
@@ -313,6 +309,77 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 		}
 	}
 	klog.V(1).Info("successfully approved run with workspace")
+
+	return nil
+}
+
+func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
+	run := &v1alpha1.Run{}
+	run.SetNamespace(o.Namespace)
+	run.SetName(name)
+
+	// Set etok's common labels
+	labels.SetCommonLabels(run)
+	// Permit filtering runs by command
+	labels.SetLabel(run, labels.Command(o.Command))
+	// Permit filtering runs by workspace
+	labels.SetLabel(run, labels.Workspace(o.Workspace))
+	// Permit filtering etok resources by component
+	labels.SetLabel(run, labels.RunComponent)
+
+	run.Workspace = o.Workspace
+
+	run.Command = o.Command
+	run.Args = o.args
+	run.ConfigMap = configMapName
+	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
+	run.ConfigMapPath = relPathToRoot
+
+	run.Verbosity = o.Verbosity
+
+	if isTTY {
+		run.AttachSpec.Handshake = true
+		run.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
+	}
+
+	run, err := o.RunsClient(o.Namespace).Create(ctx, run, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	o.createdRun = true
+	klog.V(1).Infof("created run %s\n", klog.KObj(run))
+
+	return run, nil
+}
+
+func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: o.Namespace,
+		},
+		BinaryData: map[string][]byte{
+			keyName: tarball,
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(configMap)
+	// Permit filtering archives by command
+	labels.SetLabel(configMap, labels.Command(o.Command))
+	// Permit filtering archives by workspace
+	labels.SetLabel(configMap, labels.Workspace(o.Workspace))
+	// Permit filtering etok resources by component
+	labels.SetLabel(configMap, labels.RunComponent)
+
+	_, err := o.ConfigMapsClient(o.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	o.createdArchive = true
+	klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
 
 	return nil
 }

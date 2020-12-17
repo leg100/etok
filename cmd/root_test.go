@@ -32,16 +32,6 @@ func TestRoot(t *testing.T) {
 			out:  "^Usage:",
 		},
 		{
-			name: "terraform command group",
-			args: []string{"-h"},
-			out:  "Terraform Commands:\n",
-		},
-		{
-			name: "etok command group",
-			args: []string{"-h"},
-			out:  "etok Commands:\n",
-		},
-		{
 			name: "version",
 			args: []string{"version"},
 			out:  "etok version 123\txyz\n",
@@ -64,12 +54,12 @@ func TestRoot(t *testing.T) {
 			args: []string{"workspace"},
 		},
 		{
-			name: "state",
-			args: []string{"state"},
-		},
-		{
 			name: "apply",
 			args: []string{"apply", "-h"},
+		},
+		{
+			name: "destroy",
+			args: []string{"destroy", "-h"},
 		},
 		{
 			name: "plan",

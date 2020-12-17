@@ -37,7 +37,7 @@ type RunList struct {
 
 // RunSpec defines the desired state of Run
 type RunSpec struct {
-	// +kubebuilder:validation:Enum={"apply","destroy","force-unlock","get","import","init","output","plan","refresh","sh","state list","state mv","state pull","state push","state rm","state show","taint","untaint","validate"}
+	// +kubebuilder:validation:Enum={"apply","destroy","plan","sh"}
 	Command       string   `json:"command"`
 	Args          []string `json:"args,omitempty"`
 	ConfigMap     string   `json:"configMap"`

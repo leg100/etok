@@ -2,16 +2,17 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/cmd/flags"
+	"github.com/leg100/etok/cmd/launcher"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
@@ -21,9 +22,13 @@ import (
 type RunnerOptions struct {
 	*cmdutil.Options
 
-	Path    string
-	Tarball string
-	Dest    string
+	Path      string
+	Tarball   string
+	Dest      string
+	Command   string
+	Workspace string
+
+	exec Executor
 
 	Handshake        bool
 	HandshakeTimeout time.Duration
@@ -32,13 +37,12 @@ type RunnerOptions struct {
 }
 
 func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
-	o := &RunnerOptions{Options: opts}
+	o := &RunnerOptions{Options: opts, exec: &executor{IOStreams: opts.IOStreams}}
 	cmd := &cobra.Command{
-		Use:    "runner [command (args)]",
+		Use:    "runner [args]",
 		Short:  "Run the etok runner",
-		Long:   "The etok runner is intended to be run in on pod, started by the relevant etok command controller. When invoked, it extracts a tarball containing terraform configuration files. It then waits for the command's ClientReady condition to be true. And then it invokes the relevant command, typically a terraform command.",
+		Long:   "Runner runs the requested command on a Run's pod. Prior to running the command, it can optionally be requested to untar a tarball into a destination directory, and it can optionally be requested to await a 'handshake' on stdin - a string a client can send to inform the runner it has successfully attached to the pod's TTY, ensuring it doesn't miss any output from the command that the runner then runs.",
 		Hidden: true,
-		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.args = args
 
@@ -46,10 +50,10 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 		},
 	}
 
-	flags.AddPathFlag(cmd, &o.Path)
-
 	cmd.Flags().StringVar(&o.Dest, "dest", "/workspace", "Destination path for tarball extraction")
 	cmd.Flags().StringVar(&o.Tarball, "tarball", o.Tarball, "Tarball filename")
+	cmd.Flags().StringVar(&o.Command, "command", "", "Etok command to run")
+	cmd.Flags().StringVar(&o.Workspace, "workspace", "", "Terraform workspace")
 	cmd.Flags().BoolVar(&o.Handshake, "handshake", false, "Await handshake string on stdin")
 	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
@@ -64,6 +68,11 @@ func prefixError(err error) error {
 }
 
 func (o *RunnerOptions) Run(ctx context.Context) error {
+	// Validate command
+	if !slice.ContainsString(launcher.Cmds.GetNames(), o.Command) {
+		return fmt.Errorf("%s: %w", o.Command, errUnknownCommand)
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball
@@ -95,7 +104,13 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	return o.run(ctx, o.Out, os.Stderr)
+	// Execute requested command
+	switch o.Command {
+	case "sh":
+		return o.exec.run(ctx, append([]string{"sh"}, o.args...))
+	default:
+		return execTerraformRun(ctx, o.exec, o.Command, o.Workspace, o.args)
+	}
 }
 
 // Set TTY in raw mode for the duration of running f.
@@ -148,34 +163,21 @@ func (o *RunnerOptions) handshake(ctx context.Context) error {
 
 	select {
 	case <-time.After(o.HandshakeTimeout):
-		return fmt.Errorf("timed out waiting for handshake")
+		return errHandshakeTimeout
 	case err := <-errch:
 		if err != nil {
 			return err
 		}
 		if string(buf) != cmdutil.HandshakeString {
-			return fmt.Errorf("handshake: expected '%s' but received: %s", cmdutil.HandshakeString, string(buf))
+			return errIncorrectHandshake
 		}
 	}
 	klog.V(1).Infof("[runner] handshake completed\r\n")
 	return nil
 }
 
-// Run args, taking first arg as executable, and remainder as args to executable. Path sets the
-// working directory of the executable; out and errout set stdout and stderr of executable.
-func (o *RunnerOptions) run(ctx context.Context, out, errout io.Writer) error {
-	return Run(ctx, o.args, o.Path, out, errout)
-}
-
-// Synchronously run command, taking first arg of args as executable, and remainder as arguments.
-func Run(ctx context.Context, args []string, path string, out, errout io.Writer) error {
-	klog.V(1).Infof("[runner] running command %v\n", args)
-
-	exe := exec.CommandContext(ctx, args[0], args[1:]...)
-	exe.Dir = path
-	exe.Stdin = os.Stdin
-	exe.Stdout = out
-	exe.Stderr = errout
-
-	return exe.Run()
-}
+var (
+	errIncorrectHandshake = errors.New("incorrect handshake received")
+	errHandshakeTimeout   = errors.New("timed out awaiting handshake")
+	errUnknownCommand     = errors.New("unknown command")
+)

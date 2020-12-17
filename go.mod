@@ -5,8 +5,6 @@ go 1.14
 require (
 	cloud.google.com/go v0.53.0 // indirect
 	cloud.google.com/go/storage v1.5.0
-	github.com/Azure/go-autorest/autorest v0.9.3-0.20191028180845-3492b2aff503 // indirect
-	github.com/Azure/go-autorest/autorest/adal v0.8.1-0.20191028180845-3492b2aff503 // indirect
 	github.com/Sirupsen/logrus v0.0.0-00010101000000-000000000000 // indirect
 	github.com/creack/pty v1.1.9
 	github.com/docker/docker v1.13.1 // indirect
@@ -16,7 +14,6 @@ require (
 	github.com/go-logr/zapr v0.1.1 // indirect
 	github.com/google/go-cmp v0.5.2
 	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
-	github.com/gophercloud/gophercloud v0.6.0 // indirect
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20201102131242-0c45ba392e51
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.2.0 // indirect

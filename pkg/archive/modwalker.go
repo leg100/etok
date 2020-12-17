@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
+	"k8s.io/klog/v2"
 )
 
 // On each iteration, parse the module for calls, add those calls to list of
@@ -25,6 +26,7 @@ func walk(path string) ([]string, error) {
 
 		// add call to list of found modules
 		found = append(found, filepath.Join(path, mc.Source))
+		klog.V(2).Infof("adding local module to archive: %s", filepath.Join(path, mc.Source))
 
 		// lookup calls in newly found module and add them
 		mods, err := walk(filepath.Join(path, mc.Source))

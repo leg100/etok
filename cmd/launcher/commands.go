@@ -3,6 +3,7 @@ package launcher
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -14,130 +15,58 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var allCommands = []string{
-	"apply",
-	"destroy",
-	"force-unlock",
-	"get",
-	"import",
-	"init",
-	"output",
-	"plan",
-	"refresh",
-	"sh",
-	"show",
-	"state mv",
-	"state pull",
-	"state push",
-	"state rm",
-	"state show",
-	"taint",
-	"untaint",
-	"validate",
+type runCommand struct {
+	name, short, long string
+	argsConverter     func([]string) []string
 }
 
-// Add commands to root as subcommands (and subcommands' subcommands, and so on)
-func AddCommandsToRoot(root *cobra.Command, opts *cmdutil.Options) {
-	// Add terraform commands other than state
-	for _, cmd := range nonStateCommands() {
-		root.AddCommand(cmd.create(opts, &LauncherOptions{}))
-	}
+type runCommands []runCommand
 
-	// Add terraform state command
-	state := &cobra.Command{
-		Use:   "state",
-		Short: "terraform state family of commands",
-	}
-	root.AddCommand(state)
-
-	// ...and add terraform state sub commands to state command
-	for _, cmd := range stateSubCommands() {
-		state.AddCommand(cmd.create(opts, &LauncherOptions{}))
-	}
-
-	// Add shell command
-	root.AddCommand(shellCommand().create(opts, &LauncherOptions{}))
-
-	return
+var Cmds = runCommands{
+	{
+		name:  "apply",
+		short: "Run terraform apply",
+	},
+	{
+		name:  "destroy",
+		short: "Run terraform destroy",
+	},
+	{
+		name:  "plan",
+		short: "Run terraform plan",
+	},
+	{
+		name:  "sh",
+		short: "Open shell session",
+		argsConverter: func(args []string) []string {
+			// Wrap shell args into a single command string
+			if len(args) > 0 {
+				return []string{"-c", strings.Join(args, " ")}
+			} else {
+				return []string{}
+			}
+		},
+	},
 }
 
-// Launcher command factory
-type cmd struct {
-	name, command, short string
-	argsConverter        func([]string) []string
-}
-
-var TerraformCommands = append(nonStateCommandNames, "state")
-
-var nonStateCommandNames = []string{
-	"apply",
-	"destroy",
-	"force-unlock",
-	"get",
-	"import",
-	"init",
-	"output",
-	"plan",
-	"refresh",
-	"show",
-	"taint",
-	"untaint",
-	"validate",
-}
-
-// Terraform commands other than state
-func nonStateCommands() (cmds []*cmd) {
-	for _, name := range nonStateCommandNames {
-		cmds = append(cmds, &cmd{
-			name:    name,
-			command: name,
-			short:   fmt.Sprintf("Run terraform %s", name),
-		})
-	}
-	return
-}
-
-// Terraform state sub commands
-func stateSubCommands() (cmds []*cmd) {
-	for _, name := range []string{"mv", "pull", "push", "rm", "show"} {
-		cmds = append(cmds, &cmd{
-			name:    name,
-			short:   fmt.Sprintf("Run terraform state %s", name),
-			command: fmt.Sprintf("state %s", name),
-		})
-	}
-	return
-}
-
-// Sole non-terraform command: shell
-func shellCommand() *cmd {
-	return &cmd{
-		name:          "sh",
-		command:       "sh",
-		short:         "Run shell commands in workspace",
-		argsConverter: wrapShellArgs,
-	}
-}
-
-// Spawn cobra command from launcher command factory
-func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
+func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	o.Options = opts
-	o.Command = c.command
+	o.Command = rc.name
 
 	// <namespace>/<workspace>
 	var namespacedWorkspace string
 
 	cmd := &cobra.Command{
-		Use:   fmt.Sprintf("%s [flags] -- [%s args]", c.name, c.name),
-		Short: c.short,
+		Use:   fmt.Sprintf("%s [flags] -- [%s args]", rc.name, rc.name),
+		Short: rc.short,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.Namespace, o.Workspace, err = env.ValidateAndParse(namespacedWorkspace)
 			if err != nil {
 				return err
 			}
 
-			if c.argsConverter != nil {
-				o.args = c.argsConverter(args)
+			if rc.argsConverter != nil {
+				o.args = rc.argsConverter(args)
 			} else {
 				o.args = args
 			}
@@ -184,4 +113,18 @@ func (c *cmd) create(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
 	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "etok workspace")
 
 	return cmd
+}
+
+func (runCmds runCommands) CobraCommands(opts *cmdutil.Options) (cobraCmds []*cobra.Command) {
+	for _, rc := range runCmds {
+		cobraCmds = append(cobraCmds, rc.cobraCommand(opts, &LauncherOptions{}))
+	}
+	return
+}
+
+func (runCmds runCommands) GetNames() (names []string) {
+	for _, rc := range runCmds {
+		names = append(names, rc.name)
+	}
+	return
 }

@@ -1,4 +1,4 @@
-package runner
+package controllers
 
 import (
 	"bytes"
@@ -20,23 +20,7 @@ func TestWorkspaceScript(t *testing.T) {
 			name:      "No download",
 			workspace: testobj.Workspace("default", "foo"),
 			assertions: func(script string) {
-				assert.Equal(t, `set -eo pipefail
-
-echo
-echo Running terraform init...
-terraform init -backend-config=backend.ini
-
-echo
-echo Running terraform workspace select default-foo...
-set +e
-terraform workspace select default-foo 2> /dev/null
-exists=$?
-set -e
-if [[ $exists -ne 0 ]]; then
-	echo
-	echo Running terraform workspace new default-foo...
-	terraform workspace new default-foo
-fi`, script)
+				assert.Equal(t, `set -eo pipefail`, script)
 			},
 		},
 		{
@@ -61,30 +45,14 @@ echo Extracting terraform...
 mkdir -p /terraform-bins
 unzip terraform_0.12.17_linux_amd64.zip -d /terraform-bins
 rm terraform_0.12.17_linux_amd64.zip
-rm terraform_0.12.17_SHA256SUMS
-
-echo
-echo Running terraform init...
-terraform init -backend-config=backend.ini
-
-echo
-echo Running terraform workspace select default-foo...
-set +e
-terraform workspace select default-foo 2> /dev/null
-exists=$?
-set -e
-if [[ $exists -ne 0 ]]; then
-	echo
-	echo Running terraform workspace new default-foo...
-	terraform workspace new default-foo
-fi`, script)
+rm terraform_0.12.17_SHA256SUMS`, script)
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			require.NoError(t, generateWorkspaceScript(buf, tt.workspace))
+			require.NoError(t, generateScript(buf, tt.workspace))
 			tt.assertions(buf.String())
 		})
 	}

@@ -147,12 +147,12 @@ func TestRunReconciler(t *testing.T) {
 		},
 		{
 			name: "Sets container args",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithArgs("-out", "plan.out")),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
-				assert.Equal(t, []string{"--", "terraform", "plan"}, pod.Spec.Containers[0].Args)
+				assert.Equal(t, []string{"--", "-out", "plan.out"}, pod.Spec.Containers[0].Args)
 			},
 		},
 	}

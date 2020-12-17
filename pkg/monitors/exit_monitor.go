@@ -1,11 +1,10 @@
-package runner
+package monitors
 
 import (
 	"context"
 	"fmt"
 
 	etokerrors "github.com/leg100/etok/pkg/errors"
-	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -13,10 +12,11 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
-// Wait for the pod to complete and propagate its error, it has one. The error implements
-// errors.ExitError if there is an error, which contains the non-zero exit code of the container.
-// Non-blocking, the error is reported via the returned error channel.
-func ExitMonitor(ctx context.Context, client kubernetes.Interface, name, namespace string) chan error {
+// Wait for the pod to complete and propagate its error, if it has one. The
+// error implements errors.ExitError if there is an error, which contains the
+// non-zero exit code of the container.  Non-blocking, the error is reported via
+// the returned error channel.
+func ExitMonitor(ctx context.Context, client kubernetes.Interface, name, namespace, container string) chan error {
 	var code int
 	exit := make(chan error)
 	go func() {
@@ -34,7 +34,7 @@ func ExitMonitor(ctx context.Context, client kubernetes.Interface, name, namespa
 				return false, fmt.Errorf("pod was unexpectedly deleted")
 			}
 
-			if status := k8s.ContainerStatusByName(pod, globals.RunnerContainerName); status != nil {
+			if status := k8s.ContainerStatusByName(pod, container); status != nil {
 				if status.State.Terminated != nil {
 					code = int(status.State.Terminated.ExitCode)
 					return true, nil

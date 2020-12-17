@@ -24,10 +24,6 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 		},
 	}
 
-	cmd.SetUsageFunc((&templater{
-		UsageTemplate: MainUsageTemplate(),
-	}).UsageFunc())
-
 	// Pull in klog's flags
 	klogfs := flag.NewFlagSet("klog", flag.PanicOnError)
 	klog.InitFlags(klogfs)
@@ -43,7 +39,7 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)
 
-	launcher.AddCommandsToRoot(cmd, opts)
+	cmd.AddCommand(launcher.Cmds.CobraCommands(opts)...)
 
 	return cmd
 }

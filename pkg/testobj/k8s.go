@@ -39,15 +39,6 @@ func WithServiceAccount(account string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithHandshake(timeout string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.AttachSpec = v1alpha1.AttachSpec{
-			Handshake:        true,
-			HandshakeTimeout: timeout,
-		}
-	}
-}
-
 func WithQueue(run ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Status.Queue = run
@@ -60,21 +51,9 @@ func WithStorageClass(class string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithBackendType(t string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.Backend.Type = t
-	}
-}
-
 func WithTerraformVersion(version string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.TerraformVersion = version
-	}
-}
-
-func WithBackendConfig(cfg map[string]string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.Backend.Config = cfg
 	}
 }
 
@@ -134,7 +113,7 @@ func WorkspacePod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod
 					// alternative is to use a complicated set of reactors, which are known not to
 					// play well with k8s informers:
 					// https://github.com/kubernetes/kubernetes/pull/95897
-					Name: globals.RunnerContainerName,
+					Name: "installer",
 					State: corev1.ContainerState{
 						Running: &corev1.ContainerStateRunning{},
 						Terminated: &corev1.ContainerStateTerminated{
@@ -160,9 +139,15 @@ func WithPhase(phase corev1.PodPhase) func(*corev1.Pod) {
 	}
 }
 
-func WithExitCode(code int32) func(*corev1.Pod) {
+func WithRunnerExitCode(code int32) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
 		k8s.ContainerStatusByName(pod, globals.RunnerContainerName).State.Terminated.ExitCode = code
+	}
+}
+
+func WithInstallerExitCode(code int32) func(*corev1.Pod) {
+	return func(pod *corev1.Pod) {
+		k8s.ContainerStatusByName(pod, "installer").State.Terminated.ExitCode = code
 	}
 }
 
@@ -201,6 +186,12 @@ func WithRunPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
 		if phase != "" {
 			run.Phase = phase
 		}
+	}
+}
+
+func WithArgs(args ...string) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		run.Args = args
 	}
 }
 
