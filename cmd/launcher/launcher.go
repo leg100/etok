@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/client"
@@ -20,7 +21,6 @@ import (
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
@@ -95,22 +95,12 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 			return err
 		}
 	} else {
-		if !isFlagPassed(cmd.Flags(), "workspace") {
+		if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
 			o.Namespace = etokenv.Namespace()
 			o.Workspace = etokenv.Workspace()
 		}
 	}
 	return nil
-}
-
-// Check if user has passed a flag
-func isFlagPassed(fs *pflag.FlagSet, name string) (found bool) {
-	fs.Visit(func(f *pflag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 func (o *LauncherOptions) Run(ctx context.Context) error {

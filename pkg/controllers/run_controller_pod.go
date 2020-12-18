@@ -69,6 +69,11 @@ func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							SubPath:   pluginSubPath,
 						},
 						{
+							Name:      "cache",
+							MountPath: binMountPath,
+							SubPath:   binSubPath,
+						},
+						{
 							Name:      "tarball",
 							MountPath: filepath.Join("/tarball", run.ConfigMapKey),
 							SubPath:   run.ConfigMapKey,
@@ -110,18 +115,6 @@ func RunPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 	labels.SetLabel(pod, labels.RunComponent)
 	// Permit filtering pods by the run command
 	labels.SetLabel(pod, labels.Command(run.Command))
-
-	if ws.Spec.TerraformVersion != "" {
-		// Custom terraform version specified; mount a directory from the cache
-		// volume so that when it is downloaded it is cached
-		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-			Name: "cache",
-			// Path in container to mount vol at
-			MountPath: binMountPath,
-			// Path within PVC to mount
-			SubPath: binSubPath,
-		})
-	}
 
 	if ws.Spec.SecretName != "" {
 		pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{

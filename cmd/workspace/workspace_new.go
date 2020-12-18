@@ -100,7 +100,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().StringVar(&o.WorkspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.TerraformVersion, "terraform-version", "", "Set terraform version")
+	cmd.Flags().StringVar(&o.WorkspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
@@ -178,8 +178,21 @@ func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 			Name:      o.Workspace,
 			Namespace: o.Namespace,
 		},
-		Spec: o.WorkspaceSpec,
+		Spec: v1alpha1.WorkspaceSpec{
+			SecretName:         o.WorkspaceSpec.SecretName,
+			ServiceAccountName: o.WorkspaceSpec.ServiceAccountName,
+			Cache: v1alpha1.WorkspaceCacheSpec{
+				StorageClass: o.WorkspaceSpec.Cache.StorageClass,
+				Size:         o.WorkspaceSpec.Cache.Size,
+			},
+			PrivilegedCommands: o.WorkspaceSpec.PrivilegedCommands,
+		},
 	}
+
+	if o.WorkspaceSpec.TerraformVersion != "" {
+		ws.Spec.TerraformVersion = o.WorkspaceSpec.TerraformVersion
+	}
+
 	// Set etok's common labels
 	labels.SetCommonLabels(ws)
 	// Permit filtering secrets by workspace

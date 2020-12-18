@@ -220,6 +220,18 @@ func TestNewWorkspace(t *testing.T) {
 				assert.Equal(t, "0.12.17", ws.Spec.TerraformVersion)
 			},
 		},
+		{
+			name: "set privileged commands",
+			args: []string{"default/foo", "--privileged-commands", "apply,destroy,sh"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *NewOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, []string{"apply", "destroy", "sh"}, ws.Spec.PrivilegedCommands)
+			},
+		},
 	}
 
 	for _, tt := range tests {

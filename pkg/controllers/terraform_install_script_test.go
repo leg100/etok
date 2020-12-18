@@ -17,23 +17,26 @@ func TestWorkspaceScript(t *testing.T) {
 		assertions func(string)
 	}{
 		{
-			name:      "No download",
-			workspace: testobj.Workspace("default", "foo"),
-			assertions: func(script string) {
-				assert.Equal(t, `set -eo pipefail`, script)
-			},
-		},
-		{
-			name:      "With download",
+			name:      "default",
 			workspace: testobj.Workspace("default", "foo", testobj.WithTerraformVersion("0.12.17")),
 			assertions: func(script string) {
 				assert.Equal(t, `set -eo pipefail
 
+echo Requested terraform version is 0.12.17
+
+current_version=$(terraform version -json | jq '.terraform_version' -r)
+echo Current terraform version is $current_version
+
+if [[ 0.12.17 == $current_version ]]; then
+  echo Skipping terraform installation
+  exit 0
+fi
+
 echo
-echo Downloading terraform...
+echo Downloading terraform 0.12.17...
 curl -LOf# https://releases.hashicorp.com/terraform/0.12.17/terraform_0.12.17_linux_amd64.zip
 echo
-echo Downloading terraform checksums...
+echo Downloading terraform 0.12.17 checksum...
 curl -LOf# https://releases.hashicorp.com/terraform/0.12.17/terraform_0.12.17_SHA256SUMS
 
 echo
@@ -41,7 +44,7 @@ echo Checking checksum...
 sed -n '/terraform_0.12.17_linux_amd64.zip/p' terraform_0.12.17_SHA256SUMS | sha256sum -c
 
 echo
-echo Extracting terraform...
+echo Extracting terraform 0.12.17...
 mkdir -p /terraform-bins
 unzip terraform_0.12.17_linux_amd64.zip -d /terraform-bins
 rm terraform_0.12.17_linux_amd64.zip

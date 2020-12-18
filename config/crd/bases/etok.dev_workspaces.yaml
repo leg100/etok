@@ -19,11 +19,14 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.queue
-      name: Queue
-      type: string
     - jsonPath: .status.phase
       name: Phase
+      type: string
+    - jsonPath: .spec.terraformVersion
+      name: Version
+      type: string
+    - jsonPath: .status.queue
+      name: Queue
       type: string
     name: v1alpha1
     schema:
@@ -65,12 +68,13 @@ spec:
                 default: etok
                 type: string
               terraformVersion:
+                default: 0.13.5
+                pattern: '[0-9]+\.[0-9]+\.[0-9]+'
                 type: string
               verbosity:
                 type: integer
             required:
             - privilegedCommands
-            - terraformVersion
             type: object
           status:
             description: WorkspaceStatus defines the observed state of Workspace
