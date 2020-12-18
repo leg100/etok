@@ -135,6 +135,7 @@ func (o *NewOptions) Run(ctx context.Context) error {
 	fmt.Printf("Created workspace %s\n", o.name())
 
 	// Wait until container can be streamed from
+	fmt.Println("Waiting for workspace pod to be ready...")
 	pod, err := o.waitForContainer(ctx, ws)
 	if err != nil {
 		return err
