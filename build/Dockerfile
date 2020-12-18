@@ -2,20 +2,21 @@ FROM alpine:3.12
 
 ENV ETOK_BIN=/usr/local/bin/etok
 
-# Any change to this path must also be made to the constant terraformBinMountPath in /pkg/runner/runner.go
+# Any change to this path must also be made to the constant binMountPath in /pkg/controllers/paths.go
 ENV TF_BIN_PATH=/terraform-bins
 
 ENV PATH=${TF_BIN_PATH}:${PATH}
 
+# Any change to this version must also be made to the kubebuilder default marker for TerraformVersion
+# (in /api/etok.dev/v1alpha1/workspace_types.go)
 ARG TERRAFORM_VERSION=0.13.5
 
 # install terraform
-RUN apk add curl && \
+RUN apk add curl jq && \
     curl -LOs https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     curl -LOs https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS && \
     sed -n "/terraform_${TERRAFORM_VERSION}_linux_amd64.zip/p" terraform_${TERRAFORM_VERSION}_SHA256SUMS | sha256sum -c && \
-    mkdir -p ${TF_BIN_PATH} && \
-    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip -d ${TF_BIN_PATH} && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip -d /usr/local/bin && \
     rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     rm terraform_${TERRAFORM_VERSION}_SHA256SUMS
 

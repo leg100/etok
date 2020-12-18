@@ -36,12 +36,10 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
-			name:      "Custom terraform version",
+			name:      "Terraform binary volume mount",
 			run:       testobj.Run("default", "run-12345", "plan"),
-			workspace: testobj.Workspace("foo", "bar", testobj.WithTerraformVersion("0.12.17")),
+			workspace: testobj.Workspace("foo", "bar"),
 			assertions: func(pod *corev1.Pod) {
-				// Specifying a custom terraform version creates a dedicated
-				// volume mount for caching the bin when it is downloaded
 				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 					Name:      "cache",
 					MountPath: "/terraform-bins",

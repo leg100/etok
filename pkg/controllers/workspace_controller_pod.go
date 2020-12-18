@@ -56,7 +56,6 @@ func WorkspacePod(ws *v1alpha1.Workspace, image string) (*corev1.Pod, error) {
 							SubPath:   binSubPath,
 						},
 					},
-					// WorkingDir: workspaceDir,
 				},
 			},
 			RestartPolicy:      corev1.RestartPolicyAlways,

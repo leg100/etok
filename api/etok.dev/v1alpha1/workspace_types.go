@@ -16,8 +16,9 @@ func init() {
 // Workspace is the Schema for the workspaces API
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=workspaces,scope=Namespaced,shortName={ws}
-// +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.terraformVersion"
+// +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +genclient
 type Workspace struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -49,7 +50,13 @@ type WorkspaceSpec struct {
 
 	PrivilegedCommands []string `json:"privilegedCommands"`
 
-	TerraformVersion string `json:"terraformVersion"`
+	// Any change to the default marker for the terraform version below must
+	// also be made to the dockerfile for the container image
+	// (/build/Dockerfile)
+
+	// +kubebuilder:default="0.13.5"
+	// +kubebuilder:validation:Pattern=`[0-9]+\.[0-9]+\.[0-9]+`
+	TerraformVersion string `json:"terraformVersion,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
