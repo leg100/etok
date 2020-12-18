@@ -42,42 +42,53 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
-			name: "Unqueued",
+			name: "Plan is unqueued and its pod is immediately provisioned",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
-			},
-			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhasePending, run.Phase)
-			},
-		},
-		{
-			name: "Queued",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-0", "plan-1")),
-			},
-			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseQueued, run.Phase)
-			},
-		},
-		{
-			name: "Provisioning",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithQueue("plan-1")),
-				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseProvisioning, run.Phase)
 			},
 		},
 		{
-			name: "Running",
+			name: "Queued",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("apply-0", "apply-1")),
+			},
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseQueued, run.Phase)
+			},
+		},
+		{
+			name: "Provisioning run at front of queue",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithQueue("apply-1")),
+				testobj.RunPod("operator-test", "apply-1", testobj.WithPhase(corev1.PodPending)),
+			},
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseProvisioning, run.Phase)
+			},
+		},
+		{
+			name: "Running unqueued plan",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1"),
 				testobj.RunPod("operator-test", "plan-1"),
+			},
+			assertions: func(run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseRunning, run.Phase)
+			},
+		},
+		{
+			name: "Running apply at front of queue",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("apply-1")),
+				testobj.RunPod("operator-test", "apply-1"),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseRunning, run.Phase)

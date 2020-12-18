@@ -27,13 +27,18 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 	meta.EachListItem(runlist, func(o runtime.Object) error {
 		run := o.(*v1alpha1.Run)
 
-		// Filter out commands belonging to other workspaces
+		// Filter out runs belonging to other workspaces
 		if run.Workspace != ws.Name {
 			return nil
 		}
 
-		// Filter out completed commands
+		// Filter out completed runs
 		if run.Phase == v1alpha1.RunPhaseCompleted {
+			return nil
+		}
+
+		// Filter out plans
+		if run.Command == "plan" {
 			return nil
 		}
 

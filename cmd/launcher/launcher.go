@@ -36,6 +36,12 @@ const (
 	defaultWorkspace = "default/default"
 )
 
+var (
+	errNotAuthorised     = errors.New("you are not authorised")
+	errEnqueueTimeout    = errors.New("timed out waiting for run to be enqueued")
+	errWorkspaceNotFound = errors.New("workspace not found")
+)
+
 // LauncherOptions deploys a new Run. It monitors not only its progress, but
 // that of its pod and its workspace too. It stream logs from the pod to the
 // client, or, if a TTY is detected on the client, it attaches the client to the
@@ -54,7 +60,7 @@ type LauncherOptions struct {
 	KubeContext string
 	RunName     string
 
-	// Space delimited command to be run on pod
+	// Command to be run on pod
 	Command string
 	// etok Workspace's WorkspaceSpec
 	WorkspaceSpec v1alpha1.WorkspaceSpec
@@ -119,8 +125,11 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	// Watch and log run updates
 	o.watchRun(ctx, run)
 
-	// Watch and log queue updates
-	o.watchQueue(ctx, run)
+	if o.Command != "plan" {
+		// Only commands other than plan are queued - watch and log queue
+		// updates
+		o.watchQueue(ctx, run)
+	}
 
 	g, gctx := errgroup.WithContext(ctx)
 
@@ -130,15 +139,18 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		return o.waitForPod(gctx, run, isTTY, podch)
 	})
 
-	// Wait for run to be enqueued
-	g.Go(func() error {
-		return o.waitForEnqueued(ctx, run)
-	})
+	if o.Command != "plan" {
+		// Only commands other than plan are queued - wait for run to be
+		// enqueued
+		g.Go(func() error {
+			return o.waitForEnqueued(ctx, run)
+		})
+	}
 
 	// In the meantime, check workspace exists
 	ws, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.Namespace, o.Workspace)
 	}
 	// ...and approve run if command listed as privileged
 	if ws.IsPrivilegedCommand(o.Command) {
@@ -147,7 +159,8 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		}
 	}
 
-	// Carry on waiting for run to be enqueued and for pod to be ready
+	// Carry on waiting for run to be enqueued (if not a plan) and for pod to be
+	// ready
 	if err := g.Wait(); err != nil {
 		return err
 	}
@@ -207,7 +220,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
-			err = fmt.Errorf("timed out waiting for run to be enqueued")
+			err = errEnqueueTimeout
 		}
 		return err
 	}
@@ -289,8 +302,6 @@ func (o *LauncherOptions) cleanup() {
 	}
 }
 
-var notAuthorisedError = errors.New("you are not authorised")
-
 func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
 	klog.V(1).Infof("%s is a privileged command on workspace\n", o.Command)
 	annotations := ws.GetAnnotations()
@@ -303,7 +314,7 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 	_, err := o.WorkspacesClient(o.Namespace).Update(ctx, ws, metav1.UpdateOptions{})
 	if err != nil {
 		if kerrors.IsForbidden(err) {
-			return fmt.Errorf("attempted to run privileged command %s: %w", o.Command, notAuthorisedError)
+			return fmt.Errorf("attempted to run privileged command %s: %w", o.Command, errNotAuthorised)
 		} else {
 			return fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
 		}

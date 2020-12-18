@@ -35,63 +35,63 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Single command",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Three commands, one of which is unrelated to this workspace",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-2")),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-2")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Existing queue",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-1")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-1")),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Completed command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3", "plan-1", "plan-2")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3", "apply-1", "apply-2")),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1", "plan-2"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Completed command replaced by incomplete command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("plan-3")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3")),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-3", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Unapproved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply")),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string(nil), ws.Status.Queue)
@@ -99,17 +99,17 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 		},
 		{
 			name:      "Approved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithQueue("plan-1"), testobj.WithApprovals("plan-1")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithQueue("apply-1"), testobj.WithApprovals("apply-1")),
 			objs: []runtime.Object{
-				testobj.Run("", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"plan-1"}, ws.Status.Queue)
+				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Garbage collected approval annotation",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("plan"), testobj.WithApprovals("plan-1")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, map[string]string(nil), ws.Annotations)
 			},
