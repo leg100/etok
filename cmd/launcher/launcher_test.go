@@ -18,6 +18,7 @@ import (
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
+	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -34,9 +35,11 @@ func TestLauncher(t *testing.T) {
 		name     string
 		args     []string
 		env      env.EtokEnv
-		err      func(err error) bool
+		err      error
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
+		// Limit test to these commands
+		cmds []string
 		// Size of content to be archived
 		size int
 		// Mock exit code of runner pod
@@ -45,13 +48,37 @@ func TestLauncher(t *testing.T) {
 		assertions func(*LauncherOptions)
 	}{
 		{
-			name: "defaults",
+			name: "plan",
+			cmds: []string{"plan"},
+			env:  env.EtokEnv("default/default"),
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			assertions: func(o *LauncherOptions) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
+			},
+		},
+		{
+			name: "queueable commands",
+			cmds: []string{"apply", "destroy", "sh"},
 			env:  env.EtokEnv("default/default"),
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			assertions: func(o *LauncherOptions) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
 			},
+		},
+		{
+			name: "enqueue timeout",
+			cmds: []string{"apply", "destroy", "sh"},
+			args: []string{"--enqueue-timeout", "10ms"},
+			env:  env.EtokEnv("default/default"),
+			// Deliberately left out of workspace queue
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			assertions: func(o *LauncherOptions) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
+			},
+			err: errEnqueueTimeout,
 		},
 		{
 			name: "specific namespace and workspace",
@@ -118,16 +145,12 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "workspace does not exist",
-			err: func(err error) bool {
-				return kerrors.IsNotFound(err)
-			},
+			err:  errWorkspaceNotFound,
 		},
 		{
 			name: "cleanup resources upon error",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			err: func(err error) bool {
-				return err == fakeError
-			},
+			err:  fakeError,
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
@@ -145,9 +168,7 @@ func TestLauncher(t *testing.T) {
 			name: "disable cleanup resources upon error",
 			args: []string{"--no-cleanup"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			err: func(err error) bool {
-				return err == fakeError
-			},
+			err:  fakeError,
 			setOpts: func(o *cmdutil.Options) {
 				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
@@ -165,11 +186,10 @@ func TestLauncher(t *testing.T) {
 			name: "resources are not cleaned up upon exit code error",
 			args: []string{},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			err: func(err error) bool {
-				_, ok := err.(etokerrors.ExitError)
-				return ok
-			},
+			// Mock pod returning exit code 5
 			code: int32(5),
+			// Expect exit error with exit code 5
+			err: etokerrors.NewExitError(5),
 			assertions: func(o *LauncherOptions) {
 				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.NoError(t, err)
@@ -232,58 +252,53 @@ func TestLauncher(t *testing.T) {
 				require.NoError(t, err)
 			},
 			podPhase: corev1.PodSucceeded,
-			err: func(err error) bool {
-				return err == handlers.PrematurelySucceededPodError
-			},
+			err:      handlers.PrematurelySucceededPodError,
 		},
 		{
 			name: "config too big",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			size: 1024*1024 + 1,
-			err: func(err error) bool {
-				return errors.Is(err, archive.MaxSizeError(archive.MaxConfigSize))
-			},
+			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},
 	}
 
+	// Run tests for each command
 	for _, tt := range tests {
 		for _, rc := range Cmds {
-			testutil.Run(t, tt.name+"/"+rc.name, func(t *testutil.T) {
-				path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
+			// Restrict test to specific commands if requested
+			if tt.cmds == nil || slice.ContainsString(tt.cmds, rc.name) {
+				testutil.Run(t, tt.name+"/"+rc.name, func(t *testutil.T) {
+					path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
-				// Write .terraform/environment
-				if tt.env != "" {
-					require.NoError(t, tt.env.Write(path))
-				}
+					// Write .terraform/environment
+					if tt.env != "" {
+						require.NoError(t, tt.env.Write(path))
+					}
 
-				out := new(bytes.Buffer)
-				opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
-				require.NoError(t, err)
+					out := new(bytes.Buffer)
+					opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+					require.NoError(t, err)
 
-				if tt.setOpts != nil {
-					tt.setOpts(opts)
-				}
+					if tt.setOpts != nil {
+						tt.setOpts(opts)
+					}
 
-				cmdOpts := &LauncherOptions{RunName: "run-12345"}
+					cmdOpts := &LauncherOptions{RunName: "run-12345"}
 
-				// create cobra command
-				cmd := rc.cobraCommand(opts, cmdOpts)
-				cmd.SetOut(out)
-				cmd.SetArgs(tt.args)
+					// create cobra command
+					cmd := rc.cobraCommand(opts, cmdOpts)
+					cmd.SetOut(out)
+					cmd.SetArgs(tt.args)
 
-				mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
+					mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
 
-				err = cmd.ExecuteContext(context.Background())
-				if tt.err != nil {
-					assert.True(t, tt.err(err))
-				} else {
-					assert.NoError(t, err)
-				}
+					assert.True(t, errors.Is(cmd.ExecuteContext(context.Background()), tt.err))
 
-				if tt.assertions != nil {
-					tt.assertions(cmdOpts)
-				}
-			})
+					if tt.assertions != nil {
+						tt.assertions(cmdOpts)
+					}
+				})
+			}
 		}
 	}
 }

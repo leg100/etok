@@ -84,66 +84,81 @@ func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	// Check workspace queue position
-	position := slice.StringIndex(ws.Status.Queue, run.Name)
+	// To be set with current phase
+	var phase v1alpha1.RunPhase
 
+	if run.Command != "plan" {
+		// Commands other than plan are queued
+
+		// Check workspace queue position
+		if pos := slice.StringIndex(ws.Status.Queue, run.Name); pos != 0 {
+			// Not at front of queue so update phase and return early
+			if pos > 0 {
+				phase = v1alpha1.RunPhaseQueued
+			} else {
+				// Not yet queued
+				phase = v1alpha1.RunPhasePending
+			}
+			if run.Phase != phase {
+				run.RunStatus.Phase = phase
+				if err := r.Status().Update(ctx, &run); err != nil {
+					log.Error(err, "unable to update phase")
+					return ctrl.Result{}, err
+				}
+			}
+			// Go no further
+			return ctrl.Result{}, nil
+		}
+
+		// Front of queue, so continue reconciliation
+	}
+
+	// Get or create pod
 	var pod corev1.Pod
 	var podCreated bool
-	if position == 0 {
-		// First position in workspace queue so go ahead and create pod if it
-		// doesn't exist yet
-		if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
-			if errors.IsNotFound(err) {
-				pod = *RunPod(&run, &ws, r.Image)
+	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
+		if errors.IsNotFound(err) {
+			pod = *RunPod(&run, &ws, r.Image)
 
-				// Make run owner of pod
-				if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {
-					return ctrl.Result{}, err
-				}
-
-				if err := r.Create(ctx, &pod); err != nil {
-					log.Error(err, "unable to create pod")
-					return ctrl.Result{}, err
-				}
-				podCreated = true
-			} else {
+			// Make run owner of pod
+			if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
+
+			if err := r.Create(ctx, &pod); err != nil {
+				log.Error(err, "unable to create pod")
+				return ctrl.Result{}, err
+			}
+			podCreated = true
+		} else {
+			return ctrl.Result{}, err
 		}
 	}
 
 	// Update run phase to reflect pod status
-	var phase v1alpha1.RunPhase
-	switch {
-	case position == 0:
-		if podCreated {
-			// Brand new pod won't have a status yet
+	if podCreated {
+		// Brand new pod won't have a status yet
+		phase = v1alpha1.RunPhaseProvisioning
+	} else {
+		switch pod.Status.Phase {
+		case corev1.PodSucceeded, corev1.PodFailed:
+			phase = v1alpha1.RunPhaseCompleted
+		case corev1.PodRunning:
+			phase = v1alpha1.RunPhaseRunning
+		case corev1.PodPending:
 			phase = v1alpha1.RunPhaseProvisioning
-		} else {
-			switch pod.Status.Phase {
-			case corev1.PodSucceeded, corev1.PodFailed:
-				phase = v1alpha1.RunPhaseCompleted
-			case corev1.PodRunning:
-				phase = v1alpha1.RunPhaseRunning
-			case corev1.PodPending:
-				phase = v1alpha1.RunPhaseProvisioning
-			case corev1.PodUnknown:
-				return ctrl.Result{}, fmt.Errorf("unknown pod phase")
-			default:
-				return ctrl.Result{}, fmt.Errorf("unknown pod phase: %s", pod.Status.Phase)
-			}
+		case corev1.PodUnknown:
+			return ctrl.Result{}, fmt.Errorf("unknown pod phase")
+		default:
+			return ctrl.Result{}, fmt.Errorf("unknown pod phase: %s", pod.Status.Phase)
 		}
-	case position > 0:
-		phase = v1alpha1.RunPhaseQueued
-	case position < 0:
-		// Not yet queued
-		phase = v1alpha1.RunPhasePending
 	}
 
 	if run.Phase != phase {
 		run.RunStatus.Phase = phase
 		if err := r.Status().Update(ctx, &run); err != nil {
 			log.Error(err, "unable to update phase")
+			return ctrl.Result{}, err
 		}
 	}
 

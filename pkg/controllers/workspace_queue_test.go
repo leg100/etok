@@ -32,39 +32,39 @@ func TestUpdateQueue(t *testing.T) {
 			name:      "One new run",
 			workspace: testobj.Workspace("default", "workspace-1"),
 			runs: []runtime.Object{
-				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(queue []string) {
-				require.Equal(t, []string{"plan-1"}, queue)
+				require.Equal(t, []string{"apply-1"}, queue)
 			},
 		},
 		{
 			name:      "Two new runs",
 			workspace: testobj.Workspace("default", "workspace-1"),
 			runs: []runtime.Object{
-				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(queue []string) {
-				assert.Equal(t, []string{"plan-1", "plan-2"}, queue)
+				assert.Equal(t, []string{"apply-1", "apply-2"}, queue)
 			},
 		},
 		{
 			name:      "One existing run one new run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("plan-1")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1")),
 			runs: []runtime.Object{
-				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			assertions: func(queue []string) {
-				assert.Equal(t, []string{"plan-1", "plan-2"}, queue)
+				assert.Equal(t, []string{"apply-1", "apply-2"}, queue)
 			},
 		},
 		{
 			name:      "One completed run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("plan-1")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1")),
 			runs: []runtime.Object{
-				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 			},
 			assertions: func(queue []string) {
 				assert.Equal(t, []string(nil), queue)
@@ -72,13 +72,24 @@ func TestUpdateQueue(t *testing.T) {
 		},
 		{
 			name:      "One completed run one running run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("plan-1", "plan-2")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1", "apply-2")),
 			runs: []runtime.Object{
-				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("default", "plan-2", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseRunning)),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseRunning)),
 			},
 			assertions: func(queue []string) {
-				assert.Equal(t, []string{"plan-2"}, queue)
+				assert.Equal(t, []string{"apply-2"}, queue)
+			},
+		},
+		{
+			name:      "Don't queue plans",
+			workspace: testobj.Workspace("default", "workspace-1"),
+			runs: []runtime.Object{
+				testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
+				testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
+			},
+			assertions: func(queue []string) {
+				assert.Equal(t, []string{"apply-1"}, queue)
 			},
 		},
 	}
