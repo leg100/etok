@@ -40,8 +40,7 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 // +kubebuilder:rbac:groups=etok.dev,resources=runs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
-func (r *RunReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("run", req.NamespacedName)
 	log.V(0).Info("Reconciling")
 
@@ -173,7 +172,7 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder = blder.Owns(&corev1.Pod{})
 
 	// Index field Spec.Workspace in order for the filtered watch below to work
-	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Run{}, "spec.workspace", func(o runtime.Object) []string {
+	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.Run{}, "spec.workspace", func(o client.Object) []string {
 		ws := o.(*v1alpha1.Run).Workspace
 		if ws == "" {
 			return nil
@@ -182,30 +181,28 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	// Watch for changes to resource Workspace and requeue the associated runs
-	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []ctrl.Request {
-			runlist := &v1alpha1.RunList{}
-			err := r.List(context.TODO(), runlist, client.InNamespace(a.Meta.GetNamespace()), client.MatchingFields{
-				"spec.workspace": a.Meta.GetName(),
-			})
-			if err != nil {
-				return []ctrl.Request{}
-			}
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
+		runlist := &v1alpha1.RunList{}
+		err := r.List(context.TODO(), runlist, client.InNamespace(o.GetNamespace()), client.MatchingFields{
+			"spec.workspace": o.GetName(),
+		})
+		if err != nil {
+			return []ctrl.Request{}
+		}
 
-			rr := []ctrl.Request{}
-			meta.EachListItem(runlist, func(o runtime.Object) error {
-				run := o.(*v1alpha1.Run)
-				rr = append(rr, ctrl.Request{
-					NamespacedName: types.NamespacedName{
-						Name:      run.GetName(),
-						Namespace: run.GetNamespace(),
-					},
-				})
-				return nil
+		rr := []ctrl.Request{}
+		meta.EachListItem(runlist, func(o runtime.Object) error {
+			run := o.(*v1alpha1.Run)
+			rr = append(rr, ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      run.GetName(),
+					Namespace: run.GetNamespace(),
+				},
 			})
-			return rr
-		}),
-	})
+			return nil
+		})
+		return rr
+	}))
 
 	return blder.Complete(r)
 }

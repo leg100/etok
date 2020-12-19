@@ -118,7 +118,7 @@ func TestRunReconciler(t *testing.T) {
 				},
 			}
 
-			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(context.Background(), req)
 			t.CheckError(tt.reconcileError, err)
 
 			run := &v1alpha1.Run{}
@@ -179,7 +179,7 @@ func TestRunReconciler(t *testing.T) {
 				},
 			}
 
-			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(req)
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(context.Background(), req)
 			assert.NoError(t, err)
 
 			pod := &corev1.Pod{}
