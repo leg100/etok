@@ -260,6 +260,15 @@ func TestNewWorkspace(t *testing.T) {
 				assert.Equal(t, []string{"apply", "destroy", "sh"}, ws.Spec.PrivilegedCommands)
 			},
 		},
+		{
+			name: "pod timeout exceeded",
+			args: []string{"default/foo", "--pod-timeout", "10ms"},
+			// Deliberately omit pod
+			objs: []runtime.Object{},
+			err: func(t *testutil.T, err error) {
+				assert.True(t, errors.Is(err, errPodTimeout))
+			},
+		},
 	}
 
 	for _, tt := range tests {

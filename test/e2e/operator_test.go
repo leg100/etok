@@ -62,11 +62,11 @@ func TestEtok(t *testing.T) {
 	}{
 		{
 			name: "new workspace",
-			args: []string{"workspace", "new", wsName, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--privileged-commands", "apply"},
+			args: []string{"workspace", "new", wsName, "--path", "workspace", "--context", *kubectx, "--privileged-commands", "apply"},
 		},
 		{
 			name: "second new workspace",
-			args: []string{"workspace", "new", wsName2, "--path", "workspace", "--timeout-pod", "60s", "--context", *kubectx, "--terraform-version", "0.12.17"},
+			args: []string{"workspace", "new", wsName2, "--path", "workspace", "--context", *kubectx, "--terraform-version", "0.12.17"},
 		},
 		{
 			name:            "list workspaces",

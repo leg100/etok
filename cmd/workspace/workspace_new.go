@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,17 +20,22 @@ import (
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/logstreamer"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
 const (
-	defaultTimeoutWorkspace    = 10 * time.Second
-	defaultTimeoutWorkspacePod = 60 * time.Second
-	defaultCacheSize           = "1Gi"
-	defaultSecretName          = "etok"
-	defaultServiceAccountName  = "etok"
+	defaultTimeoutWorkspace   = 10 * time.Second
+	defaultPodTimeout         = 60 * time.Second
+	defaultCacheSize          = "1Gi"
+	defaultSecretName         = "etok"
+	defaultServiceAccountName = "etok"
+)
+
+var (
+	errPodTimeout = errors.New("timed out waiting for pod to be ready")
 )
 
 type NewOptions struct {
@@ -50,8 +56,10 @@ type NewOptions struct {
 	DisableCreateSecret bool
 	// Timeout for workspace to be healthy
 	TimeoutWorkspace time.Duration
-	// Timeout for workspace pod to be running and ready
-	TimeoutWorkspacePod time.Duration
+
+	// Timeout for workspace pod to be ready
+	PodTimeout time.Duration
+
 	// Disable default behaviour of deleting resources upon error
 	DisableResourceCleanup bool
 
@@ -112,7 +120,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	o.WorkspaceSpec.Cache.StorageClass = cmd.Flags().String("storage-class", "", "StorageClass of PersistentVolume for cache")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
-	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
 
 	cmd.Flags().StringSliceVar(&o.WorkspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
 
@@ -219,7 +227,7 @@ func (o *NewOptions) createSecretIfMissing(ctx context.Context) error {
 	// Check if it exists already
 	_, err := o.SecretsClient(o.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			_, err := o.createSecret(ctx, name)
 			if err != nil {
 				return fmt.Errorf("attempted to create secret: %w", err)
@@ -239,7 +247,7 @@ func (o *NewOptions) createServiceAccountIfMissing(ctx context.Context) error {
 	// Check if it exists already
 	_, err := o.ServiceAccountsClient(o.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			_, err := o.createServiceAccount(ctx, name)
 			if err != nil {
 				return fmt.Errorf("attempted to create service account: %w", err)
@@ -289,6 +297,16 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace) (*corev1.Pod, error) {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
 	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
+
+	ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+	defer cancel()
+
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			return nil, errPodTimeout
+		}
+		return nil, err
+	}
 	return event.Object.(*corev1.Pod), err
 }
