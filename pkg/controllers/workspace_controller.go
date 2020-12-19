@@ -121,6 +121,7 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Manage Pod for workspace
 	var pod corev1.Pod
+	var podCreated bool
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
 		if errors.IsNotFound(err) {
 			pod, err := WorkspacePod(&ws, r.Image)
@@ -138,10 +139,23 @@ func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				log.Error(err, "unable to create pod")
 				return ctrl.Result{}, err
 			}
+			podCreated = true
+
 		} else if err != nil {
 			log.Error(err, "unable to get pod")
 			return ctrl.Result{}, err
 		}
+	}
+
+	if podCreated {
+		// Brand new pod so update status and end reconcile early
+		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
+
+		if err := r.Status().Update(ctx, &ws); err != nil {
+			log.Error(err, "unable to set phase")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Set workspace phase status

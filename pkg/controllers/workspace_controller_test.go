@@ -36,6 +36,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
+				testobj.WorkspacePod("", "workspace-1"),
 			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
@@ -45,6 +46,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Three commands, one of which is unrelated to this workspace",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-2")),
@@ -57,6 +59,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Existing queue",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-1")),
 			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
@@ -68,6 +71,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Completed command",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3", "apply-1", "apply-2")),
 			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
@@ -80,6 +84,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Completed command replaced by incomplete command",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3")),
 			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
@@ -110,6 +115,9 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 		{
 			name:      "Garbage collected approval annotation",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
+			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1"),
+			},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, map[string]string(nil), ws.Annotations)
 			},
@@ -117,7 +125,6 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 		{
 			name:      "Initializing phase",
 			workspace: testobj.Workspace("", "workspace-1"),
-			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1")},
 			assertions: func(ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
 			},

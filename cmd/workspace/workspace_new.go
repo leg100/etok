@@ -310,3 +310,22 @@ func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspac
 	}
 	return event.Object.(*corev1.Pod), err
 }
+
+// waitForWorkspaceInitializing waits until the workspace reports it is
+// initializing (or ready)
+func (o *NewOptions) waitForWorkspaceInitializing(ctx context.Context, ws *v1alpha1.Workspace) error {
+	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
+	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
+
+	ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+	defer cancel()
+
+	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			return nil, errPodTimeout
+		}
+		return nil, err
+	}
+	return event.Object.(*corev1.Pod), err
+}
