@@ -77,7 +77,7 @@ type LauncherOptions struct {
 	// Timeout for run pod to be running and ready
 	PodTimeout time.Duration
 	// timeout waiting to be queued
-	EnqueueTimeout time.Duration `default:"10s"`
+	EnqueueTimeout time.Duration
 
 	// Disable TTY detection
 	DisableTTY bool

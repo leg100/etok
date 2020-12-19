@@ -40,15 +40,28 @@ type WorkspaceList struct {
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
 	// +kubebuilder:default=etok
+
+	// Name of the secret resource. Its keys and values will be made available
+	// as environment variables on the workspace pod.
 	SecretName string `json:"secretName,omitempty"`
+
 	// +kubebuilder:default=etok
+
+	// Name of the service account configured for the workspace pod.
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
+	// Persistent Volume Claim specification for workspace's cache.
 	Cache WorkspaceCacheSpec `json:"cache,omitempty"`
 
+	//+kubebuilder:validation:Minimum=0
+
+	// Logging verbosity.
 	Verbosity int `json:"verbosity,omitempty"`
 
-	PrivilegedCommands []string `json:"privilegedCommands"`
+	// List of commands that are deemed privileged. The client must set a
+	// specific annotation on the workspace to approve a run with a privileged
+	// command.
+	PrivilegedCommands []string `json:"privilegedCommands,omitempty"`
 
 	// Any change to the default marker for the terraform version below must
 	// also be made to the dockerfile for the container image
@@ -56,13 +69,22 @@ type WorkspaceSpec struct {
 
 	// +kubebuilder:default="0.13.5"
 	// +kubebuilder:validation:Pattern=`[0-9]+\.[0-9]+\.[0-9]+`
+
+	// Required version of Terraform on workspace pod
 	TerraformVersion string `json:"terraformVersion,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
 type WorkspaceCacheSpec struct {
-	StorageClass string `json:"storageClass,omitempty"`
-	Size         string `json:"size,omitempty" default:"1Gi"`
+	// Storage class for the cache's persistent volume claim. This is a pointer
+	// to distinguish between explicit empty string and nil (which triggers
+	// different behaviour for dynamic provisioning of persistent volumes).
+	StorageClass *string `json:"storageClass,omitempty"`
+
+	// +kubebuilder:default="1Gi"
+
+	// Size of cache's persistent volume claim.
+	Size string `json:"size,omitempty"`
 }
 
 func (ws *Workspace) PodName() string {
@@ -97,8 +119,11 @@ func WorkspacePodName(name string) string {
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	Queue []string       `json:"queue,omitempty"`
-	Phase WorkspacePhase `json:"phase"`
+	// Queue of runs. Parse bypass the queue.
+	Queue []string `json:"queue,omitempty"`
+
+	// Lifecycle phase of workspace.
+	Phase WorkspacePhase `json:"phase,omitempty"`
 }
 
 type WorkspacePhase string
@@ -109,9 +134,4 @@ const (
 	WorkspacePhaseError        WorkspacePhase = "error"
 	WorkspacePhaseUnknown      WorkspacePhase = "unknown"
 	WorkspacePhaseDeleting     WorkspacePhase = "deleting"
-
-	WorkspaceDefaultCacheSize = "1Gi"
-
-	WorkspaceDefaultSecretName         = "etok"
-	WorkspaceDefaultServiceAccountName = "etok"
 )

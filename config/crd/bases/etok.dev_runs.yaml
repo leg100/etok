@@ -46,10 +46,12 @@ spec:
             description: RunSpec defines the desired state of Run
             properties:
               args:
+                description: The arguments to be passed to the command
                 items:
                   type: string
                 type: array
               command:
+                description: The command to run on the pod
                 enum:
                 - apply
                 - destroy
@@ -57,10 +59,13 @@ spec:
                 - sh
                 type: string
               configMap:
+                description: ConfigMap containing the tarball to extract on the pod
                 type: string
               configMapKey:
+                description: The config map key identifying the tarball to extract
                 type: string
               configMapPath:
+                description: The path within the archive to the root module
                 type: string
               handshake:
                 description: Toggle whether runner should wait for a handshake from
@@ -71,25 +76,25 @@ spec:
                 description: How long to wait for handshake before timing out
                 type: string
               verbosity:
+                description: Logging verbosity.
+                minimum: 0
                 type: integer
               workspace:
+                description: The workspace of the run.
                 type: string
             required:
             - command
             - configMap
             - configMapKey
             - configMapPath
-            - handshake
-            - handshakeTimeout
             - workspace
             type: object
           status:
             description: RunStatus defines the observed state of Run
             properties:
               phase:
+                description: Current phase of the run's lifecycle.
                 type: string
-            required:
-            - phase
             type: object
         type: object
     served: true

@@ -74,6 +74,12 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 				return err
 			}
 
+			// Storage class default is nil not empty string (pflags doesn't
+			// permit default of nil)
+			if !flags.IsFlagPassed(cmd.Flags(), "storage-class") {
+				o.WorkspaceSpec.Cache.StorageClass = nil
+			}
+
 			o.Client, err = opts.Create(o.KubeContext)
 			if err != nil {
 				return err
@@ -99,8 +105,11 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	cmd.Flags().StringVar(&o.WorkspaceSpec.ServiceAccountName, "service-account", defaultServiceAccountName, "Name of ServiceAccount")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.StorageClass, "storage-class", "", "StorageClass of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.WorkspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
+
+	// We want nil to be the default but it doesn't seem like pflags supports
+	// that so use empty string and override later (see above)
+	o.WorkspaceSpec.Cache.StorageClass = cmd.Flags().String("storage-class", "", "StorageClass of PersistentVolume for cache")
 
 	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
 	cmd.Flags().DurationVar(&o.TimeoutWorkspacePod, "timeout-pod", defaultTimeoutWorkspacePod, "timeout for pod to be ready and running")
@@ -187,11 +196,8 @@ func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 				Size:         o.WorkspaceSpec.Cache.Size,
 			},
 			PrivilegedCommands: o.WorkspaceSpec.PrivilegedCommands,
+			TerraformVersion:   o.WorkspaceSpec.TerraformVersion,
 		},
-	}
-
-	if o.WorkspaceSpec.TerraformVersion != "" {
-		ws.Spec.TerraformVersion = o.WorkspaceSpec.TerraformVersion
 	}
 
 	// Set etok's common labels

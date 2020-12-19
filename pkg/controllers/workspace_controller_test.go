@@ -185,6 +185,8 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 }
 
 func TestReconcileWorkspacePVC(t *testing.T) {
+	var localPathStorageClass string = "local-path"
+
 	tests := []struct {
 		name       string
 		workspace  *v1alpha1.Workspace
@@ -200,14 +202,14 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 		},
 		{
 			name:      "Custom storage class",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass("local-path")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass(&localPathStorageClass)),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
 				assert.Equal(t, "local-path", *pvc.Spec.StorageClassName)
 			},
 		},
 		{
 			name:      "Owned",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass("local-path")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass(&localPathStorageClass)),
 			assertions: func(pvc *corev1.PersistentVolumeClaim) {
 				assert.Equal(t, "Workspace", pvc.OwnerReferences[0].Kind)
 				assert.Equal(t, "workspace-1", pvc.OwnerReferences[0].Name)

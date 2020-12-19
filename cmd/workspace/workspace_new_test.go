@@ -172,12 +172,40 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
+			name: "default storage class is nil",
+			args: []string{"default/foo"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *NewOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Empty(t, ws.Spec.Cache.StorageClass)
+			},
+		},
+		{
+			name: "explicitly set storage class to empty string",
+			args: []string{"default/foo", "--storage-class", ""},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *NewOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, "", *ws.Spec.Cache.StorageClass)
+			},
+		},
+		{
 			name: "with cache settings",
 			args: []string{"default/foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *NewOptions) {
-				assert.Equal(t, "999Gi", o.WorkspaceSpec.Cache.Size)
-				assert.Equal(t, "lumpen-proletariat", o.WorkspaceSpec.Cache.StorageClass)
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, "999Gi", ws.Spec.Cache.Size)
+				assert.Equal(t, "lumpen-proletariat", *ws.Spec.Cache.StorageClass)
 			},
 		},
 		{
@@ -256,7 +284,7 @@ func TestNewWorkspace(t *testing.T) {
 			if tt.err != nil {
 				tt.err(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			if tt.assertions != nil {

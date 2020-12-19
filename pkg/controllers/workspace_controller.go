@@ -195,11 +195,6 @@ func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspa
 }
 
 func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
-	size := v1alpha1.WorkspaceDefaultCacheSize
-	if ws.Spec.Cache.Size != "" {
-		size = ws.Spec.Cache.Size
-	}
-
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ws.Name,
@@ -211,9 +206,10 @@ func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(size),
+					corev1.ResourceStorage: resource.MustParse(ws.Spec.Cache.Size),
 				},
 			},
+			StorageClassName: ws.Spec.Cache.StorageClass,
 		},
 	}
 
@@ -221,10 +217,6 @@ func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	labels.SetCommonLabels(pvc)
 	// Permit filtering etok resources by component
 	labels.SetLabel(pvc, labels.WorkspaceComponent)
-
-	if ws.Spec.Cache.StorageClass != "" {
-		pvc.Spec.StorageClassName = &ws.Spec.Cache.StorageClass
-	}
 
 	return pvc
 }

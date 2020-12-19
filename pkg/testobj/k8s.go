@@ -14,6 +14,12 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 			Name:      name,
 			Namespace: namespace,
 		},
+		Spec: v1alpha1.WorkspaceSpec{
+			Cache: v1alpha1.WorkspaceCacheSpec{
+				// CRD schema default
+				Size: "1Gi",
+			},
+		},
 	}
 	for _, o := range opts {
 		o(ws)
@@ -45,7 +51,7 @@ func WithQueue(run ...string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithStorageClass(class string) func(*v1alpha1.Workspace) {
+func WithStorageClass(class *string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.Cache.StorageClass = class
 	}

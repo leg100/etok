@@ -2,8 +2,13 @@ package v1alpha1
 
 import (
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	DefaultHandshakeTimeout = 10 * time.Second
 )
 
 func init() {
@@ -38,16 +43,43 @@ type RunList struct {
 // RunSpec defines the desired state of Run
 type RunSpec struct {
 	// +kubebuilder:validation:Enum={"apply","destroy","plan","sh"}
-	Command       string   `json:"command"`
-	Args          []string `json:"args,omitempty"`
-	ConfigMap     string   `json:"configMap"`
-	ConfigMapKey  string   `json:"configMapKey"`
-	ConfigMapPath string   `json:"configMapPath"`
-	Workspace     string   `json:"workspace"`
 
+	// The command to run on the pod
+	Command string `json:"command"`
+
+	// The arguments to be passed to the command
+	Args []string `json:"args,omitempty"`
+
+	// ConfigMap containing the tarball to extract on the pod
+	ConfigMap string `json:"configMap"`
+
+	// The config map key identifying the tarball to extract
+	ConfigMapKey string `json:"configMapKey"`
+
+	// The path within the archive to the root module
+	ConfigMapPath string `json:"configMapPath"`
+
+	// The workspace of the run.
+	Workspace string `json:"workspace"`
+
+	//+kubebuilder:validation:Minimum=0
+
+	// Logging verbosity.
 	Verbosity int `json:"verbosity,omitempty"`
 
+	// AttachSpec defines behaviour for clients attaching to the pod's TTY
 	AttachSpec `json:",inline"`
+}
+
+// AttachSpec defines behaviour for clients attaching to the pod's TTY
+type AttachSpec struct {
+	// Toggle whether runner should wait for a handshake from client
+	Handshake bool `json:"handshake,omitempty"`
+
+	// +kubebuilder:default="10s"
+
+	// How long to wait for handshake before timing out
+	HandshakeTimeout string `json:"handshakeTimeout,omitempty"`
 }
 
 // ApprovedAnnotationKey is the key to be set on a workspace's annotations to
@@ -66,7 +98,8 @@ func (r *Run) PodName() string { return r.Name }
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {
-	Phase RunPhase `json:"phase"`
+	// Current phase of the run's lifecycle.
+	Phase RunPhase `json:"phase,omitempty"`
 }
 
 type RunPhase string
