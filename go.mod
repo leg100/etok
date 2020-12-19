@@ -36,3 +36,5 @@ require (
 )
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.29.0
+
+replace golang.org/x/sys => golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6
