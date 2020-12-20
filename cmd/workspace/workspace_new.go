@@ -16,6 +16,7 @@ import (
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/monitors"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/logstreamer"
@@ -27,7 +28,7 @@ import (
 )
 
 const (
-	defaultTimeoutWorkspace   = 10 * time.Second
+	defaultReconcileTimeout   = 10 * time.Second
 	defaultPodTimeout         = 60 * time.Second
 	defaultCacheSize          = "1Gi"
 	defaultSecretName         = "etok"
@@ -35,7 +36,8 @@ const (
 )
 
 var (
-	errPodTimeout = errors.New("timed out waiting for pod to be ready")
+	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
+	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
 )
 
 type NewOptions struct {
@@ -54,8 +56,9 @@ type NewOptions struct {
 	DisableCreateServiceAccount bool
 	// Create a secret if it does not exist
 	DisableCreateSecret bool
-	// Timeout for workspace to be healthy
-	TimeoutWorkspace time.Duration
+
+	// Timeout for resource to be reconciled (at least once)
+	ReconcileTimeout time.Duration
 
 	// Timeout for workspace pod to be ready
 	PodTimeout time.Duration
@@ -68,6 +71,9 @@ type NewOptions struct {
 	createdWorkspace      bool
 	createdServiceAccount bool
 	createdSecret         bool
+
+	// For testing purposes toggle obj having been reconciled
+	reconciled bool
 }
 
 func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
@@ -119,7 +125,7 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 	// that so use empty string and override later (see above)
 	o.WorkspaceSpec.Cache.StorageClass = cmd.Flags().String("storage-class", "", "StorageClass of PersistentVolume for cache")
 
-	cmd.Flags().DurationVar(&o.TimeoutWorkspace, "timeout", defaultTimeoutWorkspace, "Time to wait for workspace to be healthy")
+	cmd.Flags().DurationVar(&o.ReconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
 
 	cmd.Flags().StringSliceVar(&o.WorkspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
@@ -151,12 +157,30 @@ func (o *NewOptions) Run(ctx context.Context) error {
 	o.createdWorkspace = true
 	fmt.Printf("Created workspace %s\n", o.name())
 
-	// Wait until container can be streamed from
+	g, gctx := errgroup.WithContext(ctx)
+
 	fmt.Println("Waiting for workspace pod to be ready...")
-	pod, err := o.waitForContainer(ctx, ws)
-	if err != nil {
+	podch := make(chan *corev1.Pod, 1)
+	g.Go(func() error {
+		return o.waitForContainer(gctx, ws, podch)
+	})
+
+	// Wait for resource to have been successfully reconciled at least once
+	// within the ReconcileTimeout (If we don't do this and the operator is
+	// either not installed or malfunctioning then the user would be none the
+	// wiser until the much longer PodTimeout had expired).
+	g.Go(func() error {
+		return o.waitForReconcile(gctx, ws)
+	})
+
+	// Wait for both workspace to have been reconciled and for its pod container
+	// to be ready
+	if err := g.Wait(); err != nil {
 		return err
 	}
+
+	// Receive ready pod
+	pod := <-podch
 
 	// Monitor exit code; non-blocking
 	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, controllers.InstallerContainerName)
@@ -216,6 +240,9 @@ func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 	labels.SetLabel(ws, labels.WorkspaceComponent)
 
 	ws.Spec.Verbosity = o.Verbosity
+
+	// For testing purposes mimic obj having been reconciled
+	ws.Status.Reconciled = o.reconciled
 
 	return o.WorkspacesClient(o.Namespace).Create(ctx, ws, metav1.CreateOptions{})
 }
@@ -294,7 +321,7 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 
 // waitForContainer returns true once the installer container can be streamed
 // from
-func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace) (*corev1.Pod, error) {
+func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, podch chan<- *corev1.Pod) error {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
 	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
 
@@ -304,9 +331,28 @@ func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspac
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
-			return nil, errPodTimeout
+			return errPodTimeout
 		}
-		return nil, err
+		return err
 	}
-	return event.Object.(*corev1.Pod), err
+	podch <- event.Object.(*corev1.Pod)
+	return nil
+}
+
+// waitForReconcile waits for the workspace resource to be reconciled.
+func (o *NewOptions) waitForReconcile(ctx context.Context, ws *v1alpha1.Workspace) error {
+	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
+	hdlr := handlers.Reconciled(ws)
+
+	ctx, cancel := context.WithTimeout(ctx, o.ReconcileTimeout)
+	defer cancel()
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, hdlr)
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			return errReconcileTimeout
+		}
+		return err
+	}
+	return nil
 }

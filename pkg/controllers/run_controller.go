@@ -56,7 +56,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Run completed, nothing more to be done
 	if run.Phase == v1alpha1.RunPhaseCompleted {
-		return ctrl.Result{}, nil
+		return r.success(ctx, log, &run)
 	}
 
 	// Fetch its Workspace object
@@ -106,7 +106,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				}
 			}
 			// Go no further
-			return ctrl.Result{}, nil
+			return r.success(ctx, log, &run)
 		}
 
 		// Front of queue, so continue reconciliation
@@ -161,6 +161,18 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	return r.success(ctx, log, &run)
+}
+
+// success marks a successful reconcile
+func (r *RunReconciler) success(ctx context.Context, log logr.Logger, run *v1alpha1.Run) (ctrl.Result, error) {
+	if !run.Reconciled {
+		run.Reconciled = true
+		if err := r.Status().Update(ctx, run); err != nil {
+			log.Error(err, "unable to update status")
+			return ctrl.Result{}, err
+		}
+	}
 	return ctrl.Result{}, nil
 }
 

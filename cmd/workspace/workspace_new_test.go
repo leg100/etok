@@ -27,12 +27,14 @@ func TestNewWorkspace(t *testing.T) {
 	var fakeError = errors.New("fake error")
 
 	tests := []struct {
-		name       string
-		args       []string
-		err        func(*testutil.T, error)
-		objs       []runtime.Object
-		setOpts    func(*cmdutil.Options)
-		assertions func(*NewOptions)
+		name string
+		args []string
+		err  func(*testutil.T, error)
+		// Toggle mocking a successful reconcile status
+		disableMockReconcile bool
+		objs                 []runtime.Object
+		setOpts              func(*cmdutil.Options)
+		assertions           func(*NewOptions)
 	}{
 		{
 			name: "missing workspace name",
@@ -261,6 +263,14 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
+			name:                 "reconcile timeout exceeded",
+			args:                 []string{"default/foo", "--reconcile-timeout", "10ms"},
+			disableMockReconcile: true,
+			err: func(t *testutil.T, err error) {
+				assert.True(t, errors.Is(err, errReconcileTimeout))
+			},
+		},
+		{
 			name: "pod timeout exceeded",
 			args: []string{"default/foo", "--pod-timeout", "10ms"},
 			// Deliberately omit pod
@@ -288,6 +298,11 @@ func TestNewWorkspace(t *testing.T) {
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
 			cmdOpts.Path = path
+
+			if !tt.disableMockReconcile {
+				// Mock successful reconcile
+				cmdOpts.reconciled = true
+			}
 
 			err = cmd.ExecuteContext(context.Background())
 			if tt.err != nil {

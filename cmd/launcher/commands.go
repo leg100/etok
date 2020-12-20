@@ -112,6 +112,8 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 	cmd.Flags().DurationVar(&o.EnqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
 	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "etok workspace")
 
+	cmd.Flags().DurationVar(&o.ReconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
+
 	return cmd
 }
 

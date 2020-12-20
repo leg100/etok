@@ -43,9 +43,11 @@ func TestLauncher(t *testing.T) {
 		// Size of content to be archived
 		size int
 		// Mock exit code of runner pod
-		code       int32
-		setOpts    func(*cmdutil.Options)
-		assertions func(*LauncherOptions)
+		code int32
+		// Toggle mocking a successful reconcile status
+		disableMockReconcile bool
+		setOpts              func(*cmdutil.Options)
+		assertions           func(*LauncherOptions)
 	}{
 		{
 			name: "plan",
@@ -260,6 +262,13 @@ func TestLauncher(t *testing.T) {
 			size: 1024*1024 + 1,
 			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},
+		{
+			name:                 "reconcile timeout exceeded",
+			args:                 []string{"--reconcile-timeout", "10ms"},
+			objs:                 []runtime.Object{testobj.Workspace("default", "default")},
+			disableMockReconcile: true,
+			err:                  errReconcileTimeout,
+		},
 	}
 
 	// Run tests for each command
@@ -284,6 +293,11 @@ func TestLauncher(t *testing.T) {
 					}
 
 					cmdOpts := &LauncherOptions{RunName: "run-12345"}
+
+					if !tt.disableMockReconcile {
+						// Mock successful reconcile
+						cmdOpts.reconciled = true
+					}
 
 					// create cobra command
 					cmd := rc.cobraCommand(opts, cmdOpts)

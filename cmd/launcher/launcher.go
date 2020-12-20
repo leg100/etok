@@ -33,13 +33,15 @@ import (
 )
 
 const (
-	defaultWorkspace = "default/default"
+	defaultWorkspace        = "default/default"
+	defaultReconcileTimeout = 10 * time.Second
 )
 
 var (
 	errNotAuthorised     = errors.New("you are not authorised")
 	errEnqueueTimeout    = errors.New("timed out waiting for run to be enqueued")
 	errWorkspaceNotFound = errors.New("workspace not found")
+	errReconcileTimeout  = errors.New("timed out waiting for run to be reconciled")
 )
 
 // LauncherOptions deploys a new Run. It monitors not only its progress, but
@@ -78,6 +80,8 @@ type LauncherOptions struct {
 	PodTimeout time.Duration
 	// timeout waiting to be queued
 	EnqueueTimeout time.Duration
+	// Timeout for resource to be reconciled (at least once)
+	ReconcileTimeout time.Duration
 
 	// Disable TTY detection
 	DisableTTY bool
@@ -85,6 +89,9 @@ type LauncherOptions struct {
 	// Recall if resources are created so that if error occurs they can be cleaned up
 	createdRun     bool
 	createdArchive bool
+
+	// For testing purposes toggle obj having been reconciled
+	reconciled bool
 }
 
 func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
@@ -123,6 +130,14 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 
 	g, gctx := errgroup.WithContext(ctx)
 
+	// Wait for resource to have been successfully reconciled at least once
+	// within the ReconcileTimeout (If we don't do this and the operator is
+	// either not installed or malfunctioning then the user would be none the
+	// wiser until the much longer PodTimeout had expired).
+	g.Go(func() error {
+		return o.waitForReconcile(gctx, run)
+	})
+
 	// Wait for pod and when ready send pod on chan
 	podch := make(chan *corev1.Pod, 1)
 	g.Go(func() error {
@@ -133,7 +148,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		// Only commands other than plan are queued - wait for run to be
 		// enqueued
 		g.Go(func() error {
-			return o.waitForEnqueued(ctx, run)
+			return o.waitForEnqueued(gctx, run)
 		})
 	}
 
@@ -338,6 +353,9 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 
 	run.Verbosity = o.Verbosity
 
+	// For testing purposes mimic obj having been reconciled
+	run.Reconciled = o.reconciled
+
 	if isTTY {
 		run.AttachSpec.Handshake = true
 		run.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
@@ -382,5 +400,23 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	o.createdArchive = true
 	klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
 
+	return nil
+}
+
+// waitForReconcile waits for the workspace resource to be reconciled.
+func (o *LauncherOptions) waitForReconcile(ctx context.Context, run *v1alpha1.Run) error {
+	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
+	hdlr := handlers.Reconciled(run)
+
+	ctx, cancel := context.WithTimeout(ctx, o.ReconcileTimeout)
+	defer cancel()
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, hdlr)
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			return errReconcileTimeout
+		}
+		return err
+	}
 	return nil
 }
