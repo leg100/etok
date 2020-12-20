@@ -34,7 +34,7 @@ func TestNewWorkspace(t *testing.T) {
 		disableMockReconcile bool
 		objs                 []runtime.Object
 		setOpts              func(*cmdutil.Options)
-		assertions           func(*NewOptions)
+		assertions           func(*newOptions)
 	}{
 		{
 			name: "missing workspace name",
@@ -47,13 +47,13 @@ func TestNewWorkspace(t *testing.T) {
 			name: "create workspace",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Confirm workspace resource has been created
 				_, err := o.WorkspacesClient("default").Get(context.Background(), "foo", metav1.GetOptions{})
 				require.NoError(t, err)
 
 				/// Confirm env file has been written
-				etokenv, err := env.ReadEtokEnv(o.Path)
+				etokenv, err := env.ReadEtokEnv(o.path)
 				require.NoError(t, err)
 				assert.Equal(t, "default", etokenv.Namespace())
 				assert.Equal(t, "foo", etokenv.Workspace())
@@ -64,10 +64,10 @@ func TestNewWorkspace(t *testing.T) {
 			args: []string{"default/foo"},
 
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				_, err := o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
 				assert.NoError(t, err)
-				_, err = o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
+				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
@@ -75,10 +75,10 @@ func TestNewWorkspace(t *testing.T) {
 			name: "create custom secret and service account",
 			args: []string{"default/foo", "--service-account", "foo", "--secret", "bar"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				_, err := o.ServiceAccountsClient(o.Namespace).Get(context.Background(), "foo", metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), "foo", metav1.GetOptions{})
 				assert.NoError(t, err)
-				_, err = o.SecretsClient(o.Namespace).Get(context.Background(), "bar", metav1.GetOptions{})
+				_, err = o.SecretsClient(o.namespace).Get(context.Background(), "bar", metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
@@ -86,8 +86,8 @@ func TestNewWorkspace(t *testing.T) {
 			name: "do not create secret",
 			args: []string{"default/foo", "--no-create-secret"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				_, err := o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
@@ -95,8 +95,8 @@ func TestNewWorkspace(t *testing.T) {
 			name: "do not create service account",
 			args: []string{"default/foo", "--no-create-service-account"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				_, err := o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
@@ -104,8 +104,8 @@ func TestNewWorkspace(t *testing.T) {
 			name: "non-default namespace",
 			args: []string{"bar/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("bar", "foo")},
-			assertions: func(o *NewOptions) {
-				assert.Equal(t, "bar", o.Namespace)
+			assertions: func(o *newOptions) {
+				assert.Equal(t, "bar", o.namespace)
 			},
 		},
 		{
@@ -120,14 +120,14 @@ func TestNewWorkspace(t *testing.T) {
 					return nil, fmt.Errorf("fake error")
 				}
 			},
-			assertions: func(o *NewOptions) {
-				_, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 
-				_, err = o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
+				_, err = o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 
-				_, err = o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
+				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
@@ -143,14 +143,14 @@ func TestNewWorkspace(t *testing.T) {
 					return nil, fmt.Errorf("fake error")
 				}
 			},
-			assertions: func(o *NewOptions) {
-				_, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+			assertions: func(o *newOptions) {
+				_, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.SecretsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.SecretName, metav1.GetOptions{})
+				_, err = o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.ServiceAccountsClient(o.Namespace).Get(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.GetOptions{})
+				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
@@ -177,9 +177,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "default storage class is nil",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
 				assert.Empty(t, ws.Spec.Cache.StorageClass)
@@ -189,9 +189,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "explicitly set storage class to empty string",
 			args: []string{"default/foo", "--storage-class", ""},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
 				assert.Equal(t, "", *ws.Spec.Cache.StorageClass)
@@ -201,9 +201,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "with cache settings",
 			args: []string{"default/foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
 				assert.Equal(t, "999Gi", ws.Spec.Cache.Size)
@@ -214,15 +214,15 @@ func TestNewWorkspace(t *testing.T) {
 			name: "with kube context flag",
 			args: []string{"default/foo", "--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
-				assert.Equal(t, "oz-cluster", o.KubeContext)
+			assertions: func(o *newOptions) {
+				assert.Equal(t, "oz-cluster", o.kubeContext)
 			},
 		},
 		{
 			name: "log stream output",
 			args: []string{"default/foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
 			},
 		},
@@ -242,9 +242,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "set terraform version",
 			args: []string{"default/foo", "--terraform-version", "0.12.17"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
 				assert.Equal(t, "0.12.17", ws.Spec.TerraformVersion)
@@ -254,9 +254,9 @@ func TestNewWorkspace(t *testing.T) {
 			name: "set privileged commands",
 			args: []string{"default/foo", "--privileged-commands", "apply,destroy,sh"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(o *NewOptions) {
+			assertions: func(o *newOptions) {
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
 				assert.Equal(t, []string{"apply", "destroy", "sh"}, ws.Spec.PrivilegedCommands)
@@ -291,13 +291,13 @@ func TestNewWorkspace(t *testing.T) {
 				tt.setOpts(opts)
 			}
 
-			cmd, cmdOpts := NewCmd(opts)
+			cmd, cmdOpts := newCmd(opts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
-			cmdOpts.Path = path
+			cmdOpts.path = path
 
 			if !tt.disableMockReconcile {
 				// Mock successful reconcile

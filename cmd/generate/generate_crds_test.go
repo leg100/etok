@@ -20,13 +20,13 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 		name       string
 		args       []string
 		err        bool
-		setup      func(*testutil.T, *GenerateCRDOptions)
+		setup      func(*testutil.T, *generateCRDOptions)
 		assertions func(*testutil.T, *bytes.Buffer)
 	}{
 		{
 			name: "local",
 			args: []string{"generate", "crds", "--local"},
-			setup: func(t *testutil.T, o *GenerateCRDOptions) {
+			setup: func(t *testutil.T, o *generateCRDOptions) {
 				// Default local path to CRDs is relative to repo root
 				t.Chdir("../../")
 			},
@@ -38,11 +38,11 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 		{
 			name: "remote",
 			args: []string{"generate", "crds"},
-			setup: func(t *testutil.T, o *GenerateCRDOptions) {
+			setup: func(t *testutil.T, o *generateCRDOptions) {
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintln(w, "---\ntest: yaml")
 				}))
-				o.RemoteCRDURL = ts.URL
+				o.remoteCRDURL = ts.URL
 				t.Cleanup(ts.Close)
 			},
 			assertions: func(t *testutil.T, out *bytes.Buffer) {
@@ -52,11 +52,11 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 		{
 			name: "remote failure",
 			args: []string{"generate", "crds"},
-			setup: func(t *testutil.T, o *GenerateCRDOptions) {
+			setup: func(t *testutil.T, o *generateCRDOptions) {
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusNotFound)
 				}))
-				o.RemoteCRDURL = ts.URL
+				o.remoteCRDURL = ts.URL
 				t.Cleanup(ts.Close)
 			},
 			err: true,
@@ -68,7 +68,7 @@ func TestGenerateCRDsFromLocal(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
-			cmd, cmdOpts := GenerateCRDCmd(opts)
+			cmd, cmdOpts := generateCRDCmd(opts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 

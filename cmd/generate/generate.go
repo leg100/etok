@@ -11,10 +11,10 @@ func GenerateCmd(opts *cmdutil.Options) *cobra.Command {
 		Short: "Generate deployment resources",
 	}
 
-	crdCmd, _ := GenerateCRDCmd(opts)
+	crdCmd, _ := generateCRDCmd(opts)
 	cmd.AddCommand(crdCmd)
 
-	operatorCmd, _ := GenerateOperatorCmd(opts)
+	operatorCmd, _ := generateOperatorCmd(opts)
 	cmd.AddCommand(operatorCmd)
 
 	return cmd

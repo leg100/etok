@@ -47,16 +47,16 @@ func TestLauncher(t *testing.T) {
 		// Toggle mocking a successful reconcile status
 		disableMockReconcile bool
 		setOpts              func(*cmdutil.Options)
-		assertions           func(*LauncherOptions)
+		assertions           func(*launcherOptions)
 	}{
 		{
 			name: "plan",
 			cmds: []string{"plan"},
 			env:  env.EtokEnv("default/default"),
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "default", o.namespace)
+				assert.Equal(t, "default", o.workspace)
 			},
 		},
 		{
@@ -64,9 +64,9 @@ func TestLauncher(t *testing.T) {
 			cmds: []string{"apply", "destroy", "sh"},
 			env:  env.EtokEnv("default/default"),
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "default", o.namespace)
+				assert.Equal(t, "default", o.workspace)
 			},
 		},
 		{
@@ -76,9 +76,9 @@ func TestLauncher(t *testing.T) {
 			env:  env.EtokEnv("default/default"),
 			// Deliberately left out of workspace queue
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "default", o.namespace)
+				assert.Equal(t, "default", o.workspace)
 			},
 			err: errEnqueueTimeout,
 		},
@@ -86,9 +86,9 @@ func TestLauncher(t *testing.T) {
 			name: "specific namespace and workspace",
 			env:  env.EtokEnv("foo/bar"),
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "foo", o.Namespace)
-				assert.Equal(t, "bar", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "foo", o.namespace)
+				assert.Equal(t, "bar", o.workspace)
 			},
 		},
 		{
@@ -96,9 +96,9 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--workspace", "foo/bar"},
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
 			env:  env.EtokEnv("default/default"),
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "foo", o.Namespace)
-				assert.Equal(t, "bar", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "foo", o.namespace)
+				assert.Equal(t, "bar", o.workspace)
 			},
 		},
 		{
@@ -106,8 +106,8 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--", "-input", "false"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			env:  env.EtokEnv("default/default"),
-			assertions: func(o *LauncherOptions) {
-				if o.Command == "sh" {
+			assertions: func(o *launcherOptions) {
+				if o.command == "sh" {
 					assert.Equal(t, []string{"-c", "-input false"}, o.args)
 				} else {
 					assert.Equal(t, []string{"-input", "false"}, o.args)
@@ -119,19 +119,19 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			env:  env.EtokEnv("default/default"),
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "oz-cluster", o.KubeContext)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "oz-cluster", o.kubeContext)
 			},
 		},
 		{
 			name: "approved",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands(Cmds.GetNames()...))},
-			assertions: func(o *LauncherOptions) {
+			assertions: func(o *launcherOptions) {
 				// Get run
-				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 				// Check run's approval annotation is set on workspace
 				assert.Equal(t, true, ws.IsRunApproved(run))
@@ -140,9 +140,9 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "without env file",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			assertions: func(o *LauncherOptions) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "default", o.namespace)
+				assert.Equal(t, "default", o.workspace)
 			},
 		},
 		{
@@ -158,11 +158,11 @@ func TestLauncher(t *testing.T) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *LauncherOptions) {
-				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+			assertions: func(o *launcherOptions) {
+				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 
-				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
@@ -176,11 +176,11 @@ func TestLauncher(t *testing.T) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *LauncherOptions) {
-				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+			assertions: func(o *launcherOptions) {
+				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
@@ -192,11 +192,11 @@ func TestLauncher(t *testing.T) {
 			code: int32(5),
 			// Expect exit error with exit code 5
 			err: etokerrors.NewExitError(5),
-			assertions: func(o *LauncherOptions) {
-				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+			assertions: func(o *launcherOptions) {
+				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
@@ -208,12 +208,12 @@ func TestLauncher(t *testing.T) {
 				opts.In, _, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *LauncherOptions) {
+			assertions: func(o *launcherOptions) {
 				// With a tty, launcher should attach not stream logs
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
 
 				// Get run
-				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// With a tty, a handshake is required
 				assert.True(t, run.Handshake)
@@ -229,12 +229,12 @@ func TestLauncher(t *testing.T) {
 				_, opts.In, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *LauncherOptions) {
+			assertions: func(o *launcherOptions) {
 				// With tty disabled, launcher should stream logs not attach
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
 
 				// Get run
-				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// With tty disabled, there should be no handshake
 				assert.False(t, run.Handshake)
@@ -292,7 +292,7 @@ func TestLauncher(t *testing.T) {
 						tt.setOpts(opts)
 					}
 
-					cmdOpts := &LauncherOptions{RunName: "run-12345"}
+					cmdOpts := &launcherOptions{runName: "run-12345"}
 
 					if !tt.disableMockReconcile {
 						// Mock successful reconcile
@@ -320,7 +320,7 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(t *testutil.T, opts *cmdutil.Options, o *LauncherOptions, phase corev1.PodPhase, exitCode int32) {
+func mockControllers(t *testutil.T, opts *cmdutil.Options, o *launcherOptions, phase corev1.PodPhase, exitCode int32) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 

@@ -121,7 +121,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var podCreated bool
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
 		if errors.IsNotFound(err) {
-			pod, err := WorkspacePod(&ws, r.Image)
+			pod, err := workspacePod(&ws, r.Image)
 			if err != nil {
 				log.Error(err, "unable to construct pod")
 				return ctrl.Result{}, err

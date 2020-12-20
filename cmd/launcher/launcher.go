@@ -44,47 +44,47 @@ var (
 	errReconcileTimeout  = errors.New("timed out waiting for run to be reconciled")
 )
 
-// LauncherOptions deploys a new Run. It monitors not only its progress, but
+// launcherOptions deploys a new Run. It monitors not only its progress, but
 // that of its pod and its workspace too. It stream logs from the pod to the
 // client, or, if a TTY is detected on the client, it attaches the client to the
 // pod's TTY, permitting input/output. It then awaits the completion of the pod,
 // reporting its container's exit code.
-type LauncherOptions struct {
+type launcherOptions struct {
 	*cmdutil.Options
 
 	args []string
 
 	*client.Client
 
-	Path        string
-	Namespace   string
-	Workspace   string
-	KubeContext string
-	RunName     string
+	path        string
+	namespace   string
+	workspace   string
+	kubeContext string
+	runName     string
 
-	// Command to be run on pod
-	Command string
-	// etok Workspace's WorkspaceSpec
-	WorkspaceSpec v1alpha1.WorkspaceSpec
+	// command to be run on pod
+	command string
+	// etok Workspace's workspaceSpec
+	workspaceSpec v1alpha1.WorkspaceSpec
 	// Create a service acccount if it does not exist
-	DisableCreateServiceAccount bool
+	disableCreateServiceAccount bool
 	// Create a secret if it does not exist
-	DisableCreateSecret bool
+	disableCreateSecret bool
 
 	// Disable default behaviour of deleting resources upon error
-	DisableResourceCleanup bool
+	disableResourceCleanup bool
 
 	// Timeout for wait for handshake
-	HandshakeTimeout time.Duration
+	handshakeTimeout time.Duration
 	// Timeout for run pod to be running and ready
-	PodTimeout time.Duration
+	podTimeout time.Duration
 	// timeout waiting to be queued
-	EnqueueTimeout time.Duration
+	enqueueTimeout time.Duration
 	// Timeout for resource to be reconciled (at least once)
-	ReconcileTimeout time.Duration
+	reconcileTimeout time.Duration
 
 	// Disable TTY detection
-	DisableTTY bool
+	disableTTY bool
 
 	// Recall if resources are created so that if error occurs they can be cleaned up
 	createdRun     bool
@@ -94,8 +94,8 @@ type LauncherOptions struct {
 	reconciled bool
 }
 
-func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
-	etokenv, err := env.ReadEtokEnv(o.Path)
+func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
+	etokenv, err := env.ReadEtokEnv(o.path)
 	if err != nil {
 		// It's ok for envfile to not exist
 		if !os.IsNotExist(err) {
@@ -103,15 +103,15 @@ func (o *LauncherOptions) lookupEnvFile(cmd *cobra.Command) error {
 		}
 	} else {
 		if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
-			o.Namespace = etokenv.Namespace()
-			o.Workspace = etokenv.Workspace()
+			o.namespace = etokenv.Namespace()
+			o.workspace = etokenv.Workspace()
 		}
 	}
 	return nil
 }
 
-func (o *LauncherOptions) Run(ctx context.Context) error {
-	isTTY := !o.DisableTTY && term.IsTerminal(o.In)
+func (o *launcherOptions) run(ctx context.Context) error {
+	isTTY := !o.disableTTY && term.IsTerminal(o.In)
 
 	// Tar up local config and deploy k8s resources
 	run, err := o.deploy(ctx, isTTY)
@@ -122,7 +122,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	// Watch and log run updates
 	o.watchRun(ctx, run)
 
-	if o.Command != "plan" {
+	if o.command != "plan" {
 		// Only commands other than plan are queued - watch and log queue
 		// updates
 		o.watchQueue(ctx, run)
@@ -144,7 +144,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 		return o.waitForPod(gctx, run, isTTY, podch)
 	})
 
-	if o.Command != "plan" {
+	if o.command != "plan" {
 		// Only commands other than plan are queued - wait for run to be
 		// enqueued
 		g.Go(func() error {
@@ -153,13 +153,13 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 	}
 
 	// In the meantime, check workspace exists
-	ws, err := o.WorkspacesClient(o.Namespace).Get(ctx, o.Workspace, metav1.GetOptions{})
+	ws, err := o.WorkspacesClient(o.namespace).Get(ctx, o.workspace, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.Namespace, o.Workspace)
+		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.namespace, o.workspace)
 	}
 	// ...and approve run if command listed as privileged
-	if ws.IsPrivilegedCommand(o.Command) {
-		if err := o.ApproveRun(ctx, ws, run); err != nil {
+	if ws.IsPrivilegedCommand(o.command) {
+		if err := o.approveRun(ctx, ws, run); err != nil {
 			return err
 		}
 	}
@@ -182,7 +182,7 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 			return err
 		}
 	} else {
-		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), o.RunName, globals.RunnerContainerName); err != nil {
+		if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.namespace), o.runName, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	}
@@ -198,8 +198,8 @@ func (o *LauncherOptions) Run(ctx context.Context) error {
 
 // Non-blocking; watch pod; if tty then wait til pod is running (and then attach); if
 // no tty then wait til pod is running or completed (and then stream logs from)
-func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, podch chan<- *corev1.Pod) error {
-	ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+func (o *launcherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, podch chan<- *corev1.Pod) error {
+	ctx, cancel := context.WithTimeout(ctx, o.podTimeout)
 	defer cancel()
 
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: run.Name, Namespace: run.Namespace}
@@ -217,11 +217,11 @@ func (o *LauncherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 
 // Wait until run has been enqueued onto workspace, or until timeout has been
 // reached.
-func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run) error {
-	ctx, cancel := context.WithTimeout(ctx, o.EnqueueTimeout)
+func (o *launcherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run) error {
+	ctx, cancel := context.WithTimeout(ctx, o.enqueueTimeout)
 	defer cancel()
 
-	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.Workspace, Namespace: o.Namespace}
+	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.workspace, Namespace: o.namespace}
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
@@ -233,7 +233,7 @@ func (o *LauncherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run
 	return nil
 }
 
-func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
+func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 	go func() {
 		lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
 		// Ignore errors
@@ -244,9 +244,9 @@ func (o *LauncherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
 	}()
 }
 
-func (o *LauncherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
+func (o *launcherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
 	go func() {
-		lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.Workspace, Namespace: o.Namespace}
+		lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.workspace, Namespace: o.namespace}
 		// Ignore errors TODO: the current logger has no warning level. We
 		// should probably upgrade the logger to something that does, and then
 		// log any error here as a warning.
@@ -255,11 +255,11 @@ func (o *LauncherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
 }
 
 // Deploy configmap and run resources in parallel
-func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1.Run, err error) {
+func (o *launcherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1.Run, err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Construct new archive
-	arc, err := archive.NewArchive(o.Path)
+	arc, err := archive.NewArchive(o.path)
 	if err != nil {
 		return nil, err
 	}
@@ -286,29 +286,29 @@ func (o *LauncherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 		klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
 
 		// Construct and deploy ConfigMap resource
-		return o.createConfigMap(ctx, w.Bytes(), o.RunName, v1alpha1.RunDefaultConfigMapKey)
+		return o.createConfigMap(ctx, w.Bytes(), o.runName, v1alpha1.RunDefaultConfigMapKey)
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.RunName, o.RunName, isTTY, root)
+		run, err = o.createRun(ctx, o.runName, o.runName, isTTY, root)
 		return err
 	})
 
 	return run, g.Wait()
 }
 
-func (o *LauncherOptions) cleanup() {
+func (o *launcherOptions) cleanup() {
 	if o.createdRun {
-		o.RunsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+		o.RunsClient(o.namespace).Delete(context.Background(), o.runName, metav1.DeleteOptions{})
 	}
 	if o.createdArchive {
-		o.ConfigMapsClient(o.Namespace).Delete(context.Background(), o.RunName, metav1.DeleteOptions{})
+		o.ConfigMapsClient(o.namespace).Delete(context.Background(), o.runName, metav1.DeleteOptions{})
 	}
 }
 
-func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
-	klog.V(1).Infof("%s is a privileged command on workspace\n", o.Command)
+func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
+	klog.V(1).Infof("%s is a privileged command on workspace\n", o.command)
 	annotations := ws.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -316,10 +316,10 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 	annotations[run.ApprovedAnnotationKey()] = "approved"
 	ws.SetAnnotations(annotations)
 
-	_, err := o.WorkspacesClient(o.Namespace).Update(ctx, ws, metav1.UpdateOptions{})
+	_, err := o.WorkspacesClient(o.namespace).Update(ctx, ws, metav1.UpdateOptions{})
 	if err != nil {
 		if kerrors.IsForbidden(err) {
-			return fmt.Errorf("attempted to run privileged command %s: %w", o.Command, errNotAuthorised)
+			return fmt.Errorf("attempted to run privileged command %s: %w", o.command, errNotAuthorised)
 		} else {
 			return fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
 		}
@@ -329,23 +329,23 @@ func (o *LauncherOptions) ApproveRun(ctx context.Context, ws *v1alpha1.Workspace
 	return nil
 }
 
-func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
+func (o *launcherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
 	run := &v1alpha1.Run{}
-	run.SetNamespace(o.Namespace)
+	run.SetNamespace(o.namespace)
 	run.SetName(name)
 
 	// Set etok's common labels
 	labels.SetCommonLabels(run)
 	// Permit filtering runs by command
-	labels.SetLabel(run, labels.Command(o.Command))
+	labels.SetLabel(run, labels.Command(o.command))
 	// Permit filtering runs by workspace
-	labels.SetLabel(run, labels.Workspace(o.Workspace))
+	labels.SetLabel(run, labels.Workspace(o.workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(run, labels.RunComponent)
 
-	run.Workspace = o.Workspace
+	run.Workspace = o.workspace
 
-	run.Command = o.Command
+	run.Command = o.command
 	run.Args = o.args
 	run.ConfigMap = configMapName
 	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
@@ -358,10 +358,10 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 
 	if isTTY {
 		run.AttachSpec.Handshake = true
-		run.AttachSpec.HandshakeTimeout = o.HandshakeTimeout.String()
+		run.AttachSpec.HandshakeTimeout = o.handshakeTimeout.String()
 	}
 
-	run, err := o.RunsClient(o.Namespace).Create(ctx, run, metav1.CreateOptions{})
+	run, err := o.RunsClient(o.namespace).Create(ctx, run, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -372,11 +372,11 @@ func (o *LauncherOptions) createRun(ctx context.Context, name, configMapName str
 	return run, nil
 }
 
-func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
+func (o *launcherOptions) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: o.Namespace,
+			Namespace: o.namespace,
 		},
 		BinaryData: map[string][]byte{
 			keyName: tarball,
@@ -386,13 +386,13 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	// Set etok's common labels
 	labels.SetCommonLabels(configMap)
 	// Permit filtering archives by command
-	labels.SetLabel(configMap, labels.Command(o.Command))
+	labels.SetLabel(configMap, labels.Command(o.command))
 	// Permit filtering archives by workspace
-	labels.SetLabel(configMap, labels.Workspace(o.Workspace))
+	labels.SetLabel(configMap, labels.Workspace(o.workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(configMap, labels.RunComponent)
 
-	_, err := o.ConfigMapsClient(o.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
+	_, err := o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -404,11 +404,11 @@ func (o *LauncherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 }
 
 // waitForReconcile waits for the workspace resource to be reconciled.
-func (o *LauncherOptions) waitForReconcile(ctx context.Context, run *v1alpha1.Run) error {
+func (o *launcherOptions) waitForReconcile(ctx context.Context, run *v1alpha1.Run) error {
 	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
 	hdlr := handlers.Reconciled(run)
 
-	ctx, cancel := context.WithTimeout(ctx, o.ReconcileTimeout)
+	ctx, cancel := context.WithTimeout(ctx, o.reconcileTimeout)
 	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, hdlr)

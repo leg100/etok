@@ -64,7 +64,7 @@ func TestRunPod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertions(RunPod(tt.run, tt.workspace, "etok:latest"))
+			tt.assertions(runPod(tt.run, tt.workspace, "etok:latest"))
 		})
 	}
 }

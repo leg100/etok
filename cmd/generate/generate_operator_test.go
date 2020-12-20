@@ -20,13 +20,13 @@ func TestGenerateOperator(t *testing.T) {
 		name       string
 		args       []string
 		err        bool
-		setup      func(*testutil.T, *GenerateOperatorOptions)
+		setup      func(*testutil.T, *generateOperatorOptions)
 		assertions func(*testutil.T, *bytes.Buffer)
 	}{
 		{
 			name: "local",
 			args: []string{"generate", "operator", "--local"},
-			setup: func(t *testutil.T, o *GenerateOperatorOptions) {
+			setup: func(t *testutil.T, o *generateOperatorOptions) {
 				// Default local path to CRDs is relative to repo root
 				t.Chdir("../../")
 			},
@@ -38,11 +38,11 @@ func TestGenerateOperator(t *testing.T) {
 		{
 			name: "remote",
 			args: []string{"generate", "operator"},
-			setup: func(t *testutil.T, o *GenerateOperatorOptions) {
+			setup: func(t *testutil.T, o *generateOperatorOptions) {
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					fmt.Fprintln(w, "---\ntest: yaml")
 				}))
-				o.RemoteClusterRoleURL = ts.URL
+				o.remoteClusterRoleURL = ts.URL
 				t.Cleanup(ts.Close)
 			},
 			assertions: func(t *testutil.T, out *bytes.Buffer) {
@@ -52,11 +52,11 @@ func TestGenerateOperator(t *testing.T) {
 		{
 			name: "remote failure",
 			args: []string{"generate", "operator"},
-			setup: func(t *testutil.T, o *GenerateOperatorOptions) {
+			setup: func(t *testutil.T, o *generateOperatorOptions) {
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusNotFound)
 				}))
-				o.RemoteClusterRoleURL = ts.URL
+				o.remoteClusterRoleURL = ts.URL
 				t.Cleanup(ts.Close)
 			},
 			err: true,
@@ -68,7 +68,7 @@ func TestGenerateOperator(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
-			cmd, cmdOpts := GenerateOperatorCmd(opts)
+			cmd, cmdOpts := generateOperatorCmd(opts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 

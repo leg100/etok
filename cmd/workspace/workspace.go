@@ -11,8 +11,8 @@ func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
 		Short: "etok workspace management",
 	}
 
-	newCmd, _ := NewCmd(opts)
-	cmd.AddCommand(newCmd)
+	nc, _ := newCmd(opts)
+	cmd.AddCommand(nc)
 
 	cmd.AddCommand(
 		ListCmd(opts),

@@ -24,23 +24,23 @@ const clusterRolePath = "config/rbac/role.yaml"
 
 var clusterRoleURL = "https://raw.githubusercontent.com/leg100/etok/v" + version.Version + "/" + clusterRolePath
 
-type GenerateOperatorOptions struct {
+type generateOperatorOptions struct {
 	*cmdutil.Options
 
-	Name      string
-	Namespace string
-	Image     string
+	name      string
+	namespace string
+	image     string
 
 	// Path to local generated cluster role definition
-	LocalClusterRolePath string
+	localClusterRolePath string
 	// Toggle reading cluster role from local file
-	LocalClusterRoleToggle bool
+	localClusterRoleToggle bool
 	// URL to cluster role definition
-	RemoteClusterRoleURL string
+	remoteClusterRoleURL string
 }
 
-func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperatorOptions) {
-	o := &GenerateOperatorOptions{Options: opts}
+func generateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *generateOperatorOptions) {
+	o := &generateOperatorOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "operator",
 		Short: "Generate operator's kubernetes resources",
@@ -49,18 +49,18 @@ func GenerateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateOperat
 		},
 	}
 
-	flags.AddNamespaceFlag(cmd, &o.Namespace)
-	cmd.Flags().StringVar(&o.Name, "name", "etok-operator", "Name for kubernetes resources")
-	cmd.Flags().StringVar(&o.Image, "image", version.Image, "Docker image used for both the operator and the runner")
+	flags.AddNamespaceFlag(cmd, &o.namespace)
+	cmd.Flags().StringVar(&o.name, "name", "etok-operator", "Name for kubernetes resources")
+	cmd.Flags().StringVar(&o.image, "image", version.Image, "Docker image used for both the operator and the runner")
 
-	cmd.Flags().BoolVar(&o.LocalClusterRoleToggle, "local", false, "Read cluster role definition from local file (default false)")
-	cmd.Flags().StringVar(&o.LocalClusterRolePath, "path", clusterRolePath, "Path to local cluster role definition")
-	cmd.Flags().StringVar(&o.RemoteClusterRoleURL, "url", clusterRoleURL, "URL for cluster role definition")
+	cmd.Flags().BoolVar(&o.localClusterRoleToggle, "local", false, "Read cluster role definition from local file (default false)")
+	cmd.Flags().StringVar(&o.localClusterRolePath, "path", clusterRolePath, "Path to local cluster role definition")
+	cmd.Flags().StringVar(&o.remoteClusterRoleURL, "url", clusterRoleURL, "URL for cluster role definition")
 
 	return cmd, o
 }
 
-func (o *GenerateOperatorOptions) Generate() error {
+func (o *generateOperatorOptions) Generate() error {
 	if err := o.clusterRole(); err != nil {
 		return err
 	}
@@ -87,22 +87,22 @@ func (o *GenerateOperatorOptions) Generate() error {
 
 // Operator's ClusterRole. Unlike the other resources this is read from a YAML file in the repo,
 // which in turn is generated with `make manifests`.
-func (o *GenerateOperatorOptions) clusterRole() error {
+func (o *generateOperatorOptions) clusterRole() error {
 	var clusterRole []byte
 
-	if o.LocalClusterRoleToggle {
+	if o.localClusterRoleToggle {
 		var err error
-		clusterRole, err = ioutil.ReadFile(o.LocalClusterRolePath)
+		clusterRole, err = ioutil.ReadFile(o.localClusterRolePath)
 		if err != nil {
 			return err
 		}
 	} else {
-		resp, err := http.Get(o.RemoteClusterRoleURL)
+		resp, err := http.Get(o.remoteClusterRoleURL)
 		if err != nil {
 			return err
 		}
 		if resp.StatusCode != 200 {
-			return fmt.Errorf("failed to retrieve %s: status code: %d", o.RemoteClusterRoleURL, resp.StatusCode)
+			return fmt.Errorf("failed to retrieve %s: status code: %d", o.remoteClusterRoleURL, resp.StatusCode)
 		}
 
 		clusterRole, err = ioutil.ReadAll(resp.Body)
@@ -116,25 +116,25 @@ func (o *GenerateOperatorOptions) clusterRole() error {
 	return nil
 }
 
-func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
+func (o *generateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	binding := &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterRoleBinding",
 			APIVersion: "rbac.authorization.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: o.Name,
+			Name: o.name,
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
-				Name:      o.Name,
-				Namespace: o.Namespace,
+				Name:      o.name,
+				Namespace: o.namespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
 			Kind:     "ClusterRole",
-			Name:     o.Name,
+			Name:     o.name,
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
@@ -146,15 +146,15 @@ func (o *GenerateOperatorOptions) clusterRoleBinding() *rbacv1.ClusterRoleBindin
 	return binding
 }
 
-func (o *GenerateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
+func (o *generateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
 	serviceAccount := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ServiceAccount",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      o.Name,
-			Namespace: o.Namespace,
+			Name:      o.name,
+			Namespace: o.namespace,
 		},
 	}
 
@@ -166,25 +166,25 @@ func (o *GenerateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
 	return serviceAccount
 }
 
-func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
+func (o *generateOperatorOptions) deployment() *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Deployment",
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      o.Name,
-			Namespace: o.Namespace,
+			Name:      o.name,
+			Namespace: o.namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(1),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					ServiceAccountName: o.Name,
+					ServiceAccountName: o.name,
 					Containers: []corev1.Container{
 						{
 							Name:            "etok-operator",
-							Image:           o.Image,
+							Image:           o.image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"etok"},
 							Args:            []string{"operator"},
@@ -207,7 +207,7 @@ func (o *GenerateOperatorOptions) deployment() *appsv1.Deployment {
 								},
 								{
 									Name:  "ETOK_IMAGE",
-									Value: o.Image,
+									Value: o.image,
 								},
 							},
 							TerminationMessagePolicy: "FallbackToLogsOnError",

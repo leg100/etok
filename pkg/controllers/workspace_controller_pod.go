@@ -14,14 +14,14 @@ const (
 	idlerCommand           = "trap \"exit 0\" SIGTERM; while true; do sleep 1; done"
 )
 
-// WorkspacePod returns a pod on which to setup a new etok workspace, optionally
+// workspacePod returns a pod on which to setup a new etok workspace, optionally
 // downloading a custom version of terraform, within an init container, and then
 // it runs a standard container that simply idles - expressly for performance
 // reasons: it keeps a persistent volume attached to the kubernetes node, which
 // means when a run spins up a pod the volume can be mounted more quickly (that
 // does mean however that a run pod can only be scheduled to the same node as
 // the workspace pod...).
-func WorkspacePod(ws *v1alpha1.Workspace, image string) (*corev1.Pod, error) {
+func workspacePod(ws *v1alpha1.Workspace, image string) (*corev1.Pod, error) {
 	script := new(bytes.Buffer)
 	if err := generateScript(script, ws); err != nil {
 		return nil, err

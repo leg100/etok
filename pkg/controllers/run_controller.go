@@ -115,7 +115,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	var podCreated bool
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if errors.IsNotFound(err) {
-			pod = *RunPod(&run, &ws, r.Image)
+			pod = *runPod(&run, &ws, r.Image)
 
 			// Make run owner of pod
 			if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {

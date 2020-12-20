@@ -22,16 +22,16 @@ import (
 type RunnerOptions struct {
 	*cmdutil.Options
 
-	Path      string
-	Tarball   string
-	Dest      string
-	Command   string
-	Workspace string
+	path      string
+	tarball   string
+	dest      string
+	command   string
+	workspace string
 
 	exec Executor
 
-	Handshake        bool
-	HandshakeTimeout time.Duration
+	handshake        bool
+	handshakeTimeout time.Duration
 
 	args []string
 }
@@ -50,12 +50,12 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 		},
 	}
 
-	cmd.Flags().StringVar(&o.Dest, "dest", "/workspace", "Destination path for tarball extraction")
-	cmd.Flags().StringVar(&o.Tarball, "tarball", o.Tarball, "Tarball filename")
-	cmd.Flags().StringVar(&o.Command, "command", "", "Etok command to run")
-	cmd.Flags().StringVar(&o.Workspace, "workspace", "", "Terraform workspace")
-	cmd.Flags().BoolVar(&o.Handshake, "handshake", false, "Await handshake string on stdin")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
+	cmd.Flags().StringVar(&o.dest, "dest", "/workspace", "Destination path for tarball extraction")
+	cmd.Flags().StringVar(&o.tarball, "tarball", o.tarball, "Tarball filename")
+	cmd.Flags().StringVar(&o.command, "command", "", "Etok command to run")
+	cmd.Flags().StringVar(&o.workspace, "workspace", "", "Terraform workspace")
+	cmd.Flags().BoolVar(&o.handshake, "handshake", false, "Await handshake string on stdin")
+	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
 	return cmd, o
 }
@@ -69,22 +69,22 @@ func prefixError(err error) error {
 
 func (o *RunnerOptions) Run(ctx context.Context) error {
 	// Validate command
-	if !slice.ContainsString(launcher.Cmds.GetNames(), o.Command) {
-		return fmt.Errorf("%s: %w", o.Command, errUnknownCommand)
+	if !slice.ContainsString(launcher.Cmds.GetNames(), o.command) {
+		return fmt.Errorf("%s: %w", o.command, errUnknownCommand)
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball
-	if o.Tarball != "" {
+	if o.tarball != "" {
 		g.Go(func() error {
-			f, err := os.Open(o.Tarball)
+			f, err := os.Open(o.tarball)
 			if err != nil {
 				return fmt.Errorf("failed to open tarball: %w", err)
 			}
 			defer f.Close()
 
-			if err := archive.Unpack(f, o.Dest); err != nil {
+			if err := archive.Unpack(f, o.dest); err != nil {
 				return fmt.Errorf("failed to extract tarball: %w", err)
 			}
 
@@ -93,9 +93,9 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	}
 
 	// Concurrently wait for client to handshake
-	if o.Handshake {
+	if o.handshake {
 		g.Go(func() error {
-			return o.withRawMode(gctx, o.handshake)
+			return o.withRawMode(gctx, o.receiveHandshake)
 		})
 	}
 
@@ -105,11 +105,11 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	}
 
 	// Execute requested command
-	switch o.Command {
+	switch o.command {
 	case "sh":
 		return o.exec.run(ctx, append([]string{"sh"}, o.args...))
 	default:
-		return execTerraformRun(ctx, o.exec, o.Command, o.Workspace, o.args)
+		return execTerraformRun(ctx, o.exec, o.command, o.workspace, o.args)
 	}
 }
 
@@ -131,10 +131,10 @@ func (o *RunnerOptions) withRawMode(ctx context.Context, f func(context.Context)
 	return f(ctx)
 }
 
-// Receive handshake string from client. If handshake string is not received within
-// timeout, or anything other than handshake string is received, then an error is
-// returned.
-func (o *RunnerOptions) handshake(ctx context.Context) error {
+// Receive handshake string from client. If handshake string is not received
+// within timeout, or anything other than handshake string is received, then an
+// error is returned.
+func (o *RunnerOptions) receiveHandshake(ctx context.Context) error {
 	buf := make([]byte, len(cmdutil.HandshakeString))
 	errch := make(chan error)
 	// In raw mode both carriage return and newline characters are necessary
@@ -162,7 +162,7 @@ func (o *RunnerOptions) handshake(ctx context.Context) error {
 	}()
 
 	select {
-	case <-time.After(o.HandshakeTimeout):
+	case <-time.After(o.handshakeTimeout):
 		return errHandshakeTimeout
 	case err := <-errch:
 		if err != nil {

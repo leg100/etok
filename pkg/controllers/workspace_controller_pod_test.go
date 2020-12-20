@@ -26,7 +26,7 @@ func TestWorkspacePod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pod, err := WorkspacePod(tt.workspace, "etok:latest")
+			pod, err := workspacePod(tt.workspace, "etok:latest")
 			require.NoError(t, err)
 			tt.assertions(pod)
 		})

@@ -40,31 +40,31 @@ var (
 	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
 )
 
-type NewOptions struct {
+type newOptions struct {
 	*cmdutil.Options
 
 	*client.Client
 
-	Path        string
-	Namespace   string
-	Workspace   string
-	KubeContext string
+	path        string
+	namespace   string
+	workspace   string
+	kubeContext string
 
-	// etok Workspace's WorkspaceSpec
-	WorkspaceSpec v1alpha1.WorkspaceSpec
+	// etok Workspace's workspaceSpec
+	workspaceSpec v1alpha1.WorkspaceSpec
 	// Create a service acccount if it does not exist
-	DisableCreateServiceAccount bool
+	disableCreateServiceAccount bool
 	// Create a secret if it does not exist
-	DisableCreateSecret bool
+	disableCreateSecret bool
 
 	// Timeout for resource to be reconciled (at least once)
-	ReconcileTimeout time.Duration
+	reconcileTimeout time.Duration
 
 	// Timeout for workspace pod to be ready
-	PodTimeout time.Duration
+	podTimeout time.Duration
 
 	// Disable default behaviour of deleting resources upon error
-	DisableResourceCleanup bool
+	disableResourceCleanup bool
 
 	// Recall if resources are created so that if error occurs they can be
 	// cleaned up
@@ -76,14 +76,14 @@ type NewOptions struct {
 	reconciled bool
 }
 
-func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
-	o := &NewOptions{Options: opts}
+func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
+	o := &newOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "new <namespace/workspace>",
 		Short: "Create a new etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.Namespace, o.Workspace, err = env.ValidateAndParse(args[0])
+			o.namespace, o.workspace, err = env.ValidateAndParse(args[0])
 			if err != nil {
 				return err
 			}
@@ -91,17 +91,17 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 			// Storage class default is nil not empty string (pflags doesn't
 			// permit default of nil)
 			if !flags.IsFlagPassed(cmd.Flags(), "storage-class") {
-				o.WorkspaceSpec.Cache.StorageClass = nil
+				o.workspaceSpec.Cache.StorageClass = nil
 			}
 
-			o.Client, err = opts.Create(o.KubeContext)
+			o.Client, err = opts.Create(o.kubeContext)
 			if err != nil {
 				return err
 			}
 
-			err = o.Run(cmd.Context())
+			err = o.run(cmd.Context())
 			if err != nil {
-				if !o.DisableResourceCleanup {
+				if !o.disableResourceCleanup {
 					o.cleanup()
 				}
 			}
@@ -109,42 +109,42 @@ func NewCmd(opts *cmdutil.Options) (*cobra.Command, *NewOptions) {
 		},
 	}
 
-	flags.AddPathFlag(cmd, &o.Path)
-	flags.AddKubeContextFlag(cmd, &o.KubeContext)
-	flags.AddDisableResourceCleanupFlag(cmd, &o.DisableResourceCleanup)
+	flags.AddPathFlag(cmd, &o.path)
+	flags.AddKubeContextFlag(cmd, &o.kubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.DisableCreateServiceAccount, "no-create-service-account", o.DisableCreateServiceAccount, "Create service account if missing")
-	cmd.Flags().BoolVar(&o.DisableCreateSecret, "no-create-secret", o.DisableCreateSecret, "Create secret if missing")
+	cmd.Flags().BoolVar(&o.disableCreateServiceAccount, "no-create-service-account", o.disableCreateServiceAccount, "Create service account if missing")
+	cmd.Flags().BoolVar(&o.disableCreateSecret, "no-create-secret", o.disableCreateSecret, "Create secret if missing")
 
-	cmd.Flags().StringVar(&o.WorkspaceSpec.ServiceAccountName, "service-account", defaultServiceAccountName, "Name of ServiceAccount")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
-	cmd.Flags().StringVar(&o.WorkspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
+	cmd.Flags().StringVar(&o.workspaceSpec.ServiceAccountName, "service-account", defaultServiceAccountName, "Name of ServiceAccount")
+	cmd.Flags().StringVar(&o.workspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
+	cmd.Flags().StringVar(&o.workspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
+	cmd.Flags().StringVar(&o.workspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
 
 	// We want nil to be the default but it doesn't seem like pflags supports
 	// that so use empty string and override later (see above)
-	o.WorkspaceSpec.Cache.StorageClass = cmd.Flags().String("storage-class", "", "StorageClass of PersistentVolume for cache")
+	o.workspaceSpec.Cache.StorageClass = cmd.Flags().String("storage-class", "", "StorageClass of PersistentVolume for cache")
 
-	cmd.Flags().DurationVar(&o.ReconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
-	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
+	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
+	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
 
-	cmd.Flags().StringSliceVar(&o.WorkspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
+	cmd.Flags().StringSliceVar(&o.workspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
 
 	return cmd, o
 }
 
-func (o *NewOptions) name() string {
-	return fmt.Sprintf("%s/%s", o.Namespace, o.Workspace)
+func (o *newOptions) name() string {
+	return fmt.Sprintf("%s/%s", o.namespace, o.workspace)
 }
 
-func (o *NewOptions) Run(ctx context.Context) error {
-	if !o.DisableCreateServiceAccount {
+func (o *newOptions) run(ctx context.Context) error {
+	if !o.disableCreateServiceAccount {
 		if err := o.createServiceAccountIfMissing(ctx); err != nil {
 			return err
 		}
 	}
 
-	if !o.DisableCreateSecret {
+	if !o.disableCreateSecret {
 		if err := o.createSecretIfMissing(ctx); err != nil {
 			return err
 		}
@@ -185,11 +185,11 @@ func (o *NewOptions) Run(ctx context.Context) error {
 	// Monitor exit code; non-blocking
 	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, controllers.InstallerContainerName)
 
-	if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.Namespace), ws.PodName(), controllers.InstallerContainerName); err != nil {
+	if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.namespace), ws.PodName(), controllers.InstallerContainerName); err != nil {
 		return err
 	}
 
-	if err := env.NewEtokEnv(o.Namespace, o.Workspace).Write(o.Path); err != nil {
+	if err := env.NewEtokEnv(o.namespace, o.workspace).Write(o.path); err != nil {
 		return err
 	}
 
@@ -202,40 +202,40 @@ func (o *NewOptions) Run(ctx context.Context) error {
 	}
 }
 
-func (o *NewOptions) cleanup() {
+func (o *newOptions) cleanup() {
 	if o.createdWorkspace {
-		o.WorkspacesClient(o.Namespace).Delete(context.Background(), o.Workspace, metav1.DeleteOptions{})
+		o.WorkspacesClient(o.namespace).Delete(context.Background(), o.workspace, metav1.DeleteOptions{})
 	}
 	if o.createdSecret {
-		o.SecretsClient(o.Namespace).Delete(context.Background(), o.WorkspaceSpec.SecretName, metav1.DeleteOptions{})
+		o.SecretsClient(o.namespace).Delete(context.Background(), o.workspaceSpec.SecretName, metav1.DeleteOptions{})
 	}
 	if o.createdServiceAccount {
-		o.ServiceAccountsClient(o.Namespace).Delete(context.Background(), o.WorkspaceSpec.ServiceAccountName, metav1.DeleteOptions{})
+		o.ServiceAccountsClient(o.namespace).Delete(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.DeleteOptions{})
 	}
 }
 
-func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, error) {
+func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, error) {
 	ws := &v1alpha1.Workspace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      o.Workspace,
-			Namespace: o.Namespace,
+			Name:      o.workspace,
+			Namespace: o.namespace,
 		},
 		Spec: v1alpha1.WorkspaceSpec{
-			SecretName:         o.WorkspaceSpec.SecretName,
-			ServiceAccountName: o.WorkspaceSpec.ServiceAccountName,
+			SecretName:         o.workspaceSpec.SecretName,
+			ServiceAccountName: o.workspaceSpec.ServiceAccountName,
 			Cache: v1alpha1.WorkspaceCacheSpec{
-				StorageClass: o.WorkspaceSpec.Cache.StorageClass,
-				Size:         o.WorkspaceSpec.Cache.Size,
+				StorageClass: o.workspaceSpec.Cache.StorageClass,
+				Size:         o.workspaceSpec.Cache.Size,
 			},
-			PrivilegedCommands: o.WorkspaceSpec.PrivilegedCommands,
-			TerraformVersion:   o.WorkspaceSpec.TerraformVersion,
+			PrivilegedCommands: o.workspaceSpec.PrivilegedCommands,
+			TerraformVersion:   o.workspaceSpec.TerraformVersion,
 		},
 	}
 
 	// Set etok's common labels
 	labels.SetCommonLabels(ws)
 	// Permit filtering secrets by workspace
-	labels.SetLabel(ws, labels.Workspace(o.Workspace))
+	labels.SetLabel(ws, labels.Workspace(o.workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(ws, labels.WorkspaceComponent)
 
@@ -244,15 +244,15 @@ func (o *NewOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 	// For testing purposes mimic obj having been reconciled
 	ws.Status.Reconciled = o.reconciled
 
-	return o.WorkspacesClient(o.Namespace).Create(ctx, ws, metav1.CreateOptions{})
+	return o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
 }
 
-func (o *NewOptions) createSecretIfMissing(ctx context.Context) error {
+func (o *newOptions) createSecretIfMissing(ctx context.Context) error {
 	// Shorter var name for readability
-	name := o.WorkspaceSpec.SecretName
+	name := o.workspaceSpec.SecretName
 
 	// Check if it exists already
-	_, err := o.SecretsClient(o.Namespace).Get(ctx, name, metav1.GetOptions{})
+	_, err := o.SecretsClient(o.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			_, err := o.createSecret(ctx, name)
@@ -267,12 +267,12 @@ func (o *NewOptions) createSecretIfMissing(ctx context.Context) error {
 	return nil
 }
 
-func (o *NewOptions) createServiceAccountIfMissing(ctx context.Context) error {
+func (o *newOptions) createServiceAccountIfMissing(ctx context.Context) error {
 	// Shorter var name for readability
-	name := o.WorkspaceSpec.ServiceAccountName
+	name := o.workspaceSpec.ServiceAccountName
 
 	// Check if it exists already
-	_, err := o.ServiceAccountsClient(o.Namespace).Get(ctx, name, metav1.GetOptions{})
+	_, err := o.ServiceAccountsClient(o.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			_, err := o.createServiceAccount(ctx, name)
@@ -287,7 +287,7 @@ func (o *NewOptions) createServiceAccountIfMissing(ctx context.Context) error {
 	return nil
 }
 
-func (o *NewOptions) createSecret(ctx context.Context, name string) (*corev1.Secret, error) {
+func (o *newOptions) createSecret(ctx context.Context, name string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -296,14 +296,14 @@ func (o *NewOptions) createSecret(ctx context.Context, name string) (*corev1.Sec
 	// Set etok's common labels
 	labels.SetCommonLabels(secret)
 	// Permit filtering secrets by workspace
-	labels.SetLabel(secret, labels.Workspace(o.Workspace))
+	labels.SetLabel(secret, labels.Workspace(o.workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(secret, labels.WorkspaceComponent)
 
-	return o.SecretsClient(o.Namespace).Create(ctx, secret, metav1.CreateOptions{})
+	return o.SecretsClient(o.namespace).Create(ctx, secret, metav1.CreateOptions{})
 }
 
-func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*corev1.ServiceAccount, error) {
+func (o *newOptions) createServiceAccount(ctx context.Context, name string) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -312,20 +312,20 @@ func (o *NewOptions) createServiceAccount(ctx context.Context, name string) (*co
 	// Set etok's common labels
 	labels.SetCommonLabels(serviceAccount)
 	// Permit filtering service accounts by workspace
-	labels.SetLabel(serviceAccount, labels.Workspace(o.Workspace))
+	labels.SetLabel(serviceAccount, labels.Workspace(o.workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
 
-	return o.ServiceAccountsClient(o.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
+	return o.ServiceAccountsClient(o.namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
 
 // waitForContainer returns true once the installer container can be streamed
 // from
-func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, podch chan<- *corev1.Pod) error {
+func (o *newOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, podch chan<- *corev1.Pod) error {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
 	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
 
-	ctx, cancel := context.WithTimeout(ctx, o.PodTimeout)
+	ctx, cancel := context.WithTimeout(ctx, o.podTimeout)
 	defer cancel()
 
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
@@ -340,11 +340,11 @@ func (o *NewOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspac
 }
 
 // waitForReconcile waits for the workspace resource to be reconciled.
-func (o *NewOptions) waitForReconcile(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (o *newOptions) waitForReconcile(ctx context.Context, ws *v1alpha1.Workspace) error {
 	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
 	hdlr := handlers.Reconciled(ws)
 
-	ctx, cancel := context.WithTimeout(ctx, o.ReconcileTimeout)
+	ctx, cancel := context.WithTimeout(ctx, o.reconcileTimeout)
 	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, hdlr)

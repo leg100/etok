@@ -237,7 +237,7 @@ func setupRunnerCmd(t *testutil.T, args ...string) (*bytes.Buffer, *cobra.Comman
 	cmd.SetOut(out)
 	cmd.SetArgs(args)
 
-	cmdOpts.Dest = t.NewTempDir().Chdir().Root()
+	cmdOpts.dest = t.NewTempDir().Chdir().Root()
 
 	return out, cmd, cmdOpts
 }

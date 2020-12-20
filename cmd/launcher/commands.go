@@ -49,9 +49,9 @@ var Cmds = runCommands{
 	},
 }
 
-func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *cobra.Command {
+func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 	o.Options = opts
-	o.Command = rc.name
+	o.command = rc.name
 
 	// <namespace>/<workspace>
 	var namespacedWorkspace string
@@ -60,7 +60,7 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 		Use:   fmt.Sprintf("%s [flags] -- [%s args]", rc.name, rc.name),
 		Short: rc.short,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.Namespace, o.Workspace, err = env.ValidateAndParse(namespacedWorkspace)
+			o.namespace, o.workspace, err = env.ValidateAndParse(namespacedWorkspace)
 			if err != nil {
 				return err
 			}
@@ -72,11 +72,11 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 			}
 
 			// Tests override run name
-			if o.RunName == "" {
-				o.RunName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			if o.runName == "" {
+				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
 
-			o.Client, err = opts.Create(o.KubeContext)
+			o.Client, err = opts.Create(o.kubeContext)
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 				return err
 			}
 
-			err = o.Run(cmd.Context())
+			err = o.run(cmd.Context())
 			if err != nil {
 				// Cleanup resources upon error. An exit code error means the
 				// runner ran successfully but the program it executed failed
@@ -93,7 +93,7 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 				// cleaned up.
 				var exit etokerrors.ExitError
 				if !errors.As(err, &exit) {
-					if !o.DisableResourceCleanup {
+					if !o.disableResourceCleanup {
 						o.cleanup()
 					}
 				}
@@ -102,24 +102,24 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *LauncherOptions) *co
 		},
 	}
 
-	flags.AddPathFlag(cmd, &o.Path)
-	flags.AddKubeContextFlag(cmd, &o.KubeContext)
-	flags.AddDisableResourceCleanupFlag(cmd, &o.DisableResourceCleanup)
+	flags.AddPathFlag(cmd, &o.path)
+	flags.AddKubeContextFlag(cmd, &o.kubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.DisableTTY, "no-tty", false, "disable tty")
-	cmd.Flags().DurationVar(&o.PodTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
-	cmd.Flags().DurationVar(&o.HandshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
-	cmd.Flags().DurationVar(&o.EnqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
+	cmd.Flags().BoolVar(&o.disableTTY, "no-tty", false, "disable tty")
+	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
+	cmd.Flags().DurationVar(&o.enqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
 	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "etok workspace")
 
-	cmd.Flags().DurationVar(&o.ReconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
+	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 
 	return cmd
 }
 
 func (runCmds runCommands) CobraCommands(opts *cmdutil.Options) (cobraCmds []*cobra.Command) {
 	for _, rc := range runCmds {
-		cobraCmds = append(cobraCmds, rc.cobraCommand(opts, &LauncherOptions{}))
+		cobraCmds = append(cobraCmds, rc.cobraCommand(opts, &launcherOptions{}))
 	}
 	return
 }

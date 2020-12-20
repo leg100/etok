@@ -14,38 +14,38 @@ const allCrdsPath = "config/crd/bases/etok.dev_all.yaml"
 
 var allCrdsURL = "https://raw.githubusercontent.com/leg100/etok/v" + version.Version + "/" + allCrdsPath
 
-type GenerateCRDOptions struct {
+type generateCRDOptions struct {
 	*cmdutil.Options
 
 	// Path to local concatenated CRD schema
-	LocalCRDPath string
+	localCRDPath string
 	// Toggle reading CRDs from local file
-	LocalCRDToggle bool
+	localCRDToggle bool
 	// URL to concatenated CRD schema
-	RemoteCRDURL string
+	remoteCRDURL string
 }
 
-func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions) {
-	o := &GenerateCRDOptions{Options: opts}
+func generateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *generateCRDOptions) {
+	o := &generateCRDOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "crds",
 		Short: "Generate etok CRDs",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			var crds []byte
 
-			if o.LocalCRDToggle {
+			if o.localCRDToggle {
 				var err error
-				crds, err = ioutil.ReadFile(o.LocalCRDPath)
+				crds, err = ioutil.ReadFile(o.localCRDPath)
 				if err != nil {
 					return err
 				}
 			} else {
-				resp, err := http.Get(o.RemoteCRDURL)
+				resp, err := http.Get(o.remoteCRDURL)
 				if err != nil {
 					return err
 				}
 				if resp.StatusCode != 200 {
-					return fmt.Errorf("failed to retrieve %s: status code: %d", o.RemoteCRDURL, resp.StatusCode)
+					return fmt.Errorf("failed to retrieve %s: status code: %d", o.remoteCRDURL, resp.StatusCode)
 				}
 
 				crds, err = ioutil.ReadAll(resp.Body)
@@ -60,9 +60,9 @@ func GenerateCRDCmd(opts *cmdutil.Options) (*cobra.Command, *GenerateCRDOptions)
 		},
 	}
 
-	cmd.Flags().BoolVar(&o.LocalCRDToggle, "local", false, "Read CRDs from local file (default false)")
-	cmd.Flags().StringVar(&o.LocalCRDPath, "path", allCrdsPath, "Path to local CRDs file")
-	cmd.Flags().StringVar(&o.RemoteCRDURL, "url", allCrdsURL, "URL for CRDs file")
+	cmd.Flags().BoolVar(&o.localCRDToggle, "local", false, "Read CRDs from local file (default false)")
+	cmd.Flags().StringVar(&o.localCRDPath, "path", allCrdsPath, "Path to local CRDs file")
+	cmd.Flags().StringVar(&o.remoteCRDURL, "url", allCrdsURL, "URL for CRDs file")
 
 	return cmd, o
 }
