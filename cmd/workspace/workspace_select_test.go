@@ -37,7 +37,7 @@ func TestWorkspaceSelect(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
-			cmd := SelectCmd(opts)
+			cmd := selectCmd(opts)
 			cmd.SetArgs(tt.args)
 			cmd.SetOut(opts.Out)
 

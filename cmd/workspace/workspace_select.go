@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func SelectCmd(opts *cmdutil.Options) *cobra.Command {
+func selectCmd(opts *cmdutil.Options) *cobra.Command {
 	var path string
 
 	cmd := &cobra.Command{

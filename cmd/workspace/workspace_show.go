@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func ShowCmd(opts *cmdutil.Options) *cobra.Command {
+func showCmd(opts *cmdutil.Options) *cobra.Command {
 	var path string
 
 	cmd := &cobra.Command{

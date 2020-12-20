@@ -35,7 +35,7 @@ func TestDeleteWorkspace(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(new(bytes.Buffer), tt.objs...)
 			require.NoError(t, err)
 
-			cmd := DeleteCmd(opts)
+			cmd := deleteCmd(opts)
 			cmd.SetArgs(tt.args)
 			cmd.SetOut(opts.Out)
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))

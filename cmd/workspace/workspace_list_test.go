@@ -57,7 +57,7 @@ func TestListWorkspaces(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
 			require.NoError(t, err)
 
-			cmd := ListCmd(opts)
+			cmd := listCmd(opts)
 			cmd.SetArgs(tt.args)
 			cmd.SetOut(opts.Out)
 

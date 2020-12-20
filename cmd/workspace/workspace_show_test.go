@@ -47,7 +47,7 @@ func TestWorkspaceShow(t *testing.T) {
 			opts, err := cmdutil.NewFakeOpts(out)
 			require.NoError(t, err)
 
-			cmd := ShowCmd(opts)
+			cmd := showCmd(opts)
 			cmd.SetOut(opts.Out)
 			cmd.SetArgs(tt.args)
 

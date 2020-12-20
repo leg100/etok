@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-func DeleteCmd(opts *cmdutil.Options) *cobra.Command {
+func deleteCmd(opts *cmdutil.Options) *cobra.Command {
 	var namespace, kubeContext string
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",

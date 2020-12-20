@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func ListCmd(opts *cmdutil.Options) *cobra.Command {
+func listCmd(opts *cmdutil.Options) *cobra.Command {
 	var path, kubeContext string
 	var namespace = "default"
 	var workspace = "default"

@@ -15,11 +15,10 @@ func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd.AddCommand(nc)
 
 	cmd.AddCommand(
-		ListCmd(opts),
-		DeleteCmd(opts),
-		ShowCmd(opts),
-		SelectCmd(opts),
-		DeleteCmd(opts),
+		listCmd(opts),
+		deleteCmd(opts),
+		showCmd(opts),
+		selectCmd(opts),
 	)
 
 	return cmd
