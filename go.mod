@@ -1,6 +1,6 @@
 module github.com/leg100/etok
 
-go 1.14
+go 1.15
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
