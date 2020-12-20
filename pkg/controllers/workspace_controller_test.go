@@ -179,7 +179,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 					Namespace: tt.workspace.Namespace,
 				},
 			}
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
 			// Fetch fresh workspace for assertions
@@ -235,7 +235,7 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 					Namespace: tt.workspace.Namespace,
 				},
 			}
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
 			var pvc corev1.PersistentVolumeClaim
@@ -274,7 +274,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 					Namespace: tt.workspace.Namespace,
 				},
 			}
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
 			var pod corev1.Pod

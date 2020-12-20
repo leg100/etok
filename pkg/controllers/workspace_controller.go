@@ -61,8 +61,7 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *WorkspaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("workspace", req.NamespacedName)
 	log.V(0).Info("Reconciling")
 
@@ -251,22 +250,20 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder = blder.Owns(&corev1.Pod{})
 
 	// Watch for changes to run resources and requeue the associated Workspace.
-	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []ctrl.Request {
-			run := a.Object.(*v1alpha1.Run)
-			if run.Workspace != "" {
-				return []ctrl.Request{
-					{
-						NamespacedName: types.NamespacedName{
-							Name:      run.Workspace,
-							Namespace: a.Meta.GetNamespace(),
-						},
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
+		run := o.(*v1alpha1.Run)
+		if run.Workspace != "" {
+			return []ctrl.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      run.Workspace,
+						Namespace: o.GetNamespace(),
 					},
-				}
+				},
 			}
-			return []ctrl.Request{}
-		}),
-	})
+		}
+		return []ctrl.Request{}
+	}))
 
 	return blder.Complete(r)
 }
