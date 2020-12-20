@@ -9,7 +9,7 @@ ENV PATH=${TF_BIN_PATH}:${PATH}
 
 # Any change to this version must also be made to the kubebuilder default marker for TerraformVersion
 # (in /api/etok.dev/v1alpha1/workspace_types.go)
-ARG TERRAFORM_VERSION=0.13.5
+ARG TERRAFORM_VERSION=0.14.3
 
 # install terraform
 RUN apk add curl jq && \

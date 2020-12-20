@@ -85,7 +85,7 @@ func TestEtok(t *testing.T) {
 		{
 			name:            "etok plan without pty",
 			args:            []string{"plan", "--path", "workspace", "--context", *kubectx, "--", "-no-color", "-input=false", "-var", "suffix=foo"},
-			wantStdoutRegex: regexp.MustCompile(`Refreshing Terraform state in-memory prior to plan`),
+			wantStdoutRegex: regexp.MustCompile(`Plan: 1 to add, 0 to change, 0 to destroy.`),
 		},
 		{
 			name: "etok plan with pty",
