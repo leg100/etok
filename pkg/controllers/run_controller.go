@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
@@ -17,13 +16,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type RunReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	Log    logr.Logger
 	Image  string
 }
 
@@ -31,7 +30,6 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 	return &RunReconciler{
 		Client: c,
 		Scheme: scheme.Scheme,
-		Log:    ctrl.Log.WithName("controllers").WithName("Run"),
 		Image:  image,
 	}
 }
@@ -41,8 +39,9 @@ func NewRunReconciler(c client.Client, image string) *RunReconciler {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 
 func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("run", req.NamespacedName)
-	log.V(0).Info("Reconciling")
+	// set up a convenient log object so we don't have to type request over and
+	// over again
+	log := log.FromContext(ctx)
 
 	// Get run obj
 	var run v1alpha1.Run
@@ -56,7 +55,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Run completed, nothing more to be done
 	if run.Phase == v1alpha1.RunPhaseCompleted {
-		return r.success(ctx, log, &run)
+		return r.success(ctx, &run)
 	}
 
 	// Fetch its Workspace object
@@ -106,7 +105,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				}
 			}
 			// Go no further
-			return r.success(ctx, log, &run)
+			return r.success(ctx, &run)
 		}
 
 		// Front of queue, so continue reconciliation
@@ -161,11 +160,13 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
-	return r.success(ctx, log, &run)
+	return r.success(ctx, &run)
 }
 
 // success marks a successful reconcile
-func (r *RunReconciler) success(ctx context.Context, log logr.Logger, run *v1alpha1.Run) (ctrl.Result, error) {
+func (r *RunReconciler) success(ctx context.Context, run *v1alpha1.Run) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
 	if !run.Reconciled {
 		run.Reconciled = true
 		if err := r.Status().Update(ctx, run); err != nil {

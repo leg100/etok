@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-logr/logr"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
@@ -29,7 +30,6 @@ var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.etok.dev/[-a-z0-9
 type WorkspaceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	Log    logr.Logger
 	Image  string
 }
 
@@ -37,7 +37,6 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 	return &WorkspaceReconciler{
 		Client: cl,
 		Scheme: scheme.Scheme,
-		Log:    ctrl.Log.WithName("controllers").WithName("Workspace"),
 		Image:  image,
 	}
 }
@@ -62,8 +61,9 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("workspace", req.NamespacedName)
-	log.V(0).Info("Reconciling")
+	// set up a convenient log object so we don't have to type request over and
+	// over again
+	log := log.FromContext(ctx)
 
 	// Fetch the Workspace instance
 	var ws v1alpha1.Workspace
@@ -94,7 +94,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		// Cease reconciliation
-		return r.success(ctx, log, &ws)
+		return r.success(ctx, &ws)
 	}
 
 	// Manage PVC for workspace
@@ -190,11 +190,13 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	return r.success(ctx, log, &ws)
+	return r.success(ctx, &ws)
 }
 
 // success marks a successful reconcile
-func (r *WorkspaceReconciler) success(ctx context.Context, log logr.Logger, ws *v1alpha1.Workspace) (ctrl.Result, error) {
+func (r *WorkspaceReconciler) success(ctx context.Context, ws *v1alpha1.Workspace) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
 	if !ws.Status.Reconciled {
 		ws.Status.Reconciled = true
 		if err := r.Status().Update(ctx, ws); err != nil {
