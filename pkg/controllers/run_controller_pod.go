@@ -59,8 +59,8 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 					Image:                    image,
 					ImagePullPolicy:          corev1.PullIfNotPresent,
 					Name:                     globals.RunnerContainerName,
-					Stdin:                    true,
-					TTY:                      true,
+					Stdin:                    run.Handshake,
+					TTY:                      run.Handshake,
 					TerminationMessagePolicy: "FallbackToLogsOnError",
 					VolumeMounts: []corev1.VolumeMount{
 						{

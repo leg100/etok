@@ -73,7 +73,7 @@ type RunSpec struct {
 
 // AttachSpec defines behaviour for clients attaching to the pod's TTY
 type AttachSpec struct {
-	// Toggle whether runner should wait for a handshake from client
+	// Enable TTY on pod and await handshake string from client
 	Handshake bool `json:"handshake,omitempty"`
 
 	// +kubebuilder:default="10s"

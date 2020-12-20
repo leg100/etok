@@ -68,8 +68,7 @@ spec:
                 description: The path within the archive to the root module
                 type: string
               handshake:
-                description: Toggle whether runner should wait for a handshake from
-                  client
+                description: Enable TTY on pod and await handshake string from client
                 type: boolean
               handshakeTimeout:
                 default: 10s
