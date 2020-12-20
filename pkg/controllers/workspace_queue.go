@@ -74,7 +74,7 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 	if !reflect.DeepEqual(newQ, oldQ) {
 		ws.Status.Queue = newQ
 		if err := c.Status().Update(context.TODO(), ws); err != nil {
-			return fmt.Errorf("Failed to update queue: %w", err)
+			return fmt.Errorf("failed to update queue: %w", err)
 		}
 	}
 	return nil

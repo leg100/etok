@@ -78,7 +78,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, err
 		}
 		if err := r.Update(ctx, &run); err != nil {
-			log.Error(err, "unable to set workspace owner reference")
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -100,7 +100,6 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			if run.Phase != phase {
 				run.RunStatus.Phase = phase
 				if err := r.Status().Update(ctx, &run); err != nil {
-					log.Error(err, "unable to update phase")
 					return ctrl.Result{}, err
 				}
 			}
@@ -155,7 +154,6 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if run.Phase != phase {
 		run.RunStatus.Phase = phase
 		if err := r.Status().Update(ctx, &run); err != nil {
-			log.Error(err, "unable to update phase")
 			return ctrl.Result{}, err
 		}
 	}
@@ -165,12 +163,9 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // success marks a successful reconcile
 func (r *RunReconciler) success(ctx context.Context, run *v1alpha1.Run) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
 	if !run.Reconciled {
 		run.Reconciled = true
 		if err := r.Status().Update(ctx, run); err != nil {
-			log.Error(err, "unable to update status")
 			return ctrl.Result{}, err
 		}
 	}

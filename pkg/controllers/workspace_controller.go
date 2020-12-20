@@ -81,7 +81,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Instruct garbage collector to only delete workspace once its dependents are deleted
 			ws.SetFinalizers([]string{metav1.FinalizerDeleteDependents})
 			if err := r.Update(ctx, &ws); err != nil {
-				log.Error(err, "unable to set finalizer")
 				return ctrl.Result{}, err
 			}
 		}
@@ -89,7 +88,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Workspace is being deleted
 		ws.Status.Phase = v1alpha1.WorkspacePhaseDeleting
 		if err := r.Status().Update(ctx, &ws); err != nil {
-			log.Error(err, "unable to set phase")
 			return ctrl.Result{}, err
 		}
 
@@ -151,7 +149,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
 
 		if err := r.Status().Update(ctx, &ws); err != nil {
-			log.Error(err, "unable to set phase")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -159,13 +156,11 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Set workspace phase status
 	if err := r.setPhase(ctx, &ws, &pod); err != nil {
-		log.Error(err, "unable to set phase")
 		return ctrl.Result{}, err
 	}
 
 	// Update run queue
 	if err := updateQueue(r.Client, &ws); err != nil {
-		log.Error(err, "unable to update queue")
 		return ctrl.Result{}, err
 	}
 
@@ -184,7 +179,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if !reflect.DeepEqual(annotations, updatedAnnotations) {
 			ws.Annotations = updatedAnnotations
 			if err := r.Update(ctx, &ws); err != nil {
-				log.Error(err, "failed to update approval annotations")
 				return ctrl.Result{}, err
 			}
 		}
@@ -195,12 +189,9 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 // success marks a successful reconcile
 func (r *WorkspaceReconciler) success(ctx context.Context, ws *v1alpha1.Workspace) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
 	if !ws.Status.Reconciled {
 		ws.Status.Reconciled = true
 		if err := r.Status().Update(ctx, ws); err != nil {
-			log.Error(err, "unable to update status")
 			return ctrl.Result{}, err
 		}
 	}
