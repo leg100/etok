@@ -47,7 +47,6 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Get run obj
 	var run v1alpha1.Run
 	if err := r.Get(ctx, req.NamespacedName, &run); err != nil {
-		log.Error(err, "unable to get run")
 		// we'll ignore not-found errors, since they can't be fixed by an
 		// immediate requeue (we'll need to wait for a new notification), and we
 		// can get them on deleted requests.
