@@ -124,6 +124,13 @@ type WorkspaceStatus struct {
 
 	// Lifecycle phase of workspace.
 	Phase WorkspacePhase `json:"phase,omitempty"`
+
+	// True if resource has been reconciled at least once.
+	Reconciled bool `json:"reconciled,omitempty"`
+}
+
+func (ws *Workspace) IsReconciled() bool {
+	return ws.Status.Reconciled
 }
 
 type WorkspacePhase string

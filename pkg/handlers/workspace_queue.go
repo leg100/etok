@@ -79,7 +79,7 @@ func workspaceHandlerWrapper(handler workspaceHandler) watchtools.ConditionFunc 
 	return func(event watch.Event) (bool, error) {
 		switch event.Type {
 		case watch.Deleted:
-			return false, fmt.Errorf("workspace resource deleted")
+			return false, ErrResourceUnexpectedlyDeleted
 		}
 
 		switch ws := event.Object.(type) {

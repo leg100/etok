@@ -116,7 +116,7 @@ func PodHandlerWrapper(name string, h podHandler) watchtools.ConditionFunc {
 		}
 
 		if event.Type == watch.Deleted {
-			return false, fmt.Errorf("pod was unexpectedly deleted")
+			return false, ErrResourceUnexpectedlyDeleted
 		}
 
 		if pod.Status.Phase != phase {

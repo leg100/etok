@@ -100,6 +100,13 @@ func (r *Run) PodName() string { return r.Name }
 type RunStatus struct {
 	// Current phase of the run's lifecycle.
 	Phase RunPhase `json:"phase,omitempty"`
+
+	// True if resource has been reconciled at least once.
+	Reconciled bool `json:"reconciled,omitempty"`
+}
+
+func (r *Run) IsReconciled() bool {
+	return r.RunStatus.Reconciled
 }
 
 type RunPhase string

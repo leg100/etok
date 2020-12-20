@@ -95,6 +95,9 @@ spec:
               phase:
                 description: Current phase of the run's lifecycle.
                 type: string
+              reconciled:
+                description: True if resource has been reconciled at least once.
+                type: boolean
             type: object
         type: object
     served: true
@@ -211,6 +214,9 @@ spec:
                 items:
                   type: string
                 type: array
+              reconciled:
+                description: True if resource has been reconciled at least once.
+                type: boolean
             type: object
         type: object
     served: true

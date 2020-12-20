@@ -94,7 +94,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		// Cease reconciliation
-		return ctrl.Result{}, nil
+		return r.success(ctx, log, &ws)
 	}
 
 	// Manage PVC for workspace
@@ -190,6 +190,18 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	return r.success(ctx, log, &ws)
+}
+
+// success marks a successful reconcile
+func (r *WorkspaceReconciler) success(ctx context.Context, log logr.Logger, ws *v1alpha1.Workspace) (ctrl.Result, error) {
+	if !ws.Status.Reconciled {
+		ws.Status.Reconciled = true
+		if err := r.Status().Update(ctx, ws); err != nil {
+			log.Error(err, "unable to update status")
+			return ctrl.Result{}, err
+		}
+	}
 	return ctrl.Result{}, nil
 }
 
