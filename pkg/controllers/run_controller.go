@@ -42,6 +42,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// set up a convenient log object so we don't have to type request over and
 	// over again
 	log := log.FromContext(ctx)
+	log.V(0).Info("Reconciling")
 
 	// Get run obj
 	var run v1alpha1.Run

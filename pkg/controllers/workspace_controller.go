@@ -64,6 +64,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// set up a convenient log object so we don't have to type request over and
 	// over again
 	log := log.FromContext(ctx)
+	log.V(0).Info("Reconciling")
 
 	// Fetch the Workspace instance
 	var ws v1alpha1.Workspace
