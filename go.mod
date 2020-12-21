@@ -8,7 +8,6 @@ require (
 	github.com/creack/pty v1.1.9
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/fatih/color v1.7.0
-	github.com/go-logr/logr v0.3.0
 	github.com/google/go-cmp v0.5.2
 	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20201102131242-0c45ba392e51
