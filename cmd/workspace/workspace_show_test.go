@@ -16,20 +16,20 @@ func TestWorkspaceShow(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		env  env.EtokEnv
+		env  *env.Env
 		out  string
 		err  bool
 	}{
 		{
 			name: "WithEnvironmentFile",
 			args: []string{"show"},
-			env:  env.EtokEnv("default/workspace-1"),
-			out:  "default/workspace-1\n",
+			env:  &env.Env{Namespace: "default", Workspace: "workspace-1"},
+			out:  "default_workspace-1\n",
 		},
 		{
 			name: "WithoutEnvironmentFile",
 			args: []string{"show"},
-			out:  "default/default\n",
+			out:  "default_default\n",
 		},
 	}
 
@@ -38,7 +38,7 @@ func TestWorkspaceShow(t *testing.T) {
 			path := t.NewTempDir().Chdir().Root()
 
 			// Write .terraform/environment
-			if tt.env != "" {
+			if tt.env != nil {
 				require.NoError(t, tt.env.Write(path))
 			}
 

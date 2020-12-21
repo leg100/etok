@@ -30,8 +30,12 @@ func TestRunPod(t *testing.T) {
 			workspace: testobj.Workspace("default", "foo"),
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "ETOK_NAMESPACE",
+					Value: "default",
+				})
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
 					Name:  "ETOK_WORKSPACE",
-					Value: "default-foo",
+					Value: "foo",
 				})
 			},
 		},

@@ -1,8 +1,7 @@
 package v1alpha1
 
 import (
-	"fmt"
-
+	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -91,8 +90,9 @@ func (ws *Workspace) PodName() string {
 	return WorkspacePodName(ws.Name)
 }
 
+// TerraformName provides a terraform-compatible workspace name.
 func (ws *Workspace) TerraformName() string {
-	return fmt.Sprintf("%s-%s", ws.Namespace, ws.Name)
+	return env.TerraformName(ws.Namespace, ws.Name)
 }
 
 func (ws *Workspace) PVCName() string {

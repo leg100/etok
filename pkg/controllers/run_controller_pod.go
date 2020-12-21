@@ -36,8 +36,12 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							Value: run.Command,
 						},
 						{
+							Name:  "ETOK_NAMESPACE",
+							Value: ws.Namespace,
+						},
+						{
 							Name:  "ETOK_WORKSPACE",
-							Value: ws.TerraformName(),
+							Value: ws.Name,
 						},
 						{
 							Name:  "ETOK_DEST",

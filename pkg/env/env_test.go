@@ -8,18 +8,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEtokEnv(t *testing.T) {
-	path := testutil.NewTempDir(t).Root()
-	require.NoError(t, NewEtokEnv("default", "test-env").Write(path))
-
-	env, err := ReadEtokEnv(path)
+func TestEnv(t *testing.T) {
+	etokenv, err := New("default", "test-env")
 	require.NoError(t, err)
 
-	assert.Equal(t, "default", env.Namespace())
-	assert.Equal(t, "test-env", env.Workspace())
+	path := testutil.NewTempDir(t).Root()
+	require.NoError(t, etokenv.Write(path))
+
+	env, err := Read(path)
+	require.NoError(t, err)
+
+	assert.Equal(t, "default", env.Namespace)
+	assert.Equal(t, "test-env", env.Workspace)
 }
 
-func TestEtokEnvValidate(t *testing.T) {
-	assert.NoError(t, Validate("default/foo"))
-	assert.Error(t, Validate("defaul/foo/"))
+func TestInvalidEnv(t *testing.T) {
+	_, err := New("def/ault", "te_st-env")
+	assert.Error(t, err)
 }

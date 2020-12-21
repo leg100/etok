@@ -74,16 +74,20 @@ type newOptions struct {
 
 	// For testing purposes toggle obj having been reconciled
 	reconciled bool
+
+	etokenv *env.Env
 }
 
 func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
 	o := &newOptions{Options: opts}
 	cmd := &cobra.Command{
-		Use:   "new <namespace/workspace>",
+		Use:   "new <workspace>",
 		Short: "Create a new etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.namespace, o.workspace, err = env.ValidateAndParse(args[0])
+			o.workspace = args[0]
+
+			o.etokenv, err = env.New(o.namespace, o.workspace)
 			if err != nil {
 				return err
 			}
@@ -110,6 +114,7 @@ func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
 	}
 
 	flags.AddPathFlag(cmd, &o.path)
+	flags.AddNamespaceFlag(cmd, &o.namespace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
@@ -189,7 +194,7 @@ func (o *newOptions) run(ctx context.Context) error {
 		return err
 	}
 
-	if err := env.NewEtokEnv(o.namespace, o.workspace).Write(o.path); err != nil {
+	if err := o.etokenv.Write(o.path); err != nil {
 		return err
 	}
 

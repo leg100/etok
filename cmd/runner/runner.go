@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/flags"
 	"github.com/leg100/etok/cmd/launcher"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
@@ -26,6 +28,7 @@ type RunnerOptions struct {
 	tarball   string
 	dest      string
 	command   string
+	namespace string
 	workspace string
 
 	exec Executor
@@ -50,10 +53,12 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 		},
 	}
 
+	flags.AddNamespaceFlag(cmd, &o.namespace)
+
 	cmd.Flags().StringVar(&o.dest, "dest", "/workspace", "Destination path for tarball extraction")
 	cmd.Flags().StringVar(&o.tarball, "tarball", o.tarball, "Tarball filename")
 	cmd.Flags().StringVar(&o.command, "command", "", "Etok command to run")
-	cmd.Flags().StringVar(&o.workspace, "workspace", "", "Terraform workspace")
+	cmd.Flags().StringVar(&o.workspace, "workspace", "default", "Terraform workspace")
 	cmd.Flags().BoolVar(&o.handshake, "handshake", false, "Await handshake string on stdin")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
 
@@ -71,6 +76,11 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	// Validate command
 	if !slice.ContainsString(launcher.Cmds.GetNames(), o.command) {
 		return fmt.Errorf("%s: %w", o.command, errUnknownCommand)
+	}
+
+	etokenv, err := env.New(o.namespace, o.workspace)
+	if err != nil {
+		return err
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -109,7 +119,7 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	case "sh":
 		return o.exec.run(ctx, append([]string{"sh"}, o.args...))
 	default:
-		return execTerraformRun(ctx, o.exec, o.command, o.workspace, o.args)
+		return execTerraformRun(ctx, o.exec, o.command, etokenv.String(), o.args)
 	}
 }
 

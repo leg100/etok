@@ -6,7 +6,6 @@ import (
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/env"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,13 +16,10 @@ func deleteCmd(opts *cmdutil.Options) *cobra.Command {
 	var namespace, kubeContext string
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",
-		Short: "Deletes a etok workspace",
+		Short: "Deletes an etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			namespace, ws, err := env.ValidateAndParse(args[0])
-			if err != nil {
-				return err
-			}
+			ws := args[0]
 
 			client, err := opts.Create(kubeContext)
 			if err != nil {

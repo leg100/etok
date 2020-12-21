@@ -25,14 +25,15 @@ func listCmd(opts *cmdutil.Options) *cobra.Command {
 				return err
 			}
 
-			etokenv, err := env.ReadEtokEnv(path)
+			etokenv, err := env.Read(path)
 			if err != nil {
 				if !os.IsNotExist(err) {
 					return err
 				}
 			} else {
-				namespace = etokenv.Namespace()
-				workspace = etokenv.Workspace()
+				// Override defaults
+				namespace = etokenv.Namespace
+				workspace = etokenv.Workspace
 			}
 
 			// List across all namespaces
@@ -43,12 +44,12 @@ func listCmd(opts *cmdutil.Options) *cobra.Command {
 
 			var prefix string
 			for _, ws := range workspaces.Items {
-				if ws.GetNamespace() == namespace && ws.GetName() == workspace {
+				if ws.Namespace == namespace && ws.Name == workspace {
 					prefix = "*"
 				} else {
 					prefix = ""
 				}
-				fmt.Fprintf(opts.Out, "%s\t%s/%s\n", prefix, ws.GetNamespace(), ws.GetName())
+				fmt.Fprintf(opts.Out, "%s\t%s_%s\n", prefix, ws.Namespace, ws.Name)
 			}
 
 			return nil

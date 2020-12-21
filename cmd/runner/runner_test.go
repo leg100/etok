@@ -67,7 +67,7 @@ func TestRunnerCommand(t *testing.T) {
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "plan",
-			"ETOK_WORKSPACE": "default-foo",
+			"ETOK_WORKSPACE": "foo",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -76,7 +76,27 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform plan -out plan.out]"
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform plan -out plan.out]"
+		assert.Equal(t, want, strings.TrimSpace(out.String()))
+	})
+
+	testutil.Run(t, "terraform plan with custom namespace", func(t *testutil.T) {
+		out, cmd, opts := setupRunnerCmd(t, "--", "-out", "plan.out")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "plan",
+			"ETOK_NAMESPACE": "dev",
+			"ETOK_WORKSPACE": "foo",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		// Override executor with one that prints out cmd+args
+		opts.exec = &fakeExecutorEchoArgs{out: out}
+
+		require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color dev_foo][terraform plan -out plan.out]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 
@@ -86,7 +106,7 @@ func TestRunnerCommand(t *testing.T) {
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "plan",
-			"ETOK_WORKSPACE": "default-foo",
+			"ETOK_WORKSPACE": "foo",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -95,7 +115,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform workspace new -no-color default-foo][terraform plan -out plan.out]"
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform workspace new -no-color default_foo][terraform plan -out plan.out]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 
@@ -105,7 +125,7 @@ func TestRunnerCommand(t *testing.T) {
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "apply",
-			"ETOK_WORKSPACE": "default-foo",
+			"ETOK_WORKSPACE": "foo",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -114,7 +134,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default-foo][terraform apply -auto-approve]"
+		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform apply -auto-approve]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 }

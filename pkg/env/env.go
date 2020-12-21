@@ -9,68 +9,98 @@ import (
 	"strings"
 )
 
+// Env package handles the serializing of the etok workspace name to the
+// environment file. Both terraform and etok rely on this file to determine the
+// current workspace in use. Etok relies on it to also determine the current
+// kubernetes namespace.
+//
+// The workspace name format is <namespace>_<name>. The namespace and name can
+// contain alphanumerics and hyphens. The format is designed to keep it
+// compatible with what terraform deems permissible:
+//
+//  	https://www.terraform.io/docs/cloud/workspaces/naming.html
+
 const (
-	environmentFile = ".terraform/environment"
+	environmentFile  = ".terraform/environment"
+	componentPattern = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
 )
 
 var (
-	etokenvRegex = regexp.MustCompile("^[a-z0-9-]+/[a-z0-9-]+$")
+	// componentRegex is the regex that both namespace and workspace must match:
+	// it must start and end with an alphanumeric and can contain alphanumerics
+	// and the hyphen.
+	componentRegex = regexp.MustCompile(fmt.Sprintf("^%s$", componentPattern))
+
+	envRegex = regexp.MustCompile(fmt.Sprintf("^%s_%[1]s$", componentPattern))
 )
 
-// A string identifying a namespaced workspace, according to the format $namespace/$workspace, with
-// helper functions to read and write the string to the file .terraform/environment
-type EtokEnv string
-
-func ValidateAndParse(etokenv string) (namespace string, workspace string, err error) {
-	if err = Validate(etokenv); err != nil {
-		return workspace, namespace, err
-	}
-	parts := strings.Split(etokenv, "/")
-	return parts[0], parts[1], nil
+// A string identifying a workspace, with helper functions to read and write the
+// string to the environment file.
+type Env struct {
+	Namespace, Workspace string
 }
 
-func Validate(etokenv string) error {
-	if !etokenvRegex.MatchString(etokenv) {
-		return fmt.Errorf("workspace must match pattern %s", etokenvRegex.String())
+func New(namespace, workspace string) (*Env, error) {
+	if err := validateComponent(namespace); err != nil {
+		return nil, fmt.Errorf("namespace validation failed: %w", err)
+	}
+
+	if err := validateComponent(workspace); err != nil {
+		return nil, fmt.Errorf("workspace validation failed: %w", err)
+	}
+
+	return &Env{Namespace: namespace, Workspace: workspace}, nil
+}
+
+func validateComponent(component string) error {
+	if !componentRegex.MatchString(component) {
+		return fmt.Errorf("%s failed to match pattern %s", component, componentRegex.String())
 	}
 	return nil
 }
 
-func WithOptionalNamespace(etokenv string) EtokEnv {
-	parts := strings.Split(etokenv, "/")
-	if len(parts) == 1 {
-		return EtokEnv(fmt.Sprintf("default/%s", parts[0]))
+func validateEnv(env string) error {
+	if !envRegex.MatchString(env) {
+		return fmt.Errorf("failed to match pattern %s", envRegex.String())
 	}
-	return EtokEnv(etokenv)
+	return nil
 }
 
-func NewEtokEnv(namespace, workspace string) EtokEnv {
-	return EtokEnv(fmt.Sprintf("%s/%s", namespace, workspace))
+// TerraformName provides a terraform-compatible workspace name. The full
+// kubernetes name is <namespace>/<name> but terraform doesn't permit '/', so we
+// convert it to an '_', which is permissible according to this doc:
+//
+// https://www.terraform.io/docs/cloud/workspaces/naming.html
+func TerraformName(namespace, workspace string) string {
+	return fmt.Sprintf("%s_%s", namespace, workspace)
 }
 
-func (env EtokEnv) Namespace() string {
-	return strings.Split(string(env), "/")[0]
+func (e *Env) String() string {
+	return TerraformName(e.Namespace, e.Workspace)
 }
 
-func (env EtokEnv) Workspace() string {
-	return strings.Split(string(env), "/")[1]
-}
-
-func ReadEtokEnv(path string) (EtokEnv, error) {
+func Read(path string) (env *Env, err error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bytes, err := ioutil.ReadFile(filepath.Join(absPath, environmentFile))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return EtokEnv(string(bytes)), nil
+	if err := validateEnv(string(bytes)); err != nil {
+		return nil, err
+	}
+
+	namespace := strings.Split(string(bytes), "_")[0]
+	workspace := strings.Split(string(bytes), "_")[1]
+
+	return New(namespace, workspace)
 }
 
-func (env EtokEnv) Write(path string) error {
+func (e *Env) Write(path string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return err
@@ -81,10 +111,10 @@ func (env EtokEnv) Write(path string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(envPath, []byte(string(env)), 0644)
+	return ioutil.WriteFile(envPath, []byte(e.String()), 0644)
 }
 
-func WriteEnvFile(path, content string) error {
+func WriteEnvFile(path, namespace, workspace string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return err
@@ -95,5 +125,5 @@ func WriteEnvFile(path, content string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(envPath, []byte(content), 0644)
+	return ioutil.WriteFile(envPath, []byte(TerraformName(namespace, workspace)), 0644)
 }

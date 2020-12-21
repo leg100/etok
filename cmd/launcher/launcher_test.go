@@ -34,7 +34,7 @@ func TestLauncher(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
-		env      env.EtokEnv
+		env      *env.Env
 		err      error
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
@@ -52,7 +52,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "plan",
 			cmds: []string{"plan"},
-			env:  env.EtokEnv("default/default"),
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
@@ -62,7 +62,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "queueable commands",
 			cmds: []string{"apply", "destroy", "sh"},
-			env:  env.EtokEnv("default/default"),
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
@@ -73,7 +73,7 @@ func TestLauncher(t *testing.T) {
 			name: "enqueue timeout",
 			cmds: []string{"apply", "destroy", "sh"},
 			args: []string{"--enqueue-timeout", "10ms"},
-			env:  env.EtokEnv("default/default"),
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			// Deliberately left out of workspace queue
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *launcherOptions) {
@@ -84,7 +84,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "specific namespace and workspace",
-			env:  env.EtokEnv("foo/bar"),
+			env:  &env.Env{Namespace: "foo", Workspace: "bar"},
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
@@ -92,12 +92,22 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
-			name: "workspace flag",
-			args: []string{"--workspace", "foo/bar"},
-			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
-			env:  env.EtokEnv("default/default"),
+			name: "namespace flag overrides environment",
+			args: []string{"--namespace", "foo"},
+			objs: []runtime.Object{testobj.Workspace("foo", "default", testobj.WithQueue("run-12345"))},
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
+				assert.Equal(t, "default", o.workspace)
+			},
+		},
+		{
+			name: "workspace flag overrides environment",
+			args: []string{"--workspace", "bar"},
+			objs: []runtime.Object{testobj.Workspace("default", "bar", testobj.WithQueue("run-12345"))},
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
+			assertions: func(o *launcherOptions) {
+				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "bar", o.workspace)
 			},
 		},
@@ -105,7 +115,7 @@ func TestLauncher(t *testing.T) {
 			name: "arbitrary terraform flag",
 			args: []string{"--", "-input", "false"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			env:  env.EtokEnv("default/default"),
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				if o.command == "sh" {
 					assert.Equal(t, []string{"-c", "-input false"}, o.args)
@@ -118,7 +128,7 @@ func TestLauncher(t *testing.T) {
 			name: "context flag",
 			args: []string{"--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			env:  env.EtokEnv("default/default"),
+			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "oz-cluster", o.kubeContext)
 			},
@@ -280,7 +290,7 @@ func TestLauncher(t *testing.T) {
 					path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
 					// Write .terraform/environment
-					if tt.env != "" {
+					if tt.env != nil {
 						require.NoError(t, tt.env.Write(path))
 					}
 
@@ -306,7 +316,10 @@ func TestLauncher(t *testing.T) {
 
 					mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
 
-					assert.True(t, errors.Is(cmd.ExecuteContext(context.Background()), tt.err))
+					err = cmd.ExecuteContext(context.Background())
+					if !assert.True(t, errors.Is(err, tt.err)) {
+						t.Errorf("unexpected error: %w", err)
+					}
 
 					if tt.assertions != nil {
 						tt.assertions(cmdOpts)
