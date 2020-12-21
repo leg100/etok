@@ -42,7 +42,7 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "delete",
 			args: []string{"delete", "-h"},
-			out:  "^Deletes a etok workspace",
+			out:  "^Deletes an etok workspace",
 		},
 		{
 			name: "show",

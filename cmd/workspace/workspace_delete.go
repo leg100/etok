@@ -16,7 +16,7 @@ func deleteCmd(opts *cmdutil.Options) *cobra.Command {
 	var namespace, kubeContext string
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",
-		Short: "Deletes a etok workspace",
+		Short: "Deletes an etok workspace",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := args[0]
