@@ -80,8 +80,6 @@ Use "etok [command] --help" for more information about a command.
 
 ```
 
-Commands such as `terraform fmt` or `terraform console` have been left out because there is no purpose to running them on kubernetes.
-
 ## RBAC
 
 TODO
