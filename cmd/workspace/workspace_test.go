@@ -52,7 +52,7 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "select",
 			args: []string{"select", "-h"},
-			out:  "^Select a etok workspace",
+			out:  "^Select an etok workspace",
 		},
 	}
 

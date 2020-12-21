@@ -19,7 +19,7 @@ func TestListWorkspaces(t *testing.T) {
 		name string
 		objs []runtime.Object
 		args []string
-		env  env.EtokEnv
+		env  *env.Env
 		err  bool
 		out  string
 	}{
@@ -30,8 +30,8 @@ func TestListWorkspaces(t *testing.T) {
 				testobj.Workspace("dev", "workspace-2"),
 			},
 			args: []string{},
-			env:  env.EtokEnv("default/workspace-1"),
-			out:  "*\tdefault/workspace-1\n\tdev/workspace-2\n",
+			env:  &env.Env{Namespace: "default", Workspace: "workspace-1"},
+			out:  "*\tdefault_workspace-1\n\tdev_workspace-2\n",
 		},
 		{
 			name: "WithoutEnvironmentFile",
@@ -40,7 +40,7 @@ func TestListWorkspaces(t *testing.T) {
 				testobj.Workspace("dev", "workspace-2"),
 			},
 			args: []string{},
-			out:  "\tdefault/workspace-1\n\tdev/workspace-2\n",
+			out:  "\tdefault_workspace-1\n\tdev_workspace-2\n",
 		},
 	}
 	for _, tt := range tests {
@@ -48,7 +48,7 @@ func TestListWorkspaces(t *testing.T) {
 			path := t.NewTempDir().Chdir().Root()
 
 			// Write .terraform/environment
-			if tt.env != "" {
+			if tt.env != nil {
 				require.NoError(t, tt.env.Write(path))
 			}
 

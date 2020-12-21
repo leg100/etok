@@ -45,7 +45,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "create workspace",
-			args: []string{"default/foo"},
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Confirm workspace resource has been created
@@ -53,16 +53,15 @@ func TestNewWorkspace(t *testing.T) {
 				require.NoError(t, err)
 
 				/// Confirm env file has been written
-				etokenv, err := env.ReadEtokEnv(o.path)
+				etokenv, err := env.Read(o.path)
 				require.NoError(t, err)
-				assert.Equal(t, "default", etokenv.Namespace())
-				assert.Equal(t, "foo", etokenv.Workspace())
+				assert.Equal(t, "default", etokenv.Namespace)
+				assert.Equal(t, "foo", etokenv.Workspace)
 			},
 		},
 		{
 			name: "create default secret and service account",
-			args: []string{"default/foo"},
-
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
@@ -73,7 +72,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "create custom secret and service account",
-			args: []string{"default/foo", "--service-account", "foo", "--secret", "bar"},
+			args: []string{"foo", "--service-account", "foo", "--secret", "bar"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), "foo", metav1.GetOptions{})
@@ -84,7 +83,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not create secret",
-			args: []string{"default/foo", "--no-create-secret"},
+			args: []string{"foo", "--no-create-secret"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
@@ -93,7 +92,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not create service account",
-			args: []string{"default/foo", "--no-create-service-account"},
+			args: []string{"foo", "--no-create-service-account"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
@@ -102,7 +101,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "non-default namespace",
-			args: []string{"bar/foo"},
+			args: []string{"foo", "--namespace", "bar"},
 			objs: []runtime.Object{testobj.WorkspacePod("bar", "foo")},
 			assertions: func(o *newOptions) {
 				assert.Equal(t, "bar", o.namespace)
@@ -110,7 +109,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "cleanup resources upon error",
-			args: []string{"default/foo"},
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			err: func(t *testutil.T, err error) {
 				assert.Equal(t, fakeError, err)
@@ -133,7 +132,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "do not cleanup resources upon error",
-			args: []string{"default/foo", "--no-cleanup"},
+			args: []string{"foo", "--no-cleanup"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			err: func(t *testutil.T, err error) {
 				assert.Equal(t, fakeError, err)
@@ -156,7 +155,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with existing custom secret and service account",
-			args: []string{"default/foo", "--secret", "foo", "--service-account", "bar"},
+			args: []string{"foo", "--secret", "foo", "--service-account", "bar"},
 			objs: []runtime.Object{
 				testobj.WorkspacePod("default", "foo"),
 				&corev1.Secret{
@@ -175,7 +174,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "default storage class is nil",
-			args: []string{"default/foo"},
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Get workspace
@@ -187,7 +186,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "explicitly set storage class to empty string",
-			args: []string{"default/foo", "--storage-class", ""},
+			args: []string{"foo", "--storage-class", ""},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Get workspace
@@ -199,7 +198,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with cache settings",
-			args: []string{"default/foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
+			args: []string{"foo", "--size", "999Gi", "--storage-class", "lumpen-proletariat"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Get workspace
@@ -212,7 +211,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "with kube context flag",
-			args: []string{"default/foo", "--context", "oz-cluster"},
+			args: []string{"foo", "--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				assert.Equal(t, "oz-cluster", o.kubeContext)
@@ -220,7 +219,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "log stream output",
-			args: []string{"default/foo"},
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
@@ -228,7 +227,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "non-zero exit code",
-			args: []string{"default/foo"},
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo", testobj.WithInstallerExitCode(5))},
 			err: func(t *testutil.T, err error) {
 				// want exit code 5
@@ -240,7 +239,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "set terraform version",
-			args: []string{"default/foo", "--terraform-version", "0.12.17"},
+			args: []string{"foo", "--terraform-version", "0.12.17"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Get workspace
@@ -252,7 +251,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "set privileged commands",
-			args: []string{"default/foo", "--privileged-commands", "apply,destroy,sh"},
+			args: []string{"foo", "--privileged-commands", "apply,destroy,sh"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			assertions: func(o *newOptions) {
 				// Get workspace
@@ -264,7 +263,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name:                 "reconcile timeout exceeded",
-			args:                 []string{"default/foo", "--reconcile-timeout", "10ms"},
+			args:                 []string{"foo", "--reconcile-timeout", "10ms"},
 			disableMockReconcile: true,
 			err: func(t *testutil.T, err error) {
 				assert.True(t, errors.Is(err, errReconcileTimeout))
@@ -272,7 +271,7 @@ func TestNewWorkspace(t *testing.T) {
 		},
 		{
 			name: "pod timeout exceeded",
-			args: []string{"default/foo", "--pod-timeout", "10ms"},
+			args: []string{"foo", "--pod-timeout", "10ms"},
 			// Deliberately omit pod
 			objs: []runtime.Object{},
 			err: func(t *testutil.T, err error) {

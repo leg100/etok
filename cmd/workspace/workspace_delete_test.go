@@ -21,12 +21,12 @@ func TestDeleteWorkspace(t *testing.T) {
 	}{
 		{
 			name: "With workspace",
-			args: []string{"default/workspace-1"},
+			args: []string{"workspace-1"},
 			objs: []runtime.Object{testobj.Workspace("default", "workspace-1")},
 		},
 		{
 			name: "Without workspace",
-			args: []string{"default/workspace-1"},
+			args: []string{"workspace-1"},
 			err:  true,
 		},
 	}

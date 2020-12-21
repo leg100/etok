@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	defaultWorkspace        = "default/default"
+	defaultWorkspace        = "default"
 	defaultReconcileTimeout = 10 * time.Second
 )
 
@@ -95,16 +95,18 @@ type launcherOptions struct {
 }
 
 func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
-	etokenv, err := env.ReadEtokEnv(o.path)
+	etokenv, err := env.Read(o.path)
 	if err != nil {
 		// It's ok for envfile to not exist
 		if !os.IsNotExist(err) {
 			return err
 		}
 	} else {
+		if !flags.IsFlagPassed(cmd.Flags(), "namespace") {
+			o.namespace = etokenv.Namespace
+		}
 		if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
-			o.namespace = etokenv.Namespace()
-			o.workspace = etokenv.Workspace()
+			o.workspace = etokenv.Workspace
 		}
 	}
 	return nil

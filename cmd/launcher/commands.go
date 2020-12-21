@@ -9,7 +9,6 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/util"
 	"github.com/spf13/cobra"
@@ -53,18 +52,10 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *launcherOptions) *co
 	o.Options = opts
 	o.command = rc.name
 
-	// <namespace>/<workspace>
-	var namespacedWorkspace string
-
 	cmd := &cobra.Command{
 		Use:   fmt.Sprintf("%s [flags] -- [%s args]", rc.name, rc.name),
 		Short: rc.short,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.namespace, o.workspace, err = env.ValidateAndParse(namespacedWorkspace)
-			if err != nil {
-				return err
-			}
-
 			if rc.argsConverter != nil {
 				o.args = rc.argsConverter(args)
 			} else {
@@ -103,6 +94,7 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *launcherOptions) *co
 	}
 
 	flags.AddPathFlag(cmd, &o.path)
+	flags.AddNamespaceFlag(cmd, &o.namespace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
@@ -110,7 +102,7 @@ func (rc runCommand) cobraCommand(opts *cmdutil.Options, o *launcherOptions) *co
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
 	cmd.Flags().DurationVar(&o.enqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
-	cmd.Flags().StringVar(&namespacedWorkspace, "workspace", defaultWorkspace, "etok workspace")
+	cmd.Flags().StringVar(&o.workspace, "workspace", defaultWorkspace, "etok workspace")
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 

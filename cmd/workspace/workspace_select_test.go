@@ -16,15 +16,15 @@ func TestWorkspaceSelect(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		env  env.EtokEnv
+		env  *env.Env
 		out  string
 		err  bool
 	}{
 		{
 			name: "defaults",
-			args: []string{"dev/networking"},
-			env:  env.EtokEnv("dev/networking"),
-			out:  "Current workspace now: dev/networking\n",
+			args: []string{"networking", "--namespace", "dev"},
+			env:  &env.Env{Namespace: "dev", Workspace: "networking"},
+			out:  "Current workspace now: dev_networking\n",
 		},
 	}
 
@@ -46,7 +46,7 @@ func TestWorkspaceSelect(t *testing.T) {
 			assert.Equal(t, tt.out, out.String())
 
 			// Confirm .terraform/environment was written with expected contents
-			etokenv, err := env.ReadEtokEnv(path)
+			etokenv, err := env.Read(path)
 			require.NoError(t, err)
 			assert.Equal(t, tt.env, etokenv)
 		})

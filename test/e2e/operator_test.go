@@ -29,10 +29,10 @@ const (
 	wsNamespace = "default"
 
 	// Name of workspace to be created
-	wsName = "default/foo"
+	wsName = "foo"
 
 	// Name of second workspace to be created
-	wsName2 = "default/bar"
+	wsName2 = "bar"
 )
 
 var kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
@@ -46,8 +46,8 @@ func TestEtok(t *testing.T) {
 	require.NoError(t, err)
 	bkt := sclient.Bucket(backendBucket)
 	// ignore errors
-	bkt.Object(backendPrefix + "/default-foo.tfstate").Delete(goctx.Background())
-	bkt.Object(backendPrefix + "/default-foo.tflock").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default_foo.tfstate").Delete(goctx.Background())
+	bkt.Object(backendPrefix + "/default_foo.tflock").Delete(goctx.Background())
 
 	tests := []struct {
 		name            string
@@ -71,7 +71,7 @@ func TestEtok(t *testing.T) {
 		{
 			name:            "list workspaces",
 			args:            []string{"workspace", "list", "--path", "workspace", "--context", *kubectx},
-			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\t%s\n\t%s", wsName2, wsName)),
+			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("\\*\tdefault_%s\n\tdefault_%s", wsName2, wsName)),
 		},
 		{
 			name: "select first workspace",
@@ -80,7 +80,7 @@ func TestEtok(t *testing.T) {
 		{
 			name:            "show current workspace",
 			args:            []string{"workspace", "show", "--path", "workspace"},
-			wantStdoutRegex: regexp.MustCompile(wsName),
+			wantStdoutRegex: regexp.MustCompile(fmt.Sprintf("default_%s", wsName)),
 		},
 		{
 			name:            "etok plan without pty",

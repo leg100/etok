@@ -17,17 +17,17 @@ func showCmd(opts *cmdutil.Options) *cobra.Command {
 		Use:   "show",
 		Short: "Show current workspace",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			etokenv, err := env.ReadEtokEnv(path)
+			etokenv, err := env.Read(path)
 			if err != nil {
 				if os.IsNotExist(err) {
 					// no .terraform/environment, so show defaults
-					fmt.Fprintln(opts.Out, "default/default")
+					fmt.Fprintln(opts.Out, "default_default")
 					return nil
 				}
-				return err
+				return fmt.Errorf("failed reading contents of %s: %w", path, err)
 			}
 
-			fmt.Fprintln(opts.Out, string(etokenv))
+			fmt.Fprintln(opts.Out, etokenv)
 			return nil
 		},
 	}
