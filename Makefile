@@ -69,14 +69,14 @@ delete-secret:
 	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret etok --ignore-not-found=true
 
 .PHONY: e2e
-e2e: image push deploy-crds deploy-operator create-namespace create-secret e2e-run e2e-clean
+e2e: image push deploy-crds deploy-operator e2e-run e2e-clean
 
 .PHONY: e2e-clean
-e2e-clean: delete-workspaces delete-operator delete-crds delete-secret
+e2e-clean: delete-operator delete-crds
 
 .PHONY: e2e-run
 e2e-run:
-	go test -v ./test/e2e -context $(KUBECTX)
+	go test -v ./test/e2e -failfast -context $(KUBECTX)
 
 # delete all etok custom resources (via kubectl)
 .PHONY: delete-custom-resources
@@ -89,13 +89,6 @@ delete-custom-resources:
 .PHONY: delete-run-resources
 delete-run-resources:
 	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.etok.dev
-
-# delete all etok workspaces
-.PHONY: delete-workspaces
-delete-workspaces: build
-	# Using etok bin rather than kubectl because etok bin will wait for workspaces' dependents
-	# to be deleted first before deleting the workspace itself.
-	$(BUILD_BIN) workspace list | awk '{ print $$NF }' | xargs -IWS $(BUILD_BIN) workspace delete WS
 
 .PHONY: unit
 unit:

@@ -1,6 +1,0 @@
-apiVersion: v1
-binaryData:
-  tarball.tar.gz: H4sIAHjLgF4AA+3RPQqEQAxA4RxlTiDJmNHzbKGwsLDgxPv7A8JWWgkuvK9JkRSBF0MNa2KUG+mqc9+m9UV/50Gs7VzNi/dZ1KxYkaR3PnWYa7ymlOTznd/15O5q/6di7Z8f1d/3/lnpDwAAAAAAAAAAAAAAAABnFg6AFTYAKAAA
-kind: ConfigMap
-metadata:
-  name: tarball
