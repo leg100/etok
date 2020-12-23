@@ -168,3 +168,21 @@ func (h *TempDir) Chdir() *TempDir {
 
 	return h
 }
+
+// Chdir changes current directory to the specified directory.
+func Chdir(t *testing.T, dir string) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal("unable to get current directory")
+	}
+
+	t.Cleanup(func() {
+		if err := os.Chdir(pwd); err != nil {
+			t.Fatal("unable to reset current directory")
+		}
+	})
+
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal("unable to change current directory")
+	}
+}

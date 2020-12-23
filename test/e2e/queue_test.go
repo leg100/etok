@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	expect "github.com/google/goexpect"
-	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,10 +18,6 @@ import (
 
 // E2E test of queueing functionality
 func TestQueue(t *testing.T) {
-	// Instantiate etok client
-	client, err := etokclient.NewClientCreator().Create(*kubectx)
-	require.NoError(t, err)
-
 	// The e2e tests, each composed of multiple steps
 	tests := []test{
 		{
@@ -42,13 +37,13 @@ func TestQueue(t *testing.T) {
 
 		t.Parallel()
 		t.Run(tt.name, func(t *testing.T) {
-			root := testutil.NewTempDir(t).Root()
+			// Change into temp dir
+			testutil.NewTempDir(t).Chdir()
 
 			t.Run("create workspace", func(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "workspace", "new", "foo",
 						"--namespace", tt.namespace,
-						"--path", root,
 						"--context", *kubectx,
 					},
 					[]expect.Batcher{
@@ -62,7 +57,6 @@ func TestQueue(t *testing.T) {
 				// Fire off first run, block the queue for 5 seconds
 				g.Go(func() error {
 					return step(tt, []string{buildPath, "sh", "uname; sleep 5",
-						"--path", root,
 						"--context", *kubectx,
 					}, []expect.Batcher{
 						&expect.BExp{R: `Linux`},
@@ -76,7 +70,6 @@ func TestQueue(t *testing.T) {
 				for i := 0; i < 3; i++ {
 					g.Go(func() error {
 						return step(tt, []string{buildPath, "sh", "uname",
-							"--path", root,
 							"--context", *kubectx,
 						}, []expect.Batcher{
 							&expect.BExp{R: `Queued: `},

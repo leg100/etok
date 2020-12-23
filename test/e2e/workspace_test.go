@@ -9,16 +9,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	expect "github.com/google/goexpect"
-	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/stretchr/testify/require"
 )
 
 // E2E test of workspace commands (new, list, etc)
 func TestWorkspace(t *testing.T) {
-	// Instantiate etok client
-	client, err := etokclient.NewClientCreator().Create(*kubectx)
-	require.NoError(t, err)
-
 	// The e2e tests, each composed of multiple steps
 	tests := []test{
 		{
@@ -38,14 +33,13 @@ func TestWorkspace(t *testing.T) {
 
 		t.Parallel()
 		t.Run(tt.name, func(t *testing.T) {
-			// Create terraform configs
-			root := createTerraformConfigs(t)
+			// Create temp dir of terraform configs and set pwd to root module
+			createTerraformConfigs(t)
 
 			t.Run("create workspace foo", func(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "workspace", "new", "foo",
 						"--namespace", tt.namespace,
-						"--path", root,
 						"--context", *kubectx,
 					},
 					[]expect.Batcher{
@@ -59,7 +53,6 @@ func TestWorkspace(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "workspace", "new", "bar",
 						"--namespace", tt.namespace,
-						"--path", root,
 						"--context", *kubectx,
 						"--terraform-version", version,
 					},
@@ -73,7 +66,6 @@ func TestWorkspace(t *testing.T) {
 			t.Run("list workspaces", func(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "workspace", "list",
-						"--path", root,
 						"--context", *kubectx,
 					},
 					[]expect.Batcher{
@@ -83,9 +75,7 @@ func TestWorkspace(t *testing.T) {
 
 			t.Run("show current workspace bar", func(t *testing.T) {
 				require.NoError(t, step(tt,
-					[]string{buildPath, "workspace", "show",
-						"--path", root,
-					},
+					[]string{buildPath, "workspace", "show"},
 					[]expect.Batcher{
 						&expect.BExp{R: fmt.Sprintf("%s_%s", tt.namespace, "bar")},
 					}))
@@ -93,10 +83,7 @@ func TestWorkspace(t *testing.T) {
 
 			t.Run("select workspace foo", func(t *testing.T) {
 				require.NoError(t, step(tt,
-					[]string{buildPath, "workspace", "select", "foo",
-						"--namespace", tt.namespace,
-						"--path", root,
-					},
+					[]string{buildPath, "workspace", "select", "foo", "--namespace", tt.namespace},
 					[]expect.Batcher{
 						&expect.BExp{R: fmt.Sprintf("Current workspace now: %s_%s", tt.namespace, "foo")},
 					}))

@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"os"
 	"testing"
 
 	"github.com/leg100/etok/pkg/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 // Terraform configs for e2e tests
@@ -47,13 +49,17 @@ output "random_string" {
 }`
 )
 
-// Create terraformeconfigs, return path to root module
-func createTerraformConfigs(t *testing.T) string {
+// Create terraform configs, and set present working directory to root module
+// path
+func createTerraformConfigs(t *testing.T) {
 	configs := testutil.NewTempDir(t)
 	configs.Write("root/main.tf", []byte(rootModuleConfig))
 	configs.Write("modules/random/main.tf", []byte(randomModuleConfig))
 
-	root := configs.Path("root")
-	t.Logf("%s: root module path: %s", t.Name(), root)
-	return root
+	testutil.Chdir(t, configs.Path("root"))
+
+	// Log pwd for debugging broken e2e tests
+	pwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Logf("%s: working directory set to: %s", t.Name(), pwd)
 }
