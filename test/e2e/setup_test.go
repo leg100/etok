@@ -10,7 +10,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	etokclient "github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/env"
 )
 
 const (
@@ -58,16 +57,4 @@ func TestMain(m *testing.M) {
 func errExit(err error) {
 	fmt.Fprintf(os.Stderr, "failed to instantiate etok client: %v\n", err)
 	os.Exit(1)
-}
-
-type test struct {
-	name       string
-	namespace  string
-	workspace  string
-	pty        bool
-	privileged []string
-}
-
-func (t *test) tfWorkspace() string {
-	return env.TerraformName(t.namespace, t.workspace)
 }

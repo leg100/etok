@@ -1,18 +1,23 @@
 package e2e
 
 import (
-	"os"
+	"context"
+	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	expect "github.com/google/goexpect"
+	"github.com/stretchr/testify/require"
 )
 
-func step(t test, args []string, batch []expect.Batcher) error {
-	exp, errch, err := expect.SpawnWithArgs(args, 60*time.Second, expect.Tee(nopWriteCloser{os.Stdout}))
+// step invokes command with a pty, expecting the input/output to match the
+// batch expectations. Blocks until process has finished.
+func step(t *testing.T, name string, args []string, batch []expect.Batcher) error {
+	exp, errch, err := expect.SpawnWithArgs(args, 60*time.Second, expect.Tee(nopWriteCloser{t}))
 	if err != nil {
 		return err
 	}
@@ -25,11 +30,17 @@ func step(t test, args []string, batch []expect.Batcher) error {
 	return <-errch
 }
 
-func newNamespace(name string) *corev1.Namespace {
-	return &corev1.Namespace{
+func createNamespace(t *testing.T, name string) {
+	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
+	}
+
+	_, err := client.KubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+	if err != nil {
+		// Only a namespace already exists error is acceptable
+		require.True(t, errors.IsAlreadyExists(err))
 	}
 }
 
@@ -45,11 +56,12 @@ func newSecret(name, creds string) *corev1.Secret {
 }
 
 type nopWriteCloser struct {
-	f *os.File
+	t *testing.T
 }
 
 func (n nopWriteCloser) Write(p []byte) (int, error) {
-	return n.f.Write(p)
+	n.t.Log(string(p))
+	return len(p), nil
 }
 
 func (n nopWriteCloser) Close() error {
