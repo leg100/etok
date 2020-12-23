@@ -41,6 +41,27 @@ func TestShell(t *testing.T) {
 			// Create terraform configs
 			root := createTerraformConfigs(t)
 
+			t.Run("create secret", func(t *testing.T) {
+				creds, err := ioutil.ReadFile((os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
+				require.NoError(t, err)
+				_, err = client.KubeClient.CoreV1().Secrets(tt.namespace).Create(context.Background(), newSecret("etok", string(creds)), metav1.CreateOptions{})
+				if err != nil {
+					// Only a secret already exists error is acceptable
+					require.True(t, errors.IsAlreadyExists(err))
+				}
+			})
+
+			// This test generates a lock file on the local filesystem (and
+			// generally a user is expeted to run terraform init locally in
+			// order to do other things like run terraform validate, etc).
+			t.Run("run terraform init locally", func(t *testing.T) {
+				require.NoError(t, step(tt,
+					[]string{"terraform", "init", "-no-color"},
+					[]expect.Batcher{
+						&expect.BExp{R: `Terraform has created a lock file .terraform.lock.hcl`},
+					}))
+			})
+
 			t.Run("create workspace", func(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "workspace", "new", "foo",
@@ -53,27 +74,51 @@ func TestShell(t *testing.T) {
 					}))
 			})
 
-			t.Run("single command", func(t *testing.T) {
+			// An etok plan also runs `terraform init` and `terraform workspace
+			// new` before running `terraform plan`. These steps are necessary
+			// in order to complete the workspace setup by creating the
+			// workspace's backend state. Only then can the user shell into the
+			// pod and run arbitrary terraform commands like plan and apply
+			// without terraform complaining the workspace isn't fully setup.
+			t.Run("plan", func(t *testing.T) {
 				require.NoError(t, step(tt,
-					[]string{buildPath, "sh", "uname",
-						"--path", root,
-						"--context", *kubectx,
-					},
+					[]string{buildPath, "plan",
+						"--context", *kubectx, "--",
+						"-input=true",
+						"-no-color"},
 					[]expect.Batcher{
-						&expect.BExp{R: `Linux`},
+						&expect.BExp{R: `Enter a value:`},
+						&expect.BSnd{S: "foo\n"},
+						&expect.BExp{R: `Plan: 1 to add, 0 to change, 0 to destroy.`},
 					}))
 			})
 
-			t.Run("shell session", func(t *testing.T) {
+			// This test confirms artefacts generated from the previous step
+			// have been cached on the persistent volume (and tests that the
+			// attachment to the pod tty is functioning).
+			t.Run("shell session run terraform plan", func(t *testing.T) {
 				require.NoError(t, step(tt,
 					[]string{buildPath, "sh",
-						"--path", root,
 						"--context", *kubectx,
 					},
 					[]expect.Batcher{
-						&expect.BExp{R: `#`},
-						&expect.BSnd{S: "uname; exit\n"},
-						&expect.BExp{R: `Linux`},
+						&expect.BExp{R: `/workspace/root # `},
+						&expect.BSnd{S: "terraform plan -no-color\n"},
+						&expect.BExp{R: `Enter a value:`},
+						&expect.BSnd{S: "foo\n"},
+						&expect.BExp{R: `Plan: 1 to add, 0 to change, 0 to destroy.`},
+						&expect.BExp{R: `/workspace/root # `},
+						&expect.BSnd{S: "exit\n"},
+					}))
+			})
+
+			// This test confirms the user is able to run terraform init locally
+			// without error (e.g. about workspace not existing).
+			t.Run("run terraform init locally again", func(t *testing.T) {
+				require.NoError(t, step(tt,
+					[]string{"terraform", "init", "-no-color"},
+					[]expect.Batcher{
+						&expect.BExp{R: `Reusing previous version of hashicorp/random from the dependency lock file`},
 					}))
 			})
 		})

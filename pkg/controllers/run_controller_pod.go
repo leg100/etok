@@ -78,6 +78,12 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							SubPath:   binSubPath,
 						},
 						{
+							Name: "cache",
+							// <WorkingDir>/.terraform
+							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, ".terraform"),
+							SubPath:   dotTerraformSubPath,
+						},
+						{
 							Name:      "tarball",
 							MountPath: filepath.Join("/tarball", run.ConfigMapKey),
 							SubPath:   run.ConfigMapKey,
@@ -127,6 +133,19 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 					Name: ws.Spec.SecretName,
 				},
 			},
+		})
+	}
+
+	if run.Command == "sh" {
+		// For shell sessions set TF_WORKSPACE which sets the current workspace
+		// in use. Otherwise a user would need to select the workspace manually
+		// using `terraform workspace select <workspace>`.  For other commands,
+		// such as plan and apply, we don't set TF_WORKSPACE because it is
+		// incompatible with the `terraform workspace new <workspace>` command
+		// that is run beforehand.
+		pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, corev1.EnvVar{
+			Name:  "TF_WORKSPACE",
+			Value: ws.TerraformName(),
 		})
 	}
 

@@ -40,6 +40,17 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
+			name:      "TF_WORKSPACE is set for shell commands",
+			run:       testobj.Run("default", "run-12345", "sh"),
+			workspace: testobj.Workspace("default", "foo"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "TF_WORKSPACE",
+					Value: "default_foo",
+				})
+			},
+		},
+		{
 			name:      "Terraform binary volume mount",
 			run:       testobj.Run("default", "run-12345", "plan"),
 			workspace: testobj.Workspace("foo", "bar"),
@@ -48,6 +59,18 @@ func TestRunPod(t *testing.T) {
 					Name:      "cache",
 					MountPath: "/terraform-bins",
 					SubPath:   "terraform-bins/",
+				})
+			},
+		},
+		{
+			name:      ".terraform volume mount",
+			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
+			workspace: testobj.Workspace("default", "foo"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "cache",
+					MountPath: "/workspace/subdir/.terraform",
+					SubPath:   ".terraform/",
 				})
 			},
 		},
