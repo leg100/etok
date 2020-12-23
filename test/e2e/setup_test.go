@@ -10,6 +10,9 @@ import (
 
 	"cloud.google.com/go/storage"
 	etokclient "github.com/leg100/etok/pkg/client"
+
+	// Import all GCP client auth plugin
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
 const (
