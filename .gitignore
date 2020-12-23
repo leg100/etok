@@ -1,5 +1,8 @@
 # run etok in root of repo without uploading the whole repo
 /.terraformignore
+# test config for trialling etok from root of repo
+/test.tf
+/.terraform.lock.hcl
 # example terraform
 example/
 # docker push artefacts
