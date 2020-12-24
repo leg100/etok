@@ -54,8 +54,23 @@ spec:
                 description: The command to run on the pod
                 enum:
                 - apply
+                - console
                 - destroy
+                - fmt
+                - force-unlock
+                - get
+                - graph
+                - init
+                - import
+                - output
                 - plan
+                - providers
+                - refresh
+                - show
+                - state
+                - taint
+                - untaint
+                - validate
                 - sh
                 type: string
               configMap:

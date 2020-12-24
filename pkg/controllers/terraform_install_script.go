@@ -41,12 +41,10 @@ rm terraform_{{ .Version }}_SHA256SUMS`
 
 func generateScript(out io.Writer, ws *v1alpha1.Workspace) error {
 	return t.Execute(out, struct {
-		Version                string
-		BinPath                string
-		TerraformWorkspaceName string
+		Version string
+		BinPath string
 	}{
-		Version:                ws.Spec.TerraformVersion,
-		BinPath:                binMountPath,
-		TerraformWorkspaceName: ws.TerraformName(),
+		Version: ws.Spec.TerraformVersion,
+		BinPath: binMountPath,
 	})
 }

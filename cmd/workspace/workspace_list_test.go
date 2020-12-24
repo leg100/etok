@@ -31,7 +31,7 @@ func TestListWorkspaces(t *testing.T) {
 			},
 			args: []string{},
 			env:  &env.Env{Namespace: "default", Workspace: "workspace-1"},
-			out:  "*\tdefault_workspace-1\n\tdev_workspace-2\n",
+			out:  "*\tdefault/workspace-1\n\tdev/workspace-2\n",
 		},
 		{
 			name: "WithoutEnvironmentFile",
@@ -40,7 +40,7 @@ func TestListWorkspaces(t *testing.T) {
 				testobj.Workspace("dev", "workspace-2"),
 			},
 			args: []string{},
-			out:  "\tdefault_workspace-1\n\tdev_workspace-2\n",
+			out:  "\tdefault/workspace-1\n\tdev/workspace-2\n",
 		},
 	}
 	for _, tt := range tests {

@@ -24,12 +24,12 @@ func TestWorkspaceShow(t *testing.T) {
 			name: "WithEnvironmentFile",
 			args: []string{"show"},
 			env:  &env.Env{Namespace: "default", Workspace: "workspace-1"},
-			out:  "default_workspace-1\n",
+			out:  "default/workspace-1\n",
 		},
 		{
 			name: "WithoutEnvironmentFile",
 			args: []string{"show"},
-			out:  "default_default\n",
+			out:  "default/default\n",
 		},
 	}
 

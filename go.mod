@@ -4,7 +4,6 @@ go 1.15
 
 require (
 	cloud.google.com/go v0.53.0 // indirect
-	cloud.google.com/go/storage v1.5.0
 	github.com/creack/pty v1.1.9
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/fatih/color v1.7.0

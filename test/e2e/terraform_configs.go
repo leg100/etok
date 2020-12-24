@@ -12,10 +12,8 @@ var (
 	// Terraform rootModuleConfig
 	rootModuleConfig = `
 terraform {
-  backend "gcs" {
-	bucket = "automatize-tfstate"
-	prefix = "e2e"
-  }
+  backend "kubernetes" {}
+
   required_providers {
 	random = {
 	  source  = "hashicorp/random"
@@ -47,13 +45,14 @@ output "random_string" {
 }`
 )
 
-// Create terraformeconfigs, return path to root module
+// Create terraform configs, and return path to root module
 func createTerraformConfigs(t *testing.T) string {
 	configs := testutil.NewTempDir(t)
 	configs.Write("root/main.tf", []byte(rootModuleConfig))
 	configs.Write("modules/random/main.tf", []byte(randomModuleConfig))
 
-	root := configs.Path("root")
-	t.Logf("%s: root module path: %s", t.Name(), root)
-	return root
+	path := configs.Path("root")
+	// Log pwd for debugging broken e2e tests
+	t.Logf("configuration path set to: %s", path)
+	return path
 }

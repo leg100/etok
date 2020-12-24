@@ -76,7 +76,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform plan -out plan.out]"
+		want := "[terraform plan -out plan.out]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 
@@ -96,7 +96,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color dev_foo][terraform plan -out plan.out]"
+		want := "[terraform plan -out plan.out]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 
@@ -115,7 +115,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform workspace new -no-color default_foo][terraform plan -out plan.out]"
+		want := "[terraform plan -out plan.out]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 
@@ -134,7 +134,7 @@ func TestRunnerCommand(t *testing.T) {
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		want := "[terraform init -input=false -no-color -upgrade][terraform workspace select -no-color default_foo][terraform apply -auto-approve]"
+		want := "[terraform apply -auto-approve]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
 	})
 }
