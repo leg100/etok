@@ -44,17 +44,6 @@ func createNamespace(t *testing.T, name string) {
 	}
 }
 
-func newSecret(name, creds string) *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		StringData: map[string]string{
-			"GOOGLE_CREDENTIALS": creds,
-		},
-	}
-}
-
 type nopWriteCloser struct {
 	t *testing.T
 }

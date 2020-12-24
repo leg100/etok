@@ -21,8 +21,3 @@ func TestEnv(t *testing.T) {
 	assert.Equal(t, "default", env.Namespace)
 	assert.Equal(t, "test-env", env.Workspace)
 }
-
-func TestInvalidEnv(t *testing.T) {
-	_, err := New("def/ault", "te_st-env")
-	assert.Error(t, err)
-}

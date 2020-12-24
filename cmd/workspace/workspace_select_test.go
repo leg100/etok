@@ -24,7 +24,7 @@ func TestWorkspaceSelect(t *testing.T) {
 			name: "defaults",
 			args: []string{"networking", "--namespace", "dev"},
 			env:  &env.Env{Namespace: "dev", Workspace: "networking"},
-			out:  "Current workspace now: dev_networking\n",
+			out:  "Current workspace now: dev/networking\n",
 		},
 	}
 

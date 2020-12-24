@@ -13,7 +13,6 @@ import (
 	"github.com/leg100/etok/cmd/launcher"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
@@ -78,11 +77,6 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("%s: %w", o.command, errUnknownCommand)
 	}
 
-	etokenv, err := env.New(o.namespace, o.workspace)
-	if err != nil {
-		return err
-	}
-
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball
@@ -119,7 +113,7 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	case "sh":
 		return o.exec.run(ctx, append([]string{"sh"}, o.args...))
 	default:
-		return execTerraformRun(ctx, o.exec, o.command, etokenv.String(), o.args)
+		return o.exec.run(ctx, append([]string{"terraform", o.command}, o.args...))
 	}
 }
 

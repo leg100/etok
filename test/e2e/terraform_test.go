@@ -2,13 +2,9 @@ package e2e
 
 import (
 	"context"
-	goctx "context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	expect "github.com/google/goexpect"
@@ -20,11 +16,6 @@ func TestTerraform(t *testing.T) {
 	name := "terraform"
 	namespace := "e2e-terraform"
 
-	// Delete any GCS backend state beforehand, ignoring any errors
-	bkt := sclient.Bucket(backendBucket)
-	bkt.Object(fmt.Sprintf("%s/%s_foo.tfstate", backendPrefix, namespace)).Delete(goctx.Background())
-	bkt.Object(fmt.Sprintf("%s/%s_foo.tflock", backendPrefix, namespace)).Delete(goctx.Background())
-
 	// Create dedicated namespace for e2e test
 	createNamespace(t, namespace)
 
@@ -32,17 +23,6 @@ func TestTerraform(t *testing.T) {
 	t.Run(name, func(t *testing.T) {
 		// Create temp dir of terraform configs and set pwd to root module
 		path := createTerraformConfigs(t)
-
-		t.Run("create secret", func(t *testing.T) {
-			// Get google cloud creds from env var
-			creds, err := ioutil.ReadFile((os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
-			require.NoError(t, err)
-			_, err = client.KubeClient.CoreV1().Secrets(namespace).Create(context.Background(), newSecret("etok", string(creds)), metav1.CreateOptions{})
-			if err != nil {
-				// Only a secret already exists error is acceptable
-				require.True(t, errors.IsAlreadyExists(err))
-			}
-		})
 
 		t.Run("create workspace", func(t *testing.T) {
 			require.NoError(t, step(t, name,
@@ -56,7 +36,17 @@ func TestTerraform(t *testing.T) {
 				}))
 		})
 
-		//time.Sleep(10 * time.Second)
+		t.Run("init", func(t *testing.T) {
+			require.NoError(t, step(t, name,
+				[]string{buildPath, "init",
+					"--path", path,
+					"--context", *kubectx, "--",
+					"-input=true",
+					"-no-color"},
+				[]expect.Batcher{
+					&expect.BExp{R: `Terraform has been successfully initialized!`},
+				}))
+		})
 
 		t.Run("plan", func(t *testing.T) {
 			require.NoError(t, step(t, name,

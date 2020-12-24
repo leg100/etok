@@ -21,19 +21,16 @@ type runCommand struct {
 
 type runCommands []runCommand
 
+func init() {
+	for _, cmd := range []string{"apply", "console", "destroy", "fmt", "force-unlock", "get", "graph", "init", "import", "output", "plan", "providers", "refresh", "show", "state", "taint", "untaint", "validate"} {
+		Cmds = append(Cmds, runCommand{
+			name:  cmd,
+			short: fmt.Sprintf("Run terraform %s", cmd),
+		})
+	}
+}
+
 var Cmds = runCommands{
-	{
-		name:  "apply",
-		short: "Run terraform apply",
-	},
-	{
-		name:  "destroy",
-		short: "Run terraform destroy",
-	},
-	{
-		name:  "plan",
-		short: "Run terraform plan",
-	},
 	{
 		name:  "sh",
 		short: "Open shell session",
