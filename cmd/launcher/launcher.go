@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -14,12 +17,14 @@ import (
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
+	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/util"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -94,6 +99,62 @@ type launcherOptions struct {
 	reconciled bool
 }
 
+func LauncherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
+	o.Options = opts
+
+	cmd := &cobra.Command{
+		Use:   fmt.Sprintf("%s [flags] -- [%[1]s args]", strings.Fields(o.command)[len(strings.Fields(o.command))-1]),
+		Short: fmt.Sprintf("Run terraform %s", o.command),
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			o.args = args
+
+			// Tests override run name
+			if o.runName == "" {
+				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			}
+
+			o.Client, err = opts.Create(o.kubeContext)
+			if err != nil {
+				return err
+			}
+
+			if err := o.lookupEnvFile(cmd); err != nil {
+				return err
+			}
+
+			err = o.run(cmd.Context())
+			if err != nil {
+				// Cleanup resources upon error. An exit code error means the
+				// runner ran successfully but the program it executed failed
+				// with a non-zero exit code. In this case, resources are not
+				// cleaned up.
+				var exit etokerrors.ExitError
+				if !errors.As(err, &exit) {
+					if !o.disableResourceCleanup {
+						o.cleanup()
+					}
+				}
+			}
+			return err
+		},
+	}
+
+	flags.AddPathFlag(cmd, &o.path)
+	flags.AddNamespaceFlag(cmd, &o.namespace)
+	flags.AddKubeContextFlag(cmd, &o.kubeContext)
+	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
+
+	cmd.Flags().BoolVar(&o.disableTTY, "no-tty", false, "disable tty")
+	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
+	cmd.Flags().DurationVar(&o.enqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
+	cmd.Flags().StringVar(&o.workspace, "workspace", defaultWorkspace, "etok workspace")
+
+	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
+
+	return cmd
+}
+
 func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
 	etokenv, err := env.Read(o.path)
 	if err != nil {
@@ -124,9 +185,8 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	// Watch and log run updates
 	o.watchRun(ctx, run)
 
-	if o.command != "plan" {
-		// Only commands other than plan are queued - watch and log queue
-		// updates
+	if IsQueueable(o.command) {
+		// Watch and log queue updates
 		o.watchQueue(ctx, run)
 	}
 
@@ -189,13 +249,36 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		}
 	}
 
-	// Return container's exit code
+	// Await container's exit code
 	select {
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timed out waiting for exit code")
 	case code := <-exit:
-		return code
+		if code != nil {
+			return code
+		}
 	}
+
+	if UpdatesLockFile(o.command) {
+		// Some commands (e.g. terraform init) update the lock file,
+		// .terraform.lock.hcl, and it's recommended that this be committed to
+		// version control. So the runner copies it to a config map, and it is
+		// here that that config map is retrieved.
+		lock, err := o.ConfigMapsClient(o.namespace).Get(ctx, v1alpha1.RunLockFileConfigMapName(run.Name), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		// Write lock file to user's disk
+		lockFilePath := filepath.Join(o.path, globals.LockFile)
+		if err := ioutil.WriteFile(lockFilePath, lock.BinaryData[globals.LockFile], 0644); err != nil {
+			return err
+		}
+
+		klog.V(1).Infof("Written %s", lockFilePath)
+	}
+
+	return nil
 }
 
 // Non-blocking; watch pod; if tty then wait til pod is running (and then attach); if

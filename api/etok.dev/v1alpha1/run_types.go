@@ -42,7 +42,7 @@ type RunList struct {
 
 // RunSpec defines the desired state of Run
 type RunSpec struct {
-	// +kubebuilder:validation:Enum={"apply","console","destroy","fmt","force-unlock","get","graph","init","import","output","plan","providers","refresh","show","state","taint","untaint","validate","sh"}
+	// +kubebuilder:validation:Enum={"apply","console","destroy","force-unlock","get","graph","init","import","output","plan","providers","providers lock","refresh","show","state","state pull","state push","taint","untaint","validate","sh"}
 
 	// The command to run on the pod
 	Command string `json:"command"`
@@ -95,6 +95,14 @@ func ApprovedAnnotationKey(runName string) string {
 
 // Run's pod shares its name
 func (r *Run) PodName() string { return r.Name }
+
+func (r *Run) LockFileConfigMapName() string {
+	return RunLockFileConfigMapName(r.Name)
+}
+
+func RunLockFileConfigMapName(name string) string {
+	return name + "-lockfile"
+}
 
 // RunStatus defines the observed state of Run
 type RunStatus struct {

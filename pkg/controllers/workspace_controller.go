@@ -350,9 +350,6 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
 	blder = blder.Owns(&corev1.PersistentVolumeClaim{})
 
-	// Watch owned configmaps
-	blder = blder.Owns(&corev1.ConfigMap{})
-
 	// Watch owned pods
 	blder = blder.Owns(&corev1.Pod{})
 

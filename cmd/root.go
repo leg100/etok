@@ -39,7 +39,10 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)
 
-	cmd.AddCommand(launcher.Cmds.CobraCommands(opts)...)
+	// Terraform commands (and shell command)
+	launcher.AddToRoot(cmd, opts)
+	// terraform fmt
+	cmd.AddCommand(launcher.FmtCmd(&runner.Exec{IOStreams: opts.IOStreams}))
 
 	return cmd
 }

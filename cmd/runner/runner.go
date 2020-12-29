@@ -5,30 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
-	"github.com/leg100/etok/cmd/launcher"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/util/slice"
+	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/commands"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/pkg/scheme"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 type RunnerOptions struct {
 	*cmdutil.Options
 
-	path      string
-	tarball   string
-	dest      string
-	command   string
-	namespace string
-	workspace string
+	*client.Client
+
+	path        string
+	tarball     string
+	dest        string
+	command     string
+	namespace   string
+	kubeContext string
+
+	runName string
 
 	exec Executor
 
@@ -39,7 +50,7 @@ type RunnerOptions struct {
 }
 
 func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
-	o := &RunnerOptions{Options: opts, exec: &executor{IOStreams: opts.IOStreams}}
+	o := &RunnerOptions{Options: opts, exec: &Exec{IOStreams: opts.IOStreams}}
 	cmd := &cobra.Command{
 		Use:    "runner [args]",
 		Short:  "Run the etok runner",
@@ -48,18 +59,24 @@ func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.args = args
 
+			o.Client, err = opts.Create(o.kubeContext)
+			if err != nil {
+				return err
+			}
+
 			return prefixError(o.Run(cmd.Context()))
 		},
 	}
 
 	flags.AddNamespaceFlag(cmd, &o.namespace)
+	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 
 	cmd.Flags().StringVar(&o.dest, "dest", "/workspace", "Destination path for tarball extraction")
 	cmd.Flags().StringVar(&o.tarball, "tarball", o.tarball, "Tarball filename")
-	cmd.Flags().StringVar(&o.command, "command", "", "Etok command to run")
-	cmd.Flags().StringVar(&o.workspace, "workspace", "default", "Terraform workspace")
 	cmd.Flags().BoolVar(&o.handshake, "handshake", false, "Await handshake string on stdin")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "Timeout waiting for handshake")
+	cmd.Flags().StringVar(&o.runName, "run-name", "", "Name of run resource")
+	cmd.Flags().StringVar(&o.command, "command", "", "Etok command to run")
 
 	return cmd, o
 }
@@ -72,11 +89,6 @@ func prefixError(err error) error {
 }
 
 func (o *RunnerOptions) Run(ctx context.Context) error {
-	// Validate command
-	if !slice.ContainsString(launcher.Cmds.GetNames(), o.command) {
-		return fmt.Errorf("%s: %w", o.command, errUnknownCommand)
-	}
-
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Concurrently extract tarball
@@ -109,12 +121,70 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	}
 
 	// Execute requested command
-	switch o.command {
-	case "sh":
-		return o.exec.run(ctx, append([]string{"sh"}, o.args...))
-	default:
-		return o.exec.run(ctx, append([]string{"terraform", o.command}, o.args...))
+	if err := o.exec.Execute(ctx, commands.PrepareArgs(o.command, o.args...)); err != nil {
+		return err
 	}
+
+	if commands.UpdatesLockFile(o.command) {
+		// This is a command that updates the lock file (such as terraform init)
+		// so persist it to a configmap
+		if err := o.persistLockFile(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// persistLockFile persists the lock file .terraform.lock.hcl to a config map.
+// If the lock file does not exist then it exits early without error.
+func (o *RunnerOptions) persistLockFile(ctx context.Context) error {
+	// Check if file exists
+	lockFileContents, err := ioutil.ReadFile(globals.LockFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.V(1).Infof("%s not found", globals.LockFile)
+			return nil
+		}
+	}
+
+	// File exists so continue...
+
+	// Get run resource so that it can be set as owner of config map
+	run, err := o.RunsClient(o.namespace).Get(ctx, o.runName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	// create configmap
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: o.namespace,
+			Name:      v1alpha1.RunLockFileConfigMapName(o.runName),
+		},
+		BinaryData: map[string][]byte{
+			globals.LockFile: lockFileContents,
+		},
+	}
+	// Set etok's common labels
+	labels.SetCommonLabels(configMap)
+	// Permit filtering archives by command
+	labels.SetLabel(configMap, labels.Command(o.command))
+	// Permit filtering etok resources by component
+	labels.SetLabel(configMap, labels.RunComponent)
+
+	// Make run owner of configmap, so if run is deleted so is its configmap
+	if err := controllerutil.SetOwnerReference(run, configMap, scheme.Scheme); err != nil {
+		return err
+	}
+
+	_, err = o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	klog.V(1).Infof("created config map: %s", klog.KObj(configMap))
+	return nil
 }
 
 // Set TTY in raw mode for the duration of running f.
@@ -183,5 +253,4 @@ func (o *RunnerOptions) receiveHandshake(ctx context.Context) error {
 var (
 	errIncorrectHandshake = errors.New("incorrect handshake received")
 	errHandshakeTimeout   = errors.New("timed out awaiting handshake")
-	errUnknownCommand     = errors.New("unknown command")
 )

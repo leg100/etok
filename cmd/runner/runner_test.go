@@ -14,9 +14,14 @@ import (
 	"testing"
 	"time"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/creack/pty"
 	"github.com/leg100/etok/cmd/envvars"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -25,16 +30,6 @@ import (
 )
 
 func TestRunnerCommand(t *testing.T) {
-	testutil.Run(t, "unknown command", func(t *testutil.T) {
-		_, cmd, _ := setupRunnerCmd(t)
-
-		// Set flag via env var since that's how runner is invoked on a pod
-		t.SetEnvs(map[string]string{"ETOK_COMMAND": "thegoprogramminglanguage"})
-		envvars.SetFlagsFromEnvVariables(cmd)
-
-		assert.True(t, errors.Is(cmd.ExecuteContext(context.Background()), errUnknownCommand))
-	})
-
 	testutil.Run(t, "shell command with args", func(t *testutil.T) {
 		out, cmd, _ := setupRunnerCmd(t, "--", "-c", "echo foo")
 
@@ -72,7 +67,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &fakeExecutorEchoArgs{out: out}
+		opts.exec = &FakeExecutorEchoArgs{out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -92,7 +87,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &fakeExecutorEchoArgs{out: out}
+		opts.exec = &FakeExecutorEchoArgs{out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -130,12 +125,53 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &fakeExecutorEchoArgs{out: out}
+		opts.exec = &FakeExecutorEchoArgs{out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
 		want := "[terraform apply -auto-approve]"
 		assert.Equal(t, want, strings.TrimSpace(out.String()))
+	})
+}
+
+func TestRunnerLockFile(t *testing.T) {
+	testutil.Run(t, "with lock file", func(t *testutil.T) {
+		out := new(bytes.Buffer)
+		cmdOpts, err := cmdutil.NewFakeOpts(out, testobj.Run("default", "run-12345", "init"))
+		require.NoError(t, err)
+		cmd, o := RunnerCmd(cmdOpts)
+		cmd.SetOut(out)
+		cmd.SetArgs([]string{"--", "-c", "true"})
+
+		t.NewTempDir().Chdir().Write(lockFile, []byte("plugin hashes"))
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":  "sh",
+			"ETOK_RUN_NAME": "run-12345",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		assert.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), "run-12345-lockfile", metav1.GetOptions{})
+		assert.NoError(t, err)
+	})
+
+	testutil.Run(t, "without lock file", func(t *testutil.T) {
+		_, cmd, o := setupRunnerCmd(t, "--", "-c", "true")
+
+		// Set flag via env var since that's how runner is invoked on a pod
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":  "sh",
+			"ETOK_RUN_NAME": "run-12345",
+		})
+		envvars.SetFlagsFromEnvVariables(cmd)
+
+		assert.NoError(t, cmd.ExecuteContext(context.Background()))
+
+		_, err := o.ConfigMapsClient(o.namespace).Get(context.Background(), "run-12345-lockfile", metav1.GetOptions{})
+		assert.True(t, kerrors.IsNotFound(err))
 	})
 }
 
@@ -253,7 +289,9 @@ func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
 
 func setupRunnerCmd(t *testutil.T, args ...string) (*bytes.Buffer, *cobra.Command, *RunnerOptions) {
 	out := new(bytes.Buffer)
-	cmd, cmdOpts := RunnerCmd(&cmdutil.Options{IOStreams: cmdutil.IOStreams{Out: out}})
+	o, err := cmdutil.NewFakeOpts(out)
+	require.NoError(t, err)
+	cmd, cmdOpts := RunnerCmd(o)
 	cmd.SetOut(out)
 	cmd.SetArgs(args)
 

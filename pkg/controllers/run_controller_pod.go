@@ -71,6 +71,10 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							Name:  "TF_CLI_ARGS_init",
 							Value: "-backend-config=secret_suffix=" + ws.Name,
 						},
+						{
+							Name:  "RUN_NAME",
+							Value: run.Name,
+						},
 					},
 					Image:                    image,
 					ImagePullPolicy:          corev1.PullIfNotPresent,

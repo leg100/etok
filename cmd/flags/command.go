@@ -1,0 +1,3 @@
+package flags
+
+//type CommandFlag
