@@ -296,21 +296,26 @@ func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
 			Namespace: ws.Namespace,
 		},
 		Rules: []rbacv1.PolicyRule{
-			{
-				Resources: []string{"runs"},
-				Verbs:     []string{"get"},
-				APIGroups: []string{"etok.dev"},
-			},
+			// Runner may need to persist a lock file to a new config map
 			{
 				Resources: []string{"configmaps"},
 				Verbs:     []string{"create"},
 				APIGroups: []string{""},
 			},
+			// ...and the runner specifies the run resource as owner of said
+			// config map, so it needs to retrieve run resource metadata as well
+			{
+				Resources: []string{"runs"},
+				Verbs:     []string{"get"},
+				APIGroups: []string{"etok.dev"},
+			},
+			// Terraform state backend mgmt
 			{
 				Resources: []string{"secrets"},
 				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
 				APIGroups: []string{""},
 			},
+			// Terraform state backend mgmt
 			{
 				Resources: []string{"leases"},
 				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
