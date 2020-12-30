@@ -60,7 +60,7 @@ func TestWorkspace(t *testing.T) {
 					"--context", *kubectx,
 				},
 				[]expect.Batcher{
-					&expect.BExp{R: fmt.Sprintf("\\*\t%s_%s\n\t%s_%s", namespace, "bar", namespace, "foo")},
+					&expect.BExp{R: fmt.Sprintf("\\*\t%s/%s\n\t%s/%s", namespace, "bar", namespace, "foo")},
 				}))
 		})
 
@@ -70,7 +70,7 @@ func TestWorkspace(t *testing.T) {
 					"--path", path,
 				},
 				[]expect.Batcher{
-					&expect.BExp{R: fmt.Sprintf("%s_%s", namespace, "bar")},
+					&expect.BExp{R: fmt.Sprintf("%s/%s", namespace, "bar")},
 				}))
 		})
 
@@ -78,7 +78,7 @@ func TestWorkspace(t *testing.T) {
 			require.NoError(t, step(t, name,
 				[]string{buildPath, "workspace", "select", "foo", "--namespace", namespace},
 				[]expect.Batcher{
-					&expect.BExp{R: fmt.Sprintf("Current workspace now: %s_%s", namespace, "foo")},
+					&expect.BExp{R: fmt.Sprintf("Current workspace now: %s/%s", namespace, "foo")},
 				}))
 		})
 

@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,6 +47,9 @@ func TestTerraform(t *testing.T) {
 				[]expect.Batcher{
 					&expect.BExp{R: `Terraform has been successfully initialized!`},
 				}))
+
+			// The init command should create a local lock file
+			require.FileExists(t, filepath.Join(path, ".terraform.lock.hcl"))
 		})
 
 		t.Run("plan", func(t *testing.T) {
