@@ -67,9 +67,13 @@ spec:
                 - providers lock
                 - refresh
                 - show
-                - state
+                - state list
+                - state mv
                 - state pull
                 - state push
+                - state replace-provider
+                - state rm
+                - state show
                 - taint
                 - untaint
                 - validate

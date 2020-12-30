@@ -42,7 +42,7 @@ type RunList struct {
 
 // RunSpec defines the desired state of Run
 type RunSpec struct {
-	// +kubebuilder:validation:Enum={"apply","console","destroy","force-unlock","get","graph","init","import","output","plan","providers","providers lock","refresh","show","state","state pull","state push","taint","untaint","validate","sh"}
+	// +kubebuilder:validation:Enum={"apply","console","destroy","force-unlock","get","graph","init","import","output","plan","providers","providers lock","refresh","show","state list","state mv","state pull","state push","state replace-provider","state rm","state show","taint","untaint","validate","sh"}
 
 	// The command to run on the pod
 	Command string `json:"command"`
