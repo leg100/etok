@@ -32,12 +32,13 @@ resource "random_id" "test" {
 Create a workspace:
 
 ```bash
-etok workspace new default/default
+etok workspace new default
 ```
 
 Run terraform commands:
 
 ```bash
+etok init
 etok plan
 etok apply
 ```
@@ -51,14 +52,29 @@ Usage:
   etok [command]
 
 Available Commands:
-  apply       Run terraform apply
-  destroy     Run terraform destroy
-  generate    Generate deployment resources
-  help        Help about any command
-  plan        Run terraform plan
-  sh          Open shell session
-  version     Print client version information
-  workspace   etok workspace management
+  apply        Run terraform apply
+  console      Run terraform console
+  destroy      Run terraform destroy
+  fmt          Run terraform fmt
+  force-unlock Run terraform force-unlock
+  generate     Generate deployment resources
+  get          Run terraform get
+  graph        Run terraform graph
+  help         Help about any command
+  import       Run terraform import
+  init         Run terraform init
+  output       Run terraform output
+  plan         Run terraform plan
+  providers    Run terraform providers
+  refresh      Run terraform refresh
+  sh           Run shell session in workspace
+  show         Run terraform show
+  state        Terraform state management
+  taint        Run terraform taint
+  untaint      Run terraform untaint
+  validate     Run terraform validate
+  version      Print client version information
+  workspace    etok workspace management
 
 Flags:
       --add_dir_header                   If true, adds the file directory to the header of the log messages
@@ -67,8 +83,7 @@ Flags:
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --log_file string                  If non-empty, use this log file
-      --log_file_max_size uint           Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited. (defa
-ult 1800)
+      --log_file_max_size uint           Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited. (default 1800)
       --logtostderr                      log to standard error instead of files (default true)
       --skip_headers                     If true, avoid header prefixes in the log messages
       --skip_log_headers                 If true, avoid headers when opening log files
