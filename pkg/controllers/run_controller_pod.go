@@ -59,6 +59,22 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							Name:  "TF_PLUGIN_CACHE_DIR",
 							Value: pluginMountPath,
 						},
+						{
+							Name:  "KUBE_IN_CLUSTER_CONFIG",
+							Value: "true",
+						},
+						{
+							Name:  "KUBE_NAMESPACE",
+							Value: ws.Namespace,
+						},
+						{
+							Name:  "TF_CLI_ARGS_init",
+							Value: "-backend-config=secret_suffix=" + ws.Name,
+						},
+						{
+							Name:  "ETOK_RUN_NAME",
+							Value: run.Name,
+						},
 					},
 					Image:                    image,
 					ImagePullPolicy:          corev1.PullIfNotPresent,
@@ -76,6 +92,12 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							Name:      "cache",
 							MountPath: binMountPath,
 							SubPath:   binSubPath,
+						},
+						{
+							Name: "cache",
+							// <WorkingDir>/.terraform
+							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, ".terraform"),
+							SubPath:   dotTerraformSubPath,
 						},
 						{
 							Name:      "tarball",

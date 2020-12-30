@@ -13,6 +13,7 @@ import (
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,9 +44,16 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+//
+// Operator grants these permissions to workspace service accounts, therefore it
+// too needs these permissions.
+// +kubebuilder:rbac:groups="etok.dev",resources=runs,verbs=get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create
+// +kubebuilder:rbac:groups="coordination.k8s.io",resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // for metrics:
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -93,6 +101,48 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Cease reconciliation
 		return r.success(ctx, &ws)
+	}
+
+	// Manage RBAC role for workspace
+	var role rbacv1.Role
+	if err := r.Get(ctx, req.NamespacedName, &role); err != nil {
+		if errors.IsNotFound(err) {
+			role := *newRoleForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &role, r.Scheme); err != nil {
+				log.Error(err, "unable to set role ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &role); err != nil {
+				log.Error(err, "unable to create role")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get role")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Manage RBAC role binding for workspace
+	var binding rbacv1.RoleBinding
+	if err := r.Get(ctx, req.NamespacedName, &binding); err != nil {
+		if errors.IsNotFound(err) {
+			binding := *newRoleBindingForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &binding, r.Scheme); err != nil {
+				log.Error(err, "unable to set binding ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &binding); err != nil {
+				log.Error(err, "unable to create binding")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get binding")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Manage PVC for workspace
@@ -239,6 +289,77 @@ func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	return pvc
 }
 
+func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ws.Name,
+			Namespace: ws.Namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			// Runner may need to persist a lock file to a new config map
+			{
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"create"},
+				APIGroups: []string{""},
+			},
+			// ...and the runner specifies the run resource as owner of said
+			// config map, so it needs to retrieve run resource metadata as well
+			{
+				Resources: []string{"runs"},
+				Verbs:     []string{"get"},
+				APIGroups: []string{"etok.dev"},
+			},
+			// Terraform state backend mgmt
+			{
+				Resources: []string{"secrets"},
+				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
+				APIGroups: []string{""},
+			},
+			// Terraform state backend mgmt
+			{
+				Resources: []string{"leases"},
+				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
+				APIGroups: []string{"coordination.k8s.io"},
+			},
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(role)
+	// Permit filtering etok resources by component
+	labels.SetLabel(role, labels.WorkspaceComponent)
+
+	return role
+}
+
+func newRoleBindingForWS(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
+	binding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ws.Name,
+			Namespace: ws.Namespace,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      ws.Spec.ServiceAccountName,
+				Namespace: ws.Namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "Role",
+			Name:     ws.Name,
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(binding)
+	// Permit filtering etok resources by component
+	labels.SetLabel(binding, labels.WorkspaceComponent)
+
+	return binding
+}
+
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder := ctrl.NewControllerManagedBy(mgr)
 
@@ -247,9 +368,6 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch for changes to secondary resource PVCs and requeue the owner Workspace
 	blder = blder.Owns(&corev1.PersistentVolumeClaim{})
-
-	// Watch owned configmaps
-	blder = blder.Owns(&corev1.ConfigMap{})
 
 	// Watch owned pods
 	blder = blder.Owns(&corev1.Pod{})

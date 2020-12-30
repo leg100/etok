@@ -12,10 +12,8 @@ var (
 	// Terraform rootModuleConfig
 	rootModuleConfig = `
 terraform {
-  backend "gcs" {
-	bucket = "automatize-tfstate"
-	prefix = "e2e"
-  }
+  backend "kubernetes" {}
+
   required_providers {
 	random = {
 	  source  = "hashicorp/random"

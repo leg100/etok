@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/util/slice"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -88,11 +87,6 @@ type WorkspaceCacheSpec struct {
 
 func (ws *Workspace) PodName() string {
 	return WorkspacePodName(ws.Name)
-}
-
-// TerraformName provides a terraform-compatible workspace name.
-func (ws *Workspace) TerraformName() string {
-	return env.TerraformName(ws.Namespace, ws.Name)
 }
 
 func (ws *Workspace) PVCName() string {

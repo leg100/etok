@@ -1,37 +1,26 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
-// Env package handles the serializing of the etok workspace name to the
-// environment file. Both terraform and etok rely on this file to determine the
-// current workspace in use. Etok relies on it to also determine the current
-// kubernetes namespace.
+// Env package handles the serializing of workspace information to the
+// environment file.  Etok relies on this file to determine both the current
+// workspace and kubernetes namespace in use.
 //
-// The workspace name format is <namespace>_<name>. The namespace and name can
-// contain alphanumerics and hyphens. The format is designed to keep it
-// compatible with what terraform deems permissible:
-//
-//  	https://www.terraform.io/docs/cloud/workspaces/naming.html
+// The format is <namespace>/<workspace>.
 
 const (
-	environmentFile  = ".terraform/environment"
-	componentPattern = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+	environmentFile = ".terraform/environment"
 )
 
 var (
-	// componentRegex is the regex that both namespace and workspace must match:
-	// it must start and end with an alphanumeric and can contain alphanumerics
-	// and the hyphen.
-	componentRegex = regexp.MustCompile(fmt.Sprintf("^%s$", componentPattern))
-
-	envRegex = regexp.MustCompile(fmt.Sprintf("^%s_%[1]s$", componentPattern))
+	errInvalidFormat = errors.New("invalid format, expecting <namespace>/<workspace>")
 )
 
 // A string identifying a workspace, with helper functions to read and write the
@@ -41,89 +30,35 @@ type Env struct {
 }
 
 func New(namespace, workspace string) (*Env, error) {
-	if err := validateComponent(namespace); err != nil {
-		return nil, fmt.Errorf("namespace validation failed: %w", err)
-	}
-
-	if err := validateComponent(workspace); err != nil {
-		return nil, fmt.Errorf("workspace validation failed: %w", err)
-	}
-
 	return &Env{Namespace: namespace, Workspace: workspace}, nil
 }
 
-func validateComponent(component string) error {
-	if !componentRegex.MatchString(component) {
-		return fmt.Errorf("%s failed to match pattern %s", component, componentRegex.String())
-	}
-	return nil
-}
-
-func validateEnv(env string) error {
-	if !envRegex.MatchString(env) {
-		return fmt.Errorf("failed to match pattern %s", envRegex.String())
-	}
-	return nil
-}
-
-// TerraformName provides a terraform-compatible workspace name. The full
-// kubernetes name is <namespace>/<name> but terraform doesn't permit '/', so we
-// convert it to an '_', which is permissible according to this doc:
-//
-// https://www.terraform.io/docs/cloud/workspaces/naming.html
-func TerraformName(namespace, workspace string) string {
-	return fmt.Sprintf("%s_%s", namespace, workspace)
-}
-
 func (e *Env) String() string {
-	return TerraformName(e.Namespace, e.Workspace)
+	return fmt.Sprintf("%s/%s", e.Namespace, e.Workspace)
 }
 
 func Read(path string) (env *Env, err error) {
-	absPath, err := filepath.Abs(path)
+	path = filepath.Join(path, environmentFile)
+
+	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	bytes, err := ioutil.ReadFile(filepath.Join(absPath, environmentFile))
-	if err != nil {
-		return nil, err
+	parts := strings.Split(string(bytes), "/")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("%s: %w", path, errInvalidFormat)
 	}
 
-	if err := validateEnv(string(bytes)); err != nil {
-		return nil, err
-	}
-
-	namespace := strings.Split(string(bytes), "_")[0]
-	workspace := strings.Split(string(bytes), "_")[1]
-
-	return New(namespace, workspace)
+	return New(parts[0], parts[1])
 }
 
 func (e *Env) Write(path string) error {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
+	path = filepath.Join(path, environmentFile)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
-	envPath := filepath.Join(absPath, environmentFile)
-	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(envPath, []byte(e.String()), 0644)
-}
-
-func WriteEnvFile(path, namespace, workspace string) error {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-
-	envPath := filepath.Join(absPath, environmentFile)
-	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(envPath, []byte(TerraformName(namespace, workspace)), 0644)
+	return ioutil.WriteFile(path, []byte(e.String()), 0644)
 }

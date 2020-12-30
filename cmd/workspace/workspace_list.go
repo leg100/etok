@@ -49,7 +49,7 @@ func listCmd(opts *cmdutil.Options) *cobra.Command {
 				} else {
 					prefix = ""
 				}
-				fmt.Fprintf(opts.Out, "%s\t%s_%s\n", prefix, ws.Namespace, ws.Name)
+				fmt.Fprintf(opts.Out, "%s\t%s\n", prefix, &env.Env{Namespace: ws.Namespace, Workspace: ws.Name})
 			}
 
 			return nil

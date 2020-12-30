@@ -52,6 +52,18 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
+			name:      ".terraform volume mount",
+			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
+			workspace: testobj.Workspace("default", "foo"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "cache",
+					MountPath: "/workspace/subdir/.terraform",
+					SubPath:   ".terraform/",
+				})
+			},
+		},
+		{
 			name:      "Set environment variables for secrets",
 			run:       testobj.Run("default", "run-12345", "plan"),
 			workspace: testobj.Workspace("default", "foo", testobj.WithSecret("etok")),

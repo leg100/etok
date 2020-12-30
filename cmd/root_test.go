@@ -62,6 +62,10 @@ func TestRoot(t *testing.T) {
 			args: []string{"destroy", "-h"},
 		},
 		{
+			name: "fmt",
+			args: []string{"fmt", "-h"},
+		},
+		{
 			name: "plan",
 			args: []string{"plan", "-h"},
 		},

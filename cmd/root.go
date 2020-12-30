@@ -10,6 +10,7 @@ import (
 	"github.com/leg100/etok/cmd/runner"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/cmd/workspace"
+	"github.com/leg100/etok/pkg/executor"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
@@ -39,7 +40,10 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)
 
-	cmd.AddCommand(launcher.Cmds.CobraCommands(opts)...)
+	// Terraform commands (and shell command)
+	launcher.AddToRoot(cmd, opts)
+	// terraform fmt
+	cmd.AddCommand(launcher.FmtCmd(&executor.Exec{IOStreams: opts.IOStreams}))
 
 	return cmd
 }

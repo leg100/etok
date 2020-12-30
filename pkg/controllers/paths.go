@@ -12,6 +12,10 @@ const (
 	// pluginMountPath
 	pluginSubPath = "plugin-cache/"
 
+	// dotTerraformSubPath is path within persistent volume to mount on
+	// <WorkingDir>/.terraform
+	dotTerraformSubPath = ".terraform/"
+
 	// workspaceDir is the directory in the container where the tarball is
 	// extracted to
 	workspaceDir = "/workspace"

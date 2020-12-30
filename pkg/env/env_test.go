@@ -1,6 +1,7 @@
 package env
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/leg100/etok/pkg/testutil"
@@ -22,7 +23,9 @@ func TestEnv(t *testing.T) {
 	assert.Equal(t, "test-env", env.Workspace)
 }
 
-func TestInvalidEnv(t *testing.T) {
-	_, err := New("def/ault", "te_st-env")
-	assert.Error(t, err)
+func TestBadEnv(t *testing.T) {
+	path := testutil.NewTempDir(t).Mkdir(".terraform").Write(".terraform/environment", []byte("missing-a-forward-slash")).Root()
+
+	_, err := Read(path)
+	require.True(t, errors.Is(err, errInvalidFormat))
 }

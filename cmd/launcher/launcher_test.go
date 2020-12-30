@@ -18,7 +18,6 @@ import (
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
-	"github.com/leg100/etok/pkg/util/slice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -38,8 +37,8 @@ func TestLauncher(t *testing.T) {
 		err      error
 		objs     []runtime.Object
 		podPhase corev1.PodPhase
-		// Limit test to these commands
-		cmds []string
+		// Override default command "plan"
+		cmd string
 		// Size of content to be archived
 		size int
 		// Mock exit code of runner pod
@@ -51,7 +50,6 @@ func TestLauncher(t *testing.T) {
 	}{
 		{
 			name: "plan",
-			cmds: []string{"plan"},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
 			assertions: func(o *launcherOptions) {
@@ -61,7 +59,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "queueable commands",
-			cmds: []string{"apply", "destroy", "sh"},
+			cmd:  "apply",
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
@@ -71,7 +69,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "enqueue timeout",
-			cmds: []string{"apply", "destroy", "sh"},
+			cmd:  "apply",
 			args: []string{"--enqueue-timeout", "10ms"},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			// Deliberately left out of workspace queue
@@ -117,11 +115,7 @@ func TestLauncher(t *testing.T) {
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
-				if o.command == "sh" {
-					assert.Equal(t, []string{"-c", "-input false"}, o.args)
-				} else {
-					assert.Equal(t, []string{"-input", "false"}, o.args)
-				}
+				assert.Equal(t, []string{"-input", "false"}, o.args)
 			},
 		},
 		{
@@ -135,7 +129,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "approved",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands(Cmds.GetNames()...))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
 			assertions: func(o *launcherOptions) {
 				// Get run
 				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
@@ -283,50 +277,52 @@ func TestLauncher(t *testing.T) {
 
 	// Run tests for each command
 	for _, tt := range tests {
-		for _, rc := range Cmds {
-			// Restrict test to specific commands if requested
-			if tt.cmds == nil || slice.ContainsString(tt.cmds, rc.name) {
-				testutil.Run(t, tt.name+"/"+rc.name, func(t *testutil.T) {
-					path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
-					// Write .terraform/environment
-					if tt.env != nil {
-						require.NoError(t, tt.env.Write(path))
-					}
-
-					out := new(bytes.Buffer)
-					opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
-					require.NoError(t, err)
-
-					if tt.setOpts != nil {
-						tt.setOpts(opts)
-					}
-
-					cmdOpts := &launcherOptions{runName: "run-12345"}
-
-					if !tt.disableMockReconcile {
-						// Mock successful reconcile
-						cmdOpts.reconciled = true
-					}
-
-					// create cobra command
-					cmd := rc.cobraCommand(opts, cmdOpts)
-					cmd.SetOut(out)
-					cmd.SetArgs(tt.args)
-
-					mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
-
-					err = cmd.ExecuteContext(context.Background())
-					if !assert.True(t, errors.Is(err, tt.err)) {
-						t.Errorf("unexpected error: %w", err)
-					}
-
-					if tt.assertions != nil {
-						tt.assertions(cmdOpts)
-					}
-				})
+			// Write .terraform/environment
+			if tt.env != nil {
+				require.NoError(t, tt.env.Write(path))
 			}
-		}
+
+			out := new(bytes.Buffer)
+			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+			require.NoError(t, err)
+
+			if tt.setOpts != nil {
+				tt.setOpts(opts)
+			}
+
+			// Default to plan command
+			command := "plan"
+			if tt.cmd != "" {
+				// Override plan command
+				command = tt.cmd
+			}
+
+			cmdOpts := &launcherOptions{command: command, runName: "run-12345"}
+
+			if !tt.disableMockReconcile {
+				// Mock successful reconcile
+				cmdOpts.reconciled = true
+			}
+
+			// create cobra command
+			cmd := launcherCommand(opts, cmdOpts)
+			cmd.SetOut(out)
+			cmd.SetArgs(tt.args)
+
+			mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
+
+			err = cmd.ExecuteContext(context.Background())
+			if !assert.True(t, errors.Is(err, tt.err)) {
+				t.Errorf("unexpected error: %w", err)
+			}
+
+			if tt.assertions != nil {
+				tt.assertions(cmdOpts)
+			}
+		})
 	}
 }
 

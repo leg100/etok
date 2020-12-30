@@ -1,4 +1,4 @@
-package runner
+package executor
 
 import (
 	"context"
@@ -10,16 +10,16 @@ import (
 )
 
 type Executor interface {
-	run(context.Context, []string, ...execOption) error
+	Execute(context.Context, []string, ...ExecOption) error
 }
 
-type execOption func(*exec.Cmd)
+type ExecOption func(*exec.Cmd)
 
-type executor struct {
+type Exec struct {
 	cmdutil.IOStreams
 }
 
-func (tc *executor) run(ctx context.Context, args []string, opts ...execOption) error {
+func (tc *Exec) Execute(ctx context.Context, args []string, opts ...ExecOption) error {
 	klog.V(1).Infof("running command %v\n", args)
 
 	exe := exec.CommandContext(ctx, args[0], args[1:]...)
@@ -37,7 +37,7 @@ func (tc *executor) run(ctx context.Context, args []string, opts ...execOption) 
 	return nil
 }
 
-func withPath(path string) execOption {
+func withPath(path string) ExecOption {
 	return func(cmd *exec.Cmd) {
 		cmd.Dir = path
 	}

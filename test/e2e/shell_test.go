@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	goctx "context"
 	"fmt"
 	"testing"
 
@@ -16,11 +15,6 @@ import (
 func TestShell(t *testing.T) {
 	name := "shell"
 	namespace := "e2e-shell"
-
-	// Delete any GCS backend state beforehand, ignoring any errors
-	bkt := sclient.Bucket(backendBucket)
-	bkt.Object(fmt.Sprintf("%s/%s_foo.tfstate", backendPrefix, namespace)).Delete(goctx.Background())
-	bkt.Object(fmt.Sprintf("%s/%s_foo.tflock", backendPrefix, namespace)).Delete(goctx.Background())
 
 	// Create dedicated namespace for e2e test
 	createNamespace(t, namespace)
