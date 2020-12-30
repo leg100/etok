@@ -11,22 +11,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type ConfigMapListWatcher struct {
-	Client    kubernetes.Interface
-	Namespace string
-	Name      string
-}
-
-func (lw *ConfigMapListWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
-	setNameSelector(&options, lw.Name)
-	return lw.Client.CoreV1().ConfigMaps(lw.Namespace).List(context.TODO(), options)
-}
-
-func (lw *ConfigMapListWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	setNameSelector(&options, lw.Name)
-	return lw.Client.CoreV1().ConfigMaps(lw.Namespace).Watch(context.TODO(), options)
-}
-
 type PodListWatcher struct {
 	Client    kubernetes.Interface
 	Namespace string
