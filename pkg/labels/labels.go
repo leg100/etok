@@ -25,7 +25,7 @@ var (
 // '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
 func NewLabel(name, value string) Label {
 	return Label{
-		Name:  strings.ReplaceAll(value, " ", "-"),
+		Name:  strings.ReplaceAll(name, " ", "-"),
 		Value: strings.ReplaceAll(value, " ", "-"),
 	}
 }
