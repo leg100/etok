@@ -1,11 +1,11 @@
 package launcher
 
 import (
-	"github.com/leg100/etok/cmd/runner"
+	"github.com/leg100/etok/pkg/executor"
 	"github.com/spf13/cobra"
 )
 
-func FmtCmd(exec runner.Executor) *cobra.Command {
+func FmtCmd(exec executor.Executor) *cobra.Command {
 	return &cobra.Command{
 		Use:   "fmt",
 		Short: "Run terraform fmt",

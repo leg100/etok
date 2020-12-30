@@ -11,10 +11,11 @@ import (
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
+	"github.com/leg100/etok/cmd/launcher"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/commands"
+	"github.com/leg100/etok/pkg/executor"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/scheme"
@@ -41,7 +42,7 @@ type RunnerOptions struct {
 
 	runName string
 
-	exec Executor
+	exec executor.Executor
 
 	handshake        bool
 	handshakeTimeout time.Duration
@@ -50,13 +51,17 @@ type RunnerOptions struct {
 }
 
 func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
-	o := &RunnerOptions{Options: opts, exec: &Exec{IOStreams: opts.IOStreams}}
+	o := &RunnerOptions{Options: opts, exec: &executor.Exec{IOStreams: opts.IOStreams}}
 	cmd := &cobra.Command{
 		Use:    "runner [args]",
 		Short:  "Run the etok runner",
 		Long:   "Runner runs the requested command on a Run's pod. Prior to running the command, it can optionally be requested to untar a tarball into a destination directory, and it can optionally be requested to await a 'handshake' on stdin - a string a client can send to inform the runner it has successfully attached to the pod's TTY, ensuring it doesn't miss any output from the command that the runner then runs.",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if err := o.validate(); err != nil {
+				return prefixError(err)
+			}
+
 			o.args = args
 
 			o.Client, err = opts.Create(o.kubeContext)
@@ -85,6 +90,20 @@ func prefixError(err error) error {
 	if err != nil {
 		return fmt.Errorf("[runner] %w", err)
 	}
+	return nil
+}
+
+func (o *RunnerOptions) validate() error {
+	if o.command == "" {
+		return errors.New("--command cannot be empty")
+	}
+
+	if launcher.UpdatesLockFile(o.command) {
+		if o.runName == "" {
+			return fmt.Errorf("%s updates lock file; --run-name cannot be empty", o.command)
+		}
+	}
+
 	return nil
 }
 
@@ -121,15 +140,15 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 	}
 
 	// Execute requested command
-	if err := o.exec.Execute(ctx, commands.PrepareArgs(o.command, o.args...)); err != nil {
+	if err := o.exec.Execute(ctx, prepareArgs(o.command, o.args...)); err != nil {
 		return err
 	}
 
-	if commands.UpdatesLockFile(o.command) {
+	if launcher.UpdatesLockFile(o.command) {
 		// This is a command that updates the lock file (such as terraform init)
 		// so persist it to a configmap
 		if err := o.persistLockFile(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed to persist lock file to config map: %w", err)
 		}
 	}
 
@@ -153,7 +172,7 @@ func (o *RunnerOptions) persistLockFile(ctx context.Context) error {
 	// Get run resource so that it can be set as owner of config map
 	run, err := o.RunsClient(o.namespace).Get(ctx, o.runName, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve run: %w", err)
 	}
 
 	// create configmap

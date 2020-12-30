@@ -21,6 +21,8 @@ import (
 	"github.com/creack/pty"
 	"github.com/leg100/etok/cmd/envvars"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/executor"
+	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/spf13/cobra"
@@ -31,7 +33,7 @@ import (
 
 func TestRunnerCommand(t *testing.T) {
 	testutil.Run(t, "shell command with args", func(t *testutil.T) {
-		out, cmd, _ := setupRunnerCmd(t, "--", "-c", "echo foo")
+		out, cmd, _ := setupRunnerCmd(t, "--", "echo foo")
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
@@ -43,7 +45,7 @@ func TestRunnerCommand(t *testing.T) {
 	})
 
 	testutil.Run(t, "shell command with non-zero exit", func(t *testutil.T) {
-		_, cmd, _ := setupRunnerCmd(t, "--", "-c", "exit 101")
+		_, cmd, _ := setupRunnerCmd(t, "--", "exit 101")
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
@@ -67,7 +69,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &FakeExecutorEchoArgs{out: out}
+		opts.exec = &executor.FakeExecutorEchoArgs{Out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -87,7 +89,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &FakeExecutorEchoArgs{out: out}
+		opts.exec = &executor.FakeExecutorEchoArgs{Out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -106,7 +108,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &fakeExecutorMissingWorkspace{out: out}
+		opts.exec = &executor.FakeExecutorMissingWorkspace{Out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -125,7 +127,7 @@ func TestRunnerCommand(t *testing.T) {
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// Override executor with one that prints out cmd+args
-		opts.exec = &FakeExecutorEchoArgs{out: out}
+		opts.exec = &executor.FakeExecutorEchoArgs{Out: out}
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
 
@@ -141,13 +143,13 @@ func TestRunnerLockFile(t *testing.T) {
 		require.NoError(t, err)
 		cmd, o := RunnerCmd(cmdOpts)
 		cmd.SetOut(out)
-		cmd.SetArgs([]string{"--", "-c", "true"})
+		cmd.SetArgs([]string{"--", "true"})
 
-		t.NewTempDir().Chdir().Write(lockFile, []byte("plugin hashes"))
+		t.NewTempDir().Chdir().Write(globals.LockFile, []byte("plugin hashes"))
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
-			"ETOK_COMMAND":  "sh",
+			"ETOK_COMMAND":  "init",
 			"ETOK_RUN_NAME": "run-12345",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
@@ -159,7 +161,7 @@ func TestRunnerLockFile(t *testing.T) {
 	})
 
 	testutil.Run(t, "without lock file", func(t *testutil.T) {
-		_, cmd, o := setupRunnerCmd(t, "--", "-c", "true")
+		_, cmd, o := setupRunnerCmd(t, "--", "true")
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
@@ -220,7 +222,7 @@ func TestRunnerHandshake(t *testing.T) {
 			envvars.SetFlagsFromEnvVariables(cmd)
 
 			// Override executor with one that does a noop
-			opts.exec = &fakeExecutor{}
+			opts.exec = &executor.FakeExecutor{}
 
 			// Create pseudoterminal to mimic TTY
 			ptm, pts, err := pty.Open()
@@ -245,7 +247,7 @@ func TestRunnerHandshake(t *testing.T) {
 func TestRunnerTarball(t *testing.T) {
 	testutil.Run(t, "tarball", func(t *testutil.T) {
 		// ls will check tarball extracted successfully and to the expected path
-		_, cmd, _ := setupRunnerCmd(t, "--", "-c", "/bin/ls test1.tf")
+		_, cmd, _ := setupRunnerCmd(t, "--", "/bin/ls test1.tf")
 
 		// Tarball path
 		tarball := filepath.Join(t.NewTempDir().Root(), "archive.tar.gz")

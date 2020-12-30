@@ -44,12 +44,16 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+//
+// Operator grants these permissions to workspace service accounts, therefore it
+// too needs these permissions.
+// +kubebuilder:rbac:groups="etok.dev",resources=runs,verbs=get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create
 // +kubebuilder:rbac:groups="coordination.k8s.io",resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // for metrics:
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -292,6 +296,16 @@ func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
 			Namespace: ws.Namespace,
 		},
 		Rules: []rbacv1.PolicyRule{
+			{
+				Resources: []string{"runs"},
+				Verbs:     []string{"get"},
+				APIGroups: []string{"etok.dev"},
+			},
+			{
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"create"},
+				APIGroups: []string{""},
+			},
 			{
 				Resources: []string{"secrets"},
 				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},

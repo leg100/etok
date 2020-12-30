@@ -56,7 +56,6 @@ spec:
                 - apply
                 - console
                 - destroy
-                - fmt
                 - force-unlock
                 - get
                 - graph
@@ -65,9 +64,12 @@ spec:
                 - output
                 - plan
                 - providers
+                - providers lock
                 - refresh
                 - show
                 - state
+                - state pull
+                - state push
                 - taint
                 - untaint
                 - validate

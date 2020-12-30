@@ -1,6 +1,7 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,6 +19,10 @@ const (
 	environmentFile = ".terraform/environment"
 )
 
+var (
+	errInvalidFormat = errors.New("invalid format, expecting <namespace>/<workspace>")
+)
+
 // A string identifying a workspace, with helper functions to read and write the
 // string to the environment file.
 type Env struct {
@@ -33,46 +38,27 @@ func (e *Env) String() string {
 }
 
 func Read(path string) (env *Env, err error) {
-	absPath, err := filepath.Abs(path)
+	path = filepath.Join(path, environmentFile)
+
+	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	bytes, err := ioutil.ReadFile(filepath.Join(absPath, environmentFile))
-	if err != nil {
-		return nil, err
+	parts := strings.Split(string(bytes), "/")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("%s: %w", path, errInvalidFormat)
 	}
 
-	namespace := strings.Split(string(bytes), "/")[0]
-	workspace := strings.Split(string(bytes), "/")[1]
-
-	return New(namespace, workspace)
+	return New(parts[0], parts[1])
 }
 
 func (e *Env) Write(path string) error {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
+	path = filepath.Join(path, environmentFile)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
-	envPath := filepath.Join(absPath, environmentFile)
-	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(envPath, []byte(e.String()), 0644)
-}
-
-func WriteEnvFile(path, namespace, workspace string) error {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-
-	envPath := filepath.Join(absPath, environmentFile)
-	if err := os.MkdirAll(filepath.Dir(envPath), 0755); err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(envPath, []byte((&Env{namespace, workspace}).String()), 0644)
+	return ioutil.WriteFile(path, []byte(e.String()), 0644)
 }

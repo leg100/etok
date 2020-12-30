@@ -308,7 +308,7 @@ func TestLauncher(t *testing.T) {
 			}
 
 			// create cobra command
-			cmd := LauncherCommand(opts, cmdOpts)
+			cmd := launcherCommand(opts, cmdOpts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 

@@ -24,15 +24,15 @@ func AddToRoot(root *cobra.Command, opts *cmdutil.Options) {
 		"untaint",
 		"validate",
 	} {
-		root.AddCommand(LauncherCommand(opts, &launcherOptions{command: cmd}))
+		root.AddCommand(launcherCommand(opts, &launcherOptions{command: cmd}))
 	}
 
 	// Terraform providers command
-	providers := LauncherCommand(opts, &launcherOptions{command: "providers"})
+	providers := launcherCommand(opts, &launcherOptions{command: "providers"})
 	root.AddCommand(providers)
 
 	// Terraform providers lock command
-	providers.AddCommand(LauncherCommand(opts, &launcherOptions{command: "providers lock"}))
+	providers.AddCommand(launcherCommand(opts, &launcherOptions{command: "providers lock"}))
 
 	// Terraform state commands
 	state := &cobra.Command{
@@ -49,11 +49,11 @@ func AddToRoot(root *cobra.Command, opts *cmdutil.Options) {
 		"rm",
 		"show",
 	} {
-		state.AddCommand(LauncherCommand(opts, &launcherOptions{command: "state " + stateSubCmd}))
+		state.AddCommand(launcherCommand(opts, &launcherOptions{command: "state " + stateSubCmd}))
 	}
 
 	// Shell command
-	shell := LauncherCommand(opts, &launcherOptions{command: "sh"})
+	shell := launcherCommand(opts, &launcherOptions{command: "sh"})
 	shell.Short = "Run shell session in workspace"
 	root.AddCommand(shell)
 }

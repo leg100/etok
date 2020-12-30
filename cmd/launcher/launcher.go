@@ -99,7 +99,7 @@ type launcherOptions struct {
 	reconciled bool
 }
 
-func LauncherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
+func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 	o.Options = opts
 
 	cmd := &cobra.Command{

@@ -1,4 +1,4 @@
-package runner
+package executor
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"io"
 )
 
-type fakeExecutor struct{}
+type FakeExecutor struct{}
 
-func (fe *fakeExecutor) Execute(ctx context.Context, args []string, opts ...ExecOption) error {
+func (fe *FakeExecutor) Execute(ctx context.Context, args []string, opts ...ExecOption) error {
 	return nil
 }
 
@@ -23,12 +23,12 @@ func (fe *FakeExecutorEchoArgs) Execute(ctx context.Context, args []string, opts
 	return nil
 }
 
-type fakeExecutorMissingWorkspace struct {
-	out io.Writer
+type FakeExecutorMissingWorkspace struct {
+	Out io.Writer
 }
 
-func (fe *fakeExecutorMissingWorkspace) Execute(ctx context.Context, args []string, opts ...ExecOption) error {
-	fmt.Fprintf(fe.out, "%v", args)
+func (fe *FakeExecutorMissingWorkspace) Execute(ctx context.Context, args []string, opts ...ExecOption) error {
+	fmt.Fprintf(fe.Out, "%v", args)
 
 	if len(args) > 2 && args[0] == "terraform" && args[1] == "workspace" && args[2] == "select" {
 		return errors.New("workspace does not exist")
