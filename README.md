@@ -28,6 +28,12 @@ resource "random_id" "test" {
   byte_length = 2
 }
 ```
+You also want to specify the kubernetes backend like so:
+
+```bash
+$ cat backend.tf
+backend "kubernetes" {}
+```
 
 Create a workspace:
 
