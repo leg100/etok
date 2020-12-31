@@ -22,6 +22,7 @@ func init() {
 // +kubebuilder:printcolumn:name="Command",type="string",JSONPath=".spec.command"
 // +kubebuilder:printcolumn:name="Workspace",type="string",JSONPath=".spec.workspace"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 type Run struct {
 	metav1.TypeMeta   `json:",inline"`

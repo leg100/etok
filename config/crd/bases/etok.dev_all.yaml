@@ -26,6 +26,266 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RunSpec defines the desired state of Run
+            properties:
+              args:
+                description: The arguments to be passed to the command
+                items:
+                  type: string
+                type: array
+              command:
+                description: The command to run on the pod
+                enum:
+                - apply
+                - console
+                - destroy
+                - force-unlock
+                - get
+                - graph
+                - init
+                - import
+                - output
+                - plan
+                - providers
+                - providers lock
+                - refresh
+                - show
+                - state list
+                - state mv
+                - state pull
+                - state push
+                - state replace-provider
+                - state rm
+                - state show
+                - taint
+                - untaint
+                - validate
+                - sh
+                type: string
+              configMap:
+                description: ConfigMap containing the tarball to extract on the pod
+                type: string
+              configMapKey:
+                description: The config map key identifying the tarball to extract
+                type: string
+              configMapPath:
+                description: The path within the archive to the root module
+                type: string
+              handshake:
+                description: Enable TTY on pod and await handshake string from client
+                type: boolean
+              handshakeTimeout:
+                default: 10s
+                description: How long to wait for handshake before timing out
+                type: string
+              verbosity:
+                description: Logging verbosity.
+                minimum: 0
+                type: integer
+              workspace:
+                description: The workspace of the run.
+                type: string
+            required:
+            - command
+            - configMap
+            - configMapKey
+            - configMapPath
+            - workspace
+            type: object
+          status:
+            description: RunStatus defines the observed state of Run
+            properties:
+              phase:
+                description: Current phase of the run's lifecycle.
+                type: string
+              reconciled:
+                description: True if resource has been reconciled at least once.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.0
+  creationTimestamp: null
+  labels:
+    app: etok
+  name: workspaces.etok.dev
+spec:
+  group: etok.dev
+  names:
+    kind: Workspace
+    listKind: WorkspaceList
+    plural: workspaces
+    shortNames:
+    - ws
+    singular: workspace
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.terraformVersion
+      name: Version
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.queue
+      name: Queue
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Workspace is the Schema for the workspaces API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorkspaceSpec defines the desired state of Workspace
+            properties:
+              cache:
+                description: Persistent Volume Claim specification for workspace's
+                  cache.
+                properties:
+                  size:
+                    default: 1Gi
+                    description: Size of cache's persistent volume claim.
+                    type: string
+                  storageClass:
+                    description: Storage class for the cache's persistent volume claim.
+                      This is a pointer to distinguish between explicit empty string
+                      and nil (which triggers different behaviour for dynamic provisioning
+                      of persistent volumes).
+                    type: string
+                type: object
+              privilegedCommands:
+                description: List of commands that are deemed privileged. The client
+                  must set a specific annotation on the workspace to approve a run
+                  with a privileged command.
+                items:
+                  type: string
+                type: array
+              secretName:
+                default: etok
+                description: Name of the secret resource. Its keys and values will
+                  be made available as environment variables on the workspace pod.
+                type: string
+              serviceAccountName:
+                default: etok
+                description: Name of the service account configured for the workspace
+                  pod.
+                type: string
+              terraformVersion:
+                default: 0.14.3
+                description: Required version of Terraform on workspace pod
+                pattern: '[0-9]+\.[0-9]+\.[0-9]+'
+                type: string
+              verbosity:
+                description: Logging verbosity.
+                minimum: 0
+                type: integer
+            type: object
+          status:
+            description: WorkspaceStatus defines the observed state of Workspace
+            properties:
+              phase:
+                description: Lifecycle phase of workspace.
+                type: string
+              queue:
+                description: Queue of runs. Parse bypass the queue.
+                items:
+                  type: string
+                type: array
+              reconciled:
+                description: True if resource has been reconciled at least once.
+                type: boolean
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.0
+  creationTimestamp: null
+  labels:
+    app: etok
+  name: runs.etok.dev
+spec:
+  group: etok.dev
+  names:
+    kind: Run
+    listKind: RunList
+    plural: runs
+    singular: run
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.command
+      name: Command
+      type: string
+    - jsonPath: .spec.workspace
+      name: Workspace
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -158,6 +418,9 @@ spec:
     - jsonPath: .spec.terraformVersion
       name: Version
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - jsonPath: .status.queue
       name: Queue
       type: string

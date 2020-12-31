@@ -25,6 +25,9 @@ spec:
     - jsonPath: .spec.terraformVersion
       name: Version
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - jsonPath: .status.queue
       name: Queue
       type: string

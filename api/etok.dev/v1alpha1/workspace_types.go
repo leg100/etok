@@ -16,6 +16,7 @@ func init() {
 // +kubebuilder:resource:path=workspaces,scope=Namespaced,shortName={ws}
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.terraformVersion"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +genclient
 type Workspace struct {
