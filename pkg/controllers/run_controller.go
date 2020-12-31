@@ -82,6 +82,23 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 
+	// Set ownership on ConfigMap containing tarball archive
+	var archive corev1.ConfigMap
+	if err := r.Get(ctx, req.NamespacedName, &archive); err != nil {
+		// Ignore not found errors and keep on reconciling - the client might
+		// not yet have created the config map
+		if !errors.IsNotFound(err) {
+			log.Error(err, "unable to get archive configmap")
+			return ctrl.Result{}, err
+		}
+	} else {
+		if err := controllerutil.SetOwnerReference(&run, &archive, r.Scheme); err != nil {
+			log.Error(err, "unable to set config map ownership")
+			return ctrl.Result{}, err
+		}
+		log.Info("set ownership on archive config map")
+	}
+
 	// To be set with current phase
 	var phase v1alpha1.RunPhase
 
