@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -85,9 +86,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// To be set with current phase
 	var phase v1alpha1.RunPhase
 
-	if run.Command != "plan" {
-		// Commands other than plan are queued
-
+	if launcher.IsQueueable(run.Command) {
 		// Check workspace queue position
 		if pos := slice.StringIndex(ws.Status.Queue, run.Name); pos != 0 {
 			// Not at front of queue so update phase and return early
