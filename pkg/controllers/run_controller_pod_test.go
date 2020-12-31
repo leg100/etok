@@ -37,6 +37,14 @@ func TestRunPod(t *testing.T) {
 					Name:  "ETOK_WORKSPACE",
 					Value: "foo",
 				})
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "TF_VAR_namespace",
+					Value: "default",
+				})
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "TF_VAR_workspace",
+					Value: "foo",
+				})
 			},
 		},
 		{
@@ -60,6 +68,18 @@ func TestRunPod(t *testing.T) {
 					Name:      "cache",
 					MountPath: "/workspace/subdir/.terraform",
 					SubPath:   ".terraform/",
+				})
+			},
+		},
+		{
+			name:      "variables volume mount",
+			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
+			workspace: testobj.Workspace("default", "foo"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "variables",
+					MountPath: "/workspace/subdir/_etok_variables.tf",
+					SubPath:   "_etok_variables.tf",
 				})
 			},
 		},

@@ -61,7 +61,7 @@ func TestTerraform(t *testing.T) {
 					"-no-color"},
 				[]expect.Batcher{
 					&expect.BExp{R: `Enter a value:`},
-					&expect.BSnd{S: "foo\n"},
+					&expect.BSnd{S: "bar\n"},
 					&expect.BExp{R: `Plan: 1 to add, 0 to change, 0 to destroy.`},
 				}))
 		})
@@ -75,10 +75,21 @@ func TestTerraform(t *testing.T) {
 					"-no-color"},
 				[]expect.Batcher{
 					&expect.BExp{R: `Enter a value:`},
-					&expect.BSnd{S: "foo\n"},
+					&expect.BSnd{S: "bar\n"},
 					&expect.BExp{R: `Enter a value:`},
 					&expect.BSnd{S: "yes\n"},
 					&expect.BExp{R: `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`},
+				}))
+		})
+
+		t.Run("output", func(t *testing.T) {
+			require.NoError(t, step(t, name,
+				[]string{buildPath, "output",
+					"--path", path,
+					"--context", *kubectx, "--",
+				},
+				[]expect.Batcher{
+					&expect.BExp{R: `random_string = "[0-9a-f]{4}-bar-e2e-terraform-foo"`},
 				}))
 		})
 
@@ -88,7 +99,7 @@ func TestTerraform(t *testing.T) {
 					"--path", path,
 					"--context", *kubectx, "--",
 					"-input=true",
-					"-var", "suffix=foo",
+					"-var", "suffix=bar",
 					"-no-color"},
 				[]expect.Batcher{
 					&expect.BExp{R: `Enter a value:`},

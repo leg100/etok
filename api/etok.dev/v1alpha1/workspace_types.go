@@ -93,6 +93,10 @@ func (ws *Workspace) PVCName() string {
 	return ws.Name
 }
 
+func (ws *Workspace) VariablesConfigMapName() string {
+	return ws.Name + "-variables"
+}
+
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {
 	return slice.ContainsString(ws.Spec.PrivilegedCommands, cmd)
 }

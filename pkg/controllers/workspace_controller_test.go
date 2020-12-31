@@ -286,3 +286,46 @@ func TestReconcileWorkspacePod(t *testing.T) {
 		})
 	}
 }
+
+func TestReconcileWorkspaceVariables(t *testing.T) {
+	tests := []struct {
+		name       string
+		workspace  *v1alpha1.Workspace
+		assertions func(*corev1.ConfigMap)
+	}{
+		{
+			name:      "Owned and has content",
+			workspace: testobj.Workspace("", "workspace-1"),
+			assertions: func(vars *corev1.ConfigMap) {
+				assert.Equal(t, "Workspace", vars.OwnerReferences[0].Kind)
+				assert.Equal(t, "workspace-1", vars.OwnerReferences[0].Name)
+				assert.NotEmpty(t, vars.Data[variablesPath])
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
+
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.workspace.Name,
+					Namespace: tt.workspace.Namespace,
+				},
+			}
+			_, err := r.Reconcile(context.Background(), req)
+			require.NoError(t, err)
+
+			var variables corev1.ConfigMap
+			key := types.NamespacedName{
+				Name:      tt.workspace.Name + "-variables",
+				Namespace: tt.workspace.Namespace,
+			}
+			require.NoError(t, r.Get(context.TODO(), key, &variables))
+
+			tt.assertions(&variables)
+		})
+	}
+}

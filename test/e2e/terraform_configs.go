@@ -30,7 +30,7 @@ module "random" {
 }
 
 output "random_string" {
-  value = module.random.random_string
+  value = "${module.random.random_string}-${var.namespace}-${var.workspace}"
 }`
 
 	randomModuleConfig = `

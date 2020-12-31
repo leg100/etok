@@ -75,6 +75,14 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							Name:  "ETOK_RUN_NAME",
 							Value: run.Name,
 						},
+						{
+							Name:  "TF_VAR_namespace",
+							Value: ws.Namespace,
+						},
+						{
+							Name:  "TF_VAR_workspace",
+							Value: ws.Name,
+						},
 					},
 					Image:                    image,
 					ImagePullPolicy:          corev1.PullIfNotPresent,
@@ -104,6 +112,12 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 							MountPath: filepath.Join("/tarball", run.ConfigMapKey),
 							SubPath:   run.ConfigMapKey,
 						},
+						{
+							Name: "variables",
+							// <WorkingDir>/_etok_variables.tf
+							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, variablesPath),
+							SubPath:   variablesPath,
+						},
 					},
 					WorkingDir: filepath.Join(workspaceDir, run.ConfigMapPath),
 				},
@@ -125,6 +139,16 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: run.ConfigMap,
+							},
+						},
+					},
+				},
+				{
+					Name: "variables",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: ws.VariablesConfigMapName(),
 							},
 						},
 					},

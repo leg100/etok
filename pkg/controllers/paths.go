@@ -19,4 +19,8 @@ const (
 	// workspaceDir is the directory in the container where the tarball is
 	// extracted to
 	workspaceDir = "/workspace"
+
+	// variablesPath is the filename in <WorkingDir> containing declarations of
+	// built-in variables such as namespace and workspace.
+	variablesPath = "_etok_variables.tf"
 )

@@ -47,6 +47,8 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// Manage configmaps for terraform variables
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //
 // Operator grants these permissions to workspace service accounts, therefore it
 // too needs these permissions.
@@ -101,6 +103,27 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Cease reconciliation
 		return r.success(ctx, &ws)
+	}
+
+	// Manage ConfigMap containing variables for workspace
+	var variables corev1.ConfigMap
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.VariablesConfigMapName()}, &variables); err != nil {
+		if errors.IsNotFound(err) {
+			variables := *newVariablesForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &variables, r.Scheme); err != nil {
+				log.Error(err, "unable to set config map ownership")
+				return ctrl.Result{}, err
+			}
+
+			if err = r.Create(ctx, &variables); err != nil {
+				log.Error(err, "unable to create configmap for variables")
+				return ctrl.Result{}, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get configmap for variables")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Manage RBAC role for workspace
@@ -262,6 +285,27 @@ func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspa
 	return r.Status().Update(ctx, ws)
 }
 
+func newVariablesForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
+	variables := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ws.VariablesConfigMapName(),
+			Namespace: ws.Namespace,
+		},
+		Data: map[string]string{
+			variablesPath: `variable "namespace" {}
+variable "workspace" {}
+`,
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(variables)
+	// Permit filtering etok resources by component
+	labels.SetLabel(variables, labels.WorkspaceComponent)
+
+	return variables
+}
+
 func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -371,6 +415,9 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch owned pods
 	blder = blder.Owns(&corev1.Pod{})
+
+	// Watch owned config maps (variables)
+	blder = blder.Owns(&corev1.ConfigMap{})
 
 	// Watch for changes to run resources and requeue the associated Workspace.
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
