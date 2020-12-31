@@ -141,6 +141,7 @@ func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 
 	flags.AddPathFlag(cmd, &o.path)
 	flags.AddNamespaceFlag(cmd, &o.namespace)
+	flags.AddWorkspaceFlag(cmd, &o.workspace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
@@ -148,7 +149,6 @@ func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
 	cmd.Flags().DurationVar(&o.enqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
-	cmd.Flags().StringVar(&o.workspace, "workspace", defaultWorkspace, "etok workspace")
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 

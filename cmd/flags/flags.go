@@ -9,7 +9,11 @@ func AddPathFlag(cmd *cobra.Command, path *string) {
 }
 
 func AddNamespaceFlag(cmd *cobra.Command, namespace *string) {
-	cmd.Flags().StringVar(namespace, "namespace", "default", "Kubernetes namespace")
+	cmd.Flags().StringVarP(namespace, "namespace", "n", "default", "Kubernetes namespace")
+}
+
+func AddWorkspaceFlag(cmd *cobra.Command, workspace *string) {
+	cmd.Flags().StringVarP(workspace, "workspace", "w", "default", "Etok workspace")
 }
 
 func AddKubeContextFlag(cmd *cobra.Command, kubeContext *string) {
