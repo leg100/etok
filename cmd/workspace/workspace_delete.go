@@ -30,8 +30,7 @@ func deleteCmd(opts *cmdutil.Options) *cobra.Command {
 				return fmt.Errorf("failed to delete workspace: %w", err)
 			}
 
-			// Wait for workspace (and its dependents) to be deleted
-			fmt.Println("Waiting for workspace to be deleted...")
+			fmt.Println("Waiting for workspace and its dependent resources to be deleted...")
 			wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
 				if _, err := client.WorkspacesClient(namespace).Get(cmd.Context(), ws, metav1.GetOptions{}); err != nil {
 					if errors.IsNotFound(err) {
