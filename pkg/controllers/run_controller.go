@@ -96,7 +96,9 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			log.Error(err, "unable to set config map ownership")
 			return ctrl.Result{}, err
 		}
-		log.Info("set ownership on archive config map")
+		if err := r.Update(ctx, &archive); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// To be set with current phase

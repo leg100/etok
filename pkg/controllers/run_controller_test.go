@@ -189,3 +189,46 @@ func TestRunReconciler(t *testing.T) {
 		})
 	}
 }
+
+func TestRunArchive(t *testing.T) {
+	tests := []struct {
+		name       string
+		run        *v1alpha1.Run
+		objs       []runtime.Object
+		assertions func(archive *corev1.ConfigMap)
+	}{
+		{
+			name: "Owned",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.ConfigMap("operator-test", "plan-1"),
+			},
+			assertions: func(archive *corev1.ConfigMap) {
+				assert.Equal(t, "Run", archive.OwnerReferences[0].Kind)
+				assert.Equal(t, "plan-1", archive.OwnerReferences[0].Name)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs := append(tt.objs, runtime.Object(tt.run))
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.run.Name,
+					Namespace: tt.run.Namespace,
+				},
+			}
+
+			_, err := NewRunReconciler(cl, "a.b.c/d:v1").Reconcile(context.Background(), req)
+			require.NoError(t, err)
+
+			var archive corev1.ConfigMap
+			require.NoError(t, cl.Get(context.TODO(), req.NamespacedName, &archive))
+
+			tt.assertions(&archive)
+		})
+	}
+}
