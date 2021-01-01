@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -174,6 +175,25 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 				},
 			},
 		})
+	}
+
+	// Set workspace variables
+	for _, v := range ws.Spec.Variables {
+		var ev corev1.EnvVar
+
+		if v.EnvironmentVariable {
+			ev.Name = v.Key
+		} else {
+			ev.Name = fmt.Sprintf("TF_VAR_%s", v.Key)
+		}
+
+		if ev.ValueFrom != nil {
+			ev.ValueFrom = v.ValueFrom
+		} else {
+			ev.Value = v.Value
+		}
+
+		pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, ev)
 	}
 
 	return pod

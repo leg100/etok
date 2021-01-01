@@ -75,6 +75,9 @@ type newOptions struct {
 	// For testing purposes toggle obj having been reconciled
 	reconciled bool
 
+	variables            map[string]string
+	environmentVariables map[string]string
+
 	etokenv *env.Env
 }
 
@@ -134,6 +137,9 @@ func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
 
 	cmd.Flags().StringSliceVar(&o.workspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
+
+	cmd.Flags().StringToStringVar(&o.variables, "variables", map[string]string{}, "Set terraform variables")
+	cmd.Flags().StringToStringVar(&o.environmentVariables, "environment-variables", map[string]string{}, "Set environment variables")
 
 	return cmd, o
 }
@@ -248,6 +254,14 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 
 	// For testing purposes mimic obj having been reconciled
 	ws.Status.Reconciled = o.reconciled
+
+	for k, v := range o.variables {
+		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v})
+	}
+
+	for k, v := range o.environmentVariables {
+		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v, EnvironmentVariable: true})
+	}
 
 	return o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
 }

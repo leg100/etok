@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"github.com/leg100/etok/pkg/util/slice"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -71,6 +72,9 @@ type WorkspaceSpec struct {
 
 	// Required version of Terraform on workspace pod
 	TerraformVersion string `json:"terraformVersion,omitempty"`
+
+	// Variables as inputs to module
+	Variables []*Variable `json:"variables,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
@@ -84,6 +88,35 @@ type WorkspaceCacheSpec struct {
 
 	// Size of cache's persistent volume claim.
 	Size string `json:"size,omitempty"`
+}
+
+// WorkspaceStatus defines the observed state of Workspace
+type WorkspaceStatus struct {
+	// Queue of runs. Parse bypass the queue.
+	Queue []string `json:"queue,omitempty"`
+
+	// Lifecycle phase of workspace.
+	Phase WorkspacePhase `json:"phase,omitempty"`
+
+	// True if resource has been reconciled at least once.
+	Reconciled bool `json:"reconciled,omitempty"`
+}
+
+// Variable denotes an input to the module
+type Variable struct {
+	// Variable name
+	Key string `json:"key"`
+	// Variable value
+	Value string `json:"value"`
+	// Source for the variable's value. Cannot be used if value is not empty.
+	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
+	// EnvironmentVariable denotes if this variable should be created as
+	// environment variable
+	EnvironmentVariable bool `json:"environmentVariable,omitempty"`
+}
+
+func (ws *Workspace) IsReconciled() bool {
+	return ws.Status.Reconciled
 }
 
 func (ws *Workspace) PodName() string {
@@ -114,22 +147,6 @@ func (ws *Workspace) IsRunApproved(run *Run) bool {
 
 func WorkspacePodName(name string) string {
 	return "workspace-" + name
-}
-
-// WorkspaceStatus defines the observed state of Workspace
-type WorkspaceStatus struct {
-	// Queue of runs. Parse bypass the queue.
-	Queue []string `json:"queue,omitempty"`
-
-	// Lifecycle phase of workspace.
-	Phase WorkspacePhase `json:"phase,omitempty"`
-
-	// True if resource has been reconciled at least once.
-	Reconciled bool `json:"reconciled,omitempty"`
-}
-
-func (ws *Workspace) IsReconciled() bool {
-	return ws.Status.Reconciled
 }
 
 type WorkspacePhase string

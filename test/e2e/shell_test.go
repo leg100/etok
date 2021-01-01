@@ -30,6 +30,7 @@ func TestShell(t *testing.T) {
 					"--namespace", namespace,
 					"--path", path,
 					"--context", *kubectx,
+					"--environment-variables", "FOO=bar",
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
@@ -44,6 +45,17 @@ func TestShell(t *testing.T) {
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: `Linux`},
+				}))
+		})
+
+		t.Run("workspace environment variable", func(t *testing.T) {
+			require.NoError(t, step(t, name,
+				[]string{buildPath, "sh", "echo $FOO",
+					"--path", path,
+					"--context", *kubectx,
+				},
+				[]expect.Batcher{
+					&expect.BExp{R: `bar`},
 				}))
 		})
 

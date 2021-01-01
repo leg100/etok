@@ -8,6 +8,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -247,6 +248,32 @@ func TestNewWorkspace(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.Equal(t, "0.12.17", ws.Spec.TerraformVersion)
+			},
+		},
+		{
+			name: "set terraform variables",
+			args: []string{"foo", "--variables", "foo=bar,baz=haj"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *newOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "foo", Value: "bar"})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "baz", Value: "haj"})
+			},
+		},
+		{
+			name: "set environment variables",
+			args: []string{"foo", "--environment-variables", "foo=bar,baz=haj"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *newOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "foo", Value: "bar", EnvironmentVariable: true})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "baz", Value: "haj", EnvironmentVariable: true})
 			},
 		},
 		{
