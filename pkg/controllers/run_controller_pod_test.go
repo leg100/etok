@@ -97,6 +97,28 @@ func TestRunPod(t *testing.T) {
 				})
 			},
 		},
+		{
+			name:      "Set workspace terraform variables",
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("default", "foo", testobj.WithVariables("foo", "bar")),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "TF_VAR_foo",
+					Value: "bar",
+				})
+			},
+		},
+		{
+			name:      "Set workspace environment variables",
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("default", "foo", testobj.WithEnvironmentVariables("foo", "bar")),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  "foo",
+					Value: "bar",
+				})
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

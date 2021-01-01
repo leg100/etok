@@ -37,6 +37,22 @@ func WithPrivilegedCommands(cmds ...string) func(*v1alpha1.Workspace) {
 	}
 }
 
+func WithVariables(keyValues ...string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		for i := 0; i < len(keyValues); i += 2 {
+			ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: keyValues[0], Value: keyValues[1]})
+		}
+	}
+}
+
+func WithEnvironmentVariables(keyValues ...string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		for i := 0; i < len(keyValues); i += 2 {
+			ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: keyValues[0], Value: keyValues[1], EnvironmentVariable: true})
+		}
+	}
+}
+
 func WithSecret(secret string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.SecretName = secret

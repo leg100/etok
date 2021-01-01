@@ -31,6 +31,7 @@ func TestTerraform(t *testing.T) {
 					"--namespace", namespace,
 					"--path", path,
 					"--context", *kubectx,
+					"--variables", "suffix=bar",
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
@@ -60,8 +61,6 @@ func TestTerraform(t *testing.T) {
 					"-input=true",
 					"-no-color"},
 				[]expect.Batcher{
-					&expect.BExp{R: `Enter a value:`},
-					&expect.BSnd{S: "bar\n"},
 					&expect.BExp{R: `Plan: 1 to add, 0 to change, 0 to destroy.`},
 				}))
 		})
@@ -74,8 +73,6 @@ func TestTerraform(t *testing.T) {
 					"-input=true",
 					"-no-color"},
 				[]expect.Batcher{
-					&expect.BExp{R: `Enter a value:`},
-					&expect.BSnd{S: "bar\n"},
 					&expect.BExp{R: `Enter a value:`},
 					&expect.BSnd{S: "yes\n"},
 					&expect.BExp{R: `Apply complete! Resources: 1 added, 0 changed, 0 destroyed.`},
@@ -99,7 +96,6 @@ func TestTerraform(t *testing.T) {
 					"--path", path,
 					"--context", *kubectx, "--",
 					"-input=true",
-					"-var", "suffix=bar",
 					"-no-color"},
 				[]expect.Batcher{
 					&expect.BExp{R: `Enter a value:`},
