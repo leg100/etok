@@ -259,16 +259,8 @@ func TestNewWorkspace(t *testing.T) {
 				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
-				assert.Equal(t, ws.Spec.Variables, []*v1alpha1.Variable{
-					{
-						Key:   "foo",
-						Value: "bar",
-					},
-					{
-						Key:   "baz",
-						Value: "haj",
-					},
-				})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "foo", Value: "bar"})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "baz", Value: "haj"})
 			},
 		},
 		{
@@ -280,18 +272,8 @@ func TestNewWorkspace(t *testing.T) {
 				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
-				assert.Equal(t, ws.Spec.Variables, []*v1alpha1.Variable{
-					{
-						Key:                 "foo",
-						Value:               "bar",
-						EnvironmentVariable: true,
-					},
-					{
-						Key:                 "baz",
-						Value:               "haj",
-						EnvironmentVariable: true,
-					},
-				})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "foo", Value: "bar", EnvironmentVariable: true})
+				assert.Contains(t, ws.Spec.Variables, &v1alpha1.Variable{Key: "baz", Value: "haj", EnvironmentVariable: true})
 			},
 		},
 		{
