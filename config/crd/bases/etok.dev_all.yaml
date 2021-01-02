@@ -333,6 +333,22 @@ spec:
           status:
             description: WorkspaceStatus defines the observed state of Workspace
             properties:
+              outputs:
+                description: Outputs from state file
+                items:
+                  description: Output outputs the values of Terraform output
+                  properties:
+                    key:
+                      description: Attribute name in module
+                      type: string
+                    value:
+                      description: Value
+                      type: string
+                  required:
+                  - key
+                  - value
+                  type: object
+                type: array
               phase:
                 description: Lifecycle phase of workspace.
                 type: string

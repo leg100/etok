@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"reflect"
 	"regexp"
 	"strings"
@@ -103,6 +106,46 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Cease reconciliation
 		return r.success(ctx, &ws)
+	}
+
+	// Retrieve state file
+	var state corev1.Secret
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.StateSecretName()}, &state); err != nil {
+		// Ignore not found errors and keep on reconciling - the state file
+		// might not yet have been created
+		if !errors.IsNotFound(err) {
+			log.Error(err, "unable to get state secret")
+			return ctrl.Result{}, err
+		}
+	} else {
+		// State file exists
+		if val, ok := state.Data["tfstate"]; ok {
+			gr, err := gzip.NewReader(bytes.NewBuffer(val))
+			if err != nil {
+				log.Error(err, "unable to decompress state file")
+				return ctrl.Result{}, err
+			}
+			var sfile struct {
+				Outputs map[string]struct {
+					Type  string
+					Value string
+				}
+			}
+			if err := json.NewDecoder(gr).Decode(&sfile); err != nil {
+				log.Error(err, "unable to decode state file")
+				return ctrl.Result{}, err
+			}
+			var outputs []*v1alpha1.Output
+			for k, v := range sfile.Outputs {
+				outputs = append(outputs, &v1alpha1.Output{Key: k, Value: v.Value})
+			}
+			if !reflect.DeepEqual(ws.Status.Outputs, outputs) {
+				ws.Status.Outputs = outputs
+				if err := r.Status().Update(ctx, &ws); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
 	}
 
 	// Manage ConfigMap containing variables for workspace

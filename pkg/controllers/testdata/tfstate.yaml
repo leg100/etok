@@ -1,0 +1,18 @@
+apiVersion: v1
+data:
+  tfstate: H4sIAAAAAAAA/3SS0a6iMBCG732Kptfi8SBH0cSLfYS92WTjMaTQASYLLZkO5pgN775pDyJq9oKk9Pvnn58Z/i6EkBcgh9bIg0iW/p2BSJWW2uxO5Hr1nqw2MggcEKpm0jdoQFXgVWmSlJu83ERr2OaRLtNd9J7G+2gH+zjfF+t8s9t+e9ieu56dPAifQQhJymjbZo4JTTVd+3iq6YN5+ZEmkYZS9Q1HpbX+CWZBxtcuqEaDcD0shBhCOwJneyrANzwFNvm3VofCVhlVgX51HJPhDBnVBsTg+H7bkb2gBvLkdj59SoIKHdN1NQ12hfatVq7GwlL39u3/Kc93JzSOlZnHnUcOElfU0KrZitbLOVbMhHnP4GazHFm+TTLH2sfc//55lMtX3FMz4hd6ZcgaMBXX8iDiJ6qh8HXbOP2Inytr+Lqt8Rmh/k+3PwAdkP8G0zfNE+wISvwa2QwND5NwYBwyXiB7mMnp/KDqCC+Kw1Jz88vlP45HOfFhPJ2nv+q8GBb/AgAA//+GknaoPQMAAA==
+kind: Secret
+metadata:
+  annotations:
+    encoding: gzip
+  labels:
+    app.kubernetes.io/managed-by: terraform
+    tfstate: "true"
+    tfstateSecretSuffix: foo
+    tfstateWorkspace: default
+    manager: HashiCorp
+    operation: Update
+    time: "2020-12-31T18:32:26Z"
+  name: tfstate-default-foo
+  namespace: default
+type: Opaque

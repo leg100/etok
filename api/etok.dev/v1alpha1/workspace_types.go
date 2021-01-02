@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,6 +102,9 @@ type WorkspaceStatus struct {
 
 	// True if resource has been reconciled at least once.
 	Reconciled bool `json:"reconciled,omitempty"`
+
+	// Outputs from state file
+	Outputs []*Output `json:"outputs,omitempty"`
 }
 
 // Variable denotes an input to the module
@@ -115,6 +120,14 @@ type Variable struct {
 	EnvironmentVariable bool `json:"environmentVariable,omitempty"`
 }
 
+// Output outputs the values of Terraform output
+type Output struct {
+	// Attribute name in module
+	Key string `json:"key"`
+	// Value
+	Value string `json:"value"`
+}
+
 func (ws *Workspace) IsReconciled() bool {
 	return ws.Status.Reconciled
 }
@@ -125,6 +138,12 @@ func (ws *Workspace) PodName() string {
 
 func (ws *Workspace) PVCName() string {
 	return ws.Name
+}
+
+// StateSecretName retrieves the name of the secret containing the terraform
+// state for this workspace.
+func (ws *Workspace) StateSecretName() string {
+	return fmt.Sprintf("tfstate-default-%s", ws.Name)
 }
 
 func (ws *Workspace) VariablesConfigMapName() string {

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -328,4 +330,37 @@ func TestReconcileWorkspaceVariables(t *testing.T) {
 			tt.assertions(&variables)
 		})
 	}
+}
+
+func TestReconcileWorkspaceState(t *testing.T) {
+	var state corev1.Secret
+	var workspace = testobj.Workspace("default", "foo")
+
+	f, err := os.Open("testdata/tfstate.yaml")
+	require.NoError(t, yaml.NewYAMLOrJSONDecoder(f, 999).Decode(&state))
+
+	cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
+
+	r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      workspace.Name,
+			Namespace: workspace.Namespace,
+		},
+	}
+	_, err = r.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+
+	// Fetch fresh workspace for assertions
+	ws := &v1alpha1.Workspace{}
+	require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+
+	assert.Equal(t, []*v1alpha1.Output{
+		{
+			Key:   "random_string",
+			Value: "f584-default-foo-foo",
+		},
+	}, ws.Status.Outputs)
+
 }
