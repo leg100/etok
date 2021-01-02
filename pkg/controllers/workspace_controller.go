@@ -125,6 +125,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				log.Error(err, "unable to decompress state file")
 				return ctrl.Result{}, err
 			}
+
+			// Persist outputs from state file to workspace status
 			var sfile struct {
 				Outputs map[string]struct {
 					Type  string
