@@ -237,9 +237,6 @@ func Secret(namespace, name string, opts ...func(*corev1.Secret)) *corev1.Secret
 			Name:      name,
 			Namespace: namespace,
 		},
-		StringData: map[string]string{
-			"google_application_credentials.json": "abc",
-		},
 	}
 	for _, o := range opts {
 		o(secret)

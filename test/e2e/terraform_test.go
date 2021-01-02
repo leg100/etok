@@ -79,6 +79,8 @@ func TestTerraform(t *testing.T) {
 				}))
 		})
 
+		// Check that both `etok output` works and that the workspace resource
+		// has the correct output in its status
 		t.Run("output", func(t *testing.T) {
 			require.NoError(t, step(t, name,
 				[]string{buildPath, "output",
@@ -88,6 +90,12 @@ func TestTerraform(t *testing.T) {
 				[]expect.Batcher{
 					&expect.BExp{R: `random_string = "[0-9a-f]{4}-bar-e2e-terraform-foo"`},
 				}))
+
+			ws, err := client.WorkspacesClient(namespace).Get(context.Background(), "foo", metav1.GetOptions{})
+			require.NoError(t, err)
+
+			require.Equal(t, "random_string", ws.Status.Outputs[0].Key)
+			require.Regexp(t, `[0-9a-f]{4}-bar-e2e-terraform-foo`, ws.Status.Outputs[0].Value)
 		})
 
 		t.Run("destroy", func(t *testing.T) {
