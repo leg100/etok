@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -206,9 +207,8 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return o.waitForPod(gctx, run, isTTY, podch)
 	})
 
-	if o.command != "plan" {
-		// Only commands other than plan are queued - wait for run to be
-		// enqueued
+	if IsQueueable(o.command) {
+		// Wait for run to be enqueued
 		g.Go(func() error {
 			return o.waitForEnqueued(gctx, run)
 		})
@@ -225,8 +225,14 @@ func (o *launcherOptions) run(ctx context.Context) error {
 			return err
 		}
 	}
+	// ...and report any error conditions to user
+	for _, cond := range ws.Status.Conditions {
+		if cond.Status == metav1.ConditionTrue {
+			fmt.Fprintf(o.ErrOut, "%s workspace condition %s is true: %s\n", color.YellowString("Warning:"), cond.Type, cond.Message)
+		}
+	}
 
-	// Carry on waiting for run to be enqueued (if not a plan) and for pod to be
+	// Carry on waiting for run to be enqueued (if queueable) and for pod to be
 	// ready
 	if err := g.Wait(); err != nil {
 		return err

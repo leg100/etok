@@ -78,6 +78,9 @@ type newOptions struct {
 	variables            map[string]string
 	environmentVariables map[string]string
 
+	// backupBucket is the bucket to which the state file will backed up to
+	backupBucket string
+
 	etokenv *env.Env
 }
 
@@ -128,6 +131,7 @@ func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
 	cmd.Flags().StringVar(&o.workspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
 	cmd.Flags().StringVar(&o.workspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.workspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
+	cmd.Flags().StringVar(&o.workspaceSpec.BackupBucket, "backup-bucket", "", "Backup state to GCS bucket")
 
 	// We want nil to be the default but it doesn't seem like pflags supports
 	// that so use empty string and override later (see above)
@@ -240,6 +244,7 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 			},
 			PrivilegedCommands: o.workspaceSpec.PrivilegedCommands,
 			TerraformVersion:   o.workspaceSpec.TerraformVersion,
+			BackupBucket:       o.workspaceSpec.BackupBucket,
 		},
 	}
 

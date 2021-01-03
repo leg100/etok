@@ -5,11 +5,17 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"reflect"
 	"regexp"
 	"strings"
 
+	"cloud.google.com/go/storage"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"google.golang.org/api/googleapi"
+	"sigs.k8s.io/yaml"
+
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/leg100/etok/pkg/labels"
@@ -17,7 +23,8 @@ import (
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,16 +40,31 @@ var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.etok.dev/[-a-z0-9
 
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Image  string
+	Scheme        *runtime.Scheme
+	Image         string
+	StorageClient *storage.Client
 }
 
-func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler {
-	return &WorkspaceReconciler{
+type WorkspaceReconcilerOption func(r *WorkspaceReconciler)
+
+func WithStorageClient(sc *storage.Client) WorkspaceReconcilerOption {
+	return func(r *WorkspaceReconciler) {
+		r.StorageClient = sc
+	}
+}
+
+func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceReconcilerOption) *WorkspaceReconciler {
+	r := &WorkspaceReconciler{
 		Client: cl,
 		Scheme: scheme.Scheme,
 		Image:  image,
 	}
+
+	for _, o := range opts {
+		o(r)
+	}
+
+	return r
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -50,9 +72,13 @@ func NewWorkspaceReconciler(cl client.Client, image string) *WorkspaceReconciler
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+
 // Manage configmaps for terraform variables
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-//
+
+// Read terraform state files
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // Operator grants these permissions to workspace service accounts, therefore it
 // too needs these permissions.
 // +kubebuilder:rbac:groups="etok.dev",resources=runs,verbs=get
@@ -113,39 +139,21 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.StateSecretName()}, &state); err != nil {
 		// Ignore not found errors and keep on reconciling - the state file
 		// might not yet have been created
-		if !errors.IsNotFound(err) {
+		if !kerrors.IsNotFound(err) {
 			log.Error(err, "unable to get state secret")
 			return ctrl.Result{}, err
 		}
 	} else {
-		// State file exists
-		if val, ok := state.Data["tfstate"]; ok {
-			gr, err := gzip.NewReader(bytes.NewBuffer(val))
-			if err != nil {
-				log.Error(err, "unable to decompress state file")
-				return ctrl.Result{}, err
-			}
+		// Read state secret and update status
+		sfile, err := r.readStateAndSetCondition(ctx, &ws, &state)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 
-			// Persist outputs from state file to workspace status
-			var sfile struct {
-				Outputs map[string]struct {
-					Type  string
-					Value string
-				}
-			}
-			if err := json.NewDecoder(gr).Decode(&sfile); err != nil {
-				log.Error(err, "unable to decode state file")
+		if ws.Spec.BackupBucket != "" && sfile.Serial != ws.Status.BackupSerial {
+			// Backup the state file and update status
+			if err := r.backupAndSetCondition(ctx, &ws, &state, sfile.Serial); err != nil {
 				return ctrl.Result{}, err
-			}
-			var outputs []*v1alpha1.Output
-			for k, v := range sfile.Outputs {
-				outputs = append(outputs, &v1alpha1.Output{Key: k, Value: v.Value})
-			}
-			if !reflect.DeepEqual(ws.Status.Outputs, outputs) {
-				ws.Status.Outputs = outputs
-				if err := r.Status().Update(ctx, &ws); err != nil {
-					return ctrl.Result{}, err
-				}
 			}
 		}
 	}
@@ -153,7 +161,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Manage ConfigMap containing variables for workspace
 	var variables corev1.ConfigMap
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.VariablesConfigMapName()}, &variables); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			variables := *newVariablesForWS(&ws)
 
 			if err := controllerutil.SetControllerReference(&ws, &variables, r.Scheme); err != nil {
@@ -174,7 +182,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Manage RBAC role for workspace
 	var role rbacv1.Role
 	if err := r.Get(ctx, req.NamespacedName, &role); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			role := *newRoleForWS(&ws)
 
 			if err := controllerutil.SetControllerReference(&ws, &role, r.Scheme); err != nil {
@@ -195,7 +203,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Manage RBAC role binding for workspace
 	var binding rbacv1.RoleBinding
 	if err := r.Get(ctx, req.NamespacedName, &binding); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			binding := *newRoleBindingForWS(&ws)
 
 			if err := controllerutil.SetControllerReference(&ws, &binding, r.Scheme); err != nil {
@@ -216,7 +224,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Manage PVC for workspace
 	var pvc corev1.PersistentVolumeClaim
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PVCName()}, &pvc); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			pvc := *newPVCForWS(&ws)
 
 			if err := controllerutil.SetControllerReference(&ws, &pvc, r.Scheme); err != nil {
@@ -238,7 +246,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var pod corev1.Pod
 	var podCreated bool
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			pod, err := workspacePod(&ws, r.Image)
 			if err != nil {
 				log.Error(err, "unable to construct pod")
@@ -303,6 +311,119 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	return r.success(ctx, &ws)
+}
+
+func (r *WorkspaceReconciler) readStateAndSetCondition(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret) (*state, error) {
+	data, ok := secret.Data["tfstate"]
+	if !ok {
+		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "KeyNotFound", "Expected key 'tfstate' not found in state secret")
+	}
+
+	// Decompress state file
+	gr, err := gzip.NewReader(bytes.NewBuffer(data))
+	if err != nil {
+		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "DecompressionFailed", "Failed to decompress state")
+	}
+
+	// Unmarshal state file
+	var sfile state
+	if err := json.NewDecoder(gr).Decode(&sfile); err != nil {
+		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "DecodeFailed", "Failed to decode state")
+	}
+
+	// Persist outputs from state file to workspace status
+	var outputs []*v1alpha1.Output
+	for k, v := range sfile.Outputs {
+		outputs = append(outputs, &v1alpha1.Output{Key: k, Value: v.Value})
+	}
+
+	if !reflect.DeepEqual(ws.Status.Outputs, outputs) {
+		ws.Status.Outputs = outputs
+		if err := r.Status().Update(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
+	return &sfile, r.setStateCondition(ctx, ws, metav1.ConditionFalse, "StateReadSuccessful", "State was successfully read")
+}
+
+func (r *WorkspaceReconciler) backupAndSetCondition(ctx context.Context, ws *v1alpha1.Workspace, state *corev1.Secret, serial int) error {
+	if err := r.backup(ctx, ws, state); err != nil {
+		var reason = "BackupError"
+		var message string
+		var gerr *googleapi.Error
+		if errors.As(err, &gerr) {
+			// Extract message from google api error
+			message = gerr.Message
+			if gerr.Code == 404 {
+				reason = backupBucketNotFoundReason
+				// Override generic 404 "not found" message
+				message = backupBucketNotFoundMessage
+			}
+		} else {
+			message = err.Error()
+		}
+		return r.setBackupCondition(ctx, ws, metav1.ConditionTrue, reason, message, serial)
+	}
+	return r.setBackupCondition(ctx, ws, metav1.ConditionFalse, "BackupSuccessful", "Most recent state backup was successful", serial)
+}
+
+func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, state *corev1.Secret) (err error) {
+	// Re-use client or create if not yet created
+	if r.StorageClient == nil {
+		r.StorageClient, err = storage.NewClient(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
+	oh := bh.Object(ws.BackupObjectName())
+
+	// Marshal state file first to json then to yaml
+	y, err := yaml.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	// Copy state file to GCS
+	owriter := oh.NewWriter(ctx)
+	_, err = io.Copy(owriter, bytes.NewBuffer(y))
+	if err != nil {
+		return err
+	}
+
+	if err := owriter.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *WorkspaceReconciler) setBackupCondition(ctx context.Context, ws *v1alpha1.Workspace, status metav1.ConditionStatus, reason, message string, serial int) error {
+	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
+		Type:    "BackupFailure",
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	})
+
+	if status == metav1.ConditionFalse {
+		// Backup successful so update status of last serial backed up
+		ws.Status.BackupSerial = serial
+	}
+
+	return r.Status().Update(ctx, ws)
+}
+
+func (r *WorkspaceReconciler) setStateCondition(ctx context.Context, ws *v1alpha1.Workspace, status metav1.ConditionStatus, reason, message string) error {
+	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
+		Type:    "StateFailure",
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	})
+
+	return r.Status().Update(ctx, ws)
 }
 
 // success marks a successful reconcile
@@ -463,6 +584,27 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Watch owned config maps (variables)
 	blder = blder.Owns(&corev1.ConfigMap{})
+
+	// Watch terraform state file
+	blder = blder.Watches(&source.Kind{Type: &corev1.ConfigMap{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
+		var isStateFile bool
+		for k, v := range o.GetLabels() {
+			if k == "tfstate" && v == "true" {
+				isStateFile = true
+			}
+		}
+		if !isStateFile {
+			return []ctrl.Request{}
+		}
+		return []ctrl.Request{
+			{
+				NamespacedName: types.NamespacedName{
+					Name:      o.GetName(),
+					Namespace: o.GetNamespace(),
+				},
+			},
+		}
+	}))
 
 	// Watch for changes to run resources and requeue the associated Workspace.
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {

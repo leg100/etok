@@ -39,7 +39,7 @@ local: image push
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy-operator
 deploy-operator: image push
-	$(BUILD_BIN) generate operator --local --image $(IMG) | $(KUBECTL) apply -f -
+	$(BUILD_BIN) generate operator --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS) | $(KUBECTL) apply -f -
 	$(KUBECTL) rollout status --timeout=10s deployment/etok-operator
 
 .PHONY: delete-operator
