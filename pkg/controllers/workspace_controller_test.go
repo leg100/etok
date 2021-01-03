@@ -2,18 +2,23 @@ package controllers
 
 import (
 	"context"
-	"os"
+	"io/ioutil"
 	"testing"
 
+	"sigs.k8s.io/yaml"
+
+	"github.com/fsouza/fake-gcs-server/fakestorage"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -333,34 +338,159 @@ func TestReconcileWorkspaceVariables(t *testing.T) {
 }
 
 func TestReconcileWorkspaceState(t *testing.T) {
-	var state corev1.Secret
-	var workspace = testobj.Workspace("default", "foo")
+	testutil.Run(t, "outputs", func(t *testutil.T) {
+		// Unmarshal YAML testdata into go object
+		var state corev1.Secret
+		f, err := ioutil.ReadFile("testdata/tfstate.yaml")
+		require.NoError(t, yaml.Unmarshal(f, &state))
 
-	f, err := os.Open("testdata/tfstate.yaml")
-	require.NoError(t, yaml.NewYAMLOrJSONDecoder(f, 999).Decode(&state))
+		var workspace = testobj.Workspace("default", "foo")
+		cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
 
-	cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
+		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-	r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      workspace.Name,
+				Namespace: workspace.Namespace,
+			},
+		}
+		_, err = r.Reconcile(context.Background(), req)
+		require.NoError(t, err)
 
-	req := reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      workspace.Name,
-			Namespace: workspace.Namespace,
-		},
-	}
-	_, err = r.Reconcile(context.Background(), req)
-	require.NoError(t, err)
+		// Fetch fresh workspace for assertions
+		ws := &v1alpha1.Workspace{}
+		require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
 
-	// Fetch fresh workspace for assertions
-	ws := &v1alpha1.Workspace{}
-	require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+		assert.Equal(t, []*v1alpha1.Output{
+			{
+				Key:   "random_string",
+				Value: "f584-default-foo-foo",
+			},
+		}, ws.Status.Outputs)
 
-	assert.Equal(t, []*v1alpha1.Output{
-		{
-			Key:   "random_string",
-			Value: "f584-default-foo-foo",
-		},
-	}, ws.Status.Outputs)
+		assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, "StateFailure"))
+	})
 
+	testutil.Run(t, "invalid state", func(t *testutil.T) {
+		// A generic secret resource that is missing the 'tfstate' key and thus
+		// should trigger an error
+		state := testobj.Secret("default", "tfstate-default-foo")
+
+		var workspace = testobj.Workspace("default", "foo")
+		cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, state)
+
+		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      workspace.Name,
+				Namespace: workspace.Namespace,
+			},
+		}
+		_, err := r.Reconcile(context.Background(), req)
+		require.NoError(t, err)
+
+		// Fetch fresh workspace for assertions
+		ws := &v1alpha1.Workspace{}
+		require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+
+		assert.True(t, meta.IsStatusConditionTrue(ws.Status.Conditions, "StateFailure"))
+	})
+
+	testutil.Run(t, "backup", func(t *testutil.T) {
+		// Unmarshal YAML testdata into go object
+		var state corev1.Secret
+		f, err := ioutil.ReadFile("testdata/tfstate.yaml")
+		require.NoError(t, yaml.Unmarshal(f, &state))
+
+		server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
+			InitialObjects: []fakestorage.Object{
+				// Seems like the only way to programmatically create an initial
+				// bucket is to create an initial object...
+				{
+					BucketName: "backup-bucket",
+					Name:       "some/object/file.txt",
+					Content:    []byte("inside the file"),
+				},
+			},
+			Host: "127.0.0.1",
+			Port: 8081,
+		})
+		require.NoError(t, err)
+		defer server.Stop()
+
+		testutil.Run(t.T, "valid bucket", func(t *testutil.T) {
+			var workspace = testobj.Workspace("default", "foo")
+			workspace.Spec.BackupBucket = "backup-bucket"
+
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
+
+			sclient := server.Client()
+
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      workspace.Name,
+					Namespace: workspace.Namespace,
+				},
+			}
+			_, err = r.Reconcile(context.Background(), req)
+			require.NoError(t, err)
+
+			// Check object exists in bucket
+			obj := sclient.Bucket("backup-bucket").Object(workspace.BackupObjectName())
+			_, err = obj.Attrs(context.Background())
+			require.NoError(t, err)
+
+			// Read object
+			or, err := obj.NewReader(context.Background())
+			require.NoError(t, err)
+			objectBytes, err := ioutil.ReadAll(or)
+			require.NoError(t, err)
+
+			// Unmarshal object
+			var got corev1.Secret
+			require.NoError(t, yaml.Unmarshal(objectBytes, &got))
+
+			// Check testdata state is same as backup got from gcs
+			assert.Equal(t, state, got)
+
+			ws := &v1alpha1.Workspace{}
+			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+
+			assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, "BackupFailure"))
+		})
+
+		testutil.Run(t.T, "invalid bucket", func(t *testutil.T) {
+			var workspace = testobj.Workspace("default", "foo")
+			workspace.Spec.BackupBucket = "does-not-exist"
+
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
+
+			sclient := server.Client()
+
+			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      workspace.Name,
+					Namespace: workspace.Namespace,
+				},
+			}
+			_, err = r.Reconcile(context.Background(), req)
+			require.NoError(t, err)
+
+			// Fetch fresh workspace for assertions
+			ws := &v1alpha1.Workspace{}
+			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+
+			backupComplete := meta.FindStatusCondition(ws.Status.Conditions, "BackupFailure")
+			if assert.NotNil(t, backupComplete) {
+				assert.Equal(t, metav1.ConditionTrue, backupComplete.Status)
+				assert.Equal(t, backupBucketNotFoundReason, backupComplete.Reason)
+			}
+		})
+	})
 }

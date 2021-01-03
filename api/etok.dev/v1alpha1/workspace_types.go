@@ -77,6 +77,9 @@ type WorkspaceSpec struct {
 
 	// Variables as inputs to module
 	Variables []*Variable `json:"variables,omitempty"`
+
+	// GCS bucket to which to backup state file
+	BackupBucket string `json:"backup,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
@@ -105,6 +108,11 @@ type WorkspaceStatus struct {
 
 	// Outputs from state file
 	Outputs []*Output `json:"outputs,omitempty"`
+
+	// Serial number of last successfully backed up state file
+	BackupSerial int `json:"backupSerial"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // Variable denotes an input to the module
@@ -144,6 +152,12 @@ func (ws *Workspace) PVCName() string {
 // state for this workspace.
 func (ws *Workspace) StateSecretName() string {
 	return fmt.Sprintf("tfstate-default-%s", ws.Name)
+}
+
+// BackupObjectName returns the object name to be used for the backup of the
+// workspace's state file.
+func (ws *Workspace) BackupObjectName() string {
+	return fmt.Sprintf("%s/%s.yaml", ws.Namespace, ws.Name)
 }
 
 func (ws *Workspace) VariablesConfigMapName() string {

@@ -32,6 +32,7 @@ func TestTerraform(t *testing.T) {
 					"--path", path,
 					"--context", *kubectx,
 					"--variables", "suffix=bar",
+					"--backup-bucket", backupBucket,
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
@@ -96,6 +97,12 @@ func TestTerraform(t *testing.T) {
 
 			require.Equal(t, "random_string", ws.Status.Outputs[0].Key)
 			require.Regexp(t, `[0-9a-f]{4}-bar-e2e-terraform-foo`, ws.Status.Outputs[0].Value)
+		})
+
+		// Check state backup exists
+		t.Run("state backup", func(t *testing.T) {
+			_, err := sclient.Bucket(backupBucket).Object(fmt.Sprintf("%s/foo.yaml", namespace)).Attrs(context.Background())
+			require.NoError(t, err)
 		})
 
 		t.Run("destroy", func(t *testing.T) {

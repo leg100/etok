@@ -31,6 +31,9 @@ type generateOperatorOptions struct {
 	namespace string
 	image     string
 
+	// Path on local fs containg GCP service account key
+	secretFile string
+
 	// Path to local generated cluster role definition
 	localClusterRolePath string
 	// Toggle reading cluster role from local file
@@ -56,6 +59,7 @@ func generateOperatorCmd(opts *cmdutil.Options) (*cobra.Command, *generateOperat
 	cmd.Flags().BoolVar(&o.localClusterRoleToggle, "local", false, "Read cluster role definition from local file (default false)")
 	cmd.Flags().StringVar(&o.localClusterRolePath, "path", clusterRolePath, "Path to local cluster role definition")
 	cmd.Flags().StringVar(&o.remoteClusterRoleURL, "url", clusterRoleURL, "URL for cluster role definition")
+	cmd.Flags().StringVar(&o.secretFile, "secret-file", "", "Path on local filesystem to key file")
 
 	return cmd, o
 }
@@ -69,6 +73,15 @@ func (o *generateOperatorOptions) Generate() error {
 		o.deployment(),
 		o.serviceAccount(),
 		o.clusterRoleBinding(),
+	}
+
+	if o.secretFile != "" {
+		key, err := ioutil.ReadFile(o.secretFile)
+		if err != nil {
+			return err
+		}
+
+		resources = append(resources, o.secret(key))
 	}
 
 	var sb strings.Builder
@@ -166,6 +179,29 @@ func (o *generateOperatorOptions) serviceAccount() *corev1.ServiceAccount {
 	return serviceAccount
 }
 
+func (o *generateOperatorOptions) secret(key []byte) *corev1.Secret {
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      o.name,
+			Namespace: o.namespace,
+		},
+		Data: map[string][]byte{
+			"secret-file.json": key,
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(secret)
+	// Permit filtering etok resources by component
+	labels.SetLabel(secret, labels.OperatorComponent)
+
+	return secret
+}
+
 func (o *generateOperatorOptions) deployment() *appsv1.Deployment {
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -230,6 +266,28 @@ func (o *generateOperatorOptions) deployment() *appsv1.Deployment {
 	)
 	deployment.Spec.Selector = &metav1.LabelSelector{MatchLabels: selector}
 	deployment.Spec.Template.Labels = selector
+
+	if o.secretFile != "" {
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "secrets",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: o.name,
+				},
+			},
+		})
+
+		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      "secrets",
+			MountPath: "/secrets/secret-file.json",
+			SubPath:   "secret-file.json",
+		})
+
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+			Value: "/secrets/secret-file.json",
+		})
+	}
 
 	return deployment
 }
