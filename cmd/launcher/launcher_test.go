@@ -45,7 +45,7 @@ func TestLauncher(t *testing.T) {
 		code int32
 		// Toggle mocking a successful reconcile status
 		disableMockReconcile bool
-		setOpts              func(*cmdutil.Options)
+		factoryOverrides     func(*cmdutil.Factory)
 		assertions           func(*launcherOptions)
 	}{
 		{
@@ -157,8 +157,8 @@ func TestLauncher(t *testing.T) {
 			name: "cleanup resources upon error",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			err:  fakeError,
-			setOpts: func(o *cmdutil.Options) {
-				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			factoryOverrides: func(f *cmdutil.Factory) {
+				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -175,8 +175,8 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--no-cleanup"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
 			err:  fakeError,
-			setOpts: func(o *cmdutil.Options) {
-				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			factoryOverrides: func(f *cmdutil.Factory) {
+				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -207,7 +207,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "with tty",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			setOpts: func(opts *cmdutil.Options) {
+			factoryOverrides: func(opts *cmdutil.Factory) {
 				var err error
 				opts.In, _, err = pty.Open()
 				require.NoError(t, err)
@@ -227,10 +227,10 @@ func TestLauncher(t *testing.T) {
 			name: "disable tty",
 			args: []string{"--no-tty"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			setOpts: func(opts *cmdutil.Options) {
+			factoryOverrides: func(f *cmdutil.Factory) {
 				// Ensure tty is overridden
 				var err error
-				_, opts.In, err = pty.Open()
+				_, f.In, err = pty.Open()
 				require.NoError(t, err)
 			},
 			assertions: func(o *launcherOptions) {
@@ -252,9 +252,9 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "pod completed with tty",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
-			setOpts: func(opts *cmdutil.Options) {
+			factoryOverrides: func(f *cmdutil.Factory) {
 				var err error
-				_, opts.In, err = pty.Open()
+				_, f.In, err = pty.Open()
 				require.NoError(t, err)
 			},
 			podPhase: corev1.PodSucceeded,
@@ -286,11 +286,11 @@ func TestLauncher(t *testing.T) {
 			}
 
 			out := new(bytes.Buffer)
-			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
 			require.NoError(t, err)
 
-			if tt.setOpts != nil {
-				tt.setOpts(opts)
+			if tt.factoryOverrides != nil {
+				tt.factoryOverrides(f)
 			}
 
 			// Default to plan command
@@ -300,19 +300,19 @@ func TestLauncher(t *testing.T) {
 				command = tt.cmd
 			}
 
-			cmdOpts := &launcherOptions{command: command, runName: "run-12345"}
+			opts := &launcherOptions{command: command, runName: "run-12345"}
 
 			if !tt.disableMockReconcile {
 				// Mock successful reconcile
-				cmdOpts.reconciled = true
+				opts.reconciled = true
 			}
 
 			// create cobra command
-			cmd := launcherCommand(opts, cmdOpts)
+			cmd := launcherCommand(f, opts)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 
-			mockControllers(t, opts, cmdOpts, tt.podPhase, tt.code)
+			mockControllers(t, f, opts, tt.podPhase, tt.code)
 
 			err = cmd.ExecuteContext(context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
@@ -320,7 +320,7 @@ func TestLauncher(t *testing.T) {
 			}
 
 			if tt.assertions != nil {
-				tt.assertions(cmdOpts)
+				tt.assertions(opts)
 			}
 		})
 	}
@@ -329,7 +329,7 @@ func TestLauncher(t *testing.T) {
 // Mock controllers (badly):
 // (a) Runs controller: When a run is created, create a pod
 // (b) Pods controller: Simulate pod completing successfully
-func mockControllers(t *testutil.T, opts *cmdutil.Options, o *launcherOptions, phase corev1.PodPhase, exitCode int32) {
+func mockControllers(t *testutil.T, f *cmdutil.Factory, o *launcherOptions, phase corev1.PodPhase, exitCode int32) {
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
@@ -340,5 +340,5 @@ func mockControllers(t *testutil.T, opts *cmdutil.Options, o *launcherOptions, p
 		return false, action.(testcore.CreateAction).GetObject(), nil
 	}
 
-	opts.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
+	f.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
 }

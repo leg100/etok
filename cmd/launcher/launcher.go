@@ -59,7 +59,7 @@ var (
 // pod's TTY, permitting input/output. It then awaits the completion of the pod,
 // reporting its container's exit code.
 type launcherOptions struct {
-	*cmdutil.Options
+	*cmdutil.Factory
 
 	args []string
 
@@ -103,8 +103,8 @@ type launcherOptions struct {
 	reconciled bool
 }
 
-func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
-	o.Options = opts
+func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
+	o.Factory = f
 	o.namespace = defaultNamespace
 
 	cmd := &cobra.Command{
@@ -118,7 +118,7 @@ func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
 
-			o.Client, err = opts.Create(o.kubeContext)
+			o.Client, err = f.Create(o.kubeContext)
 			if err != nil {
 				return err
 			}

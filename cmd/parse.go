@@ -8,9 +8,9 @@ import (
 )
 
 // ParseArgs parses CLI args and executes the select command
-func ParseArgs(ctx context.Context, args []string, opts *cmdutil.Options) error {
+func ParseArgs(ctx context.Context, args []string, f *cmdutil.Factory) error {
 	// Build root command
-	cmd := RootCmd(opts)
+	cmd := RootCmd(f)
 
 	// Override os.Args
 	cmd.SetArgs(args)

@@ -149,7 +149,7 @@ func TestRunnerCommand(t *testing.T) {
 func TestRunnerLockFile(t *testing.T) {
 	testutil.Run(t, "with lock file", func(t *testutil.T) {
 		out := new(bytes.Buffer)
-		cmdOpts, err := cmdutil.NewFakeOpts(out, testobj.Run("dev", "run-12345", "init"))
+		cmdOpts, err := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "init"))
 		require.NoError(t, err)
 		cmd, o := RunnerCmd(cmdOpts)
 		cmd.SetOut(out)
@@ -307,7 +307,7 @@ func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
 
 func setupRunnerCmd(t *testutil.T, args ...string) (*bytes.Buffer, *cobra.Command, *RunnerOptions) {
 	out := new(bytes.Buffer)
-	o, err := cmdutil.NewFakeOpts(out)
+	o, err := cmdutil.NewFakeFactory(out)
 	require.NoError(t, err)
 	cmd, cmdOpts := RunnerCmd(o)
 	cmd.SetOut(out)

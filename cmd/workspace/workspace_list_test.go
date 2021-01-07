@@ -54,12 +54,12 @@ func TestListWorkspaces(t *testing.T) {
 
 			out := new(bytes.Buffer)
 
-			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
 			require.NoError(t, err)
 
-			cmd := listCmd(opts)
+			cmd := listCmd(f)
 			cmd.SetArgs(tt.args)
-			cmd.SetOut(opts.Out)
+			cmd.SetOut(f.Out)
 
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 

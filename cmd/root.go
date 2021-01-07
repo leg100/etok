@@ -15,13 +15,13 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func RootCmd(opts *cmdutil.Options) *cobra.Command {
+func RootCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "etok",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			opts.Verbosity, _ = strconv.Atoi(cmd.Flags().Lookup("v").Value.String())
+			f.Verbosity, _ = strconv.Atoi(cmd.Flags().Lookup("v").Value.String())
 		},
 	}
 
@@ -30,22 +30,22 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 	klog.InitFlags(klogfs)
 	cmd.PersistentFlags().AddGoFlagSet(klogfs)
 
-	cmd.SetOut(opts.Out)
+	cmd.SetOut(f.Out)
 
-	cmd.AddCommand(versionCmd(opts))
-	cmd.AddCommand(workspace.WorkspaceCmd(opts))
-	cmd.AddCommand(manager.ManagerCmd(opts))
+	cmd.AddCommand(versionCmd(f))
+	cmd.AddCommand(workspace.WorkspaceCmd(f))
+	cmd.AddCommand(manager.ManagerCmd(f))
 
-	runnerCmd, _ := runner.RunnerCmd(opts)
+	runnerCmd, _ := runner.RunnerCmd(f)
 	cmd.AddCommand(runnerCmd)
 
-	installCmd, _ := install.InstallCmd(opts)
+	installCmd, _ := install.InstallCmd(f)
 	cmd.AddCommand(installCmd)
 
 	// Terraform commands (and shell command)
-	launcher.AddToRoot(cmd, opts)
+	launcher.AddToRoot(cmd, f)
 	// terraform fmt
-	cmd.AddCommand(launcher.FmtCmd(&executor.Exec{IOStreams: opts.IOStreams}))
+	cmd.AddCommand(launcher.FmtCmd(&executor.Exec{IOStreams: f.IOStreams}))
 
 	return cmd
 }

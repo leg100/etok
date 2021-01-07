@@ -32,12 +32,12 @@ func TestDeleteWorkspace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			opts, err := cmdutil.NewFakeOpts(new(bytes.Buffer), tt.objs...)
+			f, err := cmdutil.NewFakeFactory(new(bytes.Buffer), tt.objs...)
 			require.NoError(t, err)
 
-			cmd := deleteCmd(opts)
+			cmd := deleteCmd(f)
 			cmd.SetArgs(tt.args)
-			cmd.SetOut(opts.Out)
+			cmd.SetOut(f.Out)
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 		})
 	}

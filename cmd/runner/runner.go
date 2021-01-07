@@ -33,7 +33,7 @@ const (
 )
 
 type RunnerOptions struct {
-	*cmdutil.Options
+	*cmdutil.Factory
 
 	*client.Client
 
@@ -54,9 +54,9 @@ type RunnerOptions struct {
 	args []string
 }
 
-func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
+func RunnerCmd(opts *cmdutil.Factory) (*cobra.Command, *RunnerOptions) {
 	o := &RunnerOptions{
-		Options: opts,
+		Factory: opts,
 		exec:    &executor.Exec{IOStreams: opts.IOStreams},
 	}
 

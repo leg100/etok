@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-func deleteCmd(opts *cmdutil.Options) *cobra.Command {
+func deleteCmd(f *cmdutil.Factory) *cobra.Command {
 	var kubeContext string
 	var namespace = defaultNamespace
 
@@ -23,7 +23,7 @@ func deleteCmd(opts *cmdutil.Options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := args[0]
 
-			client, err := opts.Create(kubeContext)
+			client, err := f.Create(kubeContext)
 			if err != nil {
 				return err
 			}

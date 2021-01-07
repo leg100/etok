@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func versionCmd(opts *cmdutil.Options) *cobra.Command {
+func versionCmd(opts *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print client version information",
