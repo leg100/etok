@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func listCmd(opts *cmdutil.Factory) *cobra.Command {
+func listCmd(f *cmdutil.Factory) *cobra.Command {
 	var path, kubeContext string
 	var namespace = defaultNamespace
 	var workspace = defaultWorkspace
@@ -20,7 +20,7 @@ func listCmd(opts *cmdutil.Factory) *cobra.Command {
 		Use:   "list",
 		Short: "List all workspaces",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			client, err := opts.Create(kubeContext)
+			client, err := f.Create(kubeContext)
 			if err != nil {
 				return err
 			}
@@ -49,7 +49,7 @@ func listCmd(opts *cmdutil.Factory) *cobra.Command {
 				} else {
 					prefix = ""
 				}
-				fmt.Fprintf(opts.Out, "%s\t%s\n", prefix, &env.Env{Namespace: ws.Namespace, Workspace: ws.Name})
+				fmt.Fprintf(f.Out, "%s\t%s\n", prefix, &env.Env{Namespace: ws.Namespace, Workspace: ws.Name})
 			}
 
 			return nil
