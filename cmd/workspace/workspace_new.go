@@ -85,7 +85,10 @@ type newOptions struct {
 }
 
 func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
-	o := &newOptions{Options: opts}
+	o := &newOptions{
+		Options:   opts,
+		namespace: defaultNamespace,
+	}
 	cmd := &cobra.Command{
 		Use:   "new <workspace>",
 		Short: "Create a new etok workspace",

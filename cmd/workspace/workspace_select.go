@@ -10,7 +10,8 @@ import (
 )
 
 func selectCmd(opts *cmdutil.Options) *cobra.Command {
-	var path, namespace string
+	var path string
+	var namespace = defaultNamespace
 
 	cmd := &cobra.Command{
 		Use:   "select <workspace>",

@@ -28,6 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const (
+	defaultNamespace = "default"
+)
+
 type RunnerOptions struct {
 	*cmdutil.Options
 
@@ -51,7 +55,11 @@ type RunnerOptions struct {
 }
 
 func RunnerCmd(opts *cmdutil.Options) (*cobra.Command, *RunnerOptions) {
-	o := &RunnerOptions{Options: opts, exec: &executor.Exec{IOStreams: opts.IOStreams}}
+	o := &RunnerOptions{
+		Options: opts,
+		exec:    &executor.Exec{IOStreams: opts.IOStreams},
+	}
+
 	cmd := &cobra.Command{
 		Use:    "runner [args]",
 		Short:  "Run the etok runner",
@@ -94,6 +102,10 @@ func prefixError(err error) error {
 }
 
 func (o *RunnerOptions) validate() error {
+	if o.namespace == "" {
+		return errors.New("--namespace cannot be empty")
+	}
+
 	if o.command == "" {
 		return errors.New("--command cannot be empty")
 	}

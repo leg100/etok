@@ -5,10 +5,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// default namespace workspaces are created in or if .terraform/environment
+	// is not found
+	defaultNamespace = "default"
+
+	// default workspace if .terraform/environment is not found
+	defaultWorkspace = "default"
+)
+
 func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
-		Short: "etok workspace management",
+		Short: "Etok workspace management",
 	}
 
 	nc, _ := newCmd(opts)
