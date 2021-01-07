@@ -4,7 +4,7 @@ import (
 	"flag"
 	"strconv"
 
-	"github.com/leg100/etok/cmd/generate"
+	"github.com/leg100/etok/cmd/install"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/cmd/manager"
 	"github.com/leg100/etok/cmd/runner"
@@ -34,11 +34,13 @@ func RootCmd(opts *cmdutil.Options) *cobra.Command {
 
 	cmd.AddCommand(versionCmd(opts))
 	cmd.AddCommand(workspace.WorkspaceCmd(opts))
-	cmd.AddCommand(generate.GenerateCmd(opts))
 	cmd.AddCommand(manager.ManagerCmd(opts))
 
 	runnerCmd, _ := runner.RunnerCmd(opts)
 	cmd.AddCommand(runnerCmd)
+
+	installCmd, _ := install.InstallCmd(opts)
+	cmd.AddCommand(installCmd)
 
 	// Terraform commands (and shell command)
 	launcher.AddToRoot(cmd, opts)

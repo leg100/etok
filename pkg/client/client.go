@@ -6,6 +6,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Client is a collection of kubernetes clients along with some convenience methods.
@@ -18,6 +19,9 @@ type Client struct {
 
 	// etok generated client
 	EtokClient etokclient.Interface
+
+	// Controller-runtime client
+	RuntimeClient runtimeclient.Client
 }
 
 func (c *Client) PodsClient(namespace string) typedv1.PodInterface {

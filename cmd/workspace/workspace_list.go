@@ -13,8 +13,8 @@ import (
 
 func listCmd(opts *cmdutil.Options) *cobra.Command {
 	var path, kubeContext string
-	var namespace = "default"
-	var workspace = "default"
+	var namespace = defaultNamespace
+	var workspace = defaultWorkspace
 
 	cmd := &cobra.Command{
 		Use:   "list",

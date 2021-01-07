@@ -37,22 +37,13 @@ local: image push
 	ETOK_IMAGE=$(IMG) $(BUILD_BIN) operator --context $(KUBECTX)
 
 # Same as above - image still needs to be built and pushed/loaded
-.PHONY: deploy-operator
-deploy-operator: image push
-	$(BUILD_BIN) generate operator --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS) | $(KUBECTL) apply -f -
-	$(KUBECTL) rollout status --timeout=10s deployment/etok-operator
+.PHONY: deploy
+deploy: image push
+	$(BUILD_BIN) install --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
 
-.PHONY: delete-operator
-delete-operator: build
-	$(BUILD_BIN) generate operator --local | $(KUBECTL) delete -f - --wait --ignore-not-found=true
-
-.PHONY: deploy-crds
-deploy-crds: build manifests
-	$(BUILD_BIN) generate crds --local | $(KUBECTL) create -f -
-
-.PHONY: delete-crds
-delete-crds: build
-	$(BUILD_BIN) generate crds --local | $(KUBECTL) delete -f - --ignore-not-found
+.PHONY: undeploy
+undeploy: build
+	$(BUILD_BIN) install --local --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
 .PHONY: create-namespace
 create-namespace:
@@ -69,10 +60,10 @@ delete-secret:
 	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret etok --ignore-not-found=true
 
 .PHONY: e2e
-e2e: image push deploy-crds deploy-operator e2e-run e2e-clean
+e2e: image push deploy e2e-run e2e-clean
 
 .PHONY: e2e-clean
-e2e-clean: delete-operator delete-crds
+e2e-clean: undeploy
 
 .PHONY: e2e-run
 e2e-run:
@@ -128,12 +119,7 @@ endif
 .PHONY: manifests
 manifests: controller-gen
 	@{ \
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok-operator webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
-	for f in ./config/crd/bases/*.yaml; do \
-		$(KUBECTL) label --overwrite -f $$f --local=true -oyaml app=etok > crd_with_label.yaml;\
- 		mv crd_with_label.yaml $$f;\
- 	done;\
- 	sed -se '$$s/$$/\n---/' ./config/crd/bases/*.yaml | head -n-1 > $(ALL_CRD);\
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
 	}
 
 # Run go fmt against code

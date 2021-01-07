@@ -46,8 +46,8 @@ func TestRoot(t *testing.T) {
 			err:  true,
 		},
 		{
-			name: "generate",
-			args: []string{"generate"},
+			name: "install",
+			args: []string{"install", "-h"},
 		},
 		{
 			name: "workspace",

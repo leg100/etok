@@ -41,6 +41,9 @@ import (
 const (
 	defaultWorkspace        = "default"
 	defaultReconcileTimeout = 10 * time.Second
+
+	// default namespace runs are created in
+	defaultNamespace = "default"
 )
 
 var (
@@ -102,6 +105,7 @@ type launcherOptions struct {
 
 func launcherCommand(opts *cmdutil.Options, o *launcherOptions) *cobra.Command {
 	o.Options = opts
+	o.namespace = defaultNamespace
 
 	cmd := &cobra.Command{
 		Use:   fmt.Sprintf("%s [flags] -- [%[1]s args]", strings.Fields(o.command)[len(strings.Fields(o.command))-1]),

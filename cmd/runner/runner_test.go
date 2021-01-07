@@ -36,7 +36,11 @@ func TestRunnerCommand(t *testing.T) {
 		out, cmd, _ := setupRunnerCmd(t, "--", "echo foo")
 
 		// Set flag via env var since that's how runner is invoked on a pod
-		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "sh",
+			"ETOK_NAMESPACE": "foo",
+		})
+
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		require.NoError(t, cmd.ExecuteContext(context.Background()))
@@ -48,7 +52,10 @@ func TestRunnerCommand(t *testing.T) {
 		_, cmd, _ := setupRunnerCmd(t, "--", "exit 101")
 
 		// Set flag via env var since that's how runner is invoked on a pod
-		t.SetEnvs(map[string]string{"ETOK_COMMAND": "sh"})
+		t.SetEnvs(map[string]string{
+			"ETOK_COMMAND":   "sh",
+			"ETOK_NAMESPACE": "foo",
+		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
 		// want exit code 101
@@ -65,6 +72,7 @@ func TestRunnerCommand(t *testing.T) {
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "plan",
 			"ETOK_WORKSPACE": "foo",
+			"ETOK_NAMESPACE": "foo",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -104,6 +112,7 @@ func TestRunnerCommand(t *testing.T) {
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "plan",
 			"ETOK_WORKSPACE": "foo",
+			"ETOK_NAMESPACE": "dev",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -123,6 +132,7 @@ func TestRunnerCommand(t *testing.T) {
 		t.SetEnvs(map[string]string{
 			"ETOK_COMMAND":   "apply",
 			"ETOK_WORKSPACE": "foo",
+			"ETOK_NAMESPACE": "dev",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -139,7 +149,7 @@ func TestRunnerCommand(t *testing.T) {
 func TestRunnerLockFile(t *testing.T) {
 	testutil.Run(t, "with lock file", func(t *testutil.T) {
 		out := new(bytes.Buffer)
-		cmdOpts, err := cmdutil.NewFakeOpts(out, testobj.Run("default", "run-12345", "init"))
+		cmdOpts, err := cmdutil.NewFakeOpts(out, testobj.Run("dev", "run-12345", "init"))
 		require.NoError(t, err)
 		cmd, o := RunnerCmd(cmdOpts)
 		cmd.SetOut(out)
@@ -149,8 +159,9 @@ func TestRunnerLockFile(t *testing.T) {
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
-			"ETOK_COMMAND":  "init",
-			"ETOK_RUN_NAME": "run-12345",
+			"ETOK_NAMESPACE": "dev",
+			"ETOK_COMMAND":   "init",
+			"ETOK_RUN_NAME":  "run-12345",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -165,8 +176,9 @@ func TestRunnerLockFile(t *testing.T) {
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
-			"ETOK_COMMAND":  "sh",
-			"ETOK_RUN_NAME": "run-12345",
+			"ETOK_NAMESPACE": "dev",
+			"ETOK_COMMAND":   "sh",
+			"ETOK_RUN_NAME":  "run-12345",
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 
@@ -187,6 +199,7 @@ func TestRunnerHandshake(t *testing.T) {
 		{
 			name: "handshake",
 			envs: map[string]string{
+				"ETOK_NAMESPACE": "dev",
 				"ETOK_HANDSHAKE": "true",
 				"ETOK_COMMAND":   "sh",
 			},
@@ -195,6 +208,7 @@ func TestRunnerHandshake(t *testing.T) {
 		{
 			name: "bad handshake",
 			envs: map[string]string{
+				"ETOK_NAMESPACE": "dev",
 				"ETOK_HANDSHAKE": "true",
 				"ETOK_COMMAND":   "sh",
 			},
@@ -204,6 +218,7 @@ func TestRunnerHandshake(t *testing.T) {
 		{
 			name: "time out waiting for handshake",
 			envs: map[string]string{
+				"ETOK_NAMESPACE":         "dev",
 				"ETOK_HANDSHAKE":         "true",
 				"ETOK_HANDSHAKE_TIMEOUT": "20ms",
 				"ETOK_COMMAND":           "sh",
@@ -261,9 +276,10 @@ func TestRunnerTarball(t *testing.T) {
 
 		// Set flag via env var since that's how runner is invoked on a pod
 		t.SetEnvs(map[string]string{
-			"ETOK_TARBALL": tarball,
-			"ETOK_COMMAND": "sh",
-			"ETOK_DEST":    dest.Root(),
+			"ETOK_NAMESPACE": "dev",
+			"ETOK_TARBALL":   tarball,
+			"ETOK_COMMAND":   "sh",
+			"ETOK_DEST":      dest.Root(),
 		})
 		envvars.SetFlagsFromEnvVariables(cmd)
 

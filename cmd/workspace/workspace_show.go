@@ -21,7 +21,7 @@ func showCmd(opts *cmdutil.Options) *cobra.Command {
 			if err != nil {
 				if os.IsNotExist(err) {
 					// no .terraform/environment, so show defaults
-					fmt.Fprintln(opts.Out, "default/default")
+					fmt.Fprintf(opts.Out, "%s/%s\n", defaultNamespace, defaultWorkspace)
 					return nil
 				}
 				return fmt.Errorf("failed reading contents of %s: %w", path, err)

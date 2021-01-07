@@ -13,7 +13,9 @@ import (
 )
 
 func deleteCmd(opts *cmdutil.Options) *cobra.Command {
-	var namespace, kubeContext string
+	var kubeContext string
+	var namespace = defaultNamespace
+
 	cmd := &cobra.Command{
 		Use:   "delete <workspace>",
 		Short: "Deletes an etok workspace",
