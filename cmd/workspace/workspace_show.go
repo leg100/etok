@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func showCmd(opts *cmdutil.Factory) *cobra.Command {
+func showCmd(f *cmdutil.Factory) *cobra.Command {
 	var path string
 
 	cmd := &cobra.Command{
@@ -21,13 +21,13 @@ func showCmd(opts *cmdutil.Factory) *cobra.Command {
 			if err != nil {
 				if os.IsNotExist(err) {
 					// no .terraform/environment, so show defaults
-					fmt.Fprintf(opts.Out, "%s/%s\n", defaultNamespace, defaultWorkspace)
+					fmt.Fprintf(f.Out, "%s/%s\n", defaultNamespace, defaultWorkspace)
 					return nil
 				}
 				return fmt.Errorf("failed reading contents of %s: %w", path, err)
 			}
 
-			fmt.Fprintln(opts.Out, etokenv)
+			fmt.Fprintln(f.Out, etokenv)
 			return nil
 		},
 	}

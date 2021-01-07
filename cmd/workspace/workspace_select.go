@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func selectCmd(opts *cmdutil.Factory) *cobra.Command {
+func selectCmd(f *cmdutil.Factory) *cobra.Command {
 	var path string
 	var namespace = defaultNamespace
 
@@ -27,7 +27,7 @@ func selectCmd(opts *cmdutil.Factory) *cobra.Command {
 			if err := etokenv.Write(path); err != nil {
 				return err
 			}
-			fmt.Fprintf(opts.Out, "Current workspace now: %s\n", etokenv)
+			fmt.Fprintf(f.Out, "Current workspace now: %s\n", etokenv)
 			return nil
 		},
 	}
