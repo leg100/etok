@@ -19,7 +19,7 @@ func TestRoot(t *testing.T) {
 		out        string
 		err        bool
 		setup      func()
-		assertions func(*cmdutil.Options)
+		assertions func(*cmdutil.Factory)
 	}{
 		{
 			name: "no args",
@@ -83,8 +83,8 @@ func TestRoot(t *testing.T) {
 			// Check -v flag is persistent
 			name: "increased verbosity on child command",
 			args: []string{"version", "-v=5"},
-			assertions: func(opts *cmdutil.Options) {
-				assert.Equal(t, 5, opts.Verbosity)
+			assertions: func(f *cmdutil.Factory) {
+				assert.Equal(t, 5, f.Verbosity)
 			},
 		},
 	}
@@ -96,10 +96,10 @@ func TestRoot(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			opts, err := cmdutil.NewFakeOpts(out)
+			f, err := cmdutil.NewFakeFactory(out)
 			require.NoError(t, err)
 
-			cmd := RootCmd(opts)
+			cmd := RootCmd(f)
 			cmd.SetArgs(tt.args)
 			cmd.SetOut(out)
 
@@ -108,7 +108,7 @@ func TestRoot(t *testing.T) {
 			assert.Regexp(t, tt.out, out)
 
 			if tt.assertions != nil {
-				tt.assertions(opts)
+				tt.assertions(f)
 			}
 		})
 	}

@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func AddToRoot(root *cobra.Command, opts *cmdutil.Options) {
+func AddToRoot(root *cobra.Command, opts *cmdutil.Factory) {
 	// Terraform commands
 	for _, cmd := range []string{
 		"apply",

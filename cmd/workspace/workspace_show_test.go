@@ -44,11 +44,11 @@ func TestWorkspaceShow(t *testing.T) {
 
 			out := new(bytes.Buffer)
 
-			opts, err := cmdutil.NewFakeOpts(out)
+			f, err := cmdutil.NewFakeFactory(out)
 			require.NoError(t, err)
 
-			cmd := showCmd(opts)
-			cmd.SetOut(opts.Out)
+			cmd := showCmd(f)
+			cmd.SetOut(f.Out)
 			cmd.SetArgs(tt.args)
 
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))

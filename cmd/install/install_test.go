@@ -61,7 +61,7 @@ func TestInstall(t *testing.T) {
 			t.Chdir("../../")
 
 			buf := new(bytes.Buffer)
-			opts := &cmdutil.Options{
+			opts := &cmdutil.Factory{
 				IOStreams:     cmdutil.IOStreams{Out: os.Stdout},
 				ClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
 			}
@@ -121,7 +121,7 @@ func TestInstallWait(t *testing.T) {
 				Client: &etokclient.Client{
 					RuntimeClient: client,
 				},
-				Options: &cmdutil.Options{
+				Factory: &cmdutil.Factory{
 					IOStreams: cmdutil.IOStreams{Out: new(bytes.Buffer)},
 				},
 				timeout: 100 * time.Millisecond,
@@ -139,7 +139,7 @@ func TestInstallDryRun(t *testing.T) {
 
 		out := new(bytes.Buffer)
 		opts := &installOptions{
-			Options: &cmdutil.Options{
+			Factory: &cmdutil.Factory{
 				IOStreams: cmdutil.IOStreams{Out: out},
 			},
 			dryRun: true,

@@ -16,8 +16,8 @@ const (
 	HandshakeString = "opensesame"
 )
 
-// Options pertaining to etok apps
-type Options struct {
+// Factory pertaining to etok apps
+type Factory struct {
 	// Deferred creation of clients
 	client.ClientCreator
 
@@ -43,8 +43,8 @@ type IOStreams struct {
 	ErrOut io.Writer
 }
 
-func NewOpts(out, errout io.Writer, in io.Reader) (*Options, error) {
-	opts := &Options{
+func NewFactory(out, errout io.Writer, in io.Reader) (*Factory, error) {
+	f := &Factory{
 		GetLogsFunc:   logstreamer.GetLogs,
 		AttachFunc:    attacher.Attach,
 		ClientCreator: client.NewClientCreator(),
@@ -55,12 +55,12 @@ func NewOpts(out, errout io.Writer, in io.Reader) (*Options, error) {
 		},
 	}
 	// Set logger output device
-	klog.SetOutput(opts.Out)
-	return opts, nil
+	klog.SetOutput(f.Out)
+	return f, nil
 }
 
-func NewFakeOpts(out io.Writer, objs ...runtime.Object) (*Options, error) {
-	return &Options{
+func NewFakeFactory(out io.Writer, objs ...runtime.Object) (*Factory, error) {
+	return &Factory{
 		GetLogsFunc:   logstreamer.FakeGetLogs,
 		AttachFunc:    attacher.FakeAttach,
 		ClientCreator: client.NewFakeClientCreator(objs...),

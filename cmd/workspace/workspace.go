@@ -14,7 +14,7 @@ const (
 	defaultWorkspace = "default"
 )
 
-func WorkspaceCmd(opts *cmdutil.Options) *cobra.Command {
+func WorkspaceCmd(opts *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
 		Short: "Etok workspace management",

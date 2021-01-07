@@ -33,13 +33,13 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 	signals.CatchCtrlC(cancel)
 
 	// Construct options and their defaults
-	opts, err := cmdutil.NewOpts(out, errout, in)
+	f, err := cmdutil.NewFactory(out, errout, in)
 	if err != nil {
 		return err
 	}
 
 	// Parse args and execute selected command
-	return cmd.ParseArgs(ctx, args, opts)
+	return cmd.ParseArgs(ctx, args, f)
 }
 
 // Print error message unless the error originated from executing a program (which would have

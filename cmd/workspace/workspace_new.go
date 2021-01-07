@@ -41,7 +41,7 @@ var (
 )
 
 type newOptions struct {
-	*cmdutil.Options
+	*cmdutil.Factory
 
 	*client.Client
 
@@ -84,9 +84,9 @@ type newOptions struct {
 	etokenv *env.Env
 }
 
-func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
+func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	o := &newOptions{
-		Options:   opts,
+		Factory:   f,
 		namespace: defaultNamespace,
 	}
 	cmd := &cobra.Command{
@@ -107,7 +107,7 @@ func newCmd(opts *cmdutil.Options) (*cobra.Command, *newOptions) {
 				o.workspaceSpec.Cache.StorageClass = nil
 			}
 
-			o.Client, err = opts.Create(o.kubeContext)
+			o.Client, err = f.Create(o.kubeContext)
 			if err != nil {
 				return err
 			}

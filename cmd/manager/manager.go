@@ -25,7 +25,7 @@ func printVersion() {
 }
 
 type ManagerOptions struct {
-	*cmdutil.Options
+	*cmdutil.Factory
 
 	KubeContext string
 
@@ -40,8 +40,8 @@ type ManagerOptions struct {
 	args []string
 }
 
-func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
-	o := &ManagerOptions{Options: opts}
+func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
+	o := &ManagerOptions{Factory: f}
 	cmd := &cobra.Command{
 		Use:    "operator",
 		Short:  "Run the etok operator",
@@ -51,7 +51,7 @@ func ManagerCmd(opts *cmdutil.Options) *cobra.Command {
 
 			printVersion()
 
-			client, err := opts.Create(o.KubeContext)
+			client, err := f.Create(o.KubeContext)
 			if err != nil {
 				return err
 			}

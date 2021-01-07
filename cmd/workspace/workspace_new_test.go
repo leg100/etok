@@ -34,7 +34,7 @@ func TestNewWorkspace(t *testing.T) {
 		// Toggle mocking a successful reconcile status
 		disableMockReconcile bool
 		objs                 []runtime.Object
-		setOpts              func(*cmdutil.Options)
+		factoryOverrides     func(*cmdutil.Factory)
 		assertions           func(*newOptions)
 	}{
 		{
@@ -115,8 +115,8 @@ func TestNewWorkspace(t *testing.T) {
 			err: func(t *testutil.T, err error) {
 				assert.Equal(t, fakeError, err)
 			},
-			setOpts: func(o *cmdutil.Options) {
-				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			factoryOverrides: func(f *cmdutil.Factory) {
+				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
 				}
 			},
@@ -138,8 +138,8 @@ func TestNewWorkspace(t *testing.T) {
 			err: func(t *testutil.T, err error) {
 				assert.Equal(t, fakeError, err)
 			},
-			setOpts: func(o *cmdutil.Options) {
-				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			factoryOverrides: func(f *cmdutil.Factory) {
+				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fmt.Errorf("fake error")
 				}
 			},
@@ -310,24 +310,24 @@ func TestNewWorkspace(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			out := new(bytes.Buffer)
-			opts, err := cmdutil.NewFakeOpts(out, tt.objs...)
+			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
 			require.NoError(t, err)
 
-			if tt.setOpts != nil {
-				tt.setOpts(opts)
+			if tt.factoryOverrides != nil {
+				tt.factoryOverrides(f)
 			}
 
-			cmd, cmdOpts := newCmd(opts)
+			cmd, opts := newCmd(f)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
-			cmdOpts.path = path
+			opts.path = path
 
 			if !tt.disableMockReconcile {
 				// Mock successful reconcile
-				cmdOpts.reconciled = true
+				opts.reconciled = true
 			}
 
 			err = cmd.ExecuteContext(context.Background())
@@ -338,7 +338,7 @@ func TestNewWorkspace(t *testing.T) {
 			}
 
 			if tt.assertions != nil {
-				tt.assertions(cmdOpts)
+				tt.assertions(opts)
 			}
 		})
 	}

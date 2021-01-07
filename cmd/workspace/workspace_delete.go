@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-func deleteCmd(opts *cmdutil.Options) *cobra.Command {
+func deleteCmd(opts *cmdutil.Factory) *cobra.Command {
 	var kubeContext string
 	var namespace = defaultNamespace
 

@@ -52,7 +52,7 @@ var (
 )
 
 type installOptions struct {
-	*cmdutil.Options
+	*cmdutil.Factory
 
 	*client.Client
 
@@ -76,9 +76,9 @@ type installOptions struct {
 	dryRun bool
 }
 
-func InstallCmd(opts *cmdutil.Options) (*cobra.Command, *installOptions) {
+func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	o := &installOptions{
-		Options:   opts,
+		Factory:   f,
 		namespace: defaultNamespace,
 	}
 

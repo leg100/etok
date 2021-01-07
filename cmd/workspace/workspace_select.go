@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func selectCmd(opts *cmdutil.Options) *cobra.Command {
+func selectCmd(opts *cmdutil.Factory) *cobra.Command {
 	var path string
 	var namespace = defaultNamespace
 

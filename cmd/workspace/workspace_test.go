@@ -63,7 +63,7 @@ func TestWorkspace(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			opts, err := cmdutil.NewFakeOpts(out)
+			opts, err := cmdutil.NewFakeFactory(out)
 			require.NoError(t, err)
 
 			cmd := WorkspaceCmd(opts)
