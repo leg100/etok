@@ -22,12 +22,12 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "no args",
 			args: []string{},
-			out:  "^etok workspace management",
+			out:  "^Etok workspace management",
 		},
 		{
 			name: "help",
 			args: []string{"-h"},
-			out:  "^etok workspace management",
+			out:  "^Etok workspace management",
 		},
 		{
 			name: "new",
