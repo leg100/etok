@@ -149,9 +149,8 @@ func TestRunnerCommand(t *testing.T) {
 func TestRunnerLockFile(t *testing.T) {
 	testutil.Run(t, "with lock file", func(t *testutil.T) {
 		out := new(bytes.Buffer)
-		cmdOpts, err := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "init"))
-		require.NoError(t, err)
-		cmd, o := RunnerCmd(cmdOpts)
+		f := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "init"))
+		cmd, o := RunnerCmd(f)
 		cmd.SetOut(out)
 		cmd.SetArgs([]string{"--", "true"})
 
@@ -167,7 +166,7 @@ func TestRunnerLockFile(t *testing.T) {
 
 		assert.NoError(t, cmd.ExecuteContext(context.Background()))
 
-		_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), "run-12345-lockfile", metav1.GetOptions{})
+		_, err := o.ConfigMapsClient(o.namespace).Get(context.Background(), "run-12345-lockfile", metav1.GetOptions{})
 		assert.NoError(t, err)
 	})
 
@@ -307,15 +306,14 @@ func createTarballWithFiles(t *testutil.T, name string, filenames ...string) {
 
 func setupRunnerCmd(t *testutil.T, args ...string) (*bytes.Buffer, *cobra.Command, *RunnerOptions) {
 	out := new(bytes.Buffer)
-	o, err := cmdutil.NewFakeFactory(out)
-	require.NoError(t, err)
-	cmd, cmdOpts := RunnerCmd(o)
+	f := cmdutil.NewFakeFactory(out)
+	cmd, opts := RunnerCmd(f)
 	cmd.SetOut(out)
 	cmd.SetArgs(args)
 
-	cmdOpts.dest = t.NewTempDir().Chdir().Root()
+	opts.dest = t.NewTempDir().Chdir().Root()
 
-	return out, cmd, cmdOpts
+	return out, cmd, opts
 }
 
 // delayedReader mocks reader that only returns read call after delay

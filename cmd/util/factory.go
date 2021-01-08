@@ -21,6 +21,9 @@ type Factory struct {
 	// Deferred creation of clients
 	client.ClientCreator
 
+	// Deferred creation of controller-runtime clients
+	client.RuntimeClientCreator
+
 	// Function to attach to a pod's TTY
 	attacher.AttachFunc
 
@@ -43,11 +46,12 @@ type IOStreams struct {
 	ErrOut io.Writer
 }
 
-func NewFactory(out, errout io.Writer, in io.Reader) (*Factory, error) {
+func NewFactory(out, errout io.Writer, in io.Reader) *Factory {
 	f := &Factory{
-		GetLogsFunc:   logstreamer.GetLogs,
-		AttachFunc:    attacher.Attach,
-		ClientCreator: client.NewClientCreator(),
+		GetLogsFunc:          logstreamer.GetLogs,
+		AttachFunc:           attacher.Attach,
+		ClientCreator:        client.NewClientCreator(),
+		RuntimeClientCreator: client.NewRuntimeClientCreator(),
 		IOStreams: IOStreams{
 			Out:    out,
 			ErrOut: errout,
@@ -56,10 +60,10 @@ func NewFactory(out, errout io.Writer, in io.Reader) (*Factory, error) {
 	}
 	// Set logger output device
 	klog.SetOutput(f.Out)
-	return f, nil
+	return f
 }
 
-func NewFakeFactory(out io.Writer, objs ...runtime.Object) (*Factory, error) {
+func NewFakeFactory(out io.Writer, objs ...runtime.Object) *Factory {
 	return &Factory{
 		GetLogsFunc:   logstreamer.FakeGetLogs,
 		AttachFunc:    attacher.FakeAttach,
@@ -67,5 +71,5 @@ func NewFakeFactory(out io.Writer, objs ...runtime.Object) (*Factory, error) {
 		IOStreams: IOStreams{
 			Out: out,
 		},
-	}, nil
+	}
 }

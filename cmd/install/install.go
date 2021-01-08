@@ -86,7 +86,7 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 		Use:   "install",
 		Short: "Install etok operator",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			o.Client, err = o.ClientCreator.Create(o.kubeContext)
+			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
 			}

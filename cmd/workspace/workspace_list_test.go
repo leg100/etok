@@ -54,8 +54,7 @@ func TestListWorkspaces(t *testing.T) {
 
 			out := new(bytes.Buffer)
 
-			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out, tt.objs...)
 
 			cmd := listCmd(f)
 			cmd.SetArgs(tt.args)

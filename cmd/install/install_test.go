@@ -61,18 +61,18 @@ func TestInstall(t *testing.T) {
 			t.Chdir("../../")
 
 			buf := new(bytes.Buffer)
-			opts := &cmdutil.Factory{
-				IOStreams:     cmdutil.IOStreams{Out: os.Stdout},
-				ClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
+			f := &cmdutil.Factory{
+				IOStreams:            cmdutil.IOStreams{Out: os.Stdout},
+				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
 			}
 
-			cmd, cmdOpts := InstallCmd(opts)
+			cmd, opts := InstallCmd(f)
 			cmd.SetOut(buf)
 			cmd.SetArgs(tt.args)
 
 			// Set path to secret file
 			secretTmpDir := t.NewTempDir().Write("secret.txt", []byte("secret-sauce"))
-			cmdOpts.secretFile = secretTmpDir.Path("secret.txt")
+			opts.secretFile = secretTmpDir.Path("secret.txt")
 
 			// Mock a remote web server from which YAML files will be retrieved
 			mockWebServer(t)
@@ -83,7 +83,7 @@ func TestInstall(t *testing.T) {
 			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
 
 			// get runtime client now that it's been created
-			client := cmdOpts.RuntimeClient
+			client := opts.RuntimeClient
 
 			// assert all objs are present
 			for _, res := range wantedResources() {

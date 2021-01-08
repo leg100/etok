@@ -9,7 +9,6 @@ import (
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRoot(t *testing.T) {
@@ -96,8 +95,7 @@ func TestRoot(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			f, err := cmdutil.NewFakeFactory(out)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out)
 
 			cmd := RootCmd(f)
 			cmd.SetArgs(tt.args)

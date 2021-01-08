@@ -33,10 +33,7 @@ func run(args []string, out, errout io.Writer, in io.Reader) error {
 	signals.CatchCtrlC(cancel)
 
 	// Construct options and their defaults
-	f, err := cmdutil.NewFactory(out, errout, in)
-	if err != nil {
-		return err
-	}
+	f := cmdutil.NewFactory(out, errout, in)
 
 	// Parse args and execute selected command
 	return cmd.ParseArgs(ctx, args, f)
