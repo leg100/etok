@@ -18,6 +18,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -45,13 +46,35 @@ func TestInstall(t *testing.T) {
 			args: []string{"install", "--wait=false"},
 		},
 		{
+			name: "fresh install with only CRDs",
+			args: []string{"install", "--wait=false", "--crds-only"},
+		},
+		{
 			name: "upgrade",
 			args: []string{"install", "--wait=false"},
-			objs: wantedResources(),
+			objs: append(wantedResources(), wantedCRDs()...),
 		},
 		{
 			name: "fresh local install",
 			args: []string{"install", "--local", "--wait=false"},
+		},
+		{
+			name: "fresh install with service account annotations",
+			args: []string{"install", "--wait=false", "--sa-annotations", "foo=bar,baz=haj"},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var sa corev1.ServiceAccount
+				client.Get(context.Background(), types.NamespacedName{Namespace: "etok", Name: "etok"}, &sa)
+				assert.Equal(t, map[string]string{"foo": "bar", "baz": "haj"}, sa.GetAnnotations())
+			},
+		},
+		{
+			name: "fresh install with custom image",
+			args: []string{"install", "--wait=false", "--image", "bugsbunny:v123"},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var d = deploy()
+				client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(d), d)
+				assert.Equal(t, "bugsbunny:v123", d.Spec.Template.Spec.Containers[0].Image)
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -85,9 +108,21 @@ func TestInstall(t *testing.T) {
 			// get runtime client now that it's been created
 			client := opts.RuntimeClient
 
-			// assert all objs are present
-			for _, res := range wantedResources() {
+			// assert CRDs are present
+			for _, res := range wantedCRDs() {
 				assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
+			}
+
+			// assert non-CRD resources are present unless only CRDs are
+			// requested
+			if !opts.crdsOnly {
+				for _, res := range wantedResources() {
+					assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
+				}
+			}
+
+			if tt.assertions != nil {
+				tt.assertions(t, client)
 			}
 		})
 	}
@@ -161,9 +196,13 @@ func convertObjs(objs ...runtimeclient.Object) (converted []runtime.Object) {
 	return
 }
 
-func wantedResources() (resources []runtimeclient.Object) {
+func wantedCRDs() (resources []runtimeclient.Object) {
 	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "workspaces.etok.dev"}})
 	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "runs.etok.dev"}})
+	return
+}
+
+func wantedResources() (resources []runtimeclient.Object) {
 	resources = append(resources, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
 	resources = append(resources, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	resources = append(resources, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})

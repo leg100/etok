@@ -19,10 +19,9 @@ else
 KUBECTX=kind-kind
 IMG=leg100/etok:$(VERSION)
 endif
-
+BACKUP_SERVICE_ACCOUNT=backup@automatize-admin.iam.gserviceaccount.com
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -39,7 +38,13 @@ local: image push
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy
 deploy: image push
-	$(BUILD_BIN) install --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
+ifeq ($(ENV),gke)
+	# For GKE, use workload identity
+	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --sa-annotations iam.gke.io/gcp-service-account=$(BACKUP_SERVICE_ACCOUNT)
+else
+	# All other clusters, place key in a secret resource
+	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
+endif
 
 .PHONY: undeploy
 undeploy: build
@@ -118,9 +123,7 @@ endif
 # combine crd yamls into one
 .PHONY: manifests
 manifests: controller-gen
-	@{ \
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases;\
-	}
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 .PHONY: fmt

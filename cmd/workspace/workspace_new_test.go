@@ -289,6 +289,18 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
+			name: "set service account annotations",
+			args: []string{"foo", "--sa-annotations", "foo=bar,baz=haj"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(o *newOptions) {
+				// Get service account
+				sa, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, map[string]string{"foo": "bar", "baz": "haj"}, sa.GetAnnotations())
+			},
+		},
+		{
 			name:                 "reconcile timeout exceeded",
 			args:                 []string{"foo", "--reconcile-timeout", "10ms"},
 			disableMockReconcile: true,
