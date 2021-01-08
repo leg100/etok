@@ -50,7 +50,7 @@ func clusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
 		},
 		RoleRef: rbacv1.RoleRef{
 			Kind:     "ClusterRole",
-			Name:     "cluster-admin",
+			Name:     "etok",
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
