@@ -72,6 +72,9 @@ type newOptions struct {
 	createdServiceAccount bool
 	createdSecret         bool
 
+	// Annotations to add to the service account resource
+	serviceAccountAnnotations map[string]string
+
 	// For testing purposes toggle obj having been reconciled
 	reconciled bool
 
@@ -127,8 +130,8 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.disableCreateServiceAccount, "no-create-service-account", o.disableCreateServiceAccount, "Create service account if missing")
-	cmd.Flags().BoolVar(&o.disableCreateSecret, "no-create-secret", o.disableCreateSecret, "Create secret if missing")
+	cmd.Flags().BoolVar(&o.disableCreateServiceAccount, "no-create-service-account", o.disableCreateServiceAccount, "Disable creation of service account")
+	cmd.Flags().BoolVar(&o.disableCreateSecret, "no-create-secret", o.disableCreateSecret, "Disable creation of secret")
 
 	cmd.Flags().StringVar(&o.workspaceSpec.ServiceAccountName, "service-account", defaultServiceAccountName, "Name of ServiceAccount")
 	cmd.Flags().StringVar(&o.workspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
@@ -147,6 +150,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().StringToStringVar(&o.variables, "variables", map[string]string{}, "Set terraform variables")
 	cmd.Flags().StringToStringVar(&o.environmentVariables, "environment-variables", map[string]string{}, "Set environment variables")
+	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 
 	return cmd, o
 }
@@ -302,7 +306,7 @@ func (o *newOptions) createServiceAccountIfMissing(ctx context.Context) error {
 	_, err := o.ServiceAccountsClient(o.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			_, err := o.createServiceAccount(ctx, name)
+			_, err := o.createServiceAccount(ctx, name, o.serviceAccountAnnotations)
 			if err != nil {
 				return fmt.Errorf("attempted to create service account: %w", err)
 			}
@@ -330,10 +334,11 @@ func (o *newOptions) createSecret(ctx context.Context, name string) (*corev1.Sec
 	return o.SecretsClient(o.namespace).Create(ctx, secret, metav1.CreateOptions{})
 }
 
-func (o *newOptions) createServiceAccount(ctx context.Context, name string) (*corev1.ServiceAccount, error) {
+func (o *newOptions) createServiceAccount(ctx context.Context, name string, annotations map[string]string) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:        name,
+			Annotations: annotations,
 		},
 	}
 	// Set etok's common labels

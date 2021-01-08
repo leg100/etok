@@ -2,6 +2,14 @@
 
 **E**nhanced **T**erraform **O**n **K**ubernetes
 
+# Why
+
+* Leverage Kubernetes' RBAC for terraform operations and state
+* Fidelity across end-user and CI/CD usage
+* Queue terraform operations
+* Leverage GCP workspace identity and other secret-less mechanisms
+* Deploy infrastructure alongside applications
+
 ## Requirements
 
 * A kubernetes cluster
@@ -103,10 +111,34 @@ Use "etok [command] --help" for more information about a command.
 
 TODO
 
-## Identity
+## State
 
-* [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
-* [AWS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
+Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store state in a kubernetes secret.
+
+## Workload Identity
+
+Etok supports [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) for both the operator and workspaces.
+
+First ensure you have a GCP service account (GSA). Then bind a policy to the GSA, like so:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:[PROJECT_ID].svc.id.goog[etok/etok]" \
+    [GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
+```
+
+Install the operator with service account annotations:
+
+```bash
+etok install --sa-annotations iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
+```
+
+And similarly when creating new workspaces:
+
+```bash
+etok workspace new dev --sa-annotations iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
+```
 
 ## Credentials
 
@@ -127,6 +159,10 @@ Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/prov
 ```
 kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```
+
+# Restrictions
+
+Both the terraform configuration and the terraform state, after compression, are subject to a 1MiB limit. This due to the fact that they are stored in a config map and a secret respectively, and the data stored in either cannot exceed 1MiB.
 
 # FAQ
 

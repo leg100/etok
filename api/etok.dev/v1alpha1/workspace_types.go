@@ -70,7 +70,7 @@ type WorkspaceSpec struct {
 	// (/build/Dockerfile)
 
 	// +kubebuilder:default="0.14.3"
-	// +kubebuilder:validation:Pattern=`[0-9]+\.[0-9]+\.[0-9]+`
+	// +kubebuilder:validation:Pattern=`^[0-9]+\.[0-9]+\.[0-9]+$`
 
 	// Required version of Terraform on workspace pod
 	TerraformVersion string `json:"terraformVersion,omitempty"`
@@ -78,8 +78,10 @@ type WorkspaceSpec struct {
 	// Variables as inputs to module
 	Variables []*Variable `json:"variables,omitempty"`
 
+	// +kubebuilder:validation:Pattern=`^[0-9a-z][0-9a-z\-_]{0,61}[0-9a-z]$`
+
 	// GCS bucket to which to backup state file
-	BackupBucket string `json:"backup,omitempty"`
+	BackupBucket string `json:"backupBucket,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
