@@ -8,7 +8,6 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -32,8 +31,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			f, err := cmdutil.NewFakeFactory(new(bytes.Buffer), tt.objs...)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(new(bytes.Buffer), tt.objs...)
 
 			cmd := deleteCmd(f)
 			cmd.SetArgs(tt.args)

@@ -8,17 +8,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Implements ClientCreator
+// Implements client.RuntimeClientCreator
 type FakeClientCreator struct {
 	// Fake objs
 	objs []runtime.Object
 }
 
-func NewFakeClientCreator(objs ...runtime.Object) client.ClientCreator {
+func NewFakeClientCreator(objs ...runtime.Object) client.RuntimeClientCreator {
 	return &FakeClientCreator{objs: objs}
 }
 
-func (f *FakeClientCreator) Create(kubeCtx string) (*client.Client, error) {
+func (f *FakeClientCreator) CreateRuntimeClient(kubeCtx string) (*client.Client, error) {
 	return &client.Client{
 		Config:        &rest.Config{},
 		RuntimeClient: fake.NewFakeClientWithScheme(scheme.Scheme, f.objs...),

@@ -310,8 +310,7 @@ func TestNewWorkspace(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			out := new(bytes.Buffer)
-			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out, tt.objs...)
 
 			if tt.factoryOverrides != nil {
 				tt.factoryOverrides(f)
@@ -330,7 +329,7 @@ func TestNewWorkspace(t *testing.T) {
 				opts.reconciled = true
 			}
 
-			err = cmd.ExecuteContext(context.Background())
+			err := cmd.ExecuteContext(context.Background())
 			if tt.err != nil {
 				tt.err(t, err)
 			} else {

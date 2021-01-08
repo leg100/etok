@@ -8,7 +8,6 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestWorkspace(t *testing.T) {
@@ -63,8 +62,7 @@ func TestWorkspace(t *testing.T) {
 			}
 			out := new(bytes.Buffer)
 
-			f, err := cmdutil.NewFakeFactory(out)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out)
 
 			cmd := WorkspaceCmd(f)
 			cmd.SetArgs(tt.args)

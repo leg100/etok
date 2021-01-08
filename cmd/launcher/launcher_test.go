@@ -286,8 +286,7 @@ func TestLauncher(t *testing.T) {
 			}
 
 			out := new(bytes.Buffer)
-			f, err := cmdutil.NewFakeFactory(out, tt.objs...)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out, tt.objs...)
 
 			if tt.factoryOverrides != nil {
 				tt.factoryOverrides(f)
@@ -314,7 +313,7 @@ func TestLauncher(t *testing.T) {
 
 			mockControllers(t, f, opts, tt.podPhase, tt.code)
 
-			err = cmd.ExecuteContext(context.Background())
+			err := cmd.ExecuteContext(context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
 				t.Errorf("unexpected error: %w", err)
 			}

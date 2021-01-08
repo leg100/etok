@@ -40,8 +40,7 @@ func TestWorkspaceSelect(t *testing.T) {
 
 			out := new(bytes.Buffer)
 
-			f, err := cmdutil.NewFakeFactory(out)
-			require.NoError(t, err)
+			f := cmdutil.NewFakeFactory(out)
 
 			cmd := selectCmd(f)
 			cmd.SetArgs(tt.args)
