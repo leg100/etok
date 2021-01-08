@@ -46,6 +46,11 @@ else
 	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
 endif
 
+# Deploy only CRDs
+.PHONY: crds
+crds: build
+	$(BUILD_BIN) install --context $(KUBECTX) --local --crds-only
+
 .PHONY: undeploy
 undeploy: build
 	$(BUILD_BIN) install --local --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true

@@ -156,6 +156,16 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				return ctrl.Result{}, err
 			}
 		}
+
+		// Make workspace owner of state secret, so that if workspace is deleted
+		// so is the state
+		if err := controllerutil.SetControllerReference(&ws, &state, r.Scheme); err != nil {
+			log.Error(err, "unable to set state secret ownership")
+			return ctrl.Result{}, err
+		}
+		if err := r.Update(ctx, &state); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Manage ConfigMap containing variables for workspace

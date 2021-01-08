@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -178,12 +179,7 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				Scheme: scheme.Scheme,
 			}
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.Name,
-					Namespace: tt.workspace.Namespace,
-				},
-			}
+			req := requestFromObject(tt.workspace)
 			_, err := r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
@@ -234,12 +230,7 @@ func TestReconcileWorkspacePVC(t *testing.T) {
 
 			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.Name,
-					Namespace: tt.workspace.Namespace,
-				},
-			}
+			req := requestFromObject(tt.workspace)
 			_, err := r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
@@ -273,13 +264,7 @@ func TestReconcileWorkspacePod(t *testing.T) {
 
 			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.Name,
-					Namespace: tt.workspace.Namespace,
-				},
-			}
-			_, err := r.Reconcile(context.Background(), req)
+			_, err := r.Reconcile(context.Background(), requestFromObject(tt.workspace))
 			require.NoError(t, err)
 
 			var pod corev1.Pod
@@ -316,13 +301,7 @@ func TestReconcileWorkspaceVariables(t *testing.T) {
 
 			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      tt.workspace.Name,
-					Namespace: tt.workspace.Namespace,
-				},
-			}
-			_, err := r.Reconcile(context.Background(), req)
+			_, err := r.Reconcile(context.Background(), requestFromObject(tt.workspace))
 			require.NoError(t, err)
 
 			var variables corev1.ConfigMap
@@ -349,12 +328,7 @@ func TestReconcileWorkspaceState(t *testing.T) {
 
 		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      workspace.Name,
-				Namespace: workspace.Namespace,
-			},
-		}
+		req := requestFromObject(workspace)
 		_, err = r.Reconcile(context.Background(), req)
 		require.NoError(t, err)
 
@@ -362,6 +336,7 @@ func TestReconcileWorkspaceState(t *testing.T) {
 		ws := &v1alpha1.Workspace{}
 		require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
 
+		// Assert that state outputs have been persisted to workspace status
 		assert.Equal(t, []*v1alpha1.Output{
 			{
 				Key:   "random_string",
@@ -369,7 +344,16 @@ func TestReconcileWorkspaceState(t *testing.T) {
 			},
 		}, ws.Status.Outputs)
 
+		// Assert that conditions have been updated accordingly
 		assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, "StateFailure"))
+
+		// Fetch fresh state secret for assertions
+		state = corev1.Secret{}
+		require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: ws.StateSecretName()}, &state))
+
+		// Assert that workspace has been made owner of secret
+		assert.Equal(t, "Workspace", state.OwnerReferences[0].Kind)
+		assert.Equal(t, "foo", state.OwnerReferences[0].Name)
 	})
 
 	testutil.Run(t, "invalid state", func(t *testutil.T) {
@@ -382,12 +366,7 @@ func TestReconcileWorkspaceState(t *testing.T) {
 
 		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
 
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      workspace.Name,
-				Namespace: workspace.Namespace,
-			},
-		}
+		req := requestFromObject(workspace)
 		_, err := r.Reconcile(context.Background(), req)
 		require.NoError(t, err)
 
@@ -430,12 +409,7 @@ func TestReconcileWorkspaceState(t *testing.T) {
 
 			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      workspace.Name,
-					Namespace: workspace.Namespace,
-				},
-			}
+			req := requestFromObject(workspace)
 			_, err = r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
@@ -473,12 +447,7 @@ func TestReconcileWorkspaceState(t *testing.T) {
 
 			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
 
-			req := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      workspace.Name,
-					Namespace: workspace.Namespace,
-				},
-			}
+			req := requestFromObject(workspace)
 			_, err = r.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
@@ -493,4 +462,13 @@ func TestReconcileWorkspaceState(t *testing.T) {
 			}
 		})
 	})
+}
+
+func requestFromObject(obj client.Object) reconcile.Request {
+	return reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      obj.GetName(),
+			Namespace: obj.GetNamespace(),
+		},
+	}
 }
