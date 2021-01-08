@@ -174,6 +174,6 @@ Etok supports the use of a [`.terraformignore`](https://www.terraform.io/docs/ba
 
 * `/tf/modules/.terraformignore`
 * `/tf/.terraformignore`
-* `/.terrraformignore`
+* `/.terraformignore`
 
 If not found then the default set of rules apply as documented in the link above.
