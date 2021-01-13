@@ -2,10 +2,9 @@ package controllers
 
 import (
 	"context"
-	"io/ioutil"
 	"testing"
 
-	"sigs.k8s.io/yaml"
+	"cloud.google.com/go/storage"
 
 	"github.com/fsouza/fake-gcs-server/fakestorage"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -19,38 +18,45 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestReconcileWorkspaceStatus(t *testing.T) {
+func TestReconcileWorkspace(t *testing.T) {
+	var localPathStorageClass string = "local-path"
+
 	tests := []struct {
-		name       string
-		workspace  *v1alpha1.Workspace
-		objs       []runtime.Object
-		assertions func(ws *v1alpha1.Workspace)
+		name                string
+		workspace           *v1alpha1.Workspace
+		objs                []runtime.Object
+		bucketObjs          []fakestorage.Object
+		workspaceAssertions func(*testutil.T, *v1alpha1.Workspace)
+		podAssertions       func(*testutil.T, *corev1.Pod)
+		pvcAssertions       func(*testutil.T, *corev1.PersistentVolumeClaim)
+		configMapAssertions func(*testutil.T, *corev1.ConfigMap)
+		stateAssertions     func(*testutil.T, *corev1.Secret)
+		storageAssertions   func(*testutil.T, *storage.Client)
+		wantErr             bool
 	}{
 		{
-			name:      "No runs",
+			name:      "Queue no runs",
 			workspace: testobj.Workspace("", "workspace-1"),
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string(nil), ws.Status.Queue)
 			},
 		},
 		{
-			name:      "Single command",
+			name:      "Queue single run",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.WorkspacePod("", "workspace-1"),
 			},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
 			},
 		},
 		{
-			name:      "Three commands, one of which is unrelated to this workspace",
+			name:      "Queue two runs",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
 				testobj.WorkspacePod("", "workspace-1"),
@@ -58,81 +64,36 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-2")),
 			},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
-			name:      "Existing queue",
+			name:      "Queue with existing queue",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-1")),
 			objs: []runtime.Object{
 				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
-			name:      "Completed command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3", "apply-1", "apply-2")),
-			objs: []runtime.Object{
-				testobj.WorkspacePod("", "workspace-1"),
-				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
-				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Completed command replaced by incomplete command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-3")),
-			objs: []runtime.Object{
-				testobj.WorkspacePod("", "workspace-1"),
-				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
-				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Unapproved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply")),
-			objs: []runtime.Object{
-				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string(nil), ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Approved privileged command",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithQueue("apply-1"), testobj.WithApprovals("apply-1")),
-			objs: []runtime.Object{
-				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
-			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
-			},
-		},
-		{
-			name:      "Garbage collected approval annotation",
+			name:      "Approvals: Garbage collected approval annotation",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
 			objs: []runtime.Object{
 				testobj.WorkspacePod("", "workspace-1"),
 			},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, map[string]string(nil), ws.Annotations)
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Nil(t, ws.Annotations)
 			},
 		},
 		{
 			name:      "Initializing phase",
 			workspace: testobj.Workspace("", "workspace-1"),
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
 			},
 		},
@@ -140,23 +101,23 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Ready phase",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning))},
-			assertions: func(ws *v1alpha1.Workspace) {
-				assert.Equal(t, v1alpha1.WorkspacePhaseReady, ws.Status.Phase)
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
 			},
 		},
 		{
-			name:      "Error phase",
+			name:      "Pod succeeded",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodSucceeded))},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
 		},
 		{
-			name:      "Error phase",
+			name:      "Pod failed",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodFailed))},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
 		},
@@ -164,311 +125,236 @@ func TestReconcileWorkspaceStatus(t *testing.T) {
 			name:      "Unknown phase",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodUnknown))},
-			assertions: func(ws *v1alpha1.Workspace) {
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseUnknown, ws.Status.Phase)
 			},
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			objs := append(tt.objs, runtime.Object(tt.workspace))
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
-
-			r := &WorkspaceReconciler{
-				Client: cl,
-				Scheme: scheme.Scheme,
-			}
-
-			req := requestFromObject(tt.workspace)
-			_, err := r.Reconcile(context.Background(), req)
-			require.NoError(t, err)
-
-			// Fetch fresh workspace for assertions
-			ws := &v1alpha1.Workspace{}
-			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
-
-			tt.assertions(ws)
-		})
-	}
-}
-
-func TestReconcileWorkspacePVC(t *testing.T) {
-	var localPathStorageClass string = "local-path"
-
-	tests := []struct {
-		name       string
-		workspace  *v1alpha1.Workspace
-		assertions func(pvc *corev1.PersistentVolumeClaim)
-	}{
 		{
-			name:      "Default size",
+			name:      "Cache: Default size",
 			workspace: testobj.Workspace("", "workspace-1"),
-			assertions: func(pvc *corev1.PersistentVolumeClaim) {
+			pvcAssertions: func(t *testutil.T, pvc *corev1.PersistentVolumeClaim) {
 				size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 				assert.Equal(t, "1Gi", size.String())
 			},
 		},
 		{
-			name:      "Custom storage class",
+			name:      "Cache: Custom storage class",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass(&localPathStorageClass)),
-			assertions: func(pvc *corev1.PersistentVolumeClaim) {
+			pvcAssertions: func(t *testutil.T, pvc *corev1.PersistentVolumeClaim) {
 				assert.Equal(t, "local-path", *pvc.Spec.StorageClassName)
 			},
 		},
 		{
-			name:      "Owned",
+			name:      "Ownership of dependents",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithStorageClass(&localPathStorageClass)),
-			assertions: func(pvc *corev1.PersistentVolumeClaim) {
-				assert.Equal(t, "Workspace", pvc.OwnerReferences[0].Kind)
-				assert.Equal(t, "workspace-1", pvc.OwnerReferences[0].Name)
+			objs: []runtime.Object{
+				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
-
-			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
-
-			req := requestFromObject(tt.workspace)
-			_, err := r.Reconcile(context.Background(), req)
-			require.NoError(t, err)
-
-			var pvc corev1.PersistentVolumeClaim
-			err = r.Get(context.TODO(), req.NamespacedName, &pvc)
-			require.NoError(t, err)
-
-			tt.assertions(&pvc)
-		})
-	}
-}
-
-func TestReconcileWorkspacePod(t *testing.T) {
-	tests := []struct {
-		name       string
-		workspace  *v1alpha1.Workspace
-		assertions func(*corev1.Pod)
-	}{
-		{
-			name:      "Owned",
-			workspace: testobj.Workspace("", "workspace-1"),
-			assertions: func(pod *corev1.Pod) {
+			configMapAssertions: func(t *testutil.T, vars *corev1.ConfigMap) {
+				assert.Equal(t, "Workspace", vars.OwnerReferences[0].Kind)
+				assert.Equal(t, "workspace-1", vars.OwnerReferences[0].Name)
+			},
+			podAssertions: func(t *testutil.T, pod *corev1.Pod) {
 				assert.Equal(t, "Workspace", pod.OwnerReferences[0].Kind)
 				assert.Equal(t, "workspace-1", pod.OwnerReferences[0].Name)
 			},
+			pvcAssertions: func(t *testutil.T, pvc *corev1.PersistentVolumeClaim) {
+				assert.Equal(t, "Workspace", pvc.OwnerReferences[0].Kind)
+				assert.Equal(t, "workspace-1", pvc.OwnerReferences[0].Name)
+			},
+			stateAssertions: func(t *testutil.T, state *corev1.Secret) {
+				assert.Equal(t, "Workspace", state.OwnerReferences[0].Kind)
+				assert.Equal(t, "workspace-1", state.OwnerReferences[0].Name)
+			},
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
-
-			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
-
-			_, err := r.Reconcile(context.Background(), requestFromObject(tt.workspace))
-			require.NoError(t, err)
-
-			var pod corev1.Pod
-			podkey := types.NamespacedName{
-				Name:      "workspace-" + tt.workspace.Name,
-				Namespace: tt.workspace.Namespace,
-			}
-			require.NoError(t, r.Get(context.TODO(), podkey, &pod))
-
-			tt.assertions(&pod)
-		})
-	}
-}
-
-func TestReconcileWorkspaceVariables(t *testing.T) {
-	tests := []struct {
-		name       string
-		workspace  *v1alpha1.Workspace
-		assertions func(*corev1.ConfigMap)
-	}{
 		{
-			name:      "Owned and has content",
+			name:      "Variables: has data",
 			workspace: testobj.Workspace("", "workspace-1"),
-			assertions: func(vars *corev1.ConfigMap) {
-				assert.Equal(t, "Workspace", vars.OwnerReferences[0].Kind)
-				assert.Equal(t, "workspace-1", vars.OwnerReferences[0].Name)
+			configMapAssertions: func(t *testutil.T, vars *corev1.ConfigMap) {
 				assert.NotEmpty(t, vars.Data[variablesPath])
 			},
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, tt.workspace)
-
-			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
-
-			_, err := r.Reconcile(context.Background(), requestFromObject(tt.workspace))
-			require.NoError(t, err)
-
-			var variables corev1.ConfigMap
-			key := types.NamespacedName{
-				Name:      tt.workspace.Name + "-variables",
-				Namespace: tt.workspace.Namespace,
-			}
-			require.NoError(t, r.Get(context.TODO(), key, &variables))
-
-			tt.assertions(&variables)
-		})
-	}
-}
-
-func TestReconcileWorkspaceState(t *testing.T) {
-	testutil.Run(t, "outputs", func(t *testutil.T) {
-		// Unmarshal YAML testdata into go object
-		var state corev1.Secret
-		f, err := ioutil.ReadFile("testdata/tfstate.yaml")
-		require.NoError(t, yaml.Unmarshal(f, &state))
-
-		var workspace = testobj.Workspace("default", "foo")
-		cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
-
-		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
-
-		req := requestFromObject(workspace)
-		_, err = r.Reconcile(context.Background(), req)
-		require.NoError(t, err)
-
-		// Fetch fresh workspace for assertions
-		ws := &v1alpha1.Workspace{}
-		require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
-
-		// Assert that state outputs have been persisted to workspace status
-		assert.Equal(t, []*v1alpha1.Output{
-			{
-				Key:   "random_string",
-				Value: "f584-default-foo-foo",
+		{
+			name:      "Outputs",
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodFailed)),
+				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
-		}, ws.Status.Outputs)
-
-		// Assert that conditions have been updated accordingly
-		assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, "StateFailure"))
-
-		// Fetch fresh state secret for assertions
-		state = corev1.Secret{}
-		require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: ws.StateSecretName()}, &state))
-
-		// Assert that workspace has been made owner of secret
-		assert.Equal(t, "Workspace", state.OwnerReferences[0].Kind)
-		assert.Equal(t, "foo", state.OwnerReferences[0].Name)
-	})
-
-	testutil.Run(t, "invalid state", func(t *testutil.T) {
-		// A generic secret resource that is missing the 'tfstate' key and thus
-		// should trigger an error
-		state := testobj.Secret("default", "tfstate-default-foo")
-
-		var workspace = testobj.Workspace("default", "foo")
-		cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, state)
-
-		r := NewWorkspaceReconciler(cl, "a.b.c.d:v1")
-
-		req := requestFromObject(workspace)
-		_, err := r.Reconcile(context.Background(), req)
-		require.NoError(t, err)
-
-		// Fetch fresh workspace for assertions
-		ws := &v1alpha1.Workspace{}
-		require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
-
-		assert.True(t, meta.IsStatusConditionTrue(ws.Status.Conditions, "StateFailure"))
-	})
-
-	testutil.Run(t, "backup", func(t *testutil.T) {
-		// Unmarshal YAML testdata into go object
-		var state corev1.Secret
-		f, err := ioutil.ReadFile("testdata/tfstate.yaml")
-		require.NoError(t, yaml.Unmarshal(f, &state))
-
-		server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
-			InitialObjects: []fakestorage.Object{
-				// Seems like the only way to programmatically create an initial
-				// bucket is to create an initial object...
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Equal(t, []*v1alpha1.Output{
+					{
+						Key:   "random_string",
+						Value: "f584-default-foo-foo",
+					},
+				}, ws.Status.Outputs)
+			},
+		},
+		{
+			name:      "Backup",
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithBackupBucket("backup-bucket")),
+			objs: []runtime.Object{
+				testobj.Secret("default", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
+			},
+			bucketObjs: []fakestorage.Object{
 				{
 					BucketName: "backup-bucket",
-					Name:       "some/object/file.txt",
-					Content:    []byte("inside the file"),
 				},
 			},
-			Host: "127.0.0.1",
-			Port: 8081,
-		})
-		require.NoError(t, err)
-		defer server.Stop()
+			storageAssertions: func(t *testutil.T, client *storage.Client) {
+				// Check object exists in bucket
+				obj := client.Bucket("backup-bucket").Object("default/workspace-1.yaml")
+				_, err := obj.Attrs(context.Background())
+				require.NoError(t, err)
+			},
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Equal(t, 4, ws.Status.BackupSerial)
+			},
+		},
+		{
+			name:      "Restore",
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithBackupBucket("backup-bucket")),
+			objs: []runtime.Object{
+				testobj.Secret("default", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
+			},
+			bucketObjs: []fakestorage.Object{
+				{
+					BucketName: "backup-bucket",
+					Name:       "default/workspace-1.yaml",
+					Content:    readFile("testdata/tfstate.yaml"),
+				},
+			},
+			storageAssertions: func(t *testutil.T, client *storage.Client) {
+				// Check object exists in bucket
+				obj := client.Bucket("backup-bucket").Object("default/workspace-1.yaml")
+				_, err := obj.Attrs(context.Background())
+				require.NoError(t, err)
+			},
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Equal(t, 4, ws.Status.BackupSerial)
+			}},
+		{
+			name:      "Non-existent backup bucket",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithBackupBucket("does-not-exist")),
+			objs: []runtime.Object{
+				testobj.Secret("dev", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
+			},
+			wantErr: true,
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				restoreFailure := meta.FindStatusCondition(ws.Status.Conditions, restoreFailureCondition)
+				assert.Equal(t, metav1.ConditionTrue, restoreFailure.Status)
+				assert.Equal(t, bucketNotFoundReason, restoreFailure.Reason)
+			},
+		},
+	}
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			objs := append(tt.objs, runtime.Object(tt.workspace))
+			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
 
-		testutil.Run(t.T, "valid bucket", func(t *testutil.T) {
-			var workspace = testobj.Workspace("default", "foo")
-			workspace.Spec.BackupBucket = "backup-bucket"
+			// Setup up new fake GCS server for each test
+			server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
+				InitialObjects: tt.bucketObjs,
+				Host:           "127.0.0.1",
+				Port:           8081,
+			})
+			require.NoError(t, err)
+			defer server.Stop()
 
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
-
-			sclient := server.Client()
-
-			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
-
-			req := requestFromObject(workspace)
+			// Reconcile
+			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()))
+			req := requestFromObject(tt.workspace)
 			_, err = r.Reconcile(context.Background(), req)
-			require.NoError(t, err)
-
-			// Check object exists in bucket
-			obj := sclient.Bucket("backup-bucket").Object(workspace.BackupObjectName())
-			_, err = obj.Attrs(context.Background())
-			require.NoError(t, err)
-
-			// Read object
-			or, err := obj.NewReader(context.Background())
-			require.NoError(t, err)
-			objectBytes, err := ioutil.ReadAll(or)
-			require.NoError(t, err)
-
-			// Unmarshal object
-			var got corev1.Secret
-			require.NoError(t, yaml.Unmarshal(objectBytes, &got))
-
-			// Check testdata state is same as backup got from gcs
-			assert.Equal(t, state, got)
-
-			ws := &v1alpha1.Workspace{}
-			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
-
-			assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, "BackupFailure"))
-		})
-
-		testutil.Run(t.T, "invalid bucket", func(t *testutil.T) {
-			var workspace = testobj.Workspace("default", "foo")
-			workspace.Spec.BackupBucket = "does-not-exist"
-
-			cl := fake.NewFakeClientWithScheme(scheme.Scheme, workspace, &state)
-
-			sclient := server.Client()
-
-			r := NewWorkspaceReconciler(cl, "a.b.c.d:v1", WithStorageClient(sclient))
-
-			req := requestFromObject(workspace)
-			_, err = r.Reconcile(context.Background(), req)
-			require.NoError(t, err)
+			t.CheckError(tt.wantErr, err)
 
 			// Fetch fresh workspace for assertions
-			ws := &v1alpha1.Workspace{}
-			require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+			if tt.workspaceAssertions != nil {
+				ws := &v1alpha1.Workspace{}
+				require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+				tt.workspaceAssertions(t, ws)
+			}
 
-			backupComplete := meta.FindStatusCondition(ws.Status.Conditions, "BackupFailure")
-			if assert.NotNil(t, backupComplete) {
-				assert.Equal(t, metav1.ConditionTrue, backupComplete.Status)
-				assert.Equal(t, backupBucketNotFoundReason, backupComplete.Reason)
+			// Fetch fresh state secret for assertions
+			if tt.stateAssertions != nil {
+				state := corev1.Secret{}
+				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.StateSecretName()}, &state))
+				tt.stateAssertions(t, &state)
+			}
+
+			if tt.configMapAssertions != nil {
+				vars := corev1.ConfigMap{}
+				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.VariablesConfigMapName()}, &vars))
+				tt.configMapAssertions(t, &vars)
+			}
+
+			if tt.podAssertions != nil {
+				runner := corev1.Pod{}
+				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.PodName()}, &runner))
+				tt.podAssertions(t, &runner)
+			}
+
+			if tt.pvcAssertions != nil {
+				cache := corev1.PersistentVolumeClaim{}
+				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.PVCName()}, &cache))
+				tt.pvcAssertions(t, &cache)
+			}
+
+			if tt.storageAssertions != nil {
+				tt.storageAssertions(t, r.StorageClient)
 			}
 		})
-	})
+	}
 }
 
-func requestFromObject(obj client.Object) reconcile.Request {
-	return reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
+func TestWorkspacePhase(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []metav1.Condition
+		wantPhase  v1alpha1.WorkspacePhase
+	}{
+		{
+			name:      "ready",
+			wantPhase: v1alpha1.WorkspacePhaseReady,
 		},
+		{
+			name: "initializing",
+			conditions: []metav1.Condition{
+				{
+					Type:   podFailureCondition,
+					Status: metav1.ConditionFalse,
+					Reason: pendingReason,
+				},
+			},
+			wantPhase: v1alpha1.WorkspacePhaseInitializing,
+		},
+		{
+			name: "error",
+			conditions: []metav1.Condition{
+				{
+					Type:   podFailureCondition,
+					Status: metav1.ConditionTrue,
+				},
+			},
+			wantPhase: v1alpha1.WorkspacePhaseError,
+		},
+		{
+			name: "unknown",
+			conditions: []metav1.Condition{
+				{
+					Type:   podFailureCondition,
+					Status: metav1.ConditionUnknown,
+				},
+			},
+			wantPhase: v1alpha1.WorkspacePhaseUnknown,
+		},
+	}
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			ws := v1alpha1.Workspace{}
+			ws.Status.Conditions = tt.conditions
+
+			ws, _ = managePhase(context.Background(), ws)
+			assert.Equal(t, tt.wantPhase, ws.Status.Phase)
+		})
 	}
 }

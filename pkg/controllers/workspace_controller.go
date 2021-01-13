@@ -8,24 +8,19 @@ import (
 	"errors"
 	"io"
 	"reflect"
-	"regexp"
 	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"google.golang.org/api/googleapi"
 	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/scheme"
-	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,7 +31,50 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var approvalAnnotationKeyRegex = regexp.MustCompile("approvals.etok.dev/[-a-z0-9]+")
+const (
+	restoreFailureCondition = "RestoreFailure"
+	backupFailureCondition  = "BackupFailure"
+	cacheFailureCondition   = "CacheFailure"
+	podFailureCondition     = "PodFailure"
+
+	clientCreateReason      = "ClientCreateFailed"
+	bucketNotFoundReason    = "BucketNotFound"
+	nothingToRestoreReason  = "NothingToRestore"
+	unexpectedErrorReason   = "UnexpectedError"
+	restoreSuccessfulReason = "RestoreSuccessful"
+	backupSuccessfulReason  = "BackupSuccessful"
+	cacheBoundReason        = "CacheBound"
+	cacheLostReason         = "CacheLost"
+	podCreatedReason        = "PodCreated"
+
+	// Pending means whatever is being observed is reported to be progressing
+	// towards a non-failure state.
+	pendingReason = "Pending"
+)
+
+var (
+	restoreFailure = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionTrue)
+	restoreOK      = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionFalse)
+
+	backupFailure = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionTrue)
+	backupOK      = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionFalse)
+
+	cacheFailure = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionTrue)
+	cacheUnknown = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionUnknown)
+	cacheOK      = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionFalse)
+
+	podFailure = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionTrue)
+	podUnknown = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionUnknown)
+	podOK      = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionFalse)
+
+	// List of functions that update the workspace spec
+	workspaceReconcileSpecChain []workspaceUpdater
+	// List of functions that update the workspace status
+	workspaceReconcileStatusChain []workspaceUpdater
+)
+
+func init() {
+}
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -63,6 +101,16 @@ func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceRec
 	for _, o := range opts {
 		o(r)
 	}
+
+	// Build chain of workspace status updaters, to be called one after the
+	// other in a reconcile
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageVariables)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageRBAC)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageState)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePVC)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePod)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageQueue)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, managePhase)
 
 	return r
 }
@@ -114,470 +162,504 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if ws.GetDeletionTimestamp().IsZero() {
-		// Workspace not being deleted
-		if !slice.ContainsString(ws.GetFinalizers(), metav1.FinalizerDeleteDependents) {
-			// Instruct garbage collector to only delete workspace once its dependents are deleted
-			ws.SetFinalizers([]string{metav1.FinalizerDeleteDependents})
-			if err := r.Update(ctx, &ws); err != nil {
+	// Determine if workspace is being deleted
+	if !ws.GetDeletionTimestamp().IsZero() {
+		// It's being deleted...set phase if not done already
+		if ws.Status.Phase != v1alpha1.WorkspacePhaseDeleting {
+			ws.Status.Phase = v1alpha1.WorkspacePhaseDeleting
+			if err := r.Status().Update(ctx, &ws); err != nil {
 				return ctrl.Result{}, err
 			}
-		}
-	} else {
-		// Workspace is being deleted
-		ws.Status.Phase = v1alpha1.WorkspacePhaseDeleting
-		if err := r.Status().Update(ctx, &ws); err != nil {
-			return ctrl.Result{}, err
 		}
 
 		// Cease reconciliation
-		return r.success(ctx, &ws)
-	}
-
-	// Retrieve state file
-	var state corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.StateSecretName()}, &state); err != nil {
-		// Ignore not found errors and keep on reconciling - the state file
-		// might not yet have been created
-		if !kerrors.IsNotFound(err) {
-			log.Error(err, "unable to get state secret")
-			return ctrl.Result{}, err
-		}
-	} else {
-		// Read state secret and update status
-		sfile, err := r.readStateAndSetCondition(ctx, &ws, &state)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		if ws.Spec.BackupBucket != "" && sfile.Serial != ws.Status.BackupSerial {
-			// Backup the state file and update status
-			if err := r.backupAndSetCondition(ctx, &ws, &state, sfile.Serial); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
-		// Make workspace owner of state secret, so that if workspace is deleted
-		// so is the state
-		if err := controllerutil.SetControllerReference(&ws, &state, r.Scheme); err != nil {
-			log.Error(err, "unable to set state secret ownership")
-			return ctrl.Result{}, err
-		}
-		if err := r.Update(ctx, &state); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Manage ConfigMap containing variables for workspace
-	var variables corev1.ConfigMap
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.VariablesConfigMapName()}, &variables); err != nil {
-		if kerrors.IsNotFound(err) {
-			variables := *newVariablesForWS(&ws)
-
-			if err := controllerutil.SetControllerReference(&ws, &variables, r.Scheme); err != nil {
-				log.Error(err, "unable to set config map ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, &variables); err != nil {
-				log.Error(err, "unable to create configmap for variables")
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get configmap for variables")
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Manage RBAC role for workspace
-	var role rbacv1.Role
-	if err := r.Get(ctx, req.NamespacedName, &role); err != nil {
-		if kerrors.IsNotFound(err) {
-			role := *newRoleForWS(&ws)
-
-			if err := controllerutil.SetControllerReference(&ws, &role, r.Scheme); err != nil {
-				log.Error(err, "unable to set role ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, &role); err != nil {
-				log.Error(err, "unable to create role")
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get role")
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Manage RBAC role binding for workspace
-	var binding rbacv1.RoleBinding
-	if err := r.Get(ctx, req.NamespacedName, &binding); err != nil {
-		if kerrors.IsNotFound(err) {
-			binding := *newRoleBindingForWS(&ws)
-
-			if err := controllerutil.SetControllerReference(&ws, &binding, r.Scheme); err != nil {
-				log.Error(err, "unable to set binding ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, &binding); err != nil {
-				log.Error(err, "unable to create binding")
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get binding")
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Manage PVC for workspace
-	var pvc corev1.PersistentVolumeClaim
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PVCName()}, &pvc); err != nil {
-		if kerrors.IsNotFound(err) {
-			pvc := *newPVCForWS(&ws)
-
-			if err := controllerutil.SetControllerReference(&ws, &pvc, r.Scheme); err != nil {
-				log.Error(err, "unable to set PVC ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, &pvc); err != nil {
-				log.Error(err, "unable to create PVC")
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get PVC")
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Manage Pod for workspace
-	var pod corev1.Pod
-	var podCreated bool
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: ws.PodName()}, &pod); err != nil {
-		if kerrors.IsNotFound(err) {
-			pod, err := workspacePod(&ws, r.Image)
-			if err != nil {
-				log.Error(err, "unable to construct pod")
-				return ctrl.Result{}, err
-			}
-
-			if err := controllerutil.SetControllerReference(&ws, pod, r.Scheme); err != nil {
-				log.Error(err, "unable to set pod ownership")
-				return ctrl.Result{}, err
-			}
-
-			if err = r.Create(ctx, pod); err != nil {
-				log.Error(err, "unable to create pod")
-				return ctrl.Result{}, err
-			}
-			podCreated = true
-
-		} else if err != nil {
-			log.Error(err, "unable to get pod")
-			return ctrl.Result{}, err
-		}
-	}
-
-	if podCreated {
-		// Brand new pod so update status and end reconcile early
-		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
-
-		if err := r.Status().Update(ctx, &ws); err != nil {
-			return ctrl.Result{}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
-	// Set workspace phase status
-	if err := r.setPhase(ctx, &ws, &pod); err != nil {
-		return ctrl.Result{}, err
+	// Indicate whether spec has been updated
+	var specUpdated bool
+
+	// Set garbage collection to use foreground deletion in the event the
+	// workspace is deleted
+	if !controllerutil.ContainsFinalizer(&ws, metav1.FinalizerDeleteDependents) {
+		controllerutil.AddFinalizer(&ws, metav1.FinalizerDeleteDependents)
+		specUpdated = true
 	}
 
-	// Update run queue
-	if err := updateQueue(r.Client, &ws); err != nil {
+	// Prune approval annotations
+	annotations, err := r.pruneApprovals(ctx, ws)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if !reflect.DeepEqual(ws.Annotations, annotations) {
+		ws.Annotations = annotations
+		specUpdated = true
+	}
 
-	// Garbage collect approval annotations
-	if annotations := ws.Annotations; annotations != nil {
-		updatedAnnotations := make(map[string]string)
-		for k, v := range annotations {
-			if approvalAnnotationKeyRegex.MatchString(k) {
-				run := strings.Split(k, "/")[1]
-				if slice.ContainsString(ws.Status.Queue, run) {
-					// Run is still enqueued so keep its annotation
-					updatedAnnotations[k] = v
-				}
-			}
+	// Only issue update if necessary
+	if specUpdated {
+		if err := r.Update(ctx, &ws); err != nil {
+			return ctrl.Result{}, err
 		}
-		if !reflect.DeepEqual(annotations, updatedAnnotations) {
-			ws.Annotations = updatedAnnotations
-			if err := r.Update(ctx, &ws); err != nil {
+	}
+
+	// Update workspace status. Bail out early if an error is returned.
+	for _, f := range workspaceReconcileStatusChain {
+		var err error
+		ws, err = f(ctx, ws)
+		if err != nil {
+			if err := r.Status().Update(ctx, &ws); err != nil {
 				return ctrl.Result{}, err
 			}
+			return ctrl.Result{}, err
 		}
 	}
 
-	return r.success(ctx, &ws)
-}
-
-func (r *WorkspaceReconciler) readStateAndSetCondition(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret) (*state, error) {
-	data, ok := secret.Data["tfstate"]
-	if !ok {
-		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "KeyNotFound", "Expected key 'tfstate' not found in state secret")
+	// success marks a successful reconcile
+	if !ws.Status.Reconciled {
+		ws.Status.Reconciled = true
 	}
 
-	// Decompress state file
+	if err := r.Status().Update(ctx, &ws); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *WorkspaceReconciler) manageState(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	log := log.FromContext(ctx)
+
+	var secret corev1.Secret
+	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.StateSecretName()}, &secret)
+	switch {
+	case kerrors.IsNotFound(err):
+		if ws.Spec.BackupBucket != "" {
+			return r.restore(ctx, ws)
+		}
+	case err != nil:
+		log.Error(err, "unable to get state secret")
+		return ws, err
+	default:
+		// Make workspace owner of state secret, so that if workspace is deleted
+		// so is the state
+		if err := controllerutil.SetOwnerReference(&ws, &secret, r.Scheme); err != nil {
+			log.Error(err, "unable to set state secret ownership")
+			return ws, err
+		}
+		if err := r.Update(ctx, &secret); err != nil {
+			return ws, err
+		}
+
+		// Retrieve state file secret
+		state, err := r.readState(ctx, ws, &secret)
+		if err != nil {
+			return ws, err
+		}
+
+		// Persist outputs from state file to workspace status
+		var outputs []*v1alpha1.Output
+		for k, v := range state.Outputs {
+			outputs = append(outputs, &v1alpha1.Output{Key: k, Value: v.Value})
+		}
+		if !reflect.DeepEqual(ws.Status.Outputs, outputs) {
+			ws.Status.Outputs = outputs
+		}
+
+		if ws.Spec.BackupBucket != "" && state.Serial != ws.Status.BackupSerial {
+			// Backup the state file and update status
+			return r.backup(ctx, ws, &secret, state)
+		}
+	}
+
+	return ws, nil
+}
+
+func (r *WorkspaceReconciler) addFinalizers(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	// Set garbage collection to use foreground deletion in the event the
+	// workspace is deleted
+	if !controllerutil.ContainsFinalizer(&ws, metav1.FinalizerDeleteDependents) {
+		controllerutil.AddFinalizer(&ws, metav1.FinalizerDeleteDependents)
+	}
+	return ws, nil
+}
+
+// Prune invalid approval annotations. Invalid approvals are those that belong
+// to runs which are either completed or no longer exist.
+func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Workspace) (map[string]string, error) {
+	if ws.Annotations == nil {
+		// Nothing to prune
+		return nil, nil
+	}
+
+	// Make a copy of annotations, leaving out approvals
+	var hasApproval bool
+	annotations := make(map[string]string)
+	for k, v := range ws.Annotations {
+		if strings.HasPrefix(k, v1alpha1.ApprovedAnnotationKeyPrefix) {
+			hasApproval = true
+			continue
+		}
+		annotations[k] = v
+	}
+
+	if !hasApproval {
+		// No approvals found, so there's nothing to re-add
+		return nil, nil
+	}
+
+	// Enumerate runs, and re-add approvals accordingly
+	runlist := &v1alpha1.RunList{}
+	if err := r.List(context.TODO(), runlist, client.InNamespace(ws.Namespace)); err != nil {
+		return nil, err
+	}
+	for _, run := range runlist.Items {
+		if run.Phase == v1alpha1.RunPhaseCompleted {
+			// Don't re-add completed runs
+			continue
+		}
+
+		if metav1.HasAnnotation(ws.ObjectMeta, run.ApprovedAnnotationKey()) {
+			// Re-add approval
+			annotations[run.ApprovedAnnotationKey()] = "approved"
+		}
+	}
+
+	return annotations, nil
+}
+
+type workspaceUpdater func(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error)
+
+func (r *WorkspaceReconciler) readState(ctx context.Context, ws v1alpha1.Workspace, secret *corev1.Secret) (*state, error) {
+	data, ok := secret.Data["tfstate"]
+	if !ok {
+		return nil, errors.New("Expected key tfstate not found in state secret")
+	}
+
+	// Return a gzip reader that decompresses on the fly
 	gr, err := gzip.NewReader(bytes.NewBuffer(data))
 	if err != nil {
-		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "DecompressionFailed", "Failed to decompress state")
+		return nil, err
 	}
 
 	// Unmarshal state file
-	var sfile state
-	if err := json.NewDecoder(gr).Decode(&sfile); err != nil {
-		return nil, r.setStateCondition(ctx, ws, metav1.ConditionTrue, "DecodeFailed", "Failed to decode state")
+	var s state
+	if err := json.NewDecoder(gr).Decode(&s); err != nil {
+		return nil, err
 	}
 
-	// Persist outputs from state file to workspace status
-	var outputs []*v1alpha1.Output
-	for k, v := range sfile.Outputs {
-		outputs = append(outputs, &v1alpha1.Output{Key: k, Value: v.Value})
-	}
-
-	if !reflect.DeepEqual(ws.Status.Outputs, outputs) {
-		ws.Status.Outputs = outputs
-		if err := r.Status().Update(ctx, ws); err != nil {
-			return nil, err
-		}
-	}
-	return &sfile, r.setStateCondition(ctx, ws, metav1.ConditionFalse, "StateReadSuccessful", "State was successfully read")
+	return &s, nil
 }
 
-func (r *WorkspaceReconciler) backupAndSetCondition(ctx context.Context, ws *v1alpha1.Workspace, state *corev1.Secret, serial int) error {
-	if err := r.backup(ctx, ws, state); err != nil {
-		var reason = "BackupError"
-		var message string
-		var gerr *googleapi.Error
-		if errors.As(err, &gerr) {
-			// Extract message from google api error
-			message = gerr.Message
-			if gerr.Code == 404 {
-				reason = backupBucketNotFoundReason
-				// Override generic 404 "not found" message
-				message = backupBucketNotFoundMessage
-			}
-		} else {
-			message = err.Error()
-		}
-		return r.setBackupCondition(ctx, ws, metav1.ConditionTrue, reason, message, serial)
-	}
-	return r.setBackupCondition(ctx, ws, metav1.ConditionFalse, "BackupSuccessful", "Most recent state backup was successful", serial)
-}
-
-func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, state *corev1.Secret) (err error) {
+func (r *WorkspaceReconciler) backup(ctx context.Context, ws v1alpha1.Workspace, secret *corev1.Secret, sfile *state) (v1alpha1.Workspace, error) {
 	// Re-use client or create if not yet created
 	if r.StorageClient == nil {
+		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			return err
+			return backupFailure(ws, clientCreateReason, err.Error()), err
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
+	_, err := bh.Attrs(ctx)
+	if err == storage.ErrBucketNotExist {
+		return backupFailure(ws, bucketNotFoundReason, err.Error()), err
+	} else if err != nil {
+		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
 	oh := bh.Object(ws.BackupObjectName())
 
 	// Marshal state file first to json then to yaml
-	y, err := yaml.Marshal(state)
+	y, err := yaml.Marshal(secret)
 	if err != nil {
-		return err
+		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
 	}
 
 	// Copy state file to GCS
 	owriter := oh.NewWriter(ctx)
 	_, err = io.Copy(owriter, bytes.NewBuffer(y))
 	if err != nil {
-		return err
+		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
 	}
 
 	if err := owriter.Close(); err != nil {
-		return err
+		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
 	}
 
-	return nil
+	// Update latest backup serial
+	ws.Status.BackupSerial = sfile.Serial
+
+	return backupOK(ws, backupSuccessfulReason, "State was successfully restored"), nil
 }
 
-func (r *WorkspaceReconciler) setBackupCondition(ctx context.Context, ws *v1alpha1.Workspace, status metav1.ConditionStatus, reason, message string, serial int) error {
-	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
-		Type:    "BackupFailure",
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	})
+type workspaceConditionSetter func(v1alpha1.Workspace, string, string) v1alpha1.Workspace
 
-	if status == metav1.ConditionFalse {
-		// Backup successful so update status of last serial backed up
-		ws.Status.BackupSerial = serial
+func workspaceConditionSetterFactory(condType string, status metav1.ConditionStatus) workspaceConditionSetter {
+	return func(ws v1alpha1.Workspace, reason, message string) v1alpha1.Workspace {
+		meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
+			Type:    condType,
+			Status:  status,
+			Reason:  reason,
+			Message: message,
+		})
+		return ws
 	}
-
-	return r.Status().Update(ctx, ws)
 }
 
-func (r *WorkspaceReconciler) setStateCondition(ctx context.Context, ws *v1alpha1.Workspace, status metav1.ConditionStatus, reason, message string) error {
-	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
-		Type:    "StateFailure",
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	})
+func (r *WorkspaceReconciler) restore(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	var secret corev1.Secret
 
-	return r.Status().Update(ctx, ws)
-}
-
-// success marks a successful reconcile
-func (r *WorkspaceReconciler) success(ctx context.Context, ws *v1alpha1.Workspace) (ctrl.Result, error) {
-	if !ws.Status.Reconciled {
-		ws.Status.Reconciled = true
-		if err := r.Status().Update(ctx, ws); err != nil {
-			return ctrl.Result{}, err
+	// Re-use client or create if not yet created
+	if r.StorageClient == nil {
+		var err error
+		r.StorageClient, err = storage.NewClient(ctx)
+		if err != nil {
+			return restoreFailure(ws, clientCreateReason, err.Error()), err
 		}
 	}
-	return ctrl.Result{}, nil
+
+	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
+	_, err := bh.Attrs(ctx)
+	if err == storage.ErrBucketNotExist {
+		return restoreFailure(ws, bucketNotFoundReason, err.Error()), err
+	} else if err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	// Try to retrieve existing backup
+	oh := bh.Object(ws.BackupObjectName())
+	_, err = oh.Attrs(ctx)
+	if err == storage.ErrObjectNotExist {
+		return restoreOK(ws, nothingToRestoreReason, "No backup was found to restore"), nil
+	} else if err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	oreader, err := oh.NewReader(ctx)
+	if err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	// Copy state file from GCS
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, oreader)
+	if err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	// Unmarshal state file into secret obj
+	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	if err := oreader.Close(); err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	// Blank out resource version to avoid error upon create
+	secret.ResourceVersion = ""
+
+	if err := r.Create(ctx, &secret); err != nil {
+		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+	}
+
+	return restoreOK(ws, restoreSuccessfulReason, "State was successfully restored"), nil
 }
 
-func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *v1alpha1.Workspace, pod *corev1.Pod) error {
-	switch pod.Status.Phase {
-	case corev1.PodPending:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseInitializing
+// Set phase, which is an aggregation or summarisation of the workspace's error
+// conditions. In order of precedence: If there is at least one true error
+// condition then the phase will be set to error. If there is at least one
+// unknown condition then the phase will be set to unknown. If there is at least
+// one true condition with a pending reason then the phase will be set to
+// pending.  If all conditions are false only then is the phase set to ready.
+func managePhase(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	var phase = v1alpha1.WorkspacePhaseReady
+
+	for _, cond := range ws.Status.Conditions {
+		switch cond.Status {
+		case metav1.ConditionTrue:
+			ws.Status.Phase = v1alpha1.WorkspacePhaseError
+			return ws, nil
+		case metav1.ConditionFalse:
+			if cond.Reason == pendingReason && phase != v1alpha1.WorkspacePhaseUnknown {
+				phase = v1alpha1.WorkspacePhaseInitializing
+			}
+		case metav1.ConditionUnknown:
+			phase = v1alpha1.WorkspacePhaseUnknown
+		}
+	}
+
+	ws.Status.Phase = phase
+	return ws, nil
+}
+
+func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	log := log.FromContext(ctx)
+
+	// Manage ConfigMap containing variables for workspace
+	var variables corev1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.VariablesConfigMapName()}, &variables)
+	if kerrors.IsNotFound(err) {
+		variables := *newVariablesForWS(&ws)
+
+		if err := controllerutil.SetControllerReference(&ws, &variables, r.Scheme); err != nil {
+			log.Error(err, "unable to set config map ownership")
+			return ws, err
+		}
+
+		if err = r.Create(ctx, &variables); err != nil {
+			log.Error(err, "unable to create configmap for variables")
+			return ws, err
+		}
+	} else if err != nil {
+		log.Error(err, "unable to get configmap for variables")
+		return ws, err
+	}
+	return ws, nil
+}
+
+func namespacedNameFromObj(obj controllerutil.Object) types.NamespacedName {
+	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+}
+
+func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	// Fetch run resources
+	runlist := &v1alpha1.RunList{}
+	if err := r.List(ctx, runlist, client.InNamespace(ws.Namespace)); err != nil {
+		return ws, err
+	}
+
+	ws.Status.Queue = updateQueue(&ws, runlist.Items)
+	return ws, nil
+}
+
+func (r *WorkspaceReconciler) managePod(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	log := log.FromContext(ctx)
+
+	// Manage Pod for workspace
+	var pod corev1.Pod
+	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.PodName()}, &pod)
+	if kerrors.IsNotFound(err) {
+		pod, err := workspacePod(&ws, r.Image)
+		if err != nil {
+			log.Error(err, "unable to construct pod")
+			return ws, err
+		}
+
+		if err := controllerutil.SetControllerReference(&ws, pod, r.Scheme); err != nil {
+			log.Error(err, "unable to set pod ownership")
+			return ws, err
+		}
+
+		if err = r.Create(ctx, pod); err != nil {
+			log.Error(err, "unable to create pod")
+			return ws, err
+		}
+
+		return podOK(ws, pendingReason, "Creating pod"), nil
+
+	} else if err != nil {
+		log.Error(err, "unable to get pod")
+		return ws, err
+	}
+
+	switch phase := pod.Status.Phase; phase {
 	case corev1.PodRunning:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseReady
-	case corev1.PodSucceeded, corev1.PodFailed:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseError
+		return podOK(ws, string(phase), ""), nil
+	case corev1.PodPending:
+		return podOK(ws, pendingReason, "Pod in pending phase"), nil
+	case corev1.PodFailed:
+		return podFailure(ws, string(phase), "Pod unexpectedly failed"), nil
+	case corev1.PodSucceeded:
+		return podFailure(ws, string(phase), "Pod unexpectedly completed"), nil
 	default:
-		ws.Status.Phase = v1alpha1.WorkspacePhaseUnknown
+		return podUnknown(ws, string(phase), ""), nil
 	}
-	return r.Status().Update(ctx, ws)
 }
 
-func newVariablesForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
-	variables := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.VariablesConfigMapName(),
-			Namespace: ws.Namespace,
-		},
-		Data: map[string]string{
-			variablesPath: `variable "namespace" {}
-variable "workspace" {}
-`,
-		},
+func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	log := log.FromContext(ctx)
+
+	// Manage RBAC role for workspace
+	var role rbacv1.Role
+	if err := r.Get(ctx, namespacedNameFromObj(&ws), &role); err != nil {
+		if kerrors.IsNotFound(err) {
+			role := *newRoleForWS(&ws)
+
+			if err := controllerutil.SetControllerReference(&ws, &role, r.Scheme); err != nil {
+				log.Error(err, "unable to set role ownership")
+				return ws, err
+			}
+
+			if err = r.Create(ctx, &role); err != nil {
+				log.Error(err, "unable to create role")
+				return ws, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get role")
+			return ws, err
+		}
 	}
 
-	// Set etok's common labels
-	labels.SetCommonLabels(variables)
-	// Permit filtering etok resources by component
-	labels.SetLabel(variables, labels.WorkspaceComponent)
+	// Manage RBAC role binding for workspace
+	var binding rbacv1.RoleBinding
+	if err := r.Get(ctx, namespacedNameFromObj(&ws), &binding); err != nil {
+		if kerrors.IsNotFound(err) {
+			binding := *newRoleBindingForWS(&ws)
 
-	return variables
+			if err := controllerutil.SetControllerReference(&ws, &binding, r.Scheme); err != nil {
+				log.Error(err, "unable to set binding ownership")
+				return ws, err
+			}
+
+			if err = r.Create(ctx, &binding); err != nil {
+				log.Error(err, "unable to create binding")
+				return ws, err
+			}
+		} else if err != nil {
+			log.Error(err, "unable to get binding")
+			return ws, err
+		}
+	}
+
+	return ws, nil
 }
 
-func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
-	pvc := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.Name,
-			Namespace: ws.Namespace,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(ws.Spec.Cache.Size),
-				},
-			},
-			StorageClassName: ws.Spec.Cache.StorageClass,
-		},
+func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
+	log := log.FromContext(ctx)
+
+	var pvc corev1.PersistentVolumeClaim
+	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.PVCName()}, &pvc)
+	if kerrors.IsNotFound(err) {
+		pvc := *newPVCForWS(&ws)
+
+		if err := controllerutil.SetControllerReference(&ws, &pvc, r.Scheme); err != nil {
+			log.Error(err, "unable to set PVC ownership")
+			return ws, err
+		}
+
+		if err = r.Create(ctx, &pvc); err != nil {
+			log.Error(err, "unable to create PVC")
+			return ws, err
+		}
+		return cacheOK(ws, pendingReason, "PVC is being created"), nil
+	} else if err != nil {
+		log.Error(err, "unable to get PVC")
+		return ws, err
 	}
 
-	// Set etok's common labels
-	labels.SetCommonLabels(pvc)
-	// Permit filtering etok resources by component
-	labels.SetLabel(pvc, labels.WorkspaceComponent)
-
-	return pvc
-}
-
-func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
-	role := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.Name,
-			Namespace: ws.Namespace,
-		},
-		Rules: []rbacv1.PolicyRule{
-			// Runner may need to persist a lock file to a new config map
-			{
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"create"},
-				APIGroups: []string{""},
-			},
-			// ...and the runner specifies the run resource as owner of said
-			// config map, so it needs to retrieve run resource metadata as well
-			{
-				Resources: []string{"runs"},
-				Verbs:     []string{"get"},
-				APIGroups: []string{"etok.dev"},
-			},
-			// Terraform state backend mgmt
-			{
-				Resources: []string{"secrets"},
-				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
-				APIGroups: []string{""},
-			},
-			// Terraform state backend mgmt
-			{
-				Resources: []string{"leases"},
-				Verbs:     []string{"list", "create", "get", "delete", "patch", "update"},
-				APIGroups: []string{"coordination.k8s.io"},
-			},
-		},
+	switch pvc.Status.Phase {
+	case corev1.ClaimBound:
+		return cacheOK(ws, cacheBoundReason, "Cache's PVC successfully bound to PV"), nil
+	case corev1.ClaimLost:
+		return cacheFailure(ws, cacheLostReason, "Persistent volume does not exist any longer"), nil
+	case corev1.ClaimPending:
+		return cacheOK(ws, pendingReason, "Cache's PVC in pending state"), nil
 	}
 
-	// Set etok's common labels
-	labels.SetCommonLabels(role)
-	// Permit filtering etok resources by component
-	labels.SetLabel(role, labels.WorkspaceComponent)
-
-	return role
-}
-
-func newRoleBindingForWS(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
-	binding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.Name,
-			Namespace: ws.Namespace,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      ws.Spec.ServiceAccountName,
-				Namespace: ws.Namespace,
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "Role",
-			Name:     ws.Name,
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-	}
-
-	// Set etok's common labels
-	labels.SetCommonLabels(binding)
-	// Permit filtering etok resources by component
-	labels.SetLabel(binding, labels.WorkspaceComponent)
-
-	return binding
+	return ws, nil
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {

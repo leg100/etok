@@ -42,6 +42,7 @@ func AddToRoot(root *cobra.Command, f *cmdutil.Factory) {
 	root.AddCommand(state)
 
 	for _, stateSubCmd := range []string{
+		"list",
 		"mv",
 		"pull",
 		"push",

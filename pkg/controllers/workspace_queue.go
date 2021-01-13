@@ -1,62 +1,43 @@
 package controllers
 
 import (
-	"context"
-	"fmt"
-	"reflect"
-
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/util/slice"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
-	// New queue to be built and compared to old (existing) queue
-	newQ := []string{}
-	oldQ := ws.Status.Queue
-
-	// Fetch run resources
-	runlist := &v1alpha1.RunList{}
-	if err := c.List(context.TODO(), runlist, client.InNamespace(ws.Namespace)); err != nil {
-		return err
-	}
-
+func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
 	// Filter run resources
-	meta.EachListItem(runlist, func(o runtime.Object) error {
-		run := o.(*v1alpha1.Run)
-
+	for _, run := range runs {
 		// Filter out runs belonging to other workspaces
 		if run.Workspace != ws.Name {
-			return nil
+			continue
 		}
 
 		// Filter out completed runs
 		if run.Phase == v1alpha1.RunPhaseCompleted {
-			return nil
+			continue
 		}
 
-		// Filter out plans
-		if run.Command == "plan" {
-			return nil
+		// Filter out non-queueable runs
+		if !launcher.IsQueueable(run.Command) {
+			continue
 		}
 
 		// Filter out privileged commands that are yet to be approved
 		if slice.ContainsString(ws.Spec.PrivilegedCommands, run.Command) {
-			if !ws.IsRunApproved(run) {
-				return nil
+			if !ws.IsRunApproved(&run) {
+				continue
 			}
 		}
 
-		newQ = append(newQ, run.Name)
-		return nil
-	})
+		queue = append(queue, run.Name)
+	}
 
-	// Re-order new queue to ensure runs maintain their position from the old
-	// queue
-	for i := len(oldQ) - 1; i >= 0; i-- {
-		j := slice.StringIndex(newQ, oldQ[i])
+	// Re-order new queue to ensure runs maintain their position from the
+	// existing queue
+	for i := len(ws.Status.Queue) - 1; i >= 0; i-- {
+		j := slice.StringIndex(queue, ws.Status.Queue[i])
 		if j == -1 {
 			// Skip run not found in new queue
 			continue
@@ -66,16 +47,9 @@ func updateQueue(c client.Client, ws *v1alpha1.Workspace) error {
 			continue
 		}
 		// Move run to front of queue
-		newQ = append(newQ[:j], newQ[j+1:]...)
-		newQ = append([]string{oldQ[i]}, newQ...)
+		queue = append(queue[:j], queue[j+1:]...)
+		queue = append([]string{ws.Status.Queue[i]}, queue...)
 	}
 
-	// Update status if queue has changed
-	if !reflect.DeepEqual(newQ, oldQ) {
-		ws.Status.Queue = newQ
-		if err := c.Status().Update(context.TODO(), ws); err != nil {
-			return fmt.Errorf("failed to update queue: %w", err)
-		}
-	}
-	return nil
+	return queue
 }
