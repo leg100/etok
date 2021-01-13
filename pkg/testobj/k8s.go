@@ -1,6 +1,12 @@
 package testobj
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
+	"io/ioutil"
+	"os"
+
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/k8s"
@@ -42,6 +48,12 @@ func WithVariables(keyValues ...string) func(*v1alpha1.Workspace) {
 		for i := 0; i < len(keyValues); i += 2 {
 			ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: keyValues[0], Value: keyValues[1]})
 		}
+	}
+}
+
+func WithBackupBucket(bucket string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.BackupBucket = bucket
 	}
 }
 
@@ -251,5 +263,29 @@ func WithStringData(k, v string) func(*corev1.Secret) {
 			secret.StringData = make(map[string]string)
 		}
 		secret.StringData[k] = v
+	}
+}
+
+func WithDataFromFile(k, path string) func(*corev1.Secret) {
+	return func(secret *corev1.Secret) {
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		data, _ := ioutil.ReadFile(path)
+		secret.Data[k] = data
+	}
+}
+
+func WithCompressedDataFromFile(k, path string) func(*corev1.Secret) {
+	return func(secret *corev1.Secret) {
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		f, _ := os.Open(path)
+		buf := new(bytes.Buffer)
+		gw := gzip.NewWriter(buf)
+		io.Copy(gw, f)
+		gw.Close()
+		secret.Data[k] = buf.Bytes()
 	}
 }

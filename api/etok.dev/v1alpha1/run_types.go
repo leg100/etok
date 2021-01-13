@@ -90,8 +90,10 @@ func (r *Run) ApprovedAnnotationKey() string {
 	return ApprovedAnnotationKey(r.Name)
 }
 
+const ApprovedAnnotationKeyPrefix = "approvals.etok.dev"
+
 func ApprovedAnnotationKey(runName string) string {
-	return fmt.Sprintf("approvals.etok.dev/%s", runName)
+	return fmt.Sprintf("%s/%s", ApprovedAnnotationKeyPrefix, runName)
 }
 
 // Run's pod shares its name
