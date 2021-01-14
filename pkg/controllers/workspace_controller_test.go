@@ -208,7 +208,7 @@ func TestReconcileWorkspace(t *testing.T) {
 				require.NoError(t, err)
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, 4, ws.Status.BackupSerial)
+				assert.Equal(t, 4, *ws.Status.BackupSerial)
 			},
 		},
 		{
@@ -231,7 +231,7 @@ func TestReconcileWorkspace(t *testing.T) {
 				require.NoError(t, err)
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, 4, ws.Status.BackupSerial)
+				assert.Equal(t, 4, *ws.Status.BackupSerial)
 			}},
 		{
 			name:      "Non-existent backup bucket",
@@ -241,9 +241,9 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 			wantErr: true,
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				restoreFailure := meta.FindStatusCondition(ws.Status.Conditions, restoreFailureCondition)
+				restoreFailure := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.RestoreFailureCondition)
 				assert.Equal(t, metav1.ConditionTrue, restoreFailure.Status)
-				assert.Equal(t, bucketNotFoundReason, restoreFailure.Reason)
+				assert.Equal(t, v1alpha1.BucketNotFoundReason, restoreFailure.Reason)
 			},
 		},
 	}
@@ -320,9 +320,9 @@ func TestWorkspacePhase(t *testing.T) {
 			name: "initializing",
 			conditions: []metav1.Condition{
 				{
-					Type:   podFailureCondition,
+					Type:   v1alpha1.PodFailureCondition,
 					Status: metav1.ConditionFalse,
-					Reason: pendingReason,
+					Reason: v1alpha1.PendingReason,
 				},
 			},
 			wantPhase: v1alpha1.WorkspacePhaseInitializing,
@@ -331,7 +331,7 @@ func TestWorkspacePhase(t *testing.T) {
 			name: "error",
 			conditions: []metav1.Condition{
 				{
-					Type:   podFailureCondition,
+					Type:   v1alpha1.PodFailureCondition,
 					Status: metav1.ConditionTrue,
 				},
 			},
@@ -341,7 +341,7 @@ func TestWorkspacePhase(t *testing.T) {
 			name: "unknown",
 			conditions: []metav1.Condition{
 				{
-					Type:   podFailureCondition,
+					Type:   v1alpha1.PodFailureCondition,
 					Status: metav1.ConditionUnknown,
 				},
 			},

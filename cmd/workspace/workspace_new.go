@@ -25,11 +25,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 )
 
 const (
 	defaultReconcileTimeout   = 10 * time.Second
 	defaultPodTimeout         = 60 * time.Second
+	defaultRestoreTimeout     = 60 * time.Second
 	defaultCacheSize          = "1Gi"
 	defaultSecretName         = "etok"
 	defaultServiceAccountName = "etok"
@@ -38,6 +40,8 @@ const (
 var (
 	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
 	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
+	errRestoreTimeout   = errors.New("timed out waiting for workspace to provide status of restore")
+	errWorkspaceNameArg = errors.New("expected single argument providing the workspace name")
 )
 
 type newOptions struct {
@@ -63,6 +67,10 @@ type newOptions struct {
 	// Timeout for workspace pod to be ready
 	podTimeout time.Duration
 
+	// Timeout for workspace restore failure condition to report either true or
+	// false (did the restore fail or not?).
+	restoreTimeout time.Duration
+
 	// Disable default behaviour of deleting resources upon error
 	disableResourceCleanup bool
 
@@ -75,9 +83,8 @@ type newOptions struct {
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
-	// For testing purposes set phase in order to mimic the workspace having
-	// been reconcile by the operator
-	phase v1alpha1.WorkspacePhase
+	// For testing purposes set workspace status
+	status *v1alpha1.WorkspaceStatus
 
 	variables            map[string]string
 	environmentVariables map[string]string
@@ -96,8 +103,11 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	cmd := &cobra.Command{
 		Use:   "new <workspace>",
 		Short: "Create a new etok workspace",
-		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if len(args) != 1 {
+				return errWorkspaceNameArg
+			}
+
 			o.workspace = args[0]
 
 			o.etokenv, err = env.New(o.namespace, o.workspace)
@@ -146,6 +156,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
+	cmd.Flags().DurationVar(&o.restoreTimeout, "restore-timeout", defaultRestoreTimeout, "timeout for restore condition to report back")
 
 	cmd.Flags().StringSliceVar(&o.workspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
 
@@ -154,10 +165,6 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 
 	return cmd, o
-}
-
-func (o *newOptions) name() string {
-	return fmt.Sprintf("%s/%s", o.namespace, o.workspace)
 }
 
 func (o *newOptions) run(ctx context.Context) error {
@@ -178,15 +185,21 @@ func (o *newOptions) run(ctx context.Context) error {
 		return err
 	}
 	o.createdWorkspace = true
-	fmt.Printf("Created workspace %s\n", o.name())
+	fmt.Fprintf(o.Out, "Created workspace %s\n", klog.KObj(ws))
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	fmt.Println("Waiting for workspace pod to be ready...")
+	fmt.Fprintln(o.Out, "Waiting for workspace pod to be ready...")
 	podch := make(chan *corev1.Pod, 1)
 	g.Go(func() error {
 		return o.waitForContainer(gctx, ws, podch)
 	})
+
+	if o.workspaceSpec.BackupBucket != "" {
+		g.Go(func() error {
+			return o.waitForRestore(gctx, ws)
+		})
+	}
 
 	// Wait for resource to have been successfully reconciled at least once
 	// within the ReconcileTimeout (If we don't do this and the operator is
@@ -196,8 +209,9 @@ func (o *newOptions) run(ctx context.Context) error {
 		return o.waitForReconcile(gctx, ws)
 	})
 
-	// Wait for both workspace to have been reconciled and for its pod container
-	// to be ready
+	// Wait for workspace to have been reconciled and for its pod container to
+	// be ready, and optionally, for restore status (if backup bucket
+	// specified).
 	if err := g.Wait(); err != nil {
 		return err
 	}
@@ -243,17 +257,7 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 			Name:      o.workspace,
 			Namespace: o.namespace,
 		},
-		Spec: v1alpha1.WorkspaceSpec{
-			SecretName:         o.workspaceSpec.SecretName,
-			ServiceAccountName: o.workspaceSpec.ServiceAccountName,
-			Cache: v1alpha1.WorkspaceCacheSpec{
-				StorageClass: o.workspaceSpec.Cache.StorageClass,
-				Size:         o.workspaceSpec.Cache.Size,
-			},
-			PrivilegedCommands: o.workspaceSpec.PrivilegedCommands,
-			TerraformVersion:   o.workspaceSpec.TerraformVersion,
-			BackupBucket:       o.workspaceSpec.BackupBucket,
-		},
+		Spec: o.workspaceSpec,
 	}
 
 	// Set etok's common labels
@@ -265,8 +269,10 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 
 	ws.Spec.Verbosity = o.Verbosity
 
-	// For testing purposes mimic obj having been reconciled
-	ws.Status.Phase = o.phase
+	if o.status != nil {
+		// For testing purposes seed workspace status
+		ws.Status = *o.status
+	}
 
 	for k, v := range o.variables {
 		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v})
@@ -384,6 +390,25 @@ func (o *newOptions) waitForReconcile(ctx context.Context, ws *v1alpha1.Workspac
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
 			return errReconcileTimeout
+		}
+		return err
+	}
+	return nil
+}
+
+// waitForRestore waits for the restoreFailure condition to provide info on
+// restore of state file.
+func (o *newOptions) waitForRestore(ctx context.Context, ws *v1alpha1.Workspace) error {
+	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
+	hdlr := handlers.Restore(o.Out)
+
+	ctx, cancel := context.WithTimeout(ctx, o.restoreTimeout)
+	defer cancel()
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, hdlr)
+	if err != nil {
+		if errors.Is(err, wait.ErrWaitTimeout) {
+			return errRestoreTimeout
 		}
 		return err
 	}
