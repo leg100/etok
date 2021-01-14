@@ -99,8 +99,9 @@ type launcherOptions struct {
 	createdRun     bool
 	createdArchive bool
 
-	// For testing purposes toggle obj having been reconciled
-	reconciled bool
+	// For testing purposes set phase in order to mimic the run having been
+	// reconcile by the operator
+	phase v1alpha1.RunPhase
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -449,7 +450,7 @@ func (o *launcherOptions) createRun(ctx context.Context, name, configMapName str
 	run.Verbosity = o.Verbosity
 
 	// For testing purposes mimic obj having been reconciled
-	run.Reconciled = o.reconciled
+	run.Phase = o.phase
 
 	if isTTY {
 		run.AttachSpec.Handshake = true

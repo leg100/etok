@@ -75,8 +75,9 @@ type newOptions struct {
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
-	// For testing purposes toggle obj having been reconciled
-	reconciled bool
+	// For testing purposes set phase in order to mimic the workspace having
+	// been reconcile by the operator
+	phase v1alpha1.WorkspacePhase
 
 	variables            map[string]string
 	environmentVariables map[string]string
@@ -265,7 +266,7 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 	ws.Spec.Verbosity = o.Verbosity
 
 	// For testing purposes mimic obj having been reconciled
-	ws.Status.Reconciled = o.reconciled
+	ws.Status.Phase = o.phase
 
 	for k, v := range o.variables {
 		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v})

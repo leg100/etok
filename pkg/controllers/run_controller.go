@@ -88,10 +88,6 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if !run.Reconciled {
-		run.Reconciled = true
-	}
-
 	// Update status. Bail out early if an error is returned or explicitly
 	// instructed to bail out.
 	for _, f := range runReconcileStatusChain {

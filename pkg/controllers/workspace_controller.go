@@ -176,11 +176,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// success marks a successful reconcile
-	if !ws.Status.Reconciled {
-		ws.Status.Reconciled = true
-	}
-
 	if err := r.Status().Update(ctx, &ws); err != nil {
 		return ctrl.Result{}, err
 	}
