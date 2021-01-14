@@ -26,10 +26,6 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 				Size: "1Gi",
 			},
 		},
-		Status: v1alpha1.WorkspaceStatus{
-			// Mock obj as having been reconciled at least once.
-			Reconciled: true,
-		},
 	}
 	for _, o := range opts {
 		o(ws)
@@ -202,10 +198,6 @@ func Run(namespace, name string, command string, opts ...func(*v1alpha1.Run)) *v
 			AttachSpec: v1alpha1.AttachSpec{
 				HandshakeTimeout: "10s",
 			},
-		},
-		RunStatus: v1alpha1.RunStatus{
-			// Mock obj as having been reconciled at least once.
-			Reconciled: true,
 		},
 	}
 

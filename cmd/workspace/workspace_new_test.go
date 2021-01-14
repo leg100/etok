@@ -31,7 +31,7 @@ func TestNewWorkspace(t *testing.T) {
 		name string
 		args []string
 		err  func(*testutil.T, error)
-		// Toggle mocking a successful reconcile status
+		// Toggle mocking a successful reconcile
 		disableMockReconcile bool
 		objs                 []runtime.Object
 		factoryOverrides     func(*cmdutil.Factory)
@@ -338,7 +338,7 @@ func TestNewWorkspace(t *testing.T) {
 
 			if !tt.disableMockReconcile {
 				// Mock successful reconcile
-				opts.reconciled = true
+				opts.phase = v1alpha1.WorkspacePhaseInitializing
 			}
 
 			err := cmd.ExecuteContext(context.Background())

@@ -105,9 +105,6 @@ type WorkspaceStatus struct {
 	// Lifecycle phase of workspace.
 	Phase WorkspacePhase `json:"phase,omitempty"`
 
-	// True if resource has been reconciled at least once.
-	Reconciled bool `json:"reconciled,omitempty"`
-
 	// Outputs from state file
 	Outputs []*Output `json:"outputs,omitempty"`
 
@@ -139,7 +136,7 @@ type Output struct {
 }
 
 func (ws *Workspace) IsReconciled() bool {
-	return ws.Status.Reconciled
+	return ws.Status.Phase != ""
 }
 
 func (ws *Workspace) PodName() string {

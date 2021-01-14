@@ -302,8 +302,8 @@ func TestLauncher(t *testing.T) {
 			opts := &launcherOptions{command: command, runName: "run-12345"}
 
 			if !tt.disableMockReconcile {
-				// Mock successful reconcile
-				opts.reconciled = true
+				// Mock successful reconcile by setting phase to pending
+				opts.phase = v1alpha1.RunPhasePending
 			}
 
 			// create cobra command
