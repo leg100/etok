@@ -20,7 +20,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,50 +30,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const (
-	restoreFailureCondition = "RestoreFailure"
-	backupFailureCondition  = "BackupFailure"
-	cacheFailureCondition   = "CacheFailure"
-	podFailureCondition     = "PodFailure"
-
-	clientCreateReason      = "ClientCreateFailed"
-	bucketNotFoundReason    = "BucketNotFound"
-	nothingToRestoreReason  = "NothingToRestore"
-	unexpectedErrorReason   = "UnexpectedError"
-	restoreSuccessfulReason = "RestoreSuccessful"
-	backupSuccessfulReason  = "BackupSuccessful"
-	cacheBoundReason        = "CacheBound"
-	cacheLostReason         = "CacheLost"
-	podCreatedReason        = "PodCreated"
-
-	// Pending means whatever is being observed is reported to be progressing
-	// towards a non-failure state.
-	pendingReason = "Pending"
-)
-
 var (
-	restoreFailure = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionTrue)
-	restoreOK      = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionFalse)
-
-	backupFailure = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionTrue)
-	backupOK      = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionFalse)
-
-	cacheFailure = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionTrue)
-	cacheUnknown = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionUnknown)
-	cacheOK      = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionFalse)
-
-	podFailure = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionTrue)
-	podUnknown = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionUnknown)
-	podOK      = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionFalse)
-
-	// List of functions that update the workspace spec
-	workspaceReconcileSpecChain []workspaceUpdater
 	// List of functions that update the workspace status
 	workspaceReconcileStatusChain []workspaceUpdater
 )
 
-func init() {
-}
+type workspaceUpdater func(context.Context, v1alpha1.Workspace) (v1alpha1.Workspace, error)
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -328,8 +289,6 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 	return annotations, nil
 }
 
-type workspaceUpdater func(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error)
-
 func (r *WorkspaceReconciler) readState(ctx context.Context, ws v1alpha1.Workspace, secret *corev1.Secret) (*state, error) {
 	data, ok := secret.Data["tfstate"]
 	if !ok {
@@ -392,20 +351,6 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws v1alpha1.Workspace,
 	ws.Status.BackupSerial = sfile.Serial
 
 	return backupOK(ws, backupSuccessfulReason, "State was successfully restored"), nil
-}
-
-type workspaceConditionSetter func(v1alpha1.Workspace, string, string) v1alpha1.Workspace
-
-func workspaceConditionSetterFactory(condType string, status metav1.ConditionStatus) workspaceConditionSetter {
-	return func(ws v1alpha1.Workspace, reason, message string) v1alpha1.Workspace {
-		meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
-			Type:    condType,
-			Status:  status,
-			Reason:  reason,
-			Message: message,
-		})
-		return ws
-	}
 }
 
 func (r *WorkspaceReconciler) restore(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
@@ -535,10 +480,10 @@ func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws v1alpha1.Works
 	return ws, nil
 }
 
+// Manage Pod for workspace
 func (r *WorkspaceReconciler) managePod(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
 	log := log.FromContext(ctx)
 
-	// Manage Pod for workspace
 	var pod corev1.Pod
 	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.PodName()}, &pod)
 	if kerrors.IsNotFound(err) {

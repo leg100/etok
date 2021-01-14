@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/launcher"
@@ -21,6 +20,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+var (
+	// List of functions that update the workspace status
+	runReconcileStatusChain []runUpdater
+)
+
+type runUpdater func(context.Context, v1alpha1.Run, v1alpha1.Workspace) (v1alpha1.Run, bool, error)
+
 type RunReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -28,11 +34,18 @@ type RunReconciler struct {
 }
 
 func NewRunReconciler(c client.Client, image string) *RunReconciler {
-	return &RunReconciler{
+	r := &RunReconciler{
 		Client: c,
 		Scheme: scheme.Scheme,
 		Image:  image,
 	}
+
+	// Build chain of status updaters, to be called one after the other in a
+	// reconcile
+	runReconcileStatusChain = append(runReconcileStatusChain, r.manageQueue)
+	runReconcileStatusChain = append(runReconcileStatusChain, r.managePod)
+
+	return r
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
@@ -56,7 +69,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Run completed, nothing more to be done
 	if run.Phase == v1alpha1.RunPhaseCompleted {
-		return r.success(ctx, &run)
+		return ctrl.Result{}, nil
 	}
 
 	// Fetch its Workspace object
@@ -65,6 +78,105 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	// Make workspace owner of this run
+	if err := r.makeWorkspaceOwner(ctx, &run, &ws); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Make run owner of configmap archive
+	if err := r.setOwnerOfArchive(ctx, &run); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !run.Reconciled {
+		run.Reconciled = true
+	}
+
+	// Update status. Bail out early if an error is returned or explicitly
+	// instructed to bail out.
+	for _, f := range runReconcileStatusChain {
+		var err error
+		var bail bool
+		run, bail, err = f(ctx, run, ws)
+		if err != nil || bail {
+			if err := r.Status().Update(ctx, &run); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
+		}
+	}
+
+	if err := r.Status().Update(ctx, &run); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *RunReconciler) manageQueue(ctx context.Context, run v1alpha1.Run, ws v1alpha1.Workspace) (v1alpha1.Run, bool, error) {
+	if !launcher.IsQueueable(run.Command) {
+		return run, false, nil
+	}
+
+	// Check workspace queue position
+	pos := slice.StringIndex(ws.Status.Queue, run.Name)
+	switch {
+	case pos == 0:
+		// Front of queue, proceed
+		return run, false, nil
+	case pos > 0:
+		// Queued, bail out
+		run.Phase = v1alpha1.RunPhaseQueued
+		return run, true, nil
+	default:
+		// Not yet queued, bail out
+		run.Phase = v1alpha1.RunPhasePending
+		return run, true, nil
+	}
+}
+
+// Manage run's pod. Update run status to reflect pod status.
+func (r *RunReconciler) managePod(ctx context.Context, run v1alpha1.Run, ws v1alpha1.Workspace) (v1alpha1.Run, bool, error) {
+	log := log.FromContext(ctx)
+
+	var pod corev1.Pod
+	err := r.Get(ctx, requestFromObject(&run).NamespacedName, &pod)
+	if errors.IsNotFound(err) {
+		pod = *runPod(&run, &ws, r.Image)
+
+		// Make run owner of pod
+		if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {
+			return run, false, err
+		}
+
+		if err := r.Create(ctx, &pod); err != nil {
+			log.Error(err, "unable to create pod")
+			return run, false, err
+		}
+		run.Phase = v1alpha1.RunPhaseProvisioning
+		return run, false, nil
+	} else if err != nil {
+		return run, false, err
+	}
+
+	// Update run phase to reflect pod status
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		run.Phase = v1alpha1.RunPhaseCompleted
+	case corev1.PodRunning:
+		run.Phase = v1alpha1.RunPhaseRunning
+	case corev1.PodPending:
+		run.Phase = v1alpha1.RunPhaseProvisioning
+	default:
+		run.Phase = v1alpha1.RunPhaseUnknown
+	}
+
+	return run, false, nil
+}
+
+// Make workspace the owner of this run.
+func (r *RunReconciler) makeWorkspaceOwner(ctx context.Context, run *v1alpha1.Run, ws *v1alpha1.Workspace) error {
+	// Indicate whether run is already owned by workspace or not
 	var owned bool
 	for _, ref := range run.OwnerReferences {
 		if ref.Kind == "Workspace" && ref.Name == ws.Name {
@@ -73,121 +185,47 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 	if !owned {
-		// Make workspace owner of run (so that if workspace is deleted, so are
-		// its runs)
-		if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
-			return ctrl.Result{}, err
+		if err := controllerutil.SetOwnerReference(ws, run, r.Scheme); err != nil {
+			return err
 		}
-		if err := r.Update(ctx, &run); err != nil {
-			return ctrl.Result{}, err
+		if err := r.Update(ctx, run); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	// Set ownership on ConfigMap containing tarball archive
+func (r *RunReconciler) setOwnerOfArchive(ctx context.Context, run *v1alpha1.Run) error {
+	log := log.FromContext(ctx)
+
 	var archive corev1.ConfigMap
-	if err := r.Get(ctx, req.NamespacedName, &archive); err != nil {
+	if err := r.Get(ctx, requestFromObject(run).NamespacedName, &archive); err != nil {
 		// Ignore not found errors and keep on reconciling - the client might
 		// not yet have created the config map
 		if !errors.IsNotFound(err) {
 			log.Error(err, "unable to get archive configmap")
-			return ctrl.Result{}, err
+			return err
 		}
 	} else {
-		if err := controllerutil.SetOwnerReference(&run, &archive, r.Scheme); err != nil {
-			log.Error(err, "unable to set config map ownership")
-			return ctrl.Result{}, err
-		}
-		if err := r.Update(ctx, &archive); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// To be set with current phase
-	var phase v1alpha1.RunPhase
-
-	if launcher.IsQueueable(run.Command) {
-		// Check workspace queue position
-		if pos := slice.StringIndex(ws.Status.Queue, run.Name); pos != 0 {
-			// Not at front of queue so update phase and return early
-			if pos > 0 {
-				phase = v1alpha1.RunPhaseQueued
-			} else {
-				// Not yet queued
-				phase = v1alpha1.RunPhasePending
+		// Indicate whether archive is already owned by run or not
+		var owned bool
+		for _, ref := range archive.OwnerReferences {
+			if ref.Kind == "Run" && ref.Name == run.Name {
+				owned = true
+				break
 			}
-			if run.Phase != phase {
-				run.RunStatus.Phase = phase
-				if err := r.Status().Update(ctx, &run); err != nil {
-					return ctrl.Result{}, err
-				}
+		}
+		if !owned {
+			if err := controllerutil.SetOwnerReference(run, &archive, r.Scheme); err != nil {
+				log.Error(err, "unable to set config map ownership")
+				return err
 			}
-			// Go no further
-			return r.success(ctx, &run)
-		}
-
-		// Front of queue, so continue reconciliation
-	}
-
-	// Get or create pod
-	var pod corev1.Pod
-	var podCreated bool
-	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
-		if errors.IsNotFound(err) {
-			pod = *runPod(&run, &ws, r.Image)
-
-			// Make run owner of pod
-			if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {
-				return ctrl.Result{}, err
+			if err := r.Update(ctx, &archive); err != nil {
+				return err
 			}
-
-			if err := r.Create(ctx, &pod); err != nil {
-				log.Error(err, "unable to create pod")
-				return ctrl.Result{}, err
-			}
-			podCreated = true
-		} else {
-			return ctrl.Result{}, err
 		}
 	}
-
-	// Update run phase to reflect pod status
-	if podCreated {
-		// Brand new pod won't have a status yet
-		phase = v1alpha1.RunPhaseProvisioning
-	} else {
-		switch pod.Status.Phase {
-		case corev1.PodSucceeded, corev1.PodFailed:
-			phase = v1alpha1.RunPhaseCompleted
-		case corev1.PodRunning:
-			phase = v1alpha1.RunPhaseRunning
-		case corev1.PodPending:
-			phase = v1alpha1.RunPhaseProvisioning
-		case corev1.PodUnknown:
-			return ctrl.Result{}, fmt.Errorf("unknown pod phase")
-		default:
-			return ctrl.Result{}, fmt.Errorf("unknown pod phase: %s", pod.Status.Phase)
-		}
-	}
-
-	if run.Phase != phase {
-		run.RunStatus.Phase = phase
-		if err := r.Status().Update(ctx, &run); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	return r.success(ctx, &run)
-}
-
-// success marks a successful reconcile
-func (r *RunReconciler) success(ctx context.Context, run *v1alpha1.Run) (ctrl.Result, error) {
-	if !run.Reconciled {
-		run.Reconciled = true
-		if err := r.Status().Update(ctx, run); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
