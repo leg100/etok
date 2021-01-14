@@ -213,6 +213,9 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws v1alpha1.Works
 			return ws, err
 		}
 
+		// Report state serial number in workspace status
+		ws.Status.Serial = &state.Serial
+
 		// Persist outputs from state file to workspace status
 		var outputs []*v1alpha1.Output
 		for k, v := range state.Outputs {
@@ -222,9 +225,11 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws v1alpha1.Works
 			ws.Status.Outputs = outputs
 		}
 
-		if ws.Spec.BackupBucket != "" && state.Serial != ws.Status.BackupSerial {
-			// Backup the state file and update status
-			return r.backup(ctx, ws, &secret, state)
+		if ws.Spec.BackupBucket != "" {
+			if ws.Status.BackupSerial == nil || state.Serial != *ws.Status.BackupSerial {
+				// Backup the state file and update status
+				return r.backup(ctx, ws, &secret, state)
+			}
 		}
 	}
 
@@ -311,16 +316,16 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws v1alpha1.Workspace,
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			return backupFailure(ws, clientCreateReason, err.Error()), err
+			return backupFailure(ws, v1alpha1.ClientCreateReason, err.Error()), err
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		return backupFailure(ws, bucketNotFoundReason, err.Error()), err
+		return backupFailure(ws, v1alpha1.BucketNotFoundReason, err.Error()), err
 	} else if err != nil {
-		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
+		return backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	oh := bh.Object(ws.BackupObjectName())
@@ -328,24 +333,24 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws v1alpha1.Workspace,
 	// Marshal state file first to json then to yaml
 	y, err := yaml.Marshal(secret)
 	if err != nil {
-		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
+		return backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Copy state file to GCS
 	owriter := oh.NewWriter(ctx)
 	_, err = io.Copy(owriter, bytes.NewBuffer(y))
 	if err != nil {
-		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
+		return backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	if err := owriter.Close(); err != nil {
-		return backupFailure(ws, unexpectedErrorReason, err.Error()), err
+		return backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Update latest backup serial
-	ws.Status.BackupSerial = sfile.Serial
+	ws.Status.BackupSerial = &sfile.Serial
 
-	return backupOK(ws, backupSuccessfulReason, "State was successfully restored"), nil
+	return backupOK(ws, v1alpha1.BackupSuccessfulReason, "State successfully backed up"), nil
 }
 
 func (r *WorkspaceReconciler) restore(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
@@ -356,56 +361,56 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws v1alpha1.Workspace
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			return restoreFailure(ws, clientCreateReason, err.Error()), err
+			return restoreFailure(ws, v1alpha1.ClientCreateReason, err.Error()), err
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		return restoreFailure(ws, bucketNotFoundReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.BucketNotFoundReason, err.Error()), err
 	} else if err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Try to retrieve existing backup
 	oh := bh.Object(ws.BackupObjectName())
 	_, err = oh.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		return restoreOK(ws, nothingToRestoreReason, "No backup was found to restore"), nil
+		return restoreOK(ws, v1alpha1.NothingToRestoreReason, "No backup was found to restore"), nil
 	} else if err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	oreader, err := oh.NewReader(ctx)
 	if err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Copy state file from GCS
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, oreader)
 	if err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Unmarshal state file into secret obj
 	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	if err := oreader.Close(); err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
 	// Blank out resource version to avoid error upon create
 	secret.ResourceVersion = ""
 
 	if err := r.Create(ctx, &secret); err != nil {
-		return restoreFailure(ws, unexpectedErrorReason, err.Error()), err
+		return restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error()), err
 	}
 
-	return restoreOK(ws, restoreSuccessfulReason, "State was successfully restored"), nil
+	return restoreOK(ws, v1alpha1.RestoreSuccessfulReason, "State successfully restored"), nil
 }
 
 // Set phase, which is an aggregation or summarisation of the workspace's error
@@ -423,7 +428,7 @@ func managePhase(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace
 			ws.Status.Phase = v1alpha1.WorkspacePhaseError
 			return ws, nil
 		case metav1.ConditionFalse:
-			if cond.Reason == pendingReason && phase != v1alpha1.WorkspacePhaseUnknown {
+			if cond.Reason == v1alpha1.PendingReason && phase != v1alpha1.WorkspacePhaseUnknown {
 				phase = v1alpha1.WorkspacePhaseInitializing
 			}
 		case metav1.ConditionUnknown:
@@ -498,7 +503,7 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws v1alpha1.Workspa
 			return ws, err
 		}
 
-		return podOK(ws, pendingReason, "Creating pod"), nil
+		return podOK(ws, v1alpha1.PendingReason, "Creating pod"), nil
 
 	} else if err != nil {
 		log.Error(err, "unable to get pod")
@@ -509,7 +514,7 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws v1alpha1.Workspa
 	case corev1.PodRunning:
 		return podOK(ws, string(phase), ""), nil
 	case corev1.PodPending:
-		return podOK(ws, pendingReason, "Pod in pending phase"), nil
+		return podOK(ws, v1alpha1.PendingReason, "Pod in pending phase"), nil
 	case corev1.PodFailed:
 		return podFailure(ws, string(phase), "Pod unexpectedly failed"), nil
 	case corev1.PodSucceeded:
@@ -584,7 +589,7 @@ func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws v1alpha1.Workspa
 			log.Error(err, "unable to create PVC")
 			return ws, err
 		}
-		return cacheOK(ws, pendingReason, "PVC is being created"), nil
+		return cacheOK(ws, v1alpha1.PendingReason, "PVC is being created"), nil
 	} else if err != nil {
 		log.Error(err, "unable to get PVC")
 		return ws, err
@@ -592,11 +597,11 @@ func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws v1alpha1.Workspa
 
 	switch pvc.Status.Phase {
 	case corev1.ClaimBound:
-		return cacheOK(ws, cacheBoundReason, "Cache's PVC successfully bound to PV"), nil
+		return cacheOK(ws, v1alpha1.CacheBoundReason, "Cache's PVC successfully bound to PV"), nil
 	case corev1.ClaimLost:
-		return cacheFailure(ws, cacheLostReason, "Persistent volume does not exist any longer"), nil
+		return cacheFailure(ws, v1alpha1.CacheLostReason, "Persistent volume does not exist any longer"), nil
 	case corev1.ClaimPending:
-		return cacheOK(ws, pendingReason, "Cache's PVC in pending state"), nil
+		return cacheOK(ws, v1alpha1.PendingReason, "Cache's PVC in pending state"), nil
 	}
 
 	return ws, nil

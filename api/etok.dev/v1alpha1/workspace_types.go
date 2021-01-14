@@ -99,7 +99,8 @@ type WorkspaceCacheSpec struct {
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
-	// Queue of runs. Parse bypass the queue.
+	// Queue of runs. Only runs with queueable commands (sh, apply, etc) are
+	// queued.
 	Queue []string `json:"queue,omitempty"`
 
 	// Lifecycle phase of workspace.
@@ -108,8 +109,12 @@ type WorkspaceStatus struct {
 	// Outputs from state file
 	Outputs []*Output `json:"outputs,omitempty"`
 
-	// Serial number of last successfully backed up state file
-	BackupSerial int `json:"backupSerial"`
+	// Serial number of state file. Nil means there is no state file.
+	Serial *int `json:"serial,omitempty"`
+
+	// Serial number of the last successfully backed up state file. Nil means it
+	// has not been backed up.
+	BackupSerial *int `json:"backupSerial,omitempty"`
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }

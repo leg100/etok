@@ -6,41 +6,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	restoreFailureCondition = "RestoreFailure"
-	backupFailureCondition  = "BackupFailure"
-	cacheFailureCondition   = "CacheFailure"
-	podFailureCondition     = "PodFailure"
-
-	clientCreateReason      = "ClientCreateFailed"
-	bucketNotFoundReason    = "BucketNotFound"
-	nothingToRestoreReason  = "NothingToRestore"
-	unexpectedErrorReason   = "UnexpectedError"
-	restoreSuccessfulReason = "RestoreSuccessful"
-	backupSuccessfulReason  = "BackupSuccessful"
-	cacheBoundReason        = "CacheBound"
-	cacheLostReason         = "CacheLost"
-	podCreatedReason        = "PodCreated"
-
-	// Pending means whatever is being observed is reported to be progressing
-	// towards a non-failure state.
-	pendingReason = "Pending"
-)
-
 var (
-	restoreFailure = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionTrue)
-	restoreOK      = workspaceConditionSetterFactory(restoreFailureCondition, metav1.ConditionFalse)
+	restoreFailure = workspaceConditionSetterFactory(v1alpha1.RestoreFailureCondition, metav1.ConditionTrue)
+	restoreOK      = workspaceConditionSetterFactory(v1alpha1.RestoreFailureCondition, metav1.ConditionFalse)
 
-	backupFailure = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionTrue)
-	backupOK      = workspaceConditionSetterFactory(backupFailureCondition, metav1.ConditionFalse)
+	backupFailure = workspaceConditionSetterFactory(v1alpha1.BackupFailureCondition, metav1.ConditionTrue)
+	backupOK      = workspaceConditionSetterFactory(v1alpha1.BackupFailureCondition, metav1.ConditionFalse)
 
-	cacheFailure = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionTrue)
-	cacheUnknown = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionUnknown)
-	cacheOK      = workspaceConditionSetterFactory(cacheFailureCondition, metav1.ConditionFalse)
+	cacheFailure = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionTrue)
+	cacheUnknown = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionUnknown)
+	cacheOK      = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionFalse)
 
-	podFailure = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionTrue)
-	podUnknown = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionUnknown)
-	podOK      = workspaceConditionSetterFactory(podFailureCondition, metav1.ConditionFalse)
+	podFailure = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionTrue)
+	podUnknown = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionUnknown)
+	podOK      = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionFalse)
 )
 
 type workspaceConditionSetter func(v1alpha1.Workspace, string, string) v1alpha1.Workspace
