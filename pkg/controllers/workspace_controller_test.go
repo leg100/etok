@@ -353,7 +353,7 @@ func TestWorkspacePhase(t *testing.T) {
 			ws := v1alpha1.Workspace{}
 			ws.Status.Conditions = tt.conditions
 
-			ws, _ = managePhase(context.Background(), ws)
+			require.NoError(t, managePhase(context.Background(), &ws))
 			assert.Equal(t, tt.wantPhase, ws.Status.Phase)
 		})
 	}
