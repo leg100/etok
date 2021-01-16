@@ -46,6 +46,11 @@ else
 	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
 endif
 
+# Tail operator logs
+.PHONY: logs
+logs:
+	$(KUBECTL) --namespace=etok logs -f deploy/etok
+
 # Deploy only CRDs
 .PHONY: crds
 crds: build

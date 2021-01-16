@@ -77,13 +77,15 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Indicate whether a change has been made to the run obj
-	var updated bool
-
-	// Make workspace owner of this run
-	if err := r.makeWorkspaceOwner(ctx, &run, &ws); err != nil {
-		updated = true
-		return ctrl.Result{}, err
+	if !isAlreadyOwner(&ws, &run, r.Scheme) {
+		// Make workspace owner of run
+		if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+		// ...which adds a field to run metadata, so we need to update
+		if err := r.Update(ctx, &run); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Make run owner of configmap archive
@@ -94,19 +96,23 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Update status struct
 	reconcileErr := processRunReconcileStatusChain(ctx, &run, ws)
 
-	if updated {
-		// Update entire workspace
-		if err := r.Update(ctx, &run); err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		// Only update workspace status
-		if err := r.Status().Update(ctx, &run); err != nil {
-			return ctrl.Result{}, err
-		}
+	if err := r.updateStatus(ctx, req, run.RunStatus); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, reconcileErr
+}
+
+func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.RunStatus) error {
+	var run v1alpha1.Run
+	if err := r.Get(ctx, req.NamespacedName, &run); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(run.DeepCopy())
+	run.RunStatus = newStatus
+
+	return r.Status().Patch(ctx, &run, patch)
 }
 
 // Update workspace status.
@@ -180,24 +186,6 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 	}
 
 	return false, nil
-}
-
-// Make workspace the owner of this run.
-func (r *RunReconciler) makeWorkspaceOwner(ctx context.Context, run *v1alpha1.Run, ws *v1alpha1.Workspace) error {
-	// Indicate whether run is already owned by workspace or not
-	var owned bool
-	for _, ref := range run.OwnerReferences {
-		if ref.Kind == "Workspace" && ref.Name == ws.Name {
-			owned = true
-			break
-		}
-	}
-	if !owned {
-		if err := controllerutil.SetOwnerReference(ws, run, r.Scheme); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *RunReconciler) setOwnerOfArchive(ctx context.Context, run *v1alpha1.Run) error {

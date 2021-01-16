@@ -137,14 +137,13 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	// Indicate whether a change has been made to the workspace obj
-	var updated bool
-
 	// Set garbage collection to use foreground deletion in the event the
 	// workspace is deleted
 	if !controllerutil.ContainsFinalizer(&ws, metav1.FinalizerDeleteDependents) {
 		controllerutil.AddFinalizer(&ws, metav1.FinalizerDeleteDependents)
-		updated = true
+		if err := r.Update(ctx, &ws); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Prune approval annotations
@@ -154,25 +153,31 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if !reflect.DeepEqual(ws.Annotations, annotations) {
 		ws.Annotations = annotations
-		updated = true
+		if err := r.Update(ctx, &ws); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Update status struct
 	reconcileErr := processWorkspaceReconcileStatusChain(ctx, &ws)
 
-	if updated {
-		// Update entire workspace
-		if err := r.Update(ctx, &ws); err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		// Only update workspace status
-		if err := r.Status().Update(ctx, &ws); err != nil {
-			return ctrl.Result{}, err
-		}
+	if err := r.updateStatus(ctx, req, ws.Status); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, reconcileErr
+}
+
+func (r *WorkspaceReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.WorkspaceStatus) error {
+	var ws v1alpha1.Workspace
+	if err := r.Get(ctx, req.NamespacedName, &ws); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(ws.DeepCopy())
+	ws.Status = newStatus
+
+	return r.Status().Patch(ctx, &ws, patch)
 }
 
 // Update status. Bail out early if an error is returned.

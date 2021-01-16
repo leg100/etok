@@ -24,8 +24,7 @@ var (
 	// absolute path to the etok binary
 	buildPath string
 
-	kubectx                = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
-	disableNamespaceDelete = flag.Bool("disable-namespace-delete", false, "Disable automatic deletion of namespace at end of test")
+	kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
 
 	client *etokclient.Client
 
