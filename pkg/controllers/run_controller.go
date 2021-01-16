@@ -9,7 +9,6 @@ import (
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -25,7 +24,7 @@ var (
 	runReconcileStatusChain []runUpdater
 )
 
-type runUpdater func(context.Context, v1alpha1.Run, v1alpha1.Workspace) (v1alpha1.Run, bool, error)
+type runUpdater func(context.Context, *v1alpha1.Run, v1alpha1.Workspace) (bool, error)
 
 type RunReconciler struct {
 	client.Client
@@ -78,9 +77,15 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Make workspace owner of this run
-	if err := r.makeWorkspaceOwner(ctx, &run, &ws); err != nil {
-		return ctrl.Result{}, err
+	if !isAlreadyOwner(&ws, &run, r.Scheme) {
+		// Make workspace owner of run
+		if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
+			return ctrl.Result{}, err
+		}
+		// ...which adds a field to run metadata, so we need to update
+		if err := r.Update(ctx, &run); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Make run owner of configmap archive
@@ -88,30 +93,43 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Update status. Bail out early if an error is returned or explicitly
-	// instructed to bail out.
-	for _, f := range runReconcileStatusChain {
-		var err error
-		var bail bool
-		run, bail, err = f(ctx, run, ws)
-		if err != nil || bail {
-			if err := r.Status().Update(ctx, &run); err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, err
-		}
-	}
+	// Update status struct
+	reconcileErr := processRunReconcileStatusChain(ctx, &run, ws)
 
-	if err := r.Status().Update(ctx, &run); err != nil {
+	if err := r.updateStatus(ctx, req, run.RunStatus); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, reconcileErr
 }
 
-func (r *RunReconciler) manageQueue(ctx context.Context, run v1alpha1.Run, ws v1alpha1.Workspace) (v1alpha1.Run, bool, error) {
+func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.RunStatus) error {
+	var run v1alpha1.Run
+	if err := r.Get(ctx, req.NamespacedName, &run); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(run.DeepCopy())
+	run.RunStatus = newStatus
+
+	return r.Status().Patch(ctx, &run, patch)
+}
+
+// Update workspace status.
+func processRunReconcileStatusChain(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) error {
+	for _, f := range runReconcileStatusChain {
+		bail, err := f(ctx, run, ws)
+		if err != nil || bail {
+			// Bail out early
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
 	if !launcher.IsQueueable(run.Command) {
-		return run, false, nil
+		return false, nil
 	}
 
 	// Check workspace queue position
@@ -119,40 +137,40 @@ func (r *RunReconciler) manageQueue(ctx context.Context, run v1alpha1.Run, ws v1
 	switch {
 	case pos == 0:
 		// Front of queue, proceed
-		return run, false, nil
+		return false, nil
 	case pos > 0:
 		// Queued, bail out
 		run.Phase = v1alpha1.RunPhaseQueued
-		return run, true, nil
+		return true, nil
 	default:
 		// Not yet queued, bail out
 		run.Phase = v1alpha1.RunPhasePending
-		return run, true, nil
+		return true, nil
 	}
 }
 
 // Manage run's pod. Update run status to reflect pod status.
-func (r *RunReconciler) managePod(ctx context.Context, run v1alpha1.Run, ws v1alpha1.Workspace) (v1alpha1.Run, bool, error) {
+func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	var pod corev1.Pod
-	err := r.Get(ctx, requestFromObject(&run).NamespacedName, &pod)
+	err := r.Get(ctx, requestFromObject(run).NamespacedName, &pod)
 	if errors.IsNotFound(err) {
-		pod = *runPod(&run, &ws, r.Image)
+		pod = *runPod(run, &ws, r.Image)
 
 		// Make run owner of pod
-		if err := controllerutil.SetControllerReference(&run, &pod, r.Scheme); err != nil {
-			return run, false, err
+		if err := controllerutil.SetControllerReference(run, &pod, r.Scheme); err != nil {
+			return false, err
 		}
 
 		if err := r.Create(ctx, &pod); err != nil {
 			log.Error(err, "unable to create pod")
-			return run, false, err
+			return false, err
 		}
 		run.Phase = v1alpha1.RunPhaseProvisioning
-		return run, false, nil
+		return false, nil
 	} else if err != nil {
-		return run, false, err
+		return false, err
 	}
 
 	// Update run phase to reflect pod status
@@ -167,28 +185,7 @@ func (r *RunReconciler) managePod(ctx context.Context, run v1alpha1.Run, ws v1al
 		run.Phase = v1alpha1.RunPhaseUnknown
 	}
 
-	return run, false, nil
-}
-
-// Make workspace the owner of this run.
-func (r *RunReconciler) makeWorkspaceOwner(ctx context.Context, run *v1alpha1.Run, ws *v1alpha1.Workspace) error {
-	// Indicate whether run is already owned by workspace or not
-	var owned bool
-	for _, ref := range run.OwnerReferences {
-		if ref.Kind == "Workspace" && ref.Name == ws.Name {
-			owned = true
-			break
-		}
-	}
-	if !owned {
-		if err := controllerutil.SetOwnerReference(ws, run, r.Scheme); err != nil {
-			return err
-		}
-		if err := r.Update(ctx, run); err != nil {
-			return err
-		}
-	}
-	return nil
+	return false, nil
 }
 
 func (r *RunReconciler) setOwnerOfArchive(ctx context.Context, run *v1alpha1.Run) error {
@@ -241,27 +238,18 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	// Watch for changes to resource Workspace and requeue the associated runs
-	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Workspace{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) (requests []ctrl.Request) {
 		runlist := &v1alpha1.RunList{}
-		err := r.List(context.TODO(), runlist, client.InNamespace(o.GetNamespace()), client.MatchingFields{
+		_ = r.List(context.TODO(), runlist, client.InNamespace(o.GetNamespace()), client.MatchingFields{
 			"spec.workspace": o.GetName(),
 		})
-		if err != nil {
-			return []ctrl.Request{}
+		for _, run := range runlist.Items {
+			// Skip triggering reconcile of completed runs
+			if run.Phase != v1alpha1.RunPhaseCompleted {
+				requests = append(requests, requestFromObject(&run))
+			}
 		}
-
-		rr := []ctrl.Request{}
-		meta.EachListItem(runlist, func(o runtime.Object) error {
-			run := o.(*v1alpha1.Run)
-			rr = append(rr, ctrl.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      run.GetName(),
-					Namespace: run.GetNamespace(),
-				},
-			})
-			return nil
-		})
-		return rr
+		return
 	}))
 
 	return blder.Complete(r)

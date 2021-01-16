@@ -22,16 +22,15 @@ var (
 	podOK      = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionFalse)
 )
 
-type workspaceConditionSetter func(v1alpha1.Workspace, string, string) v1alpha1.Workspace
+type workspaceConditionSetter func(*v1alpha1.Workspace, string, string)
 
 func workspaceConditionSetterFactory(condType string, status metav1.ConditionStatus) workspaceConditionSetter {
-	return func(ws v1alpha1.Workspace, reason, message string) v1alpha1.Workspace {
+	return func(ws *v1alpha1.Workspace, reason, message string) {
 		meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
 			Type:    condType,
 			Status:  status,
 			Reason:  reason,
 			Message: message,
 		})
-		return ws
 	}
 }

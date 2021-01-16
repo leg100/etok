@@ -82,9 +82,9 @@ func TestReconcileWorkspace(t *testing.T) {
 		},
 		{
 			name:      "Approvals: Garbage collected approval annotation",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
+			workspace: testobj.Workspace("approvals", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
 			objs: []runtime.Object{
-				testobj.WorkspacePod("", "workspace-1"),
+				testobj.WorkspacePod("approvals", "workspace-1"),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Nil(t, ws.Annotations)
@@ -353,7 +353,7 @@ func TestWorkspacePhase(t *testing.T) {
 			ws := v1alpha1.Workspace{}
 			ws.Status.Conditions = tt.conditions
 
-			ws, _ = managePhase(context.Background(), ws)
+			require.NoError(t, managePhase(context.Background(), &ws))
 			assert.Equal(t, tt.wantPhase, ws.Status.Phase)
 		})
 	}

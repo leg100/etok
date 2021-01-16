@@ -20,13 +20,16 @@ func TestQueue(t *testing.T) {
 	name := "queueing"
 	namespace := "e2e-queue"
 
-	// Create dedicated namespace for e2e test
-	createNamespace(t, namespace)
-
 	t.Parallel()
 	t.Run(name, func(t *testing.T) {
 		// Change into temp dir
 		path := testutil.NewTempDir(t).Root()
+
+		t.Run("create namespace", func(t *testing.T) {
+			// (Re-)create dedicated namespace for e2e test
+			deleteNamespace(t, namespace)
+			createNamespace(t, namespace)
+		})
 
 		t.Run("create workspace", func(t *testing.T) {
 			require.NoError(t, step(t, name,
@@ -71,10 +74,10 @@ func TestQueue(t *testing.T) {
 
 			assert.NoError(t, g.Wait())
 		})
-	})
 
-	// Delete namespace for each e2e test, ignore any errors
-	if !*disableNamespaceDelete {
-		_ = client.KubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
-	}
+		t.Run("delete namespace", func(t *testing.T) {
+			// Delete namespace for e2e test, ignore any errors
+			_ = client.KubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		})
+	})
 }

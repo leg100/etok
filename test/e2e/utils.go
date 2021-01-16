@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	expect "github.com/google/goexpect"
 	"github.com/stretchr/testify/require"
@@ -42,6 +44,21 @@ func createNamespace(t *testing.T, name string) {
 		// Only a namespace already exists error is acceptable
 		require.True(t, errors.IsAlreadyExists(err))
 	}
+}
+
+// Delete namespace and wait for it to be deleted
+func deleteNamespace(t *testing.T, name string) {
+	_ = client.KubeClient.CoreV1().Namespaces().Delete(context.Background(), name, metav1.DeleteOptions{})
+	err := wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
+		if _, err := client.KubeClient.CoreV1().Namespaces().Get(context.Background(), name, metav1.GetOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("waiting for workspace to be deleted: %w", err)
+		}
+		return false, nil
+	})
+	require.NoError(t, err)
 }
 
 type nopWriteCloser struct {

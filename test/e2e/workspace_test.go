@@ -16,13 +16,16 @@ func TestWorkspace(t *testing.T) {
 	name := "workspace"
 	namespace := "e2e-workspace"
 
-	// Create dedicated namespace for e2e test
-	createNamespace(t, namespace)
-
 	t.Parallel()
 	t.Run(name, func(t *testing.T) {
 		// Create temp dir of terraform configs and return path to root module
 		path := createTerraformConfigs(t)
+
+		t.Run("create namespace", func(t *testing.T) {
+			// (Re-)create dedicated namespace for e2e test
+			deleteNamespace(t, namespace)
+			createNamespace(t, namespace)
+		})
 
 		t.Run("create workspace foo", func(t *testing.T) {
 			require.NoError(t, step(t, name,
@@ -101,10 +104,10 @@ func TestWorkspace(t *testing.T) {
 					&expect.BExp{R: fmt.Sprintf("Deleted workspace %s/bar", namespace)},
 				}))
 		})
-	})
 
-	// Delete namespace for each e2e test, ignore any errors
-	if !*disableNamespaceDelete {
-		_ = client.KubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
-	}
+		t.Run("delete namespace", func(t *testing.T) {
+			// Delete namespace for e2e test, ignore any errors
+			_ = client.KubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
+		})
+	})
 }
