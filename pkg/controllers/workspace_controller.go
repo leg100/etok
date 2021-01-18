@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -282,7 +283,7 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 		return nil, err
 	}
 	for _, run := range runlist.Items {
-		if run.Phase == v1alpha1.RunPhaseCompleted {
+		if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition) {
 			// Don't re-add completed runs
 			continue
 		}

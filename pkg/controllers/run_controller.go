@@ -2,13 +2,16 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,6 +25,15 @@ import (
 var (
 	// List of functions that update the workspace status
 	runReconcileStatusChain []runUpdater
+	// runEnqueueTimeout is the maximum time a run can remain waiting to be
+	// enqueued
+	runEnqueueTimeout = 10 * time.Second
+	// runBacklogTimeout is the maximum time a run can remain waiting in the
+	// backlog
+	runBacklogTimeout = 60 * time.Minute
+	// runPodPendingTimeout is the maximum time a pod can remain in the pending
+	// phase
+	runPodPendingTimeout = 60 * time.Second
 )
 
 type runUpdater func(context.Context, *v1alpha1.Run, v1alpha1.Workspace) (bool, error)
@@ -67,25 +79,27 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Run completed, nothing more to be done
-	if run.Phase == v1alpha1.RunPhaseCompleted {
+	if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition) {
 		return ctrl.Result{}, nil
 	}
 
 	// Fetch its Workspace object
 	var ws v1alpha1.Workspace
-	if err := r.Get(ctx, types.NamespacedName{Name: run.Workspace, Namespace: req.Namespace}, &ws); err != nil {
+	err := r.Get(ctx, types.NamespacedName{Name: run.Workspace, Namespace: req.Namespace}, &ws)
+	if kerrors.IsNotFound(err) {
+		// Workspace not found is a fatal event
+		runFailed(&run, v1alpha1.WorkspaceNotFoundReason, fmt.Sprintf("Unable to find workspace %s", run.Workspace))
+		if err := r.update(ctx, req, run); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	} else if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if !isAlreadyOwner(&ws, &run, r.Scheme) {
-		// Make workspace owner of run
-		if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
-			return ctrl.Result{}, err
-		}
-		// ...which adds a field to run metadata, so we need to update
-		if err := r.Update(ctx, &run); err != nil {
-			return ctrl.Result{}, err
-		}
+	// Make workspace owner of run
+	if err := controllerutil.SetOwnerReference(&ws, &run, r.Scheme); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Make run owner of configmap archive
@@ -94,25 +108,37 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Update status struct
-	reconcileErr := processRunReconcileStatusChain(ctx, &run, ws)
-
-	if err := r.updateStatus(ctx, req, run.RunStatus); err != nil {
+	if err := processRunReconcileStatusChain(ctx, &run, ws); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, reconcileErr
+	// Aggregate current status
+	if err := r.aggregateStatus(ctx,&run, ws); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.update(ctx, req, run); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
 }
 
-func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.RunStatus) error {
+func (r *RunReconciler) update(ctx context.Context, req ctrl.Request, newRun v1alpha1.Run) error {
 	var run v1alpha1.Run
 	if err := r.Get(ctx, req.NamespacedName, &run); err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(run.DeepCopy())
-	run.RunStatus = newStatus
 
-	return r.Status().Patch(ctx, &run, patch)
+	// Update non-status part of run
+	if err := r.Patch(ctx, newRun.DeepCopy(), patch); err != nil {
+		return err
+	}
+
+	// Update status part of run
+	return r.Status().Patch(ctx, &newRun, patch)
 }
 
 // Update workspace status.
@@ -129,6 +155,7 @@ func processRunReconcileStatusChain(ctx context.Context, run *v1alpha1.Run, ws v
 
 func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
 	if !launcher.IsQueueable(run.Command) {
+		runNotQueued(run, v1alpha1.RunNotQueueable, "Run does not need to be queued")
 		return false, nil
 	}
 
@@ -136,15 +163,14 @@ func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v
 	pos := slice.StringIndex(ws.Status.Queue, run.Name)
 	switch {
 	case pos == 0:
-		// Front of queue, proceed
+		runQueued(run, v1alpha1.FrontOfQueueReason, "Run is front of queue and can proceed")
 		return false, nil
 	case pos > 0:
-		// Queued, bail out
-		run.Phase = v1alpha1.RunPhaseQueued
+		runQueued(run, v1alpha1.QueueBacklogReason, "Run is waiting behind another run in the queue")
 		return true, nil
 	default:
 		// Not yet queued, bail out
-		run.Phase = v1alpha1.RunPhasePending
+		runNotQueued(run, v1alpha1.WaitingToBeQueued, "Run is waiting to be enqueued")
 		return true, nil
 	}
 }
@@ -155,7 +181,7 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 
 	var pod corev1.Pod
 	err := r.Get(ctx, requestFromObject(run).NamespacedName, &pod)
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		pod = *runPod(run, &ws, r.Image)
 
 		// Make run owner of pod
@@ -167,21 +193,103 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 			log.Error(err, "unable to create pod")
 			return false, err
 		}
-		run.Phase = v1alpha1.RunPhaseProvisioning
+		runPodOK(run, v1alpha1.RunPodCreated, "")
 		return false, nil
 	} else if err != nil {
 		return false, err
 	}
 
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded:
+		runPodOK(run, v1alpha1.PodSucceededReason, "")
+	case corev1.PodFailed:
+		runPodOK(run, v1alpha1.PodFailedReason, "")
+	case corev1.PodRunning:
+		runPodOK(run, v1alpha1.PodRunningReason, "")
+	case corev1.PodPending:
+		runPodOK(run, v1alpha1.PodPendingReason, "")
+	default:
+		runPodOK(run, v1alpha1.PodUnknownReason, "")
+	}
+
+	return false, nil
+}
+
+// aggregateStatus aggregates conditions, summarising the run's current state in
+// further status conditions and fields
+func (r *RunReconciler) aggregateStatus(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
+	log := log.FromContext(ctx)
+
+	if run.Conditions == nil {
+		run.Phase = v1alpha1.RunPhaseUnknown
+		return false, nil
+	}
+
+	for _, c := range run.Conditions {
+		switch c.Type {
+		case v1alpha1.RunQueuedCondition:
+			switch c.Status {
+			case metav1.ConditionFalse:
+				switch c.Reason {
+				case v1alpha1.WaitingToBeQueued:
+					if cond.LastTransitionTime.Add(runEnqueueTimeout).After(time.Now()) {
+						runFailed(run, v1alpha1.RunEnqueueTimeoutReason, "Timed out waiting to be added to queue")
+						eturn true, nil
+					}
+				}
+			case metav1.ConditionTrue:
+				switch c.Reason {
+				case v1alpha1.QueueBacklogReason:
+					if cond.LastTransitionTime.Add(runBacklogTimeout).After(time.Now()) {
+						runFailed(run, v1alpha1.RunEnqueueTimeoutReason, "Timed out waiting in the backlog")
+						return true, nil
+					}
+				}
+
+
+	if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.RunFailedCondition) {
+		run.Phase = v1alpha1.RunPhaseFailed
+	} else {
+		cond := meta.FindStatusCondition(run.Conditions, v1alpha1.RunCompleteCondition)
+		if cond.Status == metav1.ConditionTrue {
+			run.Phase = v1alpha1.RunPhaseCompleted
+		}
+		if cond.Status == metav1.ConditionFalse {
+			switch cond.Reason {
+			case v1alpha1.PodPendingReason:
+				if cond.LastTransitionTime.Add(runPodPendingTimeout).After(time.Now()) {
+					runFailed(run, v1alpha1.RunPendingTimeoutReason, "Timed out waiting for pod in pending phase")
+					return true, nil
+				}
+		}
+
+
+		cond := meta.FindStatusCondition(run.Conditions, v1alpha1.RunQueuedCondition)
+		if cond.LastTransitionTime.Add(runEnqueueTimeout).After(time.Now()) {
+			runFailed(run, v1alpha1.RunEnqueueTimeoutReason, "Timed out waiting to be added to queue")
+			return true, nil
+		}
+		run.Phase = v1alpha1.RunPhaseWaiting
+	runIncomplete(run, string(v1alpha1.RunPhaseProvisioning), "")
+
 	// Update run phase to reflect pod status
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed:
+		runComplete(run, string(pod.Status.Phase), "")
 		run.Phase = v1alpha1.RunPhaseCompleted
 	case corev1.PodRunning:
+		runIncomplete(run, string(pod.Status.Phase), "")
 		run.Phase = v1alpha1.RunPhaseRunning
 	case corev1.PodPending:
+		runIncomplete(run, string(pod.Status.Phase), "")
+		cond := meta.FindStatusCondition(run.Conditions, v1alpha1.RunCompleteCondition)
+		if cond.LastTransitionTime.Add(runEnqueueTimeout).After(time.Now()) {
+			runFailed(run, v1alpha1.RunPendingTimeoutReason, "Timed out waiting for pod in pending phase")
+			return true, nil
+		}
 		run.Phase = v1alpha1.RunPhaseProvisioning
 	default:
+		runIncomplete(run, string(pod.Status.Phase), "")
 		run.Phase = v1alpha1.RunPhaseUnknown
 	}
 
@@ -195,7 +303,7 @@ func (r *RunReconciler) setOwnerOfArchive(ctx context.Context, run *v1alpha1.Run
 	if err := r.Get(ctx, requestFromObject(run).NamespacedName, &archive); err != nil {
 		// Ignore not found errors and keep on reconciling - the client might
 		// not yet have created the config map
-		if !errors.IsNotFound(err) {
+		if !kerrors.IsNotFound(err) {
 			log.Error(err, "unable to get archive configmap")
 			return err
 		}
@@ -245,7 +353,7 @@ func (r *RunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		})
 		for _, run := range runlist.Items {
 			// Skip triggering reconcile of completed runs
-			if run.Phase != v1alpha1.RunPhaseCompleted {
+			if !meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition) {
 				requests = append(requests, requestFromObject(&run))
 			}
 		}

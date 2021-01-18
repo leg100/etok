@@ -4,6 +4,7 @@ import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/util/slice"
+	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
@@ -15,7 +16,7 @@ func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
 		}
 
 		// Filter out completed runs
-		if run.Phase == v1alpha1.RunPhaseCompleted {
+		if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition) {
 			continue
 		}
 

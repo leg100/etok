@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -26,13 +28,21 @@ func TestRunReconciler(t *testing.T) {
 		reconcileError bool
 	}{
 		{
-			name:           "Missing workspace",
-			run:            testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
-			reconcileError: true,
+			name: "Missing workspace",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			assertions: func(run *v1alpha1.Run) {
+				if assert.NotNil(t, run.Conditions) {
+					done := meta.FindStatusCondition(run.Conditions, v1alpha1.DoneCondition)
+					if assert.NotNil(t, done) {
+						assert.Equal(t, metav1.ConditionTrue, done.Status)
+						assert.Equal(t, v1alpha1.WorkspaceNotFoundReason, done.Reason)
+					}
+				}
+			},
 		},
 		{
 			name: "Owned",
-			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseWaiting)),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1"),
 			},
@@ -95,14 +105,14 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
-			name: "Completed",
+			name: "Done",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
 				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded)),
 			},
 			assertions: func(run *v1alpha1.Run) {
-				assert.Equal(t, v1alpha1.RunPhaseCompleted, run.Phase)
+				assert.True(t, meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition))
 			},
 		},
 	}

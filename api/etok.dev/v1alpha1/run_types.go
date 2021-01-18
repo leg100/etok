@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -111,21 +112,37 @@ func RunLockFileConfigMapName(name string) string {
 type RunStatus struct {
 	// Current phase of the run's lifecycle.
 	Phase RunPhase `json:"phase,omitempty"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 func (r *Run) IsReconciled() bool {
 	return r.Phase != ""
 }
 
+func (r *Run) IsDone() bool {
+	return meta.IsStatusConditionTrue(r.Conditions, DoneCondition)
+}
+
+// A RunPhase summarises the current status of the run
 type RunPhase string
 
 const (
-	RunPhaseUnknown      RunPhase = "unknown"
-	RunPhasePending      RunPhase = "pending"
-	RunPhaseQueued       RunPhase = "queued"
+	// Unknown: current status cannot be determined
+	RunPhaseUnknown RunPhase = "unknown"
+	// Waiting: waiting to be added to workspace queue (only relevant to those
+	// runs with a command that needs to be queued, e.g. apply, sh, etc.)
+	RunPhaseWaiting RunPhase = "waiting"
+	// Queued: run is currently in workspace queue backlog i.e. not first place
+	RunPhaseQueued RunPhase = "queued"
+	// Provisioning: run's pod is in the process of being created
 	RunPhaseProvisioning RunPhase = "provisioning"
-	RunPhaseRunning      RunPhase = "running"
-	RunPhaseCompleted    RunPhase = "completed"
+	// Running: run's pod is running
+	RunPhaseRunning RunPhase = "running"
+	// Completed: run's pod completed (regardless of exit code)
+	RunPhaseCompleted RunPhase = "completed"
+	// Failed: a fatal error occurred and the run will not be completed
+	RunPhaseFailed RunPhase = "failed"
 
 	RunDefaultConfigMapKey = "config.tar.gz"
 )

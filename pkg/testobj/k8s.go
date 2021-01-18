@@ -11,6 +11,7 @@ import (
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -220,6 +221,15 @@ func WithRunPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
 		if phase != "" {
 			run.Phase = phase
 		}
+	}
+}
+
+func WithCondition(condition string) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
+			Type:   condition,
+			Status: metav1.ConditionTrue,
+		})
 	}
 }
 

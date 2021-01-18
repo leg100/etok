@@ -303,7 +303,7 @@ func TestLauncher(t *testing.T) {
 
 			if !tt.disableMockReconcile {
 				// Mock successful reconcile by setting phase to pending
-				opts.phase = v1alpha1.RunPhasePending
+				opts.phase = v1alpha1.RunPhaseWaiting
 			}
 
 			// create cobra command
