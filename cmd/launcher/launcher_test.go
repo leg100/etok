@@ -61,7 +61,7 @@ func TestLauncher(t *testing.T) {
 			name: "queueable commands",
 			cmd:  "apply",
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
@@ -83,7 +83,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "specific namespace and workspace",
 			env:  &env.Env{Namespace: "foo", Workspace: "bar"},
-			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithCombinedQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
 				assert.Equal(t, "bar", o.workspace)
@@ -92,7 +92,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "namespace flag overrides environment",
 			args: []string{"--namespace", "foo"},
-			objs: []runtime.Object{testobj.Workspace("foo", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("foo", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
@@ -102,7 +102,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "workspace flag overrides environment",
 			args: []string{"--workspace", "bar"},
-			objs: []runtime.Object{testobj.Workspace("default", "bar", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "bar", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
@@ -112,7 +112,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "arbitrary terraform flag",
 			args: []string{"--", "-input", "false"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, []string{"-input", "false"}, o.args)
@@ -121,7 +121,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "context flag",
 			args: []string{"--context", "oz-cluster"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "oz-cluster", o.kubeContext)
@@ -129,7 +129,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "approved",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
 			assertions: func(o *launcherOptions) {
 				// Get run
 				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
@@ -143,7 +143,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "without env file",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			assertions: func(o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
@@ -155,7 +155,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "cleanup resources upon error",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
 			factoryOverrides: func(f *cmdutil.Factory) {
 				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
@@ -173,7 +173,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "disable cleanup resources upon error",
 			args: []string{"--no-cleanup"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
 			factoryOverrides: func(f *cmdutil.Factory) {
 				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
@@ -191,7 +191,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "resources are not cleaned up upon exit code error",
 			args: []string{},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			// Mock pod returning exit code 5
 			code: int32(5),
 			// Expect exit error with exit code 5
@@ -206,7 +206,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "with tty",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			factoryOverrides: func(opts *cmdutil.Factory) {
 				var err error
 				opts.In, _, err = pty.Open()
@@ -226,7 +226,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "disable tty",
 			args: []string{"--no-tty"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			factoryOverrides: func(f *cmdutil.Factory) {
 				// Ensure tty is overridden
 				var err error
@@ -246,12 +246,12 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name:     "pod completed with no tty",
-			objs:     []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs:     []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			podPhase: corev1.PodSucceeded,
 		},
 		{
 			name: "pod completed with tty",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			factoryOverrides: func(f *cmdutil.Factory) {
 				var err error
 				_, f.In, err = pty.Open()
@@ -262,7 +262,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "config too big",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithQueue("run-12345"))},
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			size: 1024*1024 + 1,
 			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},

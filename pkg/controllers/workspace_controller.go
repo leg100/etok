@@ -501,7 +501,7 @@ func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws *v1alpha1.Work
 		return err
 	}
 
-	ws.Status.Queue = updateQueue(ws, runlist.Items)
+	updateCombinedQueue(ws, runlist.Items)
 	return nil
 }
 

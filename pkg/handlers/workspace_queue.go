@@ -13,11 +13,12 @@ import (
 // Log queue position until run is at front of queue
 func LogQueuePosition(runName string) watchtools.ConditionFunc {
 	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
-		pos := slice.StringIndex(ws.Status.Queue, runName)
-		switch {
-		case pos == 0:
+		if ws.Status.Active == runName {
+			// We're active, proceed
 			return true, nil
-		case pos > 0:
+		}
+
+		if pos := slice.StringIndex(ws.Status.Queue, runName); pos >= 0 {
 			boldCyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 			var printedQueue []string
 			for _, run := range ws.Status.Queue {
@@ -27,10 +28,7 @@ func LogQueuePosition(runName string) watchtools.ConditionFunc {
 					printedQueue = append(printedQueue, run)
 				}
 			}
-			fmt.Printf("Queued: %v\n", printedQueue)
-		default:
-			// yet to be queued
-			return false, nil
+			fmt.Printf("Queued behind active run %s: %v\n", ws.Status.Active, printedQueue)
 		}
 		return false, nil
 	})
@@ -39,6 +37,9 @@ func LogQueuePosition(runName string) watchtools.ConditionFunc {
 // Return true if run is queued
 func IsQueued(runName string) watchtools.ConditionFunc {
 	return workspaceHandlerWrapper(func(ws *v1alpha1.Workspace) (bool, error) {
+		if ws.Status.Active == runName {
+			return true, nil
+		}
 		if slice.ContainsString(ws.Status.Queue, runName) {
 			return true, nil
 		}

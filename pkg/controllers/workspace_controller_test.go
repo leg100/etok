@@ -52,7 +52,7 @@ func TestReconcileWorkspace(t *testing.T) {
 				testobj.WorkspacePod("", "workspace-1"),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1"}, ws.Status.Queue)
+				assert.Equal(t, "apply-1", ws.Status.Active)
 			},
 		},
 		{
@@ -65,19 +65,21 @@ func TestReconcileWorkspace(t *testing.T) {
 				testobj.Run("", "apply-3", "apply", testobj.WithWorkspace("workspace-2")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
+				assert.Equal(t, "apply-1", ws.Status.Active)
+				assert.Equal(t, []string{"apply-2"}, ws.Status.Queue)
 			},
 		},
 		{
 			name:      "Queue with existing queue",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithQueue("apply-1")),
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 			objs: []runtime.Object{
 				testobj.WorkspacePod("", "workspace-1"),
 				testobj.Run("", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				testobj.Run("", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, []string{"apply-1", "apply-2"}, ws.Status.Queue)
+				assert.Equal(t, "apply-1", ws.Status.Active)
+				assert.Equal(t, []string{"apply-2"}, ws.Status.Queue)
 			},
 		},
 		{

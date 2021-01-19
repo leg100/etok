@@ -132,21 +132,21 @@ func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v
 		return false, nil
 	}
 
-	// Check workspace queue position
-	pos := slice.StringIndex(ws.Status.Queue, run.Name)
-	switch {
-	case pos == 0:
-		// Front of queue, proceed
+	if ws.Status.Active == run.Name {
+		// We're active, proceed
 		return false, nil
-	case pos > 0:
-		// Queued, bail out
-		run.Phase = v1alpha1.RunPhaseQueued
-		return true, nil
-	default:
-		// Not yet queued, bail out
-		run.Phase = v1alpha1.RunPhasePending
-		return true, nil
 	}
+
+	// Check workspace queue position
+	if pos := slice.StringIndex(ws.Status.Queue, run.Name); pos >= 0 {
+		// Queued
+		run.Phase = v1alpha1.RunPhaseQueued
+	} else {
+		// Not yet queued
+		run.Phase = v1alpha1.RunPhasePending
+	}
+	// Bail out
+	return true, nil
 }
 
 // Manage run's pod. Update run status to reflect pod status.

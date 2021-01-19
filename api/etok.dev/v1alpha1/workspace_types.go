@@ -20,6 +20,7 @@ func init() {
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.terraformVersion"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Active",type="string",JSONPath=".status.active"
 // +kubebuilder:printcolumn:name="Queue",type="string",JSONPath=".status.queue"
 // +genclient
 type Workspace struct {
@@ -102,6 +103,8 @@ type WorkspaceStatus struct {
 	// Queue of runs. Only runs with queueable commands (sh, apply, etc) are
 	// queued.
 	Queue []string `json:"queue,omitempty"`
+
+	Active string `json:"active,omitempty"`
 
 	// Lifecycle phase of workspace.
 	Phase WorkspacePhase `json:"phase,omitempty"`

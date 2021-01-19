@@ -8,17 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUpdateQueue(t *testing.T) {
+func TestUpdateCombinedQueue(t *testing.T) {
 	tests := []struct {
-		name      string
-		workspace *v1alpha1.Workspace
-		runs      []v1alpha1.Run
-		want      []string
+		name       string
+		workspace  *v1alpha1.Workspace
+		runs       []v1alpha1.Run
+		wantActive string
+		wantQueue  []string
 	}{
 		{
 			name:      "No runs",
 			workspace: testobj.Workspace("default", "workspace-1"),
-			want:      []string(nil),
 		},
 		{
 			name:      "One new run",
@@ -26,7 +26,8 @@ func TestUpdateQueue(t *testing.T) {
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			want: []string{"apply-1"},
+			wantActive: "apply-1",
+			wantQueue:  []string{},
 		},
 		{
 			name:      "Two new runs",
@@ -35,33 +36,36 @@ func TestUpdateQueue(t *testing.T) {
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				*testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			want: []string{"apply-1", "apply-2"},
+			wantActive: "apply-1",
+			wantQueue:  []string{"apply-2"},
 		},
 		{
 			name:      "One existing run one new run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 				*testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			want: []string{"apply-1", "apply-2"},
+			wantActive: "apply-1",
+			wantQueue:  []string{"apply-2"},
 		},
 		{
 			name:      "One completed run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 			},
-			want: []string(nil),
+			wantQueue: []string(nil),
 		},
 		{
 			name:      "One completed run one running run",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithQueue("apply-1", "apply-2")),
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithCombinedQueue("apply-1", "apply-2")),
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
 				*testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseRunning)),
 			},
-			want: []string{"apply-2"},
+			wantActive: "apply-2",
+			wantQueue:  []string{},
 		},
 		{
 			name:      "Don't queue unqueueable runs",
@@ -73,7 +77,8 @@ func TestUpdateQueue(t *testing.T) {
 				*testobj.Run("default", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhasePending)),
 			},
-			want: []string{"sh-1", "apply-1"},
+			wantActive: "sh-1",
+			wantQueue:  []string{"apply-1"},
 		},
 		{
 			name:      "Unapproved privileged command",
@@ -81,7 +86,7 @@ func TestUpdateQueue(t *testing.T) {
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			want: []string(nil),
+			wantQueue: []string(nil),
 		},
 		{
 			name:      "Approved privileged command",
@@ -89,12 +94,15 @@ func TestUpdateQueue(t *testing.T) {
 			runs: []v1alpha1.Run{
 				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			},
-			want: []string{"apply-1"},
+			wantActive: "apply-1",
+			wantQueue:  []string{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, updateQueue(tt.workspace, tt.runs))
+			updateCombinedQueue(tt.workspace, tt.runs)
+			require.Equal(t, tt.wantActive, tt.workspace.Status.Active)
+			require.Equal(t, tt.wantQueue, tt.workspace.Status.Queue)
 		})
 	}
 }

@@ -73,9 +73,12 @@ func WithServiceAccount(account string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithQueue(run ...string) func(*v1alpha1.Workspace) {
+func WithCombinedQueue(run ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
-		ws.Status.Queue = run
+		if len(run) > 0 {
+			ws.Status.Active = run[0]
+		}
+		ws.Status.Queue = run[1:]
 	}
 }
 

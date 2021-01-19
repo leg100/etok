@@ -28,6 +28,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.active
+      name: Active
+      type: string
     - jsonPath: .status.queue
       name: Queue
       type: string
@@ -201,6 +204,8 @@ spec:
           status:
             description: WorkspaceStatus defines the observed state of Workspace
             properties:
+              active:
+                type: string
               backupSerial:
                 description: Serial number of the last successfully backed up state
                   file. Nil means it has not been backed up.
