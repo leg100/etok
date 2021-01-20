@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -380,7 +381,7 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		return workspaceFailure(err.Error()), nil
+		return workspaceFailure(fmt.Sprintf("backup failure: bucket %s not found", ws.Spec.BackupBucket)), nil
 	}
 	if err != nil {
 		return nil, err
@@ -429,7 +430,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		return workspaceFailure(err.Error()), nil
+		return workspaceFailure(fmt.Sprintf("restore failure: bucket %s not found", ws.Spec.BackupBucket)), nil
 	} else if err != nil {
 		return nil, err
 	}

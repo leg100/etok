@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -31,6 +30,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	watchtools "k8s.io/client-go/tools/watch"
@@ -50,6 +50,7 @@ var (
 	errNotAuthorised     = errors.New("you are not authorised")
 	errEnqueueTimeout    = errors.New("timed out waiting for run to be enqueued")
 	errWorkspaceNotFound = errors.New("workspace not found")
+	errWorkspaceNotReady = errors.New("workspace not ready")
 	errReconcileTimeout  = errors.New("timed out waiting for run to be reconciled")
 )
 
@@ -221,19 +222,24 @@ func (o *launcherOptions) run(ctx context.Context) error {
 
 	// In the meantime, check workspace exists
 	ws, err := o.WorkspacesClient(o.namespace).Get(ctx, o.workspace, metav1.GetOptions{})
-	if err != nil {
+	if kerrors.IsNotFound(err) {
 		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.namespace, o.workspace)
 	}
-	// ...and approve run if command listed as privileged
+	if err != nil {
+		return err
+	}
+	// ...ensure workspace is ready
+	workspaceReady := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)
+	if workspaceReady == nil {
+		return fmt.Errorf("%w: %s: ready condition not found", errWorkspaceNotReady, klog.KObj(ws))
+	}
+	if workspaceReady.Status != metav1.ConditionTrue {
+		return fmt.Errorf("%w: %s: %s", errWorkspaceNotReady, klog.KObj(ws), workspaceReady.Message)
+	}
+	// ...approve run if command listed as privileged
 	if ws.IsPrivilegedCommand(o.command) {
 		if err := o.approveRun(ctx, ws, run); err != nil {
 			return err
-		}
-	}
-	// ...and report any error conditions to user
-	for _, cond := range ws.Status.Conditions {
-		if cond.Status == metav1.ConditionTrue {
-			fmt.Fprintf(o.ErrOut, "%s workspace condition %s is true: %s\n", color.YellowString("Warning:"), cond.Type, cond.Message)
 		}
 	}
 

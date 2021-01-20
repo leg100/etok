@@ -27,6 +27,14 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 				Size: "1Gi",
 			},
 		},
+		Status: v1alpha1.WorkspaceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   v1alpha1.WorkspaceReadyCondition,
+					Status: metav1.ConditionTrue,
+				},
+			},
+		},
 	}
 	for _, o := range opts {
 		o(ws)
