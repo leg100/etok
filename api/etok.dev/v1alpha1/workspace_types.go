@@ -5,6 +5,7 @@ import (
 
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -143,8 +144,16 @@ type Output struct {
 	Value string `json:"value"`
 }
 
+// IsReconciled indicates whether resource has reconciled. It does this by
+// checking that a ready condition has been set, regardless of whether it is
+// true or false.
 func (ws *Workspace) IsReconciled() bool {
-	return ws.Status.Phase != ""
+	ready := meta.FindStatusCondition(ws.Status.Conditions, WorkspaceReadyCondition)
+
+	if ready != nil {
+		return true
+	}
+	return false
 }
 
 func (ws *Workspace) PodName() string {
@@ -168,7 +177,11 @@ func (ws *Workspace) BackupObjectName() string {
 }
 
 func (ws *Workspace) VariablesConfigMapName() string {
-	return ws.Name + "-variables"
+	return WorkspaceVariablesConfigMapName(ws.Name)
+}
+
+func WorkspaceVariablesConfigMapName(name string) string {
+	return name + "-variables"
 }
 
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {

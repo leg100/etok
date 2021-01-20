@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/globals"
@@ -26,6 +27,14 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 				Size: "1Gi",
 			},
 		},
+		Status: v1alpha1.WorkspaceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   v1alpha1.WorkspaceReadyCondition,
+					Status: metav1.ConditionTrue,
+				},
+			},
+		},
 	}
 	for _, o := range opts {
 		o(ws)
@@ -44,6 +53,12 @@ func WithVariables(keyValues ...string) func(*v1alpha1.Workspace) {
 		for i := 0; i < len(keyValues); i += 2 {
 			ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: keyValues[0], Value: keyValues[1]})
 		}
+	}
+}
+
+func WithDeleteTimestamp() func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.SetDeletionTimestamp(&metav1.Time{Time: time.Now()})
 	}
 }
 
@@ -149,9 +164,14 @@ func RunPod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 
 func WorkspacePod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 	pod := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "",
+			Kind:       "Pod",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v1alpha1.WorkspacePodName(name),
 			Namespace: namespace,
+			Labels:    map[string]string{"a": "b"},
 		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,

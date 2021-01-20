@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,7 +37,7 @@ var (
 	workspaceReconcileStatusChain []workspaceUpdater
 )
 
-type workspaceUpdater func(context.Context, *v1alpha1.Workspace) error
+type workspaceUpdater func(context.Context, *v1alpha1.Workspace) (*metav1.Condition, error)
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -65,13 +67,14 @@ func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceRec
 
 	// Build chain of workspace status updaters, to be called one after the
 	// other in a reconcile
+	workspaceReconcileStatusChain = []workspaceUpdater{}
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.handleDeletion)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageQueue)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageVariables)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageRBAC)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageState)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePVC)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePod)
-	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageQueue)
-	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, managePhase)
 
 	return r
 }
@@ -123,20 +126,6 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Determine if workspace is being deleted
-	if !ws.GetDeletionTimestamp().IsZero() {
-		// It's being deleted...set phase if not done already
-		if ws.Status.Phase != v1alpha1.WorkspacePhaseDeleting {
-			ws.Status.Phase = v1alpha1.WorkspacePhaseDeleting
-			if err := r.Status().Update(ctx, &ws); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
-		// Cease reconciliation
-		return ctrl.Result{}, nil
-	}
-
 	// Set garbage collection to use foreground deletion in the event the
 	// workspace is deleted
 	if !controllerutil.ContainsFinalizer(&ws, metav1.FinalizerDeleteDependents) {
@@ -158,39 +147,110 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Update status struct
-	reconcileErr := processWorkspaceReconcileStatusChain(ctx, &ws)
+	// Update status one step in the chain at a time. Returns a ready condition.
+	ready, backoff := processWorkspaceReconcileStatusChain(ctx, &ws)
+	if ready != nil {
+		// Add condition to status
+		meta.SetStatusCondition(&ws.Status.Conditions, *ready)
 
-	if err := r.updateStatus(ctx, req, ws.Status); err != nil {
-		return ctrl.Result{}, err
+		// Ensure phase reflects ready condition
+		ws.Status.Phase = setPhase(ready.Reason)
+
+		if err := r.updateStatus(ctx, req, ws.Status); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
-	return ctrl.Result{}, reconcileErr
+	// Non-nil backoff triggers an exponential backoff
+	return ctrl.Result{}, backoff
 }
 
+// updateStatus actually calls the k8s API to update the workspace resource. To
+// avoid errors caused by a stale read cache, it re-retrieves the workspace
+// resource and applies a patch.
 func (r *WorkspaceReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.WorkspaceStatus) error {
 	var ws v1alpha1.Workspace
 	if err := r.Get(ctx, req.NamespacedName, &ws); err != nil {
 		return err
 	}
 
-	patch := client.MergeFrom(ws.DeepCopy())
 	ws.Status = newStatus
 
-	return r.Status().Patch(ctx, &ws, patch)
+	return r.Status().Update(ctx, &ws)
 }
 
-// Update status. Bail out early if an error is returned.
-func processWorkspaceReconcileStatusChain(ctx context.Context, ws *v1alpha1.Workspace) error {
+// processWorkspaceReconcileStatusChain enumerates a list of functions, calling
+// them one at time. Each one updates the workspace status and returns a ready
+// condition. Depending on the value of the condition, either the list continues
+// to be enumerated or the condition is returned. A non-nil error indicates the
+// reconcile should be exponentially backed off.
+func processWorkspaceReconcileStatusChain(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+	var pending *metav1.Condition
 	for _, f := range workspaceReconcileStatusChain {
-		if err := f(ctx, ws); err != nil {
-			return err
+		ready, err := f(ctx, ws)
+		if err != nil {
+			return nil, err
+		}
+
+		if ready == nil {
+			continue
+		}
+
+		switch ready.Reason {
+		case v1alpha1.UnknownReason, v1alpha1.FailureReason:
+			// Update condition and trigger exponential back-off
+			return ready, errors.New(ready.Message)
+		case v1alpha1.DeletionReason:
+			// Update condition
+			return ready, nil
+		case v1alpha1.PendingReason:
+			// Last pending wins
+			pending = ready
 		}
 	}
-	return nil
+
+	if pending != nil {
+		return pending, nil
+	}
+
+	// If no other reason is found, the workspace is ready
+	return &metav1.Condition{
+		Type:   v1alpha1.WorkspaceReadyCondition,
+		Status: metav1.ConditionTrue,
+		Reason: v1alpha1.ReadyReason,
+	}, nil
 }
 
-func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Workspace) error {
+// setPhase maps the Ready condition's reason field to a phase string
+func setPhase(reason string) v1alpha1.WorkspacePhase {
+	switch reason {
+	case v1alpha1.ReadyReason:
+		return v1alpha1.WorkspacePhaseReady
+	case v1alpha1.DeletionReason:
+		return v1alpha1.WorkspacePhaseDeleting
+	case v1alpha1.FailureReason:
+		return v1alpha1.WorkspacePhaseError
+	case v1alpha1.PendingReason:
+		return v1alpha1.WorkspacePhaseInitializing
+	default:
+		return v1alpha1.WorkspacePhaseUnknown
+	}
+}
+
+// Determine if workspace is being deleted
+func (r *WorkspaceReconciler) handleDeletion(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+	if !ws.GetDeletionTimestamp().IsZero() {
+		return &metav1.Condition{
+			Type:    v1alpha1.WorkspaceReadyCondition,
+			Status:  metav1.ConditionFalse,
+			Reason:  v1alpha1.DeletionReason,
+			Message: "Workspace is being deleted",
+		}, nil
+	}
+	return nil, nil
+}
+
+func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
 	var secret corev1.Secret
@@ -202,22 +262,22 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 		}
 	case err != nil:
 		log.Error(err, "unable to get state secret")
-		return err
+		return nil, err
 	default:
 		// Make workspace owner of state secret, so that if workspace is deleted
 		// so is the state
 		if err := controllerutil.SetOwnerReference(ws, &secret, r.Scheme); err != nil {
 			log.Error(err, "unable to set state secret ownership")
-			return err
+			return nil, err
 		}
 		if err := r.Update(ctx, &secret); err != nil {
-			return err
+			return nil, err
 		}
 
 		// Retrieve state file secret
 		state, err := r.readState(ctx, ws, &secret)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Report state serial number in workspace status
@@ -240,7 +300,7 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (r *WorkspaceReconciler) addFinalizers(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
@@ -308,25 +368,23 @@ func (r *WorkspaceReconciler) readState(ctx context.Context, ws *v1alpha1.Worksp
 	return &s, nil
 }
 
-func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret, sfile *state) error {
+func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret, sfile *state) (*metav1.Condition, error) {
 	// Re-use client or create if not yet created
 	if r.StorageClient == nil {
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			backupFailure(ws, v1alpha1.ClientCreateReason, err.Error())
-			return err
+			return nil, err
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		backupFailure(ws, v1alpha1.BucketNotFoundReason, err.Error())
-		return err
-	} else if err != nil {
-		backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return workspaceFailure(fmt.Sprintf("backup failure: bucket %s not found", ws.Spec.BackupBucket)), nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	oh := bh.Object(ws.BackupObjectName())
@@ -334,31 +392,30 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 	// Marshal state file first to json then to yaml
 	y, err := yaml.Marshal(secret)
 	if err != nil {
-		backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Copy state file to GCS
 	owriter := oh.NewWriter(ctx)
 	_, err = io.Copy(owriter, bytes.NewBuffer(y))
 	if err != nil {
-		backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	if err := owriter.Close(); err != nil {
-		backupFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Update latest backup serial
 	ws.Status.BackupSerial = &sfile.Serial
 
-	backupOK(ws, v1alpha1.BackupSuccessfulReason, "State successfully backed up")
-	return nil
+	// TODO: emit an event
+	//backupOK(ws, v1alpha1.BackupSuccessfulReason, "State successfully backed
+	//up")
+	return nil, nil
 }
 
-func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	var secret corev1.Secret
 
 	// Re-use client or create if not yet created
@@ -366,97 +423,65 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			restoreFailure(ws, v1alpha1.ClientCreateReason, err.Error())
-			return err
+			return nil, err
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		restoreFailure(ws, v1alpha1.BucketNotFoundReason, err.Error())
-		return err
+		return workspaceFailure(fmt.Sprintf("restore failure: bucket %s not found", ws.Spec.BackupBucket)), nil
 	} else if err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Try to retrieve existing backup
 	oh := bh.Object(ws.BackupObjectName())
 	_, err = oh.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		restoreOK(ws, v1alpha1.NothingToRestoreReason, "No backup was found to restore")
-		return nil
+		// TODO: emit an event
+		//workspaceNotReady(ws, v1alpha1.NothingToRestoreReason, "No backup was
+		//found to restore")
+		return nil, nil
 	} else if err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	oreader, err := oh.NewReader(ctx)
 	if err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Copy state file from GCS
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, oreader)
 	if err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Unmarshal state file into secret obj
 	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	if err := oreader.Close(); err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
 	// Blank out resource version to avoid error upon create
 	secret.ResourceVersion = ""
 
 	if err := r.Create(ctx, &secret); err != nil {
-		restoreFailure(ws, v1alpha1.UnexpectedErrorReason, err.Error())
-		return err
+		return nil, err
 	}
 
-	restoreOK(ws, v1alpha1.RestoreSuccessfulReason, "State successfully restored")
-	return nil
+	// TODO: emit an event
+	//restoreOK(ws, v1alpha1.RestoreSuccessfulReason, "State successfully
+	//restored")
+	return nil, nil
 }
 
-// Set phase, which is an aggregation or summarisation of the workspace's error
-// conditions. In order of precedence: If there is at least one true error
-// condition then the phase will be set to error. If there is at least one
-// unknown condition then the phase will be set to unknown. If there is at least
-// one true condition with a pending reason then the phase will be set to
-// pending.  If all conditions are false only then is the phase set to ready.
-func managePhase(ctx context.Context, ws *v1alpha1.Workspace) error {
-	var phase = v1alpha1.WorkspacePhaseReady
-
-	for _, cond := range ws.Status.Conditions {
-		switch cond.Status {
-		case metav1.ConditionTrue:
-			ws.Status.Phase = v1alpha1.WorkspacePhaseError
-			return nil
-		case metav1.ConditionFalse:
-			if cond.Reason == v1alpha1.PendingReason && phase != v1alpha1.WorkspacePhaseUnknown {
-				phase = v1alpha1.WorkspacePhaseInitializing
-			}
-		case metav1.ConditionUnknown:
-			phase = v1alpha1.WorkspacePhaseUnknown
-		}
-	}
-
-	ws.Status.Phase = phase
-	return nil
-}
-
-func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
 	// Manage ConfigMap containing variables for workspace
@@ -467,37 +492,38 @@ func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws *v1alpha1.
 
 		if err := controllerutil.SetControllerReference(ws, &variables, r.Scheme); err != nil {
 			log.Error(err, "unable to set config map ownership")
-			return err
+			return nil, err
 		}
 
 		if err = r.Create(ctx, &variables); err != nil {
 			log.Error(err, "unable to create configmap for variables")
-			return err
+			return nil, err
 		}
+		return workspacePending("Creating configmap containing terraform variables"), nil
 	} else if err != nil {
 		log.Error(err, "unable to get configmap for variables")
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 func namespacedNameFromObj(obj controllerutil.Object) types.NamespacedName {
 	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 }
 
-func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	// Fetch run resources
 	runlist := &v1alpha1.RunList{}
 	if err := r.List(ctx, runlist, client.InNamespace(ws.Namespace)); err != nil {
-		return err
+		return nil, err
 	}
 
 	updateCombinedQueue(ws, runlist.Items)
-	return nil
+	return nil, nil
 }
 
 // Manage Pod for workspace
-func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
 	var pod corev1.Pod
@@ -506,43 +532,44 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Worksp
 		pod, err := workspacePod(ws, r.Image)
 		if err != nil {
 			log.Error(err, "unable to construct pod")
-			return err
+			return nil, err
 		}
 
 		if err := controllerutil.SetControllerReference(ws, pod, r.Scheme); err != nil {
 			log.Error(err, "unable to set pod ownership")
-			return err
+			return nil, err
 		}
 
 		if err = r.Create(ctx, pod); err != nil {
 			log.Error(err, "unable to create pod")
-			return err
+			return nil, err
 		}
 
-		podOK(ws, v1alpha1.PendingReason, "Creating pod")
-		return nil
-
+		// TODO: event
+		//podOK(ws, v1alpha1.PendingReason, "Creating pod")
+		return workspacePending("Creating pod"), nil
 	} else if err != nil {
 		log.Error(err, "unable to get pod")
-		return err
+		return nil, err
 	}
 
 	switch phase := pod.Status.Phase; phase {
 	case corev1.PodRunning:
-		podOK(ws, string(phase), "")
+		// TODO: event
+		break
 	case corev1.PodPending:
-		podOK(ws, v1alpha1.PendingReason, "Pod in pending phase")
+		return workspacePending("Pod in pending phase"), nil
 	case corev1.PodFailed:
-		podFailure(ws, string(phase), "Pod unexpectedly failed")
+		return workspaceFailure("Pod failed"), nil
 	case corev1.PodSucceeded:
-		podFailure(ws, string(phase), "Pod unexpectedly completed")
+		return workspaceFailure("Pod unexpectedly exited"), nil
 	default:
-		podUnknown(ws, string(phase), "")
+		return workspaceUnknown("Pod state unknown"), nil
 	}
-	return nil
+	return nil, nil
 }
 
-func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
 	// Manage RBAC role for workspace
@@ -553,16 +580,17 @@ func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws *v1alpha1.Works
 
 			if err := controllerutil.SetControllerReference(ws, &role, r.Scheme); err != nil {
 				log.Error(err, "unable to set role ownership")
-				return err
+				return nil, err
 			}
 
 			if err = r.Create(ctx, &role); err != nil {
 				log.Error(err, "unable to create role")
-				return err
+				return nil, err
 			}
+			return workspacePending("Creating RBAC role"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get role")
-			return err
+			return nil, err
 		}
 	}
 
@@ -574,23 +602,24 @@ func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws *v1alpha1.Works
 
 			if err := controllerutil.SetControllerReference(ws, &binding, r.Scheme); err != nil {
 				log.Error(err, "unable to set binding ownership")
-				return err
+				return nil, err
 			}
 
 			if err = r.Create(ctx, &binding); err != nil {
 				log.Error(err, "unable to create binding")
-				return err
+				return nil, err
 			}
+			return workspacePending("Creating RBAC binding"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get binding")
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
-func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
 	var pvc corev1.PersistentVolumeClaim
@@ -600,30 +629,32 @@ func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Worksp
 
 		if err := controllerutil.SetControllerReference(ws, &pvc, r.Scheme); err != nil {
 			log.Error(err, "unable to set PVC ownership")
-			return err
+			return nil, err
 		}
 
 		if err = r.Create(ctx, &pvc); err != nil {
 			log.Error(err, "unable to create PVC")
-			return err
+			return nil, err
 		}
-		cacheOK(ws, v1alpha1.PendingReason, "PVC is being created")
-		return nil
+		//cacheOK(ws, v1alpha1.PendingReason, "PVC is being created")
+		return workspacePending("Creating PVC"), nil
 	} else if err != nil {
 		log.Error(err, "unable to get PVC")
-		return err
+		return nil, err
 	}
 
 	switch pvc.Status.Phase {
-	case corev1.ClaimBound:
-		cacheOK(ws, v1alpha1.CacheBoundReason, "Cache's PVC successfully bound to PV")
 	case corev1.ClaimLost:
-		cacheFailure(ws, v1alpha1.CacheLostReason, "Persistent volume does not exist any longer")
+		// TODO: emit this as an event instead since a PV would be lost and then
+		// re-created.
+		return nil, errors.New("PVC has lost its persistent volume")
 	case corev1.ClaimPending:
-		cacheOK(ws, v1alpha1.PendingReason, "Cache's PVC in pending state")
+		return workspacePending("Cache's PVC in pending state"), nil
+	case corev1.ClaimBound:
+		return nil, nil
+	default:
+		return workspaceUnknown("Cache PVC status unknown"), nil
 	}
-
-	return nil
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {

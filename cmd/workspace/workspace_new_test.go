@@ -292,8 +292,8 @@ func TestNewWorkspace(t *testing.T) {
 			name: "reconcile timeout exceeded",
 			args: []string{"foo", "--reconcile-timeout", "10ms"},
 			overrideStatus: func(status *v1alpha1.WorkspaceStatus) {
-				// Unset phase, which should trigger the timeout
-				status.Phase = ""
+				// Unset conditions, which should trigger timeout
+				status.Conditions = []metav1.Condition{}
 			},
 			err: errReconcileTimeout,
 		},
@@ -305,30 +305,20 @@ func TestNewWorkspace(t *testing.T) {
 			err:  errPodTimeout,
 		},
 		{
-			name: "print out restore status if backup bucket provided",
-			args: []string{"foo", "--backup-bucket", "my-bucket"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				assert.Contains(t, o.Out.(*bytes.Buffer).String(), "Restore status: dummy message")
-			},
-		},
-		{
-			name: "restore failure",
-			args: []string{"foo", "--backup-bucket", "my-bucket"},
+			name: "workspace failure",
+			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			overrideStatus: func(status *v1alpha1.WorkspaceStatus) {
-				// Mock operator failing to provide restoreFailure condition
-				// status
 				status.Conditions = []metav1.Condition{
 					{
-						Type:    v1alpha1.RestoreFailureCondition,
-						Status:  metav1.ConditionTrue,
-						Reason:  v1alpha1.BucketNotFoundReason,
-						Message: "bucket not found",
+						Type:    v1alpha1.WorkspaceReadyCondition,
+						Status:  metav1.ConditionFalse,
+						Reason:  v1alpha1.FailureReason,
+						Message: "mock failure",
 					},
 				}
 			},
-			err: handlers.ErrRestoreFailed,
+			err: handlers.ErrWorkspaceFailed,
 		},
 		{
 			name: "restore timeout exceeded",
@@ -339,7 +329,7 @@ func TestNewWorkspace(t *testing.T) {
 				// status
 				status.Conditions = nil
 			},
-			err: errRestoreTimeout,
+			err: errReadyTimeout,
 		},
 	}
 
@@ -362,13 +352,13 @@ func TestNewWorkspace(t *testing.T) {
 
 			// Mock the workspace controller by setting status up front
 			status := v1alpha1.WorkspaceStatus{
-				Phase: v1alpha1.WorkspacePhaseInitializing,
+				Phase: v1alpha1.WorkspacePhaseReady,
 				Conditions: []metav1.Condition{
 					{
-						Type:    v1alpha1.RestoreFailureCondition,
-						Status:  metav1.ConditionFalse,
-						Reason:  v1alpha1.NothingToRestoreReason,
-						Message: "dummy message",
+						Type:    v1alpha1.WorkspaceReadyCondition,
+						Status:  metav1.ConditionTrue,
+						Reason:  v1alpha1.ReadyReason,
+						Message: "mock ready",
 					},
 				},
 			}
