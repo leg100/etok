@@ -241,8 +241,8 @@ func (r *WorkspaceReconciler) handleDeletion(ctx context.Context, ws *v1alpha1.W
 	if !ws.GetDeletionTimestamp().IsZero() {
 		return &metav1.Condition{
 			Type:    v1alpha1.WorkspaceReadyCondition,
-			Status:  metav1.ConditionTrue,
-			Reason:  v1alpha1.ReadyReason,
+			Status:  metav1.ConditionFalse,
+			Reason:  v1alpha1.DeletionReason,
 			Message: "Workspace is being deleted",
 		}, nil
 	}

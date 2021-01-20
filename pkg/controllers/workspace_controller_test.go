@@ -120,6 +120,17 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 		},
 		{
+			name:      "Deleting phase",
+			workspace: testobj.Workspace("", "workspace-1", testobj.WithDeleteTimestamp()),
+			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
+				assert.Equal(t, v1alpha1.WorkspacePhaseDeleting, ws.Status.Phase)
+				if assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)) {
+					ready := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)
+					assert.Equal(t, v1alpha1.DeletionReason, ready.Reason)
+				}
+			},
+		},
+		{
 			name:      "Pod succeeded",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodSucceeded))},

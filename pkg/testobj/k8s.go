@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/globals"
@@ -44,6 +45,12 @@ func WithVariables(keyValues ...string) func(*v1alpha1.Workspace) {
 		for i := 0; i < len(keyValues); i += 2 {
 			ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: keyValues[0], Value: keyValues[1]})
 		}
+	}
+}
+
+func WithDeleteTimestamp() func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.SetDeletionTimestamp(&metav1.Time{Time: time.Now()})
 	}
 }
 
