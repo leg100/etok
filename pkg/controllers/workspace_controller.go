@@ -260,36 +260,27 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 		return nil, nil
 	}
 
-	// Make a copy of annotations, leaving out approvals
-	var hasApproval bool
-	annotations := make(map[string]string)
-	for k, v := range ws.Annotations {
-		if strings.HasPrefix(k, v1alpha1.ApprovedAnnotationKeyPrefix) {
-			hasApproval = true
+	annotations := makeCopyOfMap(ws.Annotations)
+
+	for k := range annotations {
+		if !strings.HasPrefix(k, v1alpha1.ApprovedAnnotationKeyPrefix) {
+			// Skip non-approval annotations
 			continue
 		}
-		annotations[k] = v
-	}
 
-	if !hasApproval {
-		// No approvals found, so there's nothing to re-add
-		return nil, nil
-	}
-
-	// Enumerate runs, and re-add approvals accordingly
-	runlist := &v1alpha1.RunList{}
-	if err := r.List(context.TODO(), runlist, client.InNamespace(ws.Namespace)); err != nil {
-		return nil, err
-	}
-	for _, run := range runlist.Items {
+		var run v1alpha1.Run
+		objectKey := types.NamespacedName{Namespace: ws.Namespace, Name: v1alpha1.GetRunFromApprovalAnnotationKey(k)}
+		err := r.Get(context.TODO(), objectKey, &run)
+		if kerrors.IsNotFound(err) {
+			// Remove runs that no longer exist
+			delete(annotations, k)
+			continue
+		} else if err != nil {
+			return nil, err
+		}
 		if run.Phase == v1alpha1.RunPhaseCompleted {
-			// Don't re-add completed runs
-			continue
-		}
-
-		if metav1.HasAnnotation(ws.ObjectMeta, run.ApprovedAnnotationKey()) {
-			// Re-add approval
-			annotations[run.ApprovedAnnotationKey()] = "approved"
+			// Remove completed runs
+			delete(annotations, k)
 		}
 	}
 

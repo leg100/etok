@@ -105,6 +105,17 @@ func WithApprovals(run ...string) func(*v1alpha1.Workspace) {
 	}
 }
 
+func WithAnnotations(keyValues ...string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		if ws.Annotations == nil {
+			ws.Annotations = make(map[string]string)
+		}
+		for i := 0; i < len(keyValues); i += 2 {
+			ws.Annotations[keyValues[i]] = keyValues[i+1]
+		}
+	}
+}
+
 func RunPod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
