@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -288,7 +289,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			defer server.Stop()
 
 			// Reconcile
-			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()))
+			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()), WithEventRecorder(record.NewFakeRecorder(100)))
 			req := requestFromObject(tt.workspace)
 			_, err = r.Reconcile(context.Background(), req)
 			if tt.wantErr {

@@ -70,7 +70,11 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 			klog.V(0).Info("Runner image: " + o.Image)
 
 			// Setup workspace ctrl with mgr
-			if err := controllers.NewWorkspaceReconciler(mgr.GetClient(), o.Image).SetupWithManager(mgr); err != nil {
+			workspaceReconciler := controllers.NewWorkspaceReconciler(
+				mgr.GetClient(),
+				o.Image,
+				controllers.WithEventRecorder(mgr.GetEventRecorderFor("workspace-controller")))
+			if err := workspaceReconciler.SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create workspace controller: %w", err)
 			}
 

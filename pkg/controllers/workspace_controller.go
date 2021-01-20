@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -44,6 +45,7 @@ type WorkspaceReconciler struct {
 	Scheme        *runtime.Scheme
 	Image         string
 	StorageClient *storage.Client
+	recorder      record.EventRecorder
 }
 
 type WorkspaceReconcilerOption func(r *WorkspaceReconciler)
@@ -51,6 +53,12 @@ type WorkspaceReconcilerOption func(r *WorkspaceReconciler)
 func WithStorageClient(sc *storage.Client) WorkspaceReconcilerOption {
 	return func(r *WorkspaceReconciler) {
 		r.StorageClient = sc
+	}
+}
+
+func WithEventRecorder(recorder record.EventRecorder) WorkspaceReconcilerOption {
+	return func(r *WorkspaceReconciler) {
+		r.recorder = recorder
 	}
 }
 
@@ -84,6 +92,7 @@ func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceRec
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Manage configmaps for terraform variables
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -275,7 +284,7 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 		}
 
 		// Retrieve state file secret
-		state, err := r.readState(ctx, ws, &secret)
+		state, err := readState(ctx, &secret)
 		if err != nil {
 			return nil, err
 		}
@@ -347,7 +356,7 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 	return annotations, nil
 }
 
-func (r *WorkspaceReconciler) readState(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret) (*state, error) {
+func readState(ctx context.Context, secret *corev1.Secret) (*state, error) {
 	data, ok := secret.Data["tfstate"]
 	if !ok {
 		return nil, errors.New("Expected key tfstate not found in state secret")
@@ -374,6 +383,7 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
+			r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
 			return nil, err
 		}
 	}
@@ -384,6 +394,7 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 		return workspaceFailure(fmt.Sprintf("backup failure: bucket %s not found", ws.Spec.BackupBucket)), nil
 	}
 	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
 		return nil, err
 	}
 
@@ -392,6 +403,7 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 	// Marshal state file first to json then to yaml
 	y, err := yaml.Marshal(secret)
 	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
 		return nil, err
 	}
 
@@ -399,19 +411,19 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 	owriter := oh.NewWriter(ctx)
 	_, err = io.Copy(owriter, bytes.NewBuffer(y))
 	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
 		return nil, err
 	}
 
 	if err := owriter.Close(); err != nil {
+		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
 		return nil, err
 	}
 
 	// Update latest backup serial
 	ws.Status.BackupSerial = &sfile.Serial
 
-	// TODO: emit an event
-	//backupOK(ws, v1alpha1.BackupSuccessfulReason, "State successfully backed
-	//up")
+	r.recorder.Eventf(ws, "Normal", "BackupSuccessful", "Backed up state #%d", sfile.Serial)
 	return nil, nil
 }
 
@@ -439,9 +451,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	oh := bh.Object(ws.BackupObjectName())
 	_, err = oh.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		// TODO: emit an event
-		//workspaceNotReady(ws, v1alpha1.NothingToRestoreReason, "No backup was
-		//found to restore")
+		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
 		return nil, nil
 	} else if err != nil {
 		return nil, err
@@ -449,6 +459,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 
 	oreader, err := oh.NewReader(ctx)
 	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
 		return nil, err
 	}
 
@@ -456,15 +467,18 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, oreader)
 	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
 		return nil, err
 	}
 
 	// Unmarshal state file into secret obj
 	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
 		return nil, err
 	}
 
 	if err := oreader.Close(); err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
 		return nil, err
 	}
 
@@ -472,12 +486,22 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	secret.ResourceVersion = ""
 
 	if err := r.Create(ctx, &secret); err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
 		return nil, err
 	}
 
-	// TODO: emit an event
-	//restoreOK(ws, v1alpha1.RestoreSuccessfulReason, "State successfully
-	//restored")
+	// Parse state file
+	state, err := readState(ctx, &secret)
+	if err != nil {
+		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
+		return nil, err
+	}
+
+	// Record in status that a backup with the given serial number exists.
+	ws.Status.BackupSerial = &state.Serial
+
+	r.recorder.Eventf(ws, "Normal", "RestoreSuccessful", "Restored state #%d", state.Serial)
+
 	return nil, nil
 }
 
@@ -645,8 +669,7 @@ func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Worksp
 
 	switch pvc.Status.Phase {
 	case corev1.ClaimLost:
-		// TODO: emit this as an event instead since a PV would be lost and then
-		// re-created.
+		r.recorder.Event(ws, "Warning", "CacheLost", "Cache persistent volume has been lost")
 		return nil, errors.New("PVC has lost its persistent volume")
 	case corev1.ClaimPending:
 		return workspacePending("Cache's PVC in pending state"), nil
