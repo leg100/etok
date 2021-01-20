@@ -33,7 +33,7 @@ func deleteCmd(f *cmdutil.Factory) *cobra.Command {
 			}
 
 			fmt.Println("Waiting for workspace and its dependent resources to be deleted...")
-			wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+			err = wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
 				if _, err := client.WorkspacesClient(namespace).Get(cmd.Context(), ws, metav1.GetOptions{}); err != nil {
 					if errors.IsNotFound(err) {
 						return true, nil
@@ -42,6 +42,9 @@ func deleteCmd(f *cmdutil.Factory) *cobra.Command {
 				}
 				return false, nil
 			})
+			if err != nil {
+				return err
+			}
 
 			fmt.Printf("Deleted workspace %s/%s\n", namespace, ws)
 
