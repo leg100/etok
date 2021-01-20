@@ -84,13 +84,16 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 		},
 		{
-			name:      "Approvals: Garbage collected approval annotation",
-			workspace: testobj.Workspace("approvals", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1")),
+			name:      "Pruned approval annotation for completed run",
+			workspace: testobj.Workspace("approvals", "workspace-1", testobj.WithPrivilegedCommands("apply"), testobj.WithApprovals("apply-1", "apply-2"), testobj.WithAnnotations("k1", "v1")),
 			objs: []runtime.Object{
 				testobj.WorkspacePod("approvals", "workspace-1"),
+				testobj.Run("approvals", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithRunPhase(v1alpha1.RunPhaseCompleted)),
+				testobj.Run("approvals", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Nil(t, ws.Annotations)
+				want := map[string]string{"approvals.etok.dev/apply-2": "approved", "k1": "v1"}
+				assert.Equal(t, want, ws.Annotations)
 			},
 		},
 		{
