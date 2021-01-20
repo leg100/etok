@@ -168,7 +168,11 @@ func (ws *Workspace) BackupObjectName() string {
 }
 
 func (ws *Workspace) VariablesConfigMapName() string {
-	return ws.Name + "-variables"
+	return WorkspaceVariablesConfigMapName(ws.Name)
+}
+
+func WorkspaceVariablesConfigMapName(name string) string {
+	return name + "-variables"
 }
 
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {

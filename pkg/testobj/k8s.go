@@ -138,9 +138,14 @@ func RunPod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 
 func WorkspacePod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod {
 	pod := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "",
+			Kind:       "Pod",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      v1alpha1.WorkspacePodName(name),
 			Namespace: namespace,
+			Labels:    map[string]string{"a": "b"},
 		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,

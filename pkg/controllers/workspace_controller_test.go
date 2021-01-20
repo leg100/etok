@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -102,9 +103,17 @@ func TestReconcileWorkspace(t *testing.T) {
 		{
 			name:      "Ready phase",
 			workspace: testobj.Workspace("", "workspace-1"),
-			objs:      []runtime.Object{testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning))},
+			objs: []runtime.Object{
+				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning)),
+				testobj.PVC("", "workspace-1", testobj.WithPVCPhase(corev1.ClaimBound)),
+				testobj.ConfigMap("", v1alpha1.WorkspaceVariablesConfigMapName("workspace-1")),
+				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
+				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
+				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
+			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, v1alpha1.WorkspacePhaseInitializing, ws.Status.Phase)
+				assert.Equal(t, v1alpha1.WorkspacePhaseReady, ws.Status.Phase)
+				assert.True(t, meta.IsStatusConditionTrue(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition))
 			},
 		},
 		{
@@ -114,6 +123,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
+			wantErr: true,
 		},
 		{
 			name:      "Pod failed",
@@ -122,6 +132,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
+			wantErr: true,
 		},
 		{
 			name:      "Unknown phase",
@@ -130,6 +141,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseUnknown, ws.Status.Phase)
 			},
+			wantErr: true,
 		},
 		{
 			name:      "Cache: Default size",
@@ -180,7 +192,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Outputs",
 			workspace: testobj.Workspace("", "workspace-1"),
 			objs: []runtime.Object{
-				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodFailed)),
+				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning)),
 				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
@@ -243,9 +255,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 			wantErr: true,
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				restoreFailure := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.RestoreFailureCondition)
-				assert.Equal(t, metav1.ConditionTrue, restoreFailure.Status)
-				assert.Equal(t, v1alpha1.BucketNotFoundReason, restoreFailure.Reason)
+				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
 		},
 	}
@@ -267,7 +277,11 @@ func TestReconcileWorkspace(t *testing.T) {
 			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()))
 			req := requestFromObject(tt.workspace)
 			_, err = r.Reconcile(context.Background(), req)
-			t.CheckError(tt.wantErr, err)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 
 			// Fetch fresh workspace for assertions
 			if tt.workspaceAssertions != nil {
@@ -304,59 +318,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			if tt.storageAssertions != nil {
 				tt.storageAssertions(t, r.StorageClient)
 			}
-		})
-	}
-}
-
-func TestWorkspacePhase(t *testing.T) {
-	tests := []struct {
-		name       string
-		conditions []metav1.Condition
-		wantPhase  v1alpha1.WorkspacePhase
-	}{
-		{
-			name:      "ready",
-			wantPhase: v1alpha1.WorkspacePhaseReady,
-		},
-		{
-			name: "initializing",
-			conditions: []metav1.Condition{
-				{
-					Type:   v1alpha1.PodFailureCondition,
-					Status: metav1.ConditionFalse,
-					Reason: v1alpha1.PendingReason,
-				},
-			},
-			wantPhase: v1alpha1.WorkspacePhaseInitializing,
-		},
-		{
-			name: "error",
-			conditions: []metav1.Condition{
-				{
-					Type:   v1alpha1.PodFailureCondition,
-					Status: metav1.ConditionTrue,
-				},
-			},
-			wantPhase: v1alpha1.WorkspacePhaseError,
-		},
-		{
-			name: "unknown",
-			conditions: []metav1.Condition{
-				{
-					Type:   v1alpha1.PodFailureCondition,
-					Status: metav1.ConditionUnknown,
-				},
-			},
-			wantPhase: v1alpha1.WorkspacePhaseUnknown,
-		},
-	}
-	for _, tt := range tests {
-		testutil.Run(t, tt.name, func(t *testutil.T) {
-			ws := v1alpha1.Workspace{}
-			ws.Status.Conditions = tt.conditions
-
-			require.NoError(t, managePhase(context.Background(), &ws))
-			assert.Equal(t, tt.wantPhase, ws.Status.Phase)
 		})
 	}
 }
