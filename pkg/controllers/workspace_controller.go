@@ -2,9 +2,7 @@ package controllers
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -354,27 +352,6 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 	}
 
 	return annotations, nil
-}
-
-func readState(ctx context.Context, secret *corev1.Secret) (*state, error) {
-	data, ok := secret.Data["tfstate"]
-	if !ok {
-		return nil, errors.New("Expected key tfstate not found in state secret")
-	}
-
-	// Return a gzip reader that decompresses on the fly
-	gr, err := gzip.NewReader(bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmarshal state file
-	var s state
-	if err := json.NewDecoder(gr).Decode(&s); err != nil {
-		return nil, err
-	}
-
-	return &s, nil
 }
 
 func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret, sfile *state) (*metav1.Condition, error) {
