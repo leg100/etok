@@ -4,7 +4,6 @@ import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/util/slice"
-	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 // updateCombinedQueue updates a workspace's combined queue (the active run +
@@ -23,7 +22,7 @@ func updateCombinedQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) {
 		}
 
 		// Filter out completed runs
-		if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.DoneCondition) {
+		if run.IsDone() {
 			continue
 		}
 

@@ -53,7 +53,7 @@ func TestUpdateCombinedQueue(t *testing.T) {
 			name:      "One completed run",
 			workspace: testobj.Workspace("default", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 			runs: []v1alpha1.Run{
-				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithCondition(v1alpha1.DoneCondition)),
+				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithCondition(v1alpha1.RunCompleteCondition)),
 			},
 			wantQueue: []string(nil),
 		},
@@ -61,7 +61,7 @@ func TestUpdateCombinedQueue(t *testing.T) {
 			name:      "One completed run one incomplete run",
 			workspace: testobj.Workspace("default", "workspace-1", testobj.WithCombinedQueue("apply-1", "apply-2")),
 			runs: []v1alpha1.Run{
-				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithCondition(v1alpha1.DoneCondition)),
+				*testobj.Run("default", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithCondition(v1alpha1.RunCompleteCondition)),
 				*testobj.Run("default", "apply-2", "apply", testobj.WithWorkspace("workspace-1")),
 			},
 			wantActive: "apply-2",

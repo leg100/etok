@@ -125,8 +125,15 @@ func (r *Run) IsReconciled() bool {
 	return r.Phase != ""
 }
 
+// IsDone checks if a run has either completed or failed
 func (r *Run) IsDone() bool {
-	return meta.IsStatusConditionTrue(r.Conditions, DoneCondition)
+	if r.Conditions == nil {
+		return false
+	}
+	completed := meta.IsStatusConditionTrue(r.Conditions, RunCompleteCondition)
+	failed := meta.IsStatusConditionTrue(r.Conditions, RunFailedCondition)
+
+	return completed || failed
 }
 
 // A RunPhase summarises the current status of the run

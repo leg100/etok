@@ -43,10 +43,10 @@ func TestLauncher(t *testing.T) {
 		size int
 		// Mock exit code of runner pod
 		code int32
-		// Toggle mocking a successful reconcile status
-		disableMockReconcile bool
-		factoryOverrides     func(*cmdutil.Factory)
-		assertions           func(*launcherOptions)
+		// Override run status
+		overrideStatus   func(*v1alpha1.RunStatus)
+		factoryOverrides func(*cmdutil.Factory)
+		assertions       func(*launcherOptions)
 	}{
 		{
 			name: "plan",
@@ -66,19 +66,6 @@ func TestLauncher(t *testing.T) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
 			},
-		},
-		{
-			name: "enqueue timeout",
-			cmd:  "apply",
-			args: []string{"--enqueue-timeout", "10ms"},
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			// Deliberately left out of workspace queue
-			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "default", o.namespace)
-				assert.Equal(t, "default", o.workspace)
-			},
-			err: errEnqueueTimeout,
 		},
 		{
 			name: "specific namespace and workspace",
@@ -267,11 +254,32 @@ func TestLauncher(t *testing.T) {
 			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},
 		{
-			name:                 "reconcile timeout exceeded",
-			args:                 []string{"--reconcile-timeout", "10ms"},
-			objs:                 []runtime.Object{testobj.Workspace("default", "default")},
-			disableMockReconcile: true,
-			err:                  errReconcileTimeout,
+			name: "reconcile timeout exceeded",
+			args: []string{"--reconcile-timeout", "10ms"},
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			overrideStatus: func(status *v1alpha1.RunStatus) {
+				// Triggers reconcile timeout
+				status.Phase = ""
+			},
+			err: errReconcileTimeout,
+		},
+		{
+			name: "run failed",
+			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			overrideStatus: func(status *v1alpha1.RunStatus) {
+				status.Conditions = []metav1.Condition{
+					{
+						Type:    v1alpha1.RunFailedCondition,
+						Status:  metav1.ConditionTrue,
+						Reason:  v1alpha1.FailureReason,
+						Message: "mock failure message",
+					},
+				}
+			},
+			assertions: func(o *launcherOptions) {
+				assert.Contains(t, o.Out.(*bytes.Buffer).String(), "Error: run failed: mock failure message")
+			},
+			err: handlers.ErrRunFailed,
 		},
 	}
 
@@ -301,10 +309,22 @@ func TestLauncher(t *testing.T) {
 
 			opts := &launcherOptions{command: command, runName: "run-12345"}
 
-			if !tt.disableMockReconcile {
-				// Mock successful reconcile by setting phase to pending
-				opts.phase = v1alpha1.RunPhaseWaiting
+			// Mock the workspace controller by setting status up front
+			status := v1alpha1.RunStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   v1alpha1.RunCompleteCondition,
+						Status: metav1.ConditionFalse,
+						Reason: v1alpha1.PodRunningReason,
+					},
+				},
+				Phase: v1alpha1.RunPhaseRunning,
 			}
+			// Permit individual tests to override workspace status
+			if tt.overrideStatus != nil {
+				tt.overrideStatus(&status)
+			}
+			opts.status = &status
 
 			// create cobra command
 			cmd := launcherCommand(f, opts)

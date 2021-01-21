@@ -48,7 +48,6 @@ const (
 
 var (
 	errNotAuthorised     = errors.New("you are not authorised")
-	errEnqueueTimeout    = errors.New("timed out waiting for run to be enqueued")
 	errWorkspaceNotFound = errors.New("workspace not found")
 	errWorkspaceNotReady = errors.New("workspace not ready")
 	errReconcileTimeout  = errors.New("timed out waiting for run to be reconciled")
@@ -88,8 +87,6 @@ type launcherOptions struct {
 	handshakeTimeout time.Duration
 	// Timeout for run pod to be running and ready
 	podTimeout time.Duration
-	// timeout waiting to be queued
-	enqueueTimeout time.Duration
 	// Timeout for resource to be reconciled (at least once)
 	reconcileTimeout time.Duration
 
@@ -100,9 +97,8 @@ type launcherOptions struct {
 	createdRun     bool
 	createdArchive bool
 
-	// For testing purposes set phase in order to mimic the run having been
-	// reconcile by the operator
-	phase v1alpha1.RunPhase
+	// For testing purposes set run status
+	status *v1alpha1.RunStatus
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -155,7 +151,6 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	cmd.Flags().BoolVar(&o.disableTTY, "no-tty", false, "disable tty")
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
-	cmd.Flags().DurationVar(&o.enqueueTimeout, "enqueue-timeout", 10*time.Second, "timeout waiting to be queued")
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 
@@ -189,9 +184,6 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return err
 	}
 
-	// Watch and log run updates
-	o.watchRun(ctx, run)
-
 	if IsQueueable(o.command) {
 		// Watch and log queue updates
 		o.watchQueue(ctx, run)
@@ -213,12 +205,10 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return o.waitForPod(gctx, run, isTTY, podch)
 	})
 
-	if IsQueueable(o.command) {
-		// Wait for run to be enqueued
-		g.Go(func() error {
-			return o.waitForEnqueued(gctx, run)
-		})
-	}
+	// Wait for run to indicate pod is running
+	g.Go(func() error {
+		return o.watchRun(gctx, run)
+	})
 
 	// In the meantime, check workspace exists
 	ws, err := o.WorkspacesClient(o.namespace).Get(ctx, o.workspace, metav1.GetOptions{})
@@ -243,8 +233,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		}
 	}
 
-	// Carry on waiting for run to be enqueued (if queueable) and for pod to be
-	// ready
+	// Carry on waiting for pod to be ready
 	if err := g.Wait(); err != nil {
 		return err
 	}
@@ -317,33 +306,10 @@ func (o *launcherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isT
 	return nil
 }
 
-// Wait until run has been enqueued onto workspace, or until timeout has been
-// reached.
-func (o *launcherOptions) waitForEnqueued(ctx context.Context, run *v1alpha1.Run) error {
-	ctx, cancel := context.WithTimeout(ctx, o.enqueueTimeout)
-	defer cancel()
-
-	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: o.workspace, Namespace: o.namespace}
-	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.IsQueued(run.Name))
-	if err != nil {
-		if errors.Is(err, wait.ErrWaitTimeout) {
-			err = errEnqueueTimeout
-		}
-		return err
-	}
-	klog.V(1).Info("run enqueued within enqueue timeout")
-	return nil
-}
-
-func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) {
-	go func() {
-		lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
-		// Ignore errors
-		// TODO: the current logger has no warning level. We should probably
-		// upgrade the logger to something that does, and then log any error
-		// here as a warning.
-		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.LogRunPhase())
-	}()
+func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) error {
+	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunPodRunning(run.Name))
+	return err
 }
 
 func (o *launcherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
@@ -455,8 +421,10 @@ func (o *launcherOptions) createRun(ctx context.Context, name, configMapName str
 
 	run.Verbosity = o.Verbosity
 
-	// For testing purposes mimic obj having been reconciled
-	run.Phase = o.phase
+	if o.status != nil {
+		// For testing purposes seed status
+		run.RunStatus = *o.status
+	}
 
 	if isTTY {
 		run.AttachSpec.Handshake = true
@@ -505,7 +473,7 @@ func (o *launcherOptions) createConfigMap(ctx context.Context, tarball []byte, n
 	return nil
 }
 
-// waitForReconcile waits for the workspace resource to be reconciled.
+// waitForReconcile waits for the run resource to be reconciled.
 func (o *launcherOptions) waitForReconcile(ctx context.Context, run *v1alpha1.Run) error {
 	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
 	hdlr := handlers.Reconciled(run)

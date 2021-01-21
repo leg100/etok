@@ -2,14 +2,7 @@ package controllers
 
 import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-var (
-	runComplete   = runConditionSetterFactory(v1alpha1.RunCompleteCondition, metav1.ConditionTrue)
-	runIncomplete = runConditionSetterFactory(v1alpha1.RunCompleteCondition, metav1.ConditionFalse)
-	runFailed     = runConditionSetterFactory(v1alpha1.RunFailedCondition, metav1.ConditionTrue)
 )
 
 func workspaceFailure(message string) *metav1.Condition {
@@ -39,15 +32,29 @@ func workspaceUnknown(message string) *metav1.Condition {
 	}
 }
 
-type runConditionSetter func(*v1alpha1.Run, string, string)
+func runFailed(reason, message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.RunFailedCondition,
+		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: message,
+	}
+}
 
-func runConditionSetterFactory(condType string, status metav1.ConditionStatus) runConditionSetter {
-	return func(run *v1alpha1.Run, reason, message string) {
-		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
-			Type:    condType,
-			Status:  status,
-			Reason:  reason,
-			Message: message,
-		})
+func runIncomplete(reason, message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.RunCompleteCondition,
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: message,
+	}
+}
+
+func runComplete(reason, message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.RunCompleteCondition,
+		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: message,
 	}
 }
