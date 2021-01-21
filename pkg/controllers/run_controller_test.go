@@ -65,7 +65,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Queued",
 			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("apply-0", "apply-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("apply-0", "apply-1")),
 			},
 			assertions: func(run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseQueued, run.Phase)
@@ -75,7 +75,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Provisioning run at front of queue",
 			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithQueue("apply-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithCombinedQueue("apply-1")),
 				testobj.RunPod("operator-test", "apply-1", testobj.WithPhase(corev1.PodPending)),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -97,7 +97,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Running apply at front of queue",
 			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("apply-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 				testobj.RunPod("operator-test", "apply-1"),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -108,7 +108,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Done",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded)),
 			},
 			assertions: func(run *v1alpha1.Run) {
@@ -150,7 +150,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Creates pod",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.NotEqual(t, &corev1.Pod{}, pod)
@@ -160,7 +160,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Image name",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t, "a.b.c/d:v1", pod.Spec.Containers[0].Image)
@@ -170,7 +170,7 @@ func TestRunReconciler(t *testing.T) {
 			name: "Sets container args",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1"), testobj.WithArgs("-out", "plan.out")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
 			},
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t, []string{"--", "-out", "plan.out"}, pod.Spec.Containers[0].Args)
@@ -211,7 +211,7 @@ func TestRunArchive(t *testing.T) {
 			name: "Owned",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithQueue("plan-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
 				testobj.ConfigMap("operator-test", "plan-1"),
 			},
 			assertions: func(archive *corev1.ConfigMap) {

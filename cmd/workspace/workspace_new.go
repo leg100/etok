@@ -31,7 +31,7 @@ import (
 const (
 	defaultReconcileTimeout   = 10 * time.Second
 	defaultPodTimeout         = 60 * time.Second
-	defaultRestoreTimeout     = 60 * time.Second
+	defaultReadyTimeout       = 60 * time.Second
 	defaultCacheSize          = "1Gi"
 	defaultSecretName         = "etok"
 	defaultServiceAccountName = "etok"
@@ -40,7 +40,7 @@ const (
 var (
 	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
 	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
-	errRestoreTimeout   = errors.New("timed out waiting for workspace to provide status of restore")
+	errReadyTimeout     = errors.New("timed out waiting for workspace to be ready")
 	errWorkspaceNameArg = errors.New("expected single argument providing the workspace name")
 )
 
@@ -156,7 +156,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
-	cmd.Flags().DurationVar(&o.restoreTimeout, "restore-timeout", defaultRestoreTimeout, "timeout for restore condition to report back")
+	cmd.Flags().DurationVar(&o.restoreTimeout, "restore-timeout", defaultReadyTimeout, "timeout for restore condition to report back")
 
 	cmd.Flags().StringSliceVar(&o.workspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
 
@@ -184,22 +184,8 @@ func (o *newOptions) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	o.createdWorkspace = true
-	fmt.Fprintf(o.Out, "Created workspace %s\n", klog.KObj(ws))
 
 	g, gctx := errgroup.WithContext(ctx)
-
-	fmt.Fprintln(o.Out, "Waiting for workspace pod to be ready...")
-	podch := make(chan *corev1.Pod, 1)
-	g.Go(func() error {
-		return o.waitForContainer(gctx, ws, podch)
-	})
-
-	if o.workspaceSpec.BackupBucket != "" {
-		g.Go(func() error {
-			return o.waitForRestore(gctx, ws)
-		})
-	}
 
 	// Wait for resource to have been successfully reconciled at least once
 	// within the ReconcileTimeout (If we don't do this and the operator is
@@ -209,20 +195,29 @@ func (o *newOptions) run(ctx context.Context) error {
 		return o.waitForReconcile(gctx, ws)
 	})
 
-	// Wait for workspace to have been reconciled and for its pod container to
-	// be ready, and optionally, for restore status (if backup bucket
-	// specified).
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	// Receive ready pod
-	pod := <-podch
+	// Wait for workspace to be ready
+	g.Go(func() error {
+		return o.waitForReady(gctx, ws)
+	})
 
 	// Monitor exit code; non-blocking
-	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, controllers.InstallerContainerName)
+	exit := monitors.ExitMonitor(ctx, o.KubeClient, ws.PodName(), ws.Namespace, controllers.InstallerContainerName)
 
-	if err := logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.namespace), ws.PodName(), controllers.InstallerContainerName); err != nil {
+	// Wait for pod to be ready and start streaming logs from its installer
+	// container
+	g.Go(func() error {
+		fmt.Fprintln(o.Out, "Waiting for workspace pod to be ready...")
+		_, err := o.waitForContainer(gctx, ws)
+		if err != nil {
+			return err
+		}
+
+		return logstreamer.Stream(ctx, o.GetLogsFunc, o.Out, o.PodsClient(o.namespace), ws.PodName(), controllers.InstallerContainerName)
+	})
+
+	// Wait for workspace to have been reconciled and for its pod container to
+	// be ready
+	if err := g.Wait(); err != nil {
 		return err
 	}
 
@@ -282,7 +277,15 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v, EnvironmentVariable: true})
 	}
 
-	return o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
+	ws, err := o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	o.createdWorkspace = true
+	fmt.Fprintf(o.Out, "Created workspace %s\n", klog.KObj(ws))
+
+	return ws, nil
 }
 
 func (o *newOptions) createSecretIfMissing(ctx context.Context) error {
@@ -360,7 +363,7 @@ func (o *newOptions) createServiceAccount(ctx context.Context, name string, anno
 
 // waitForContainer returns true once the installer container can be streamed
 // from
-func (o *newOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace, podch chan<- *corev1.Pod) error {
+func (o *newOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspace) (*corev1.Pod, error) {
 	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: ws.PodName(), Namespace: ws.Namespace}
 	hdlr := handlers.ContainerReady(ws.PodName(), controllers.InstallerContainerName, true, false)
 
@@ -370,12 +373,11 @@ func (o *newOptions) waitForContainer(ctx context.Context, ws *v1alpha1.Workspac
 	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, hdlr)
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
-			return errPodTimeout
+			return nil, errPodTimeout
 		}
-		return err
+		return nil, err
 	}
-	podch <- event.Object.(*corev1.Pod)
-	return nil
+	return event.Object.(*corev1.Pod), nil
 }
 
 // waitForReconcile waits for the workspace resource to be reconciled.
@@ -396,11 +398,10 @@ func (o *newOptions) waitForReconcile(ctx context.Context, ws *v1alpha1.Workspac
 	return nil
 }
 
-// waitForRestore waits for the restoreFailure condition to provide info on
-// restore of state file.
-func (o *newOptions) waitForRestore(ctx context.Context, ws *v1alpha1.Workspace) error {
+// waitForReady waits for the ready condition to indicate it is ready.
+func (o *newOptions) waitForReady(ctx context.Context, ws *v1alpha1.Workspace) error {
 	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
-	hdlr := handlers.Restore(o.Out)
+	hdlr := handlers.WorkspaceReady()
 
 	ctx, cancel := context.WithTimeout(ctx, o.restoreTimeout)
 	defer cancel()
@@ -408,7 +409,7 @@ func (o *newOptions) waitForRestore(ctx context.Context, ws *v1alpha1.Workspace)
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, hdlr)
 	if err != nil {
 		if errors.Is(err, wait.ErrWaitTimeout) {
-			return errRestoreTimeout
+			return errReadyTimeout
 		}
 		return err
 	}

@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -95,6 +96,10 @@ const ApprovedAnnotationKeyPrefix = "approvals.etok.dev"
 
 func ApprovedAnnotationKey(runName string) string {
 	return fmt.Sprintf("%s/%s", ApprovedAnnotationKeyPrefix, runName)
+}
+
+func GetRunFromApprovalAnnotationKey(key string) string {
+	return strings.Split(key, "/")[1]
 }
 
 // Run's pod shares its name

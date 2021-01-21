@@ -66,7 +66,7 @@ func TestQueue(t *testing.T) {
 						"--context", *kubectx,
 						"--path", path,
 					}, []expect.Batcher{
-						&expect.BExp{R: `Queued: `},
+						&expect.BExp{R: `Queued behind active run`},
 						&expect.BExp{R: `Linux`},
 					})
 				})

@@ -7,42 +7,35 @@ import (
 )
 
 var (
-	restoreFailure = workspaceConditionSetterFactory(v1alpha1.RestoreFailureCondition, metav1.ConditionTrue)
-	restoreOK      = workspaceConditionSetterFactory(v1alpha1.RestoreFailureCondition, metav1.ConditionFalse)
-
-	backupFailure = workspaceConditionSetterFactory(v1alpha1.BackupFailureCondition, metav1.ConditionTrue)
-	backupOK      = workspaceConditionSetterFactory(v1alpha1.BackupFailureCondition, metav1.ConditionFalse)
-
-	cacheFailure = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionTrue)
-	cacheUnknown = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionUnknown)
-	cacheOK      = workspaceConditionSetterFactory(v1alpha1.CacheFailureCondition, metav1.ConditionFalse)
-
-	podFailure = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionTrue)
-	podUnknown = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionUnknown)
-	podOK      = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionFalse)
-
 	runComplete   = runConditionSetterFactory(v1alpha1.RunCompleteCondition, metav1.ConditionTrue)
 	runIncomplete = runConditionSetterFactory(v1alpha1.RunCompleteCondition, metav1.ConditionFalse)
 	runFailed     = runConditionSetterFactory(v1alpha1.RunFailedCondition, metav1.ConditionTrue)
-
-	runQueued    = runConditionSetterFactory(v1alpha1.RunQueuedCondition, metav1.ConditionTrue)
-	runNotQueued = runConditionSetterFactory(v1alpha1.RunQueuedCondition, metav1.ConditionFalse)
-
-	runPodOK      = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionTrue)
-	runPodFailed  = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionFalse)
-	runPodUnknown = workspaceConditionSetterFactory(v1alpha1.PodFailureCondition, metav1.ConditionUnknown)
 )
 
-type workspaceConditionSetter func(*v1alpha1.Workspace, string, string)
+func workspaceFailure(message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.WorkspaceReadyCondition,
+		Status:  metav1.ConditionFalse,
+		Reason:  v1alpha1.FailureReason,
+		Message: message,
+	}
+}
 
-func workspaceConditionSetterFactory(condType string, status metav1.ConditionStatus) workspaceConditionSetter {
-	return func(ws *v1alpha1.Workspace, reason, message string) {
-		meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
-			Type:    condType,
-			Status:  status,
-			Reason:  reason,
-			Message: message,
-		})
+func workspacePending(message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.WorkspaceReadyCondition,
+		Status:  metav1.ConditionFalse,
+		Reason:  v1alpha1.PendingReason,
+		Message: message,
+	}
+}
+
+func workspaceUnknown(message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.WorkspaceReadyCondition,
+		Status:  metav1.ConditionUnknown,
+		Reason:  v1alpha1.UnknownReason,
+		Message: message,
 	}
 }
 

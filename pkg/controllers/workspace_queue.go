@@ -7,7 +7,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 )
 
-func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
+// updateCombinedQueue updates a workspace's combined queue (the active run +
+// the queue) with the given list of runs.  Runs in the existing queue are
+// expunged if they meet certain criteria.  If they are not expunged they
+// mantain their position.
+func updateCombinedQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) {
+	newQ := []string{}
+	currQ := append([]string{ws.Status.Active}, ws.Status.Queue...)
+
 	// Filter run resources
 	for _, run := range runs {
 		// Filter out runs belonging to other workspaces
@@ -32,13 +39,13 @@ func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
 			}
 		}
 
-		queue = append(queue, run.Name)
+		newQ = append(newQ, run.Name)
 	}
 
 	// Re-order new queue to ensure runs maintain their position from the
 	// existing queue
-	for i := len(ws.Status.Queue) - 1; i >= 0; i-- {
-		j := slice.StringIndex(queue, ws.Status.Queue[i])
+	for i := len(currQ) - 1; i >= 0; i-- {
+		j := slice.StringIndex(newQ, currQ[i])
 		if j == -1 {
 			// Skip run not found in new queue
 			continue
@@ -48,9 +55,14 @@ func updateQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) (queue []string) {
 			continue
 		}
 		// Move run to front of queue
-		queue = append(queue[:j], queue[j+1:]...)
-		queue = append([]string{ws.Status.Queue[i]}, queue...)
+		newQ = append(newQ[:j], newQ[j+1:]...)
+		newQ = append([]string{currQ[i]}, newQ...)
 	}
 
-	return queue
+	// Update workspace with new (combined) queue
+	if len(newQ) > 0 {
+		ws.Status.Active, ws.Status.Queue = newQ[0], newQ[1:]
+	} else {
+		ws.Status.Active, ws.Status.Queue = "", []string(nil)
+	}
 }
