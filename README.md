@@ -126,7 +126,7 @@ Note: To restrict users to individual namespaces you'll need to create RoleBindi
 
 ## Privileged Commands
 
-Etok commands can be specified as privileged. Pass the `--privileged-commands=<command1,command2,..>` flag to the `workspace new` command. Only users possessing the RBAC permission (see above) can run privileged commands.
+Etok commands can be specified as privileged. Pass the `--privileged-commands=<command1,command2,..>` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
 
 ## State
 
