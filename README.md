@@ -124,6 +124,10 @@ kubectl edit clusterrolebinding etok-user
 
 Note: To restrict users to individual namespaces you'll need to create RoleBindings referencing the ClusterRoles.
 
+## Privileged Commands
+
+Etok commands can be specified as privileged. Pass the `--privileged-commands=<command1,command2,..>` flag to the `workspace new` command. Only users possessing the [RBAC permission to update the Workspace resource](#rbac) can run privileged commands.
+
 ## State
 
 Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store the terraform state in a kubernetes secret. You need to specify an empty backend configuration like so:
