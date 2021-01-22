@@ -1,6 +1,6 @@
 # Etok
 
-**E**nhanced **T**erraform **O**n **K**ubernetes
+**E**xecute **T**erraform **O**n **K**ubernetes
 
 # Why
 
