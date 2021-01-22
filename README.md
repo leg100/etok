@@ -138,9 +138,9 @@ terraform {
 }
 ```
 
-### Backup/Restore State
+### Backup/Restore
 
-Etok supports backup and restoration of the state to cloud storage. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
+Backup and restoration of the state to and from cloud storage is supported. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
 
 To enable backup/restore, pass the name of an existing bucket via the `--backup-bucket` flag to the `workspace new` command. Note: only GCS is supported at present.
 
