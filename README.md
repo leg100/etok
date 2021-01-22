@@ -5,7 +5,7 @@
 # Why
 
 * Leverage Kubernetes' RBAC for terraform operations and state
-* Fidelity across end-user and CI/CD usage
+* Single platform for end-user and CI/CD usage
 * Queue terraform operations
 * Leverage GCP workspace identity and other secret-less mechanisms
 * Deploy infrastructure alongside applications
