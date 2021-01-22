@@ -352,7 +352,14 @@ func mockControllers(t *testutil.T, f *cmdutil.Factory, o *launcherOptions, phas
 	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
 		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
 
-		pod := testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithRunnerExitCode(exitCode))
+		var pod *corev1.Pod
+		// Only set phase if non-empty
+		if phase != "" {
+			pod = testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithRunnerExitCode(exitCode))
+		} else {
+			pod = testobj.RunPod(run.Namespace, run.Name, testobj.WithRunnerExitCode(exitCode))
+		}
+
 		_, err := o.PodsClient(run.Namespace).Create(context.Background(), pod, metav1.CreateOptions{})
 		require.NoError(t, err)
 

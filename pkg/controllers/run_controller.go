@@ -2,10 +2,13 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/launcher"
+	"github.com/leg100/etok/pkg/globals"
+	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -258,18 +261,48 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 		return nil, err
 	}
 
-	switch pod.Status.Phase {
-	case corev1.PodSucceeded:
-		return runComplete(v1alpha1.PodSucceededReason, ""), nil
-	case corev1.PodFailed:
-		return runComplete(v1alpha1.PodFailedReason, ""), nil
-	case corev1.PodRunning:
-		return runIncomplete(v1alpha1.PodRunningReason, ""), nil
-	case corev1.PodPending:
-		return runIncomplete(v1alpha1.PodPendingReason, ""), nil
-	default:
-		return runIncomplete(v1alpha1.PodUnknownReason, ""), nil
+	var isCompleted = metav1.ConditionFalse
+
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		// Record exit code in run status
+		code, err := getExitCode(&pod)
+		if err != nil {
+			return nil, errors.New("unable to retrieve container status")
+		}
+		run.RunStatus.ExitCode = &code
+
+		isCompleted = metav1.ConditionTrue
 	}
+
+	return &metav1.Condition{
+		Type:   v1alpha1.RunCompleteCondition,
+		Status: isCompleted,
+		Reason: getReasonFromPodPhase(pod.Status.Phase),
+	}, nil
+}
+
+// Translate pod phase to a reason string for the run completed condition
+func getReasonFromPodPhase(phase corev1.PodPhase) string {
+	switch phase {
+	case corev1.PodSucceeded:
+		return v1alpha1.PodSucceededReason
+	case corev1.PodFailed:
+		return v1alpha1.PodFailedReason
+	case corev1.PodRunning:
+		return v1alpha1.PodRunningReason
+	case corev1.PodPending:
+		return v1alpha1.PodPendingReason
+	default:
+		return v1alpha1.PodUnknownReason
+	}
+}
+
+func getExitCode(pod *corev1.Pod) (int, error) {
+	status := k8s.ContainerStatusByName(pod, globals.RunnerContainerName)
+	if status == nil {
+		return 0, errors.New("unable to retrieve container status")
+	}
+	return int(status.State.Terminated.ExitCode), nil
 }
 
 func (r *RunReconciler) setOwnerOfArchive(ctx context.Context, run *v1alpha1.Run) error {

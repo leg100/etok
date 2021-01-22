@@ -159,6 +159,17 @@ func TestRunReconciler(t *testing.T) {
 				assert.Equal(t, "plan-1", archive.OwnerReferences[0].Name)
 			},
 		},
+		{
+			name: "Exit code recorded in status",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
+				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded), testobj.WithRunnerExitCode(5)),
+			},
+			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
+				assert.Equal(t, 5, *run.RunStatus.ExitCode)
+			},
+		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {

@@ -459,8 +459,9 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 		return nil, err
 	}
 
-	// Blank out resource version to avoid error upon create
+	// Blank out certain fields to avoid errors upon create
 	secret.ResourceVersion = ""
+	secret.OwnerReferences = nil
 
 	if err := r.Create(ctx, &secret); err != nil {
 		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
@@ -673,7 +674,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	blder = blder.Owns(&corev1.ConfigMap{})
 
 	// Watch terraform state files
-	blder = blder.Watches(&source.Kind{Type: &corev1.ConfigMap{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
+	blder = blder.Watches(&source.Kind{Type: &corev1.Secret{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []ctrl.Request {
 		var isStateFile bool
 		for k, v := range o.GetLabels() {
 			if k == "tfstate" && v == "true" {

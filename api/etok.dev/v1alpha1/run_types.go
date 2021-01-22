@@ -119,6 +119,9 @@ type RunStatus struct {
 	Phase RunPhase `json:"phase,omitempty"`
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Exit code of run pod's runner container
+	ExitCode *int `json:"exitCode,omitempty"`
 }
 
 func (r *Run) IsReconciled() bool {

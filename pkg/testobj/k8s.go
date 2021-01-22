@@ -201,10 +201,7 @@ func WorkspacePod(namespace, name string, opts ...func(*corev1.Pod)) *corev1.Pod
 
 func WithPhase(phase corev1.PodPhase) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
-		// Only set a phase if non-empty
-		if phase != "" {
-			pod.Status.Phase = phase
-		}
+		pod.Status.Phase = phase
 	}
 }
 

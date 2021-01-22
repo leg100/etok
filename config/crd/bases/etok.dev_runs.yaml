@@ -184,6 +184,9 @@ spec:
                   - type
                   type: object
                 type: array
+              exitCode:
+                description: Exit code of run pod's runner container
+                type: integer
               phase:
                 description: Current phase of the run's lifecycle.
                 type: string
