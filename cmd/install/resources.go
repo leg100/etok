@@ -32,8 +32,8 @@ func serviceAccount(namespace string, annotations map[string]string) *corev1.Ser
 	}
 }
 
-func clusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
-	binding := &rbacv1.ClusterRoleBinding{
+func operatorClusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "etok",
 		},
@@ -54,8 +54,40 @@ func clusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
+}
 
-	return binding
+func userClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "etok-user",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ClusterRoleBinding",
+			APIVersion: rbacv1.SchemeGroupVersion.String(),
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "etok-user",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+}
+
+func adminClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "etok-admin",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ClusterRoleBinding",
+			APIVersion: rbacv1.SchemeGroupVersion.String(),
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "etok-admin",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
 }
 
 func secret(namespace string, key []byte) *corev1.Secret {

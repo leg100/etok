@@ -11,6 +11,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"google.golang.org/api/googleapi"
 	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -420,7 +421,13 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	_, err := bh.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
 		return workspaceFailure(fmt.Sprintf("restore failure: bucket %s not found", ws.Spec.BackupBucket)), nil
-	} else if err != nil {
+	}
+	if gerr, ok := err.(*googleapi.Error); ok {
+		if gerr.Code == 403 {
+			return workspaceFailure(fmt.Sprintf("restore failure: %s", gerr.Message)), nil
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
 

@@ -1,0 +1,28 @@
+# Role permits ability to use the etok CLI to manage workspaces as well run privileged commands. To be bound to subject in addition to the etok-user role.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: etok-admin
+rules:
+- apiGroups:
+  - etok.dev
+  resources:
+  - workspaces
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+  - get
+  - list
+  - watch

@@ -109,7 +109,18 @@ Use "etok [command] --help" for more information about a command.
 
 ## RBAC
 
-TODO
+The `install` command also installs ClusterRoles and ClusterRoleBindings for your convenience:
+
+* [etok-user](./config/rbac/user.yaml): permissions to run commands
+* [etok-admin](./config/rbac/admin.yaml): additional permissions to manage workspaces and run privileged commands
+
+Amend the bindings accordingly to add/remove users. For example:
+
+```
+kubectl edit clusterrolebinding etok-user
+```
+
+Note: To restrict users to individual namespaces you'll need to create RoleBindings referencing the ClusterRoles.
 
 ## State
 

@@ -183,7 +183,7 @@ func TestInstallDryRun(t *testing.T) {
 		require.NoError(t, opts.install(context.Background()))
 
 		docs := strings.Split(out.String(), "---\n")
-		assert.Equal(t, 7, len(docs))
+		assert.Equal(t, 11, len(docs))
 	})
 }
 
@@ -207,7 +207,11 @@ func wantedResources() (resources []runtimeclient.Object) {
 	resources = append(resources, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	resources = append(resources, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
+	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
+	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
 	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
+	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
+	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
 	resources = append(resources, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	return
 }
@@ -243,14 +247,7 @@ func mockWebServer(t *testutil.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Respond by reading the request path from local FS (the path is made
 		// relative by stripping off the first '/')
-		switch path := r.URL.Path; path {
-		case "/config/crd/bases/etok.dev_workspaces.yaml":
-			respondWithFile(w, path[1:])
-		case "/config/crd/bases/etok.dev_runs.yaml":
-			respondWithFile(w, path[1:])
-		case "/config/rbac/role.yaml":
-			respondWithFile(w, path[1:])
-		}
+		respondWithFile(w, r.URL.Path[1:])
 	}))
 	t.Override(&repoURL, ts.URL)
 	t.Cleanup(ts.Close)

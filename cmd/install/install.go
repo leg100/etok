@@ -43,9 +43,13 @@ var (
 		"config/crd/bases/etok.dev_workspaces.yaml",
 		"config/crd/bases/etok.dev_runs.yaml",
 	}
-	// Relative paths to the cluster role resource to be installed. Path
-	// relative to the root of the repo.
-	clusterRolePath = "config/rbac/role.yaml"
+	// Relative paths to the cluster roles to be installed. Paths relative to
+	// the root of the repo.
+	clusterRolePaths = []string{
+		"config/rbac/role.yaml",
+		"config/rbac/user.yaml",
+		"config/rbac/admin.yaml",
+	}
 
 	// Interval between polling deployment status
 	interval = time.Second
@@ -131,13 +135,17 @@ func (o *installOptions) install(ctx context.Context) error {
 	}
 
 	if !o.crdsOnly {
-		clusterRoleResource, err := o.clusterRole()
-		if err != nil {
-			return err
+		for _, path := range clusterRolePaths {
+			role, err := o.clusterRole(path)
+			if err != nil {
+				return err
+			}
+			resources = append(resources, role)
 		}
-		resources = append(resources, clusterRoleResource)
 
-		resources = append(resources, clusterRoleBinding(o.namespace))
+		resources = append(resources, operatorClusterRoleBinding(o.namespace))
+		resources = append(resources, userClusterRoleBinding())
+		resources = append(resources, adminClusterRoleBinding())
 		resources = append(resources, namespace(o.namespace))
 		resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
 
@@ -197,18 +205,28 @@ func (o *installOptions) createOrUpdate(ctx context.Context, resources []runtime
 	for _, res := range resources {
 		existing := res.DeepCopyObject().(runtimeclient.Object)
 
+		kind := res.GetObjectKind().GroupVersionKind().Kind
+
 		err := o.RuntimeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(res), existing)
 		switch {
 		case kerrors.IsNotFound(err):
-			fmt.Fprintf(o.Out, "Creating resource %s %s\n", res.GetObjectKind().GroupVersionKind().Kind, klog.KObj(res))
+			fmt.Fprintf(o.Out, "Creating resource %s %s\n", kind, klog.KObj(res))
 			if err := o.RuntimeClient.Create(ctx, res); err != nil {
 				return fmt.Errorf("unable to create resource: %w", err)
 			}
 		case err != nil:
 			return err
 		default:
+			if kind == "ClusterRoleBinding" && (res.GetName() == "etok-users" || res.GetName() == "etok-admins") {
+				// Preserve any out-of-band changes to subjects
+				existingBinding := existing.(*rbacv1.ClusterRoleBinding)
+				updatedBinding := res.(*rbacv1.ClusterRoleBinding)
+				updatedBinding.Subjects = existingBinding.Subjects
+			}
+
 			res.SetResourceVersion(existing.GetResourceVersion())
-			fmt.Fprintf(o.Out, "Updating resource %s %s\n", res.GetObjectKind().GroupVersionKind().Kind, klog.KObj(res))
+
+			fmt.Fprintf(o.Out, "Updating resource %s %s\n", kind, klog.KObj(res))
 			if err := o.RuntimeClient.Update(ctx, res); err != nil {
 				return fmt.Errorf("unable to update existing resource: %w", err)
 			}
@@ -259,11 +277,11 @@ func (o *installOptions) crd(path string) (*apiextv1.CustomResourceDefinition, e
 	return &obj, nil
 }
 
-// Operator's ClusterRole. Unlike most other resources this is read from a YAML
-// file from the repo, which in turn is installed with `make manifests`. Can
+// Unmarshal cluster role. Unlike most other resources this is read from a YAML
+// file from the repo, which in turn is installed with `make manifests`.  Can
 // also be read from a URL.
-func (o *installOptions) clusterRole() (*rbacv1.ClusterRole, error) {
-	data, err := getLocalOrRemoteDoc(o.local, clusterRolePath, repoURL)
+func (o *installOptions) clusterRole(path string) (*rbacv1.ClusterRole, error) {
+	data, err := getLocalOrRemoteDoc(o.local, path, repoURL)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,68 @@
+# Role permits ability to use the etok CLI to run unprivileged commands. It does not permit running privileged commands or creating/deleting workspaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: etok-user
+rules:
+- apiGroups:
+  - etok.dev
+  resources:
+  - runs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - etok.dev
+  resources:
+  - runs/status
+  verbs:
+  - get
+  - watch
+- apiGroups:
+  - etok.dev
+  resources:
+  - workspaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - etok.dev
+  resources:
+  - workspaces/status
+  verbs:
+  - get
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/attach
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
