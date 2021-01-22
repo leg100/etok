@@ -11,7 +11,6 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
@@ -20,28 +19,25 @@ import (
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	testcore "k8s.io/client-go/testing"
 )
 
 func TestLauncher(t *testing.T) {
 	var fakeError = errors.New("fake error")
 
 	tests := []struct {
-		name     string
-		args     []string
-		env      *env.Env
-		err      error
-		objs     []runtime.Object
-		podPhase corev1.PodPhase
+		name string
+		args []string
+		env  *env.Env
+		err  error
+		objs []runtime.Object
 		// Override default command "plan"
 		cmd string
 		// Size of content to be archived
 		size int
-		// Mock exit code of runner pod
+		// Mock exit code of runner container
 		code int32
 		// Override run status
 		overrideStatus   func(*v1alpha1.RunStatus)
@@ -179,8 +175,11 @@ func TestLauncher(t *testing.T) {
 			name: "resources are not cleaned up upon exit code error",
 			args: []string{},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			// Mock pod returning exit code 5
-			code: int32(5),
+			overrideStatus: func(status *v1alpha1.RunStatus) {
+				// Mock pod returning exit code 5
+				var code = 5
+				status.ExitCode = &code
+			},
 			// Expect exit error with exit code 5
 			err: etokerrors.NewExitError(5),
 			assertions: func(o *launcherOptions) {
@@ -232,9 +231,8 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
-			name:     "pod completed with no tty",
-			objs:     []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			podPhase: corev1.PodSucceeded,
+			name: "pod completed with no tty",
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 		},
 		{
 			name: "pod completed with tty",
@@ -244,8 +242,17 @@ func TestLauncher(t *testing.T) {
 				_, f.In, err = pty.Open()
 				require.NoError(t, err)
 			},
-			podPhase: corev1.PodSucceeded,
-			err:      handlers.PrematurelySucceededPodError,
+			overrideStatus: func(status *v1alpha1.RunStatus) {
+				// Mock run having cmpleted
+				status.Conditions = []metav1.Condition{
+					{
+						Type:   v1alpha1.RunCompleteCondition,
+						Status: metav1.ConditionTrue,
+						Reason: v1alpha1.PodSucceededReason,
+					},
+				}
+			},
+			err: handlers.PrematurelySucceededPodError,
 		},
 		{
 			name: "config too big",
@@ -310,6 +317,7 @@ func TestLauncher(t *testing.T) {
 			opts := &launcherOptions{command: command, runName: "run-12345"}
 
 			// Mock the workspace controller by setting status up front
+			var code int
 			status := v1alpha1.RunStatus{
 				Conditions: []metav1.Condition{
 					{
@@ -318,7 +326,8 @@ func TestLauncher(t *testing.T) {
 						Reason: v1alpha1.PodRunningReason,
 					},
 				},
-				Phase: v1alpha1.RunPhaseRunning,
+				Phase:    v1alpha1.RunPhaseRunning,
+				ExitCode: &code,
 			}
 			// Permit individual tests to override workspace status
 			if tt.overrideStatus != nil {
@@ -331,8 +340,6 @@ func TestLauncher(t *testing.T) {
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 
-			mockControllers(t, f, opts, tt.podPhase, tt.code)
-
 			err := cmd.ExecuteContext(context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
 				t.Errorf("unexpected error: %w", err)
@@ -343,28 +350,4 @@ func TestLauncher(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Mock controllers (badly):
-// (a) Runs controller: When a run is created, create a pod
-// (b) Pods controller: Simulate pod completing successfully
-func mockControllers(t *testutil.T, f *cmdutil.Factory, o *launcherOptions, phase corev1.PodPhase, exitCode int32) {
-	createPodAction := func(action testcore.Action) (bool, runtime.Object, error) {
-		run := action.(testcore.CreateAction).GetObject().(*v1alpha1.Run)
-
-		var pod *corev1.Pod
-		// Only set phase if non-empty
-		if phase != "" {
-			pod = testobj.RunPod(run.Namespace, run.Name, testobj.WithPhase(phase), testobj.WithRunnerExitCode(exitCode))
-		} else {
-			pod = testobj.RunPod(run.Namespace, run.Name, testobj.WithRunnerExitCode(exitCode))
-		}
-
-		_, err := o.PodsClient(run.Namespace).Create(context.Background(), pod, metav1.CreateOptions{})
-		require.NoError(t, err)
-
-		return false, action.(testcore.CreateAction).GetObject(), nil
-	}
-
-	f.ClientCreator.(*client.FakeClientCreator).PrependReactor("create", "runs", createPodAction)
 }

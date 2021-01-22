@@ -15,10 +15,11 @@ var (
 	ErrRunFailed = errors.New("run failed")
 )
 
-// Event handler for a run that returns true once its status shows its pod is
-// running. If the status shows the run has failed an error is returned
-// containing the reason for why it failed.
-func RunPodRunning(name string) watchtools.ConditionFunc {
+// RunConnectable returns true if the run indicates its container can be
+// connected to. If isTTY is true then the container must be running and must
+// not have completed. If isTTY is false then the container can either be
+// running or have completed (because its logs can be retrieved).
+func RunConnectable(name string, isTTY bool) watchtools.ConditionFunc {
 	// Keep the last reason received for a run's 'complete' condition
 	var lastReason string
 
@@ -47,16 +48,22 @@ func RunPodRunning(name string) watchtools.ConditionFunc {
 			}
 
 			if condition.Type == v1alpha1.RunCompleteCondition {
-				if condition.Status == metav1.ConditionFalse {
-					if condition.Reason != lastReason {
-						klog.V(1).Infof("run status update: %s: %s", condition.Reason, condition.Message)
-					}
+				if condition.Reason != lastReason {
+					klog.V(1).Infof("run status update: %s: %s", condition.Reason, condition.Message)
+				}
+				lastReason = condition.Reason
 
-					if condition.Reason == v1alpha1.PodRunningReason {
-						return true, nil
+				switch condition.Reason {
+				case v1alpha1.PodRunningReason:
+					return true, nil
+				case v1alpha1.PodSucceededReason, v1alpha1.PodFailedReason:
+					if isTTY {
+						// We cannot attach to the TTY of a completed pod
+						return false, PrematurelySucceededPodError
 					}
-
-					lastReason = condition.Reason
+					return true, nil
+				default:
+					return false, nil
 				}
 			}
 		}

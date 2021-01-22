@@ -199,54 +199,27 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return o.waitForReconcile(gctx, run)
 	})
 
-	// Wait for pod and when ready send pod on chan
-	podch := make(chan *corev1.Pod, 1)
-	g.Go(func() error {
-		return o.waitForPod(gctx, run, isTTY, podch)
-	})
-
 	// Wait for run to indicate pod is running
 	g.Go(func() error {
-		return o.watchRun(gctx, run)
+		return o.watchRun(gctx, run, isTTY)
 	})
 
-	// In the meantime, check workspace exists
-	ws, err := o.WorkspacesClient(o.namespace).Get(ctx, o.workspace, metav1.GetOptions{})
-	if kerrors.IsNotFound(err) {
-		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.namespace, o.workspace)
-	}
-	if err != nil {
+	// Check workspace exists and is healthy
+	if err := o.checkWorkspace(ctx, run); err != nil {
 		return err
 	}
-	// ...ensure workspace is ready
-	workspaceReady := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)
-	if workspaceReady == nil {
-		return fmt.Errorf("%w: %s: ready condition not found", errWorkspaceNotReady, klog.KObj(ws))
-	}
-	if workspaceReady.Status != metav1.ConditionTrue {
-		return fmt.Errorf("%w: %s: %s", errWorkspaceNotReady, klog.KObj(ws), workspaceReady.Message)
-	}
-	// ...approve run if command listed as privileged
-	if ws.IsPrivilegedCommand(o.command) {
-		if err := o.approveRun(ctx, ws, run); err != nil {
-			return err
-		}
-	}
 
-	// Carry on waiting for pod to be ready
+	// Carry on waiting for run to indicate pod is ready
 	if err := g.Wait(); err != nil {
 		return err
 	}
 
-	// Receive ready pod
-	pod := <-podch
-
-	// Monitor exit code; non-blocking
-	exit := monitors.ExitMonitor(ctx, o.KubeClient, pod.Name, pod.Namespace, globals.RunnerContainerName)
+	// Watch the run for the container's exit code. Non-blocking.
+	exit := monitors.RunExitMonitor(ctx, o.EtokClient, o.namespace, o.runName)
 
 	// Connect to pod
 	if isTTY {
-		if err := o.AttachFunc(o.Out, *o.Config, pod, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
+		if err := o.AttachFunc(o.Out, *o.Config, o.namespace, o.runName, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
 	} else {
@@ -287,28 +260,9 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	return nil
 }
 
-// Non-blocking; watch pod; if tty then wait til pod is running (and then attach); if
-// no tty then wait til pod is running or completed (and then stream logs from)
-func (o *launcherOptions) waitForPod(ctx context.Context, run *v1alpha1.Run, isTTY bool, podch chan<- *corev1.Pod) error {
-	ctx, cancel := context.WithTimeout(ctx, o.podTimeout)
-	defer cancel()
-
-	lw := &k8s.PodListWatcher{Client: o.KubeClient, Name: run.Name, Namespace: run.Namespace}
-	event, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, handlers.ContainerReady(run.Name, globals.RunnerContainerName, false, isTTY))
-	if err != nil {
-		if errors.Is(err, wait.ErrWaitTimeout) {
-			err = fmt.Errorf("timed out waiting for pod to be ready")
-		}
-		return err
-	}
-	klog.V(1).Info("pod ready")
-	podch <- event.Object.(*corev1.Pod)
-	return nil
-}
-
-func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) error {
+func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run, isTTY bool) error {
 	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
-	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunPodRunning(run.Name))
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunConnectable(run.Name, isTTY))
 	return err
 }
 
@@ -320,6 +274,34 @@ func (o *launcherOptions) watchQueue(ctx context.Context, run *v1alpha1.Run) {
 		// log any error here as a warning.
 		_, _ = watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, handlers.LogQueuePosition(run.Name))
 	}()
+}
+
+func (o *launcherOptions) checkWorkspace(ctx context.Context, run *v1alpha1.Run) error {
+	ws, err := o.WorkspacesClient(o.namespace).Get(ctx, o.workspace, metav1.GetOptions{})
+	if kerrors.IsNotFound(err) {
+		return fmt.Errorf("%w: %s/%s", errWorkspaceNotFound, o.namespace, o.workspace)
+	}
+	if err != nil {
+		return err
+	}
+
+	// ...ensure workspace is ready
+	workspaceReady := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)
+	if workspaceReady == nil {
+		return fmt.Errorf("%w: %s: ready condition not found", errWorkspaceNotReady, klog.KObj(ws))
+	}
+	if workspaceReady.Status != metav1.ConditionTrue {
+		return fmt.Errorf("%w: %s: %s", errWorkspaceNotReady, klog.KObj(ws), workspaceReady.Message)
+	}
+
+	// ...approve run if command listed as privileged
+	if ws.IsPrivilegedCommand(o.command) {
+		if err := o.approveRun(ctx, ws, run); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Deploy configmap and run resources in parallel

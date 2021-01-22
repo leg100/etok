@@ -205,6 +205,13 @@ func WithPhase(phase corev1.PodPhase) func(*corev1.Pod) {
 	}
 }
 
+// Set exit code in run status
+func WithRunExitCode(code int) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		run.RunStatus.ExitCode = &code
+	}
+}
+
 func WithRunnerExitCode(code int32) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
 		k8s.ContainerStatusByName(pod, globals.RunnerContainerName).State.Terminated.ExitCode = code

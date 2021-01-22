@@ -15,13 +15,13 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-type AttachFunc func(io.Writer, rest.Config, *corev1.Pod, *os.File, string, string) error
+type AttachFunc func(io.Writer, rest.Config, string, string, *os.File, string, string) error
 
 // Attach appropriates the behaviour of 'kubectl attach', adding a workaround for
 // https://github.com/kubernetes/kubernetes/issues/27264. A 'handshake string' is sent, to inform the
 // runner on the pod that the client has attached and, only then, will the runner invoke the
 // process.
-func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handshake, containerName string) error {
+func Attach(out io.Writer, cfg rest.Config, namespace, name string, in *os.File, handshake, containerName string) error {
 	cfg.ContentConfig = rest.ContentConfig{
 		NegotiatedSerializer: scheme.Codecs.WithoutConversion(),
 		GroupVersion:         &schema.GroupVersion{Version: "v1"},
@@ -86,7 +86,7 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handsh
 		return err
 	}
 
-	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", makeAttachRequest(client, pod, containerName).URL())
+	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", makeAttachRequest(client, namespace, name, containerName).URL())
 	if err != nil {
 		return err
 	}
@@ -106,11 +106,11 @@ func Attach(out io.Writer, cfg rest.Config, pod *corev1.Pod, in *os.File, handsh
 	return nil
 }
 
-func makeAttachRequest(client rest.Interface, pod *corev1.Pod, container string) *rest.Request {
+func makeAttachRequest(client rest.Interface, namespace, name, container string) *rest.Request {
 	req := client.Post().
 		Resource("pods").
-		Name(pod.Name).
-		Namespace(pod.Namespace).
+		Name(name).
+		Namespace(namespace).
 		SubResource("attach")
 
 	return req.VersionedParams(&corev1.PodAttachOptions{
