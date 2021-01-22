@@ -38,7 +38,9 @@ You also want to specify the kubernetes backend like so:
 
 ```bash
 $ cat backend.tf
-backend "kubernetes" {}
+terraform {
+  backend "kubernetes" {}
+}
 ```
 
 Create a workspace:
@@ -124,7 +126,19 @@ Note: To restrict users to individual namespaces you'll need to create RoleBindi
 
 ## State
 
-Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store state in a kubernetes secret.
+Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store the terraform state in a kubernetes secret. You need to specify an empty backend configuration like so:
+
+```
+terraform {
+  backend "kubernetes" {}
+}
+```
+
+### Backup/Restore State
+
+Etok supports backup and restoration of the state to cloud storage. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
+
+To enable backup/restore, pass the`--backup-bucket=<bucket>` flag to the `workspace new` command. Note: only GCS is supported at present.
 
 ## Workload Identity
 
