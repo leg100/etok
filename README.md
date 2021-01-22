@@ -126,7 +126,7 @@ Note: To restrict users to individual namespaces you'll want to create RoleBindi
 
 ## Privileged Commands
 
-Etok commands can be specified as privileged. Pass the `--privileged-commands=<command1,command2,..>` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
+Commands can be specified as privileged. Pass them via the `--privileged-commands` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
 
 ## State
 
@@ -142,7 +142,7 @@ terraform {
 
 Etok supports backup and restoration of the state to cloud storage. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
 
-To enable backup/restore, pass the`--backup-bucket=<bucket>` flag to the `workspace new` command. Note: only GCS is supported at present.
+To enable backup/restore, pass the name of an existing bucket via the `--backup-bucket` flag to the `workspace new` command. Note: only GCS is supported at present.
 
 ## Workload Identity
 
