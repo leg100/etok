@@ -2,6 +2,8 @@
 
 **E**nhanced **T**erraform **O**n **K**ubernetes
 
+[![asciicast](https://asciinema.org/a/Wr22W5EDPe6Hxlpm6YtNuB1eH.png)](https://asciinema.org/a/Wr22W5EDPe6Hxlpm6YtNuB1eH)
+
 # Why
 
 * Leverage Kubernetes' RBAC for terraform operations and state
