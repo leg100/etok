@@ -4,7 +4,7 @@
 
 [![demo](./demo.svg)]
 
-# Why
+## Why
 
 * Leverage Kubernetes' RBAC for terraform operations and state
 * Single platform for end-user and CI/CD usage
@@ -191,13 +191,13 @@ Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/prov
 kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```
 
-# Restrictions
+## Restrictions
 
 Both the terraform configuration and the terraform state, after compression, are subject to a 1MiB limit. This due to the fact that they are stored in a config map and a secret respectively, and the data stored in either cannot exceed 1MiB.
 
-# FAQ
+## FAQ
 
-## What is uploaded to the pod when running a plan/apply/destroy?
+### What is uploaded to the pod when running a plan/apply/destroy?
 
 The contents of the root module (the current working directory, or the value of the `path` flag) is uploaded. Additionally, if the root module configuration contains references to other modules on the local filesystem, then these too are uploaded, along with all such modules recursively referenced (modules referencing modules, and so forth). The directory structure containing all modules is maintained on the kubernetes pod, ensuring relative references remain valid (e.g. `./modules/vpc` or `../modules/vpc`).
 
