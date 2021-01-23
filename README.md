@@ -1,13 +1,13 @@
 # Etok
 
-**E**nhanced **T**erraform **O**n **K**ubernetes
+**E**xecute **T**erraform **O**n **K**ubernetes
 
 [![asciicast](https://asciinema.org/a/Wr22W5EDPe6Hxlpm6YtNuB1eH.png)](https://asciinema.org/a/Wr22W5EDPe6Hxlpm6YtNuB1eH)
 
 # Why
 
 * Leverage Kubernetes' RBAC for terraform operations and state
-* Fidelity across end-user and CI/CD usage
+* Single platform for end-user and CI/CD usage
 * Queue terraform operations
 * Leverage GCP workspace identity and other secret-less mechanisms
 * Deploy infrastructure alongside applications
@@ -40,7 +40,9 @@ You also want to specify the kubernetes backend like so:
 
 ```bash
 $ cat backend.tf
-backend "kubernetes" {}
+terraform {
+  backend "kubernetes" {}
+}
 ```
 
 Create a workspace:
@@ -113,20 +115,36 @@ Use "etok [command] --help" for more information about a command.
 
 The `install` command also installs ClusterRoles and ClusterRoleBindings for your convenience:
 
-* [etok-user](./config/rbac/user.yaml): permissions to run commands
-* [etok-admin](./config/rbac/admin.yaml): additional permissions to manage workspaces and run privileged commands
+* [etok-user](./config/rbac/user.yaml): includes the permissions necessary for running unprivileged commands
+* [etok-admin](./config/rbac/admin.yaml): additional permissions for managing workspaces and running [privileged commands](#privileged commands)
 
-Amend the bindings accordingly to add/remove users. For example:
+Amend the bindings accordingly to add/remove users. For example to amend the etok-user binding:
 
 ```
 kubectl edit clusterrolebinding etok-user
 ```
 
-Note: To restrict users to individual namespaces you'll need to create RoleBindings referencing the ClusterRoles.
+Note: To restrict users to individual namespaces you'll want to create RoleBindings referencing the ClusterRoles.
+
+## Privileged Commands
+
+Commands can be specified as privileged. Pass them via the `--privileged-commands` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
 
 ## State
 
-Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store state in a kubernetes secret.
+Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store the terraform state in a kubernetes secret. You need to specify an empty backend configuration like so:
+
+```
+terraform {
+  backend "kubernetes" {}
+}
+```
+
+### Backup/Restore
+
+Backup and restoration of the state to and from cloud storage is supported. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
+
+To enable backup/restore, pass the name of an existing bucket via the `--backup-bucket` flag to the `workspace new` command. Note: only GCS is supported at present.
 
 ## Workload Identity
 
