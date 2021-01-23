@@ -361,19 +361,14 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 		var err error
 		r.StorageClient, err = storage.NewClient(ctx)
 		if err != nil {
-			r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
-			return nil, err
+			return r.handleStorageError(err, ws, "BackupError")
 		}
 	}
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
-	if err == storage.ErrBucketNotExist {
-		return workspaceFailure(fmt.Sprintf("backup failure: bucket %s not found", ws.Spec.BackupBucket)), nil
-	}
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "BackupError")
 	}
 
 	oh := bh.Object(ws.BackupObjectName())
@@ -381,21 +376,18 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 	// Marshal state file first to json then to yaml
 	y, err := yaml.Marshal(secret)
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "BackupError")
 	}
 
 	// Copy state file to GCS
 	owriter := oh.NewWriter(ctx)
 	_, err = io.Copy(owriter, bytes.NewBuffer(y))
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "BackupError")
 	}
 
 	if err := owriter.Close(); err != nil {
-		r.recorder.Eventf(ws, "Warning", "BackupError", "Error received when trying to backup state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "BackupError")
 	}
 
 	// Update latest backup serial
@@ -419,51 +411,36 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 
 	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
 	_, err := bh.Attrs(ctx)
-	if err == storage.ErrBucketNotExist {
-		return workspaceFailure(fmt.Sprintf("restore failure: bucket %s not found", ws.Spec.BackupBucket)), nil
-	}
-	if gerr, ok := err.(*googleapi.Error); ok {
-		if gerr.Code == 403 {
-			return workspaceFailure(fmt.Sprintf("restore failure: %s", gerr.Message)), nil
-		}
-	}
 	if err != nil {
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Try to retrieve existing backup
 	oh := bh.Object(ws.BackupObjectName())
 	_, err = oh.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
-		return nil, nil
-	} else if err != nil {
-		return nil, err
+	if err != nil {
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	oreader, err := oh.NewReader(ctx)
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Copy state file from GCS
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, oreader)
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Unmarshal state file into secret obj
 	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	if err := oreader.Close(); err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Blank out certain fields to avoid errors upon create
@@ -471,15 +448,13 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	secret.OwnerReferences = nil
 
 	if err := r.Create(ctx, &secret); err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Parse state file
 	state, err := readState(ctx, &secret)
 	if err != nil {
-		r.recorder.Eventf(ws, "Warning", "RestoreError", "Error received when trying to restore state: %w", err)
-		return nil, err
+		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Record in status that a backup with the given serial number exists.
@@ -488,6 +463,24 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	r.recorder.Eventf(ws, "Normal", "RestoreSuccessful", "Restored state #%d", state.Serial)
 
 	return nil, nil
+}
+
+// Handle errors from the Google Cloud storage client
+func (r *WorkspaceReconciler) handleStorageError(err error, ws *v1alpha1.Workspace, reason string) (*metav1.Condition, error) {
+	if err == storage.ErrBucketNotExist {
+		r.recorder.Eventf(ws, "Warning", reason, "bucket does not exist")
+		return workspaceFailure(fmt.Sprintf("%s: %s", reason, "bucket does not exist")), nil
+	}
+
+	if gerr, ok := err.(*googleapi.Error); ok {
+		if gerr.Code >= 400 && gerr.Code < 500 {
+			// HTTP 40x errors are deemed unrecoverable
+			r.recorder.Eventf(ws, "Warning", reason, gerr.Message)
+			return workspaceFailure(fmt.Sprintf("%s: %s", reason, gerr.Message)), nil
+		}
+	}
+	r.recorder.Eventf(ws, "Warning", reason, err.Error())
+	return nil, err
 }
 
 func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
