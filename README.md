@@ -2,7 +2,7 @@
 
 **E**xecute **T**erraform **O**n **K**ubernetes
 
-[![demo](./demo.svg)]
+![demo](./demo.svg)
 
 ## Why
 
