@@ -146,6 +146,15 @@ Backup and restoration of the state to and from cloud storage is supported. Ever
 
 To enable backup/restore, pass the name of an existing bucket via the `--backup-bucket` flag to the `workspace new` command. Note: only GCS is supported at present.
 
+Be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
+
+```
+storage.buckets.get
+storage.objects.create
+storage.objects.delete
+storage.objects.get
+```
+
 ## Workload Identity
 
 Etok supports [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) for both the operator and workspaces.
