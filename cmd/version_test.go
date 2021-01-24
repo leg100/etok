@@ -62,7 +62,7 @@ func TestVersion(t *testing.T) {
 			out := new(bytes.Buffer)
 			f := cmdutil.NewFakeFactory(out, tt.objs...)
 
-			cmd, _ := versionCmd(f)
+			cmd := versionCmd(f)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 

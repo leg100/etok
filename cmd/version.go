@@ -3,31 +3,21 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type versionOptions struct {
-	*cmdutil.Factory
-
-	*client.Client
-
-	kubeContext string
-}
-
-func versionCmd(f *cmdutil.Factory) (*cobra.Command, *versionOptions) {
-	o := &versionOptions{
-		Factory: f,
-	}
-
+func versionCmd(f *cmdutil.Factory) *cobra.Command {
 	// Default namespace of server installation
 	var namespace = "etok"
 	// Default name of server deployment
 	var name = "etok"
+	// k8s context
+	var kubeContext string
 
 	cmd := &cobra.Command{
 		Use:   "version",
@@ -37,7 +27,7 @@ func versionCmd(f *cmdutil.Factory) (*cobra.Command, *versionOptions) {
 			fmt.Fprintf(f.Out, "Client Version: %s\t%s\n", version.Version, version.Commit)
 
 			// Try and print server version
-			client, err := f.Create(o.kubeContext)
+			client, err := f.Create(kubeContext)
 			if err != nil {
 				return err
 			}
@@ -72,8 +62,9 @@ func versionCmd(f *cmdutil.Factory) (*cobra.Command, *versionOptions) {
 		},
 	}
 
+	flags.AddKubeContextFlag(cmd, &kubeContext)
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", namespace, "Kubernetes namespace of server installation")
 	cmd.Flags().StringVar(&name, "name", name, "Name of server deployment")
 
-	return cmd, o
+	return cmd
 }

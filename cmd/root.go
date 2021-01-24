@@ -32,8 +32,7 @@ func RootCmd(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.SetOut(f.Out)
 
-	versionCmd, _ := versionCmd(f)
-	cmd.AddCommand(versionCmd)
+	cmd.AddCommand(versionCmd(f))
 
 	cmd.AddCommand(workspace.WorkspaceCmd(f))
 	cmd.AddCommand(manager.ManagerCmd(f))
