@@ -418,8 +418,11 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	// Try to retrieve existing backup
 	oh := bh.Object(ws.BackupObjectName())
 	_, err = oh.Attrs(ctx)
-	if err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
+	if err == storage.ErrObjectNotExist {
+		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
 
 	oreader, err := oh.NewReader(ctx)
