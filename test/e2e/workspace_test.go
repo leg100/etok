@@ -52,7 +52,8 @@ func TestWorkspace(t *testing.T) {
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/bar", namespace)},
 					&expect.BExp{R: fmt.Sprintf("Requested terraform version is %s", version)},
-					&expect.BExp{R: fmt.Sprintf("Downloading terraform %s", version)},
+					&expect.BExp{R: fmt.Sprintf("Downloading terraform %s...", version)},
+					&expect.BExp{R: fmt.Sprintf("Extracting terraform %s...", version)},
 				}))
 		})
 
