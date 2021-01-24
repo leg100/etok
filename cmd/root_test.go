@@ -33,7 +33,7 @@ func TestRoot(t *testing.T) {
 		{
 			name: "version",
 			args: []string{"version"},
-			out:  "etok version 123\txyz\n",
+			out:  "Client Version: 123\txyz\nServer Version: deployment etok/etok not found",
 			setup: func() {
 				version.Version = "123"
 				version.Commit = "xyz"

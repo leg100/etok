@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/leg100/etok/pkg/testutil"
-	"github.com/leg100/etok/pkg/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,15 +26,6 @@ func TestMain(t *testing.T) {
 			name: "help",
 			args: []string{"-h"},
 			out:  "^Usage:",
-		},
-		{
-			name: "version",
-			args: []string{"version"},
-			out:  "etok version 123\txyz\n",
-			setup: func() {
-				version.Version = "123"
-				version.Commit = "xyz"
-			},
 		},
 		{
 			name: "increased verbosity",

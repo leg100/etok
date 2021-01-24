@@ -14,6 +14,7 @@ type Label struct {
 var (
 	App                = Label{"app", "etok"}
 	Version            = Label{"version", version.Version}
+	Commit             = Label{"commit", version.Commit}
 	OperatorComponent  = Component("operator")
 	WorkspaceComponent = Component("workspace")
 	RunComponent       = Component("run")
@@ -64,4 +65,6 @@ func SetCommonLabels(obj metav1.Object) {
 	SetLabel(obj, App)
 	// Current version of application
 	SetLabel(obj, Version)
+	// Current git commit of build
+	SetLabel(obj, Commit)
 }
