@@ -130,6 +130,26 @@ Note: To restrict users to individual namespaces you'll want to create RoleBindi
 
 Commands can be specified as privileged. Pass them via the `--privileged-commands` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
 
+## Queueable Commands
+
+Commands with the ability to alter state are deemed 'queueable'. Only one queueable command at a time can run on a workspace. The currently running queueable command is designated as 'active', and commands waiting to become active wait in a workspace FIFO queue. The following commands are queueable:
+
+* apply
+* destroy
+* force-unlock
+* import
+* init
+* refresh
+* sh
+* state mv
+* state push
+* state replace-provider
+* state rm
+* taint
+* untaint
+
+All other commands run immediately and concurrently.
+
 ## State
 
 Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store the terraform state in a kubernetes secret. You need to specify an empty backend configuration like so:
