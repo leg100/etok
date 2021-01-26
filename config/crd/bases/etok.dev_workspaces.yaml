@@ -80,16 +80,6 @@ spec:
                 items:
                   type: string
                 type: array
-              secretName:
-                default: etok
-                description: Name of the secret resource. Its keys and values will
-                  be made available as environment variables on the workspace pod.
-                type: string
-              serviceAccountName:
-                default: etok
-                description: Name of the service account configured for the workspace
-                  pod.
-                type: string
               terraformVersion:
                 default: 0.14.3
                 description: Required version of Terraform on workspace pod
