@@ -594,15 +594,14 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 	var serviceAccount corev1.ServiceAccount
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ServiceAccountName}, &serviceAccount); err != nil {
 		if kerrors.IsNotFound(err) {
-			role := *newRoleForWS(ws)
+			serviceAccount := *newServiceAccountForNamespace(ws)
 
-			if err = r.Create(ctx, &role); err != nil {
-				log.Error(err, "unable to create role")
+			if err = r.Create(ctx, &serviceAccount); err != nil {
+				log.Error(err, "unable to create service account")
 				return nil, err
 			}
-			return workspacePending("Creating RBAC role"), nil
 		} else if err != nil {
-			log.Error(err, "unable to get role")
+			log.Error(err, "unable to get service account")
 			return nil, err
 		}
 	}
@@ -610,13 +609,12 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 	var role rbacv1.Role
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleName}, &role); err != nil {
 		if kerrors.IsNotFound(err) {
-			role := *newRoleForWS(ws)
+			role := *newRoleForNamespace(ws)
 
 			if err = r.Create(ctx, &role); err != nil {
 				log.Error(err, "unable to create role")
 				return nil, err
 			}
-			return workspacePending("Creating RBAC role"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get role")
 			return nil, err
@@ -626,13 +624,12 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 	var binding rbacv1.RoleBinding
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleBindingName}, &binding); err != nil {
 		if kerrors.IsNotFound(err) {
-			binding := *newRoleBindingForWS(ws)
+			binding := *newRoleBindingForNamespace(ws)
 
 			if err = r.Create(ctx, &binding); err != nil {
 				log.Error(err, "unable to create binding")
 				return nil, err
 			}
-			return workspacePending("Creating RBAC binding"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get binding")
 			return nil, err
