@@ -242,10 +242,28 @@ func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v
 func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
-	var pod corev1.Pod
-	err := r.Get(ctx, requestFromObject(run).NamespacedName, &pod)
+	// Check if optional secret "etok" is available
+	secretFound := true
+	err := r.Get(ctx, types.NamespacedName{Namespace: run.Namespace, Name: "etok"}, &corev1.Secret{})
 	if kerrors.IsNotFound(err) {
-		pod = *runPod(run, &ws, r.Image)
+		secretFound = false
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Check if optional service account "etok" is available
+	serviceAccountFound := true
+	err = r.Get(ctx, types.NamespacedName{Namespace: run.Namespace, Name: "etok"}, &corev1.ServiceAccount{})
+	if kerrors.IsNotFound(err) {
+		serviceAccountFound = false
+	} else if err != nil {
+		return nil, err
+	}
+
+	var pod corev1.Pod
+	err = r.Get(ctx, requestFromObject(run).NamespacedName, &pod)
+	if kerrors.IsNotFound(err) {
+		pod = *runPod(run, &ws, secretFound, serviceAccountFound, r.Image)
 
 		// Make run owner of pod
 		if err := controllerutil.SetControllerReference(run, &pod, r.Scheme); err != nil {

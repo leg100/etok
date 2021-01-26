@@ -109,7 +109,7 @@ func newRoleBindingForWS(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
-				Name:      ws.Spec.ServiceAccountName,
+				Name:      ServiceAccountName,
 				Namespace: ws.Namespace,
 			},
 		},

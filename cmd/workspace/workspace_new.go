@@ -21,7 +21,6 @@ import (
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/logstreamer"
 	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	watchtools "k8s.io/client-go/tools/watch"
@@ -29,12 +28,10 @@ import (
 )
 
 const (
-	defaultReconcileTimeout   = 10 * time.Second
-	defaultPodTimeout         = 60 * time.Second
-	defaultReadyTimeout       = 60 * time.Second
-	defaultCacheSize          = "1Gi"
-	defaultSecretName         = "etok"
-	defaultServiceAccountName = "etok"
+	defaultReconcileTimeout = 10 * time.Second
+	defaultPodTimeout       = 60 * time.Second
+	defaultReadyTimeout     = 60 * time.Second
+	defaultCacheSize        = "1Gi"
 )
 
 var (
@@ -56,10 +53,6 @@ type newOptions struct {
 
 	// etok Workspace's workspaceSpec
 	workspaceSpec v1alpha1.WorkspaceSpec
-	// Create a service acccount if it does not exist
-	disableCreateServiceAccount bool
-	// Create a secret if it does not exist
-	disableCreateSecret bool
 
 	// Timeout for resource to be reconciled (at least once)
 	reconcileTimeout time.Duration
@@ -76,12 +69,7 @@ type newOptions struct {
 
 	// Recall if resources are created so that if error occurs they can be
 	// cleaned up
-	createdWorkspace      bool
-	createdServiceAccount bool
-	createdSecret         bool
-
-	// Annotations to add to the service account resource
-	serviceAccountAnnotations map[string]string
+	createdWorkspace bool
 
 	// For testing purposes set workspace status
 	status *v1alpha1.WorkspaceStatus
@@ -141,11 +129,6 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
-	cmd.Flags().BoolVar(&o.disableCreateServiceAccount, "no-create-service-account", o.disableCreateServiceAccount, "Disable creation of service account")
-	cmd.Flags().BoolVar(&o.disableCreateSecret, "no-create-secret", o.disableCreateSecret, "Disable creation of secret")
-
-	cmd.Flags().StringVar(&o.workspaceSpec.ServiceAccountName, "service-account", defaultServiceAccountName, "Name of ServiceAccount")
-	cmd.Flags().StringVar(&o.workspaceSpec.SecretName, "secret", defaultSecretName, "Name of Secret containing credentials")
 	cmd.Flags().StringVar(&o.workspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.workspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
 	cmd.Flags().StringVar(&o.workspaceSpec.BackupBucket, "backup-bucket", "", "Backup state to GCS bucket")
@@ -162,24 +145,11 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().StringToStringVar(&o.variables, "variables", map[string]string{}, "Set terraform variables")
 	cmd.Flags().StringToStringVar(&o.environmentVariables, "environment-variables", map[string]string{}, "Set environment variables")
-	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 
 	return cmd, o
 }
 
 func (o *newOptions) run(ctx context.Context) error {
-	if !o.disableCreateServiceAccount {
-		if err := o.createServiceAccountIfMissing(ctx); err != nil {
-			return err
-		}
-	}
-
-	if !o.disableCreateSecret {
-		if err := o.createSecretIfMissing(ctx); err != nil {
-			return err
-		}
-	}
-
 	ws, err := o.createWorkspace(ctx)
 	if err != nil {
 		return err
@@ -238,12 +208,6 @@ func (o *newOptions) cleanup() {
 	if o.createdWorkspace {
 		o.WorkspacesClient(o.namespace).Delete(context.Background(), o.workspace, metav1.DeleteOptions{})
 	}
-	if o.createdSecret {
-		o.SecretsClient(o.namespace).Delete(context.Background(), o.workspaceSpec.SecretName, metav1.DeleteOptions{})
-	}
-	if o.createdServiceAccount {
-		o.ServiceAccountsClient(o.namespace).Delete(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.DeleteOptions{})
-	}
 }
 
 func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, error) {
@@ -286,79 +250,6 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 	fmt.Fprintf(o.Out, "Created workspace %s\n", klog.KObj(ws))
 
 	return ws, nil
-}
-
-func (o *newOptions) createSecretIfMissing(ctx context.Context) error {
-	// Shorter var name for readability
-	name := o.workspaceSpec.SecretName
-
-	// Check if it exists already
-	_, err := o.SecretsClient(o.namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			_, err := o.createSecret(ctx, name)
-			if err != nil {
-				return fmt.Errorf("attempted to create secret: %w", err)
-			}
-			o.createdSecret = true
-		} else {
-			return fmt.Errorf("attempted to retrieve secret: %w", err)
-		}
-	}
-	return nil
-}
-
-func (o *newOptions) createServiceAccountIfMissing(ctx context.Context) error {
-	// Shorter var name for readability
-	name := o.workspaceSpec.ServiceAccountName
-
-	// Check if it exists already
-	_, err := o.ServiceAccountsClient(o.namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			_, err := o.createServiceAccount(ctx, name, o.serviceAccountAnnotations)
-			if err != nil {
-				return fmt.Errorf("attempted to create service account: %w", err)
-			}
-			o.createdServiceAccount = true
-		} else {
-			return fmt.Errorf("attempted to retrieve service account: %w", err)
-		}
-	}
-	return nil
-}
-
-func (o *newOptions) createSecret(ctx context.Context, name string) (*corev1.Secret, error) {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-	// Set etok's common labels
-	labels.SetCommonLabels(secret)
-	// Permit filtering secrets by workspace
-	labels.SetLabel(secret, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(secret, labels.WorkspaceComponent)
-
-	return o.SecretsClient(o.namespace).Create(ctx, secret, metav1.CreateOptions{})
-}
-
-func (o *newOptions) createServiceAccount(ctx context.Context, name string, annotations map[string]string) (*corev1.ServiceAccount, error) {
-	serviceAccount := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Annotations: annotations,
-		},
-	}
-	// Set etok's common labels
-	labels.SetCommonLabels(serviceAccount)
-	// Permit filtering service accounts by workspace
-	labels.SetLabel(serviceAccount, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
-
-	return o.ServiceAccountsClient(o.namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 }
 
 // waitForContainer returns true once the installer container can be streamed

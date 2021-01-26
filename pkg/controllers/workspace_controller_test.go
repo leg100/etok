@@ -111,8 +111,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning)),
 				testobj.PVC("", "workspace-1", testobj.WithPVCPhase(corev1.ClaimBound)),
 				testobj.ConfigMap("", v1alpha1.WorkspaceVariablesConfigMapName("workspace-1")),
-				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
-				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
+				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName}},
+				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleBindingName}},
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: ServiceAccountName}},
 				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {

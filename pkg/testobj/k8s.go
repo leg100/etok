@@ -77,18 +77,6 @@ func WithEnvironmentVariables(keyValues ...string) func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithSecret(secret string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.SecretName = secret
-	}
-}
-
-func WithServiceAccount(account string) func(*v1alpha1.Workspace) {
-	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.ServiceAccountName = account
-	}
-}
-
 func WithCombinedQueue(run ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		if len(run) > 0 {

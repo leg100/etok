@@ -58,8 +58,7 @@ func workspacePod(ws *v1alpha1.Workspace, image string) (*corev1.Pod, error) {
 					},
 				},
 			},
-			RestartPolicy:      corev1.RestartPolicyAlways,
-			ServiceAccountName: ws.Spec.ServiceAccountName,
+			RestartPolicy: corev1.RestartPolicyAlways,
 			Volumes: []corev1.Volume{
 				{
 					Name: "cache",
