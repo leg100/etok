@@ -57,7 +57,8 @@ func TestRunReconciler(t *testing.T) {
 			name: "Plan is unqueued and its pod is immediately provisioned",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
+				testobj.Workspace("operator-test", "workspace-1"),
+				testobj.Secret("operator-test", "etok"),
 			},
 			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseProvisioning, run.Phase)
@@ -77,8 +78,9 @@ func TestRunReconciler(t *testing.T) {
 			name: "Provisioning run at front of queue",
 			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1"), testobj.WithCombinedQueue("apply-1")),
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("apply-1")),
 				testobj.RunPod("operator-test", "apply-1", testobj.WithPhase(corev1.PodPending)),
+				testobj.Secret("operator-test", "etok"),
 			},
 			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
 				assert.Equal(t, v1alpha1.RunPhaseProvisioning, run.Phase)
@@ -128,6 +130,60 @@ func TestRunReconciler(t *testing.T) {
 			},
 		},
 		{
+			name: "Secret found and environment variables source set",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
+				testobj.Secret("operator-test", "etok"),
+			},
+			podAssertions: func(t *testutil.T, pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "etok",
+						},
+					},
+				})
+			},
+		},
+		{
+			name: "Secret found and environment variables source not set",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
+			},
+			podAssertions: func(t *testutil.T, pod *corev1.Pod) {
+				assert.NotContains(t, pod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "etok",
+						},
+					},
+				})
+			},
+		},
+		{
+			name: "service account found and set",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "operator-test", Name: "etok"}},
+			},
+			podAssertions: func(t *testutil.T, pod *corev1.Pod) {
+				assert.Equal(t, "etok", pod.Spec.ServiceAccountName)
+			},
+		},
+		{
+			name: "service account not found and not set",
+			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("plan-1")),
+			},
+			podAssertions: func(t *testutil.T, pod *corev1.Pod) {
+				assert.Equal(t, "", pod.Spec.ServiceAccountName)
+			},
+		},
+		{
 			name: "Image name",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
@@ -163,8 +219,9 @@ func TestRunReconciler(t *testing.T) {
 			name: "Exit code recorded in status",
 			run:  testobj.Run("operator-test", "plan-1", "plan", testobj.WithWorkspace("workspace-1")),
 			objs: []runtime.Object{
-				testobj.Workspace("operator-test", "workspace-1", testobj.WithSecret("secret-1")),
+				testobj.Workspace("operator-test", "workspace-1"),
 				testobj.RunPod("operator-test", "plan-1", testobj.WithPhase(corev1.PodSucceeded), testobj.WithRunnerExitCode(5)),
+				testobj.Secret("operator-test", "etok"),
 			},
 			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
 				assert.Equal(t, 5, *run.RunStatus.ExitCode)

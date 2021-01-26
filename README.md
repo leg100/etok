@@ -113,7 +113,7 @@ Use "etok [command] --help" for more information about a command.
 
 ## RBAC
 
-The `install` command also installs ClusterRoles and ClusterRoleBindings for your convenience:
+The `install` command also installs ClusterRoles (and ClusterRoleBindings) for your convenience:
 
 * [etok-user](./config/rbac/user.yaml): includes the permissions necessary for running unprivileged commands
 * [etok-admin](./config/rbac/admin.yaml): additional permissions for managing workspaces and running [privileged commands](#privileged commands)
@@ -128,11 +128,11 @@ Note: To restrict users to individual namespaces you'll want to create RoleBindi
 
 ## Privileged Commands
 
-Commands can be specified as privileged. Pass them via the `--privileged-commands` flag to the `workspace new` command. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands.
+Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands. Pass them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
 ## State
 
-Etok uses the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html) to store the terraform state in a kubernetes secret. You need to specify an empty backend configuration like so:
+It's highly recommended that you use the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html). If you do so, it's important you specify an empty backend configuration like so:
 
 ```
 terraform {
@@ -140,13 +140,13 @@ terraform {
 }
 ```
 
-### Backup/Restore
+### State Persistence
 
-Backup and restoration of the state to and from cloud storage is supported. Every update to the state is backed up to a cloud storage bucket. If for whatever reason the secret storing the state is deleted, the workspace restores the secret.
+Persistence of state to cloud storage is supported. Every update to the state is backed up to a cloud storage bucket. The state is restored if it's deleted.
 
-To enable backup/restore, pass the name of an existing bucket via the `--backup-bucket` flag to the `workspace new` command. Note: only GCS is supported at present.
+To enable persistence, pass the name of an existing bucket via the `--backup-bucket` flag when creating a new workspace with `workspace new`. Note: only GCS is supported at present.
 
-Be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
+The operator is responsible for persisting the state. Therefore be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
 
 ```
 storage.buckets.get
@@ -155,11 +155,29 @@ storage.objects.delete
 storage.objects.get
 ```
 
-## Workload Identity
+## Credentials
 
-Etok supports [GCP Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) for both the operator and workspaces.
+Etok looks for credentials in a secret named `etok`. If found, the credentials contained within are made available to terraform as environment variables.
 
-First ensure you have a GCP service account (GSA). Then bind a policy to the GSA, like so:
+For instance to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
+
+```
+kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
+```
+
+Or, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
+
+```
+kubectl create secret generic etok \
+  --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"  \
+  --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
+```
+
+### Workload Identity
+
+https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+
+To use Workload Identity for the operator, first ensure you have a GCP service account (GSA). Then bind a policy to the GSA, like so:
 
 ```bash
 gcloud iam service-accounts add-iam-policy-binding \
@@ -168,37 +186,19 @@ gcloud iam service-accounts add-iam-policy-binding \
     [GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
 ```
 
-Install the operator with service account annotations:
+Where `[etok/etok]` refers to the kubernetes service account (KSA) named `etok` in the namespace `etok` (the installation defaults).
+
+Then install the operator with a service account annotation:
 
 ```bash
 etok install --sa-annotations iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
 ```
 
-And similarly when creating new workspaces:
+To use Workload Identity for workspaces, bind a policy to a GSA, as above, but setting the namespace to that of the workspace. The add the annotation to the KSA named `etok` in the namespace of the workspace:
 
-```bash
-etok workspace new dev --sa-annotations iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
-```
+`kubectl annotate serviceaccounts etok iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com`
 
-## Credentials
-
-Credentials placed inside a kubernetes secret named `etok` are made available to terraform as environment variables.
-
-For example, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
-
-```
-kubectl create secret generic etok \
-  --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"  \
-  --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
-```
-
-`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are then made available as environment variables.
-
-Or, to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
-
-```
-kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
-```
+(`workspace new` creates the KSA if it doesn't already exist)
 
 ## Restrictions
 
@@ -217,3 +217,4 @@ Etok supports the use of a [`.terraformignore`](https://www.terraform.io/docs/ba
 * `/.terraformignore`
 
 If not found then the default set of rules apply as documented in the link above.
+

@@ -27,17 +27,18 @@ func TestReconcileWorkspace(t *testing.T) {
 	var localPathStorageClass string = "local-path"
 
 	tests := []struct {
-		name                string
-		workspace           *v1alpha1.Workspace
-		objs                []runtime.Object
-		bucketObjs          []fakestorage.Object
-		workspaceAssertions func(*testutil.T, *v1alpha1.Workspace)
-		podAssertions       func(*testutil.T, *corev1.Pod)
-		pvcAssertions       func(*testutil.T, *corev1.PersistentVolumeClaim)
-		configMapAssertions func(*testutil.T, *corev1.ConfigMap)
-		stateAssertions     func(*testutil.T, *corev1.Secret)
-		storageAssertions   func(*testutil.T, *storage.Client)
-		wantErr             bool
+		name                  string
+		workspace             *v1alpha1.Workspace
+		objs                  []runtime.Object
+		bucketObjs            []fakestorage.Object
+		workspaceAssertions   func(*testutil.T, *v1alpha1.Workspace)
+		podAssertions         func(*testutil.T, *corev1.Pod)
+		pvcAssertions         func(*testutil.T, *corev1.PersistentVolumeClaim)
+		configMapAssertions   func(*testutil.T, *corev1.ConfigMap)
+		stateAssertions       func(*testutil.T, *corev1.Secret)
+		storageAssertions     func(*testutil.T, *storage.Client)
+		disableRBACAssertions bool
+		wantErr               bool
 	}{
 		{
 			name:      "Queue no runs",
@@ -111,8 +112,9 @@ func TestReconcileWorkspace(t *testing.T) {
 				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning)),
 				testobj.PVC("", "workspace-1", testobj.WithPVCPhase(corev1.ClaimBound)),
 				testobj.ConfigMap("", v1alpha1.WorkspaceVariablesConfigMapName("workspace-1")),
-				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
-				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "workspace-1"}},
+				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName}},
+				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleBindingName}},
+				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: ServiceAccountName}},
 				testobj.Secret("", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
@@ -123,6 +125,8 @@ func TestReconcileWorkspace(t *testing.T) {
 		{
 			name:      "Deleting phase",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithDeleteTimestamp()),
+			// RBAC resources won't have been created so don't check for them
+			disableRBACAssertions: true,
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseDeleting, ws.Status.Phase)
 				if assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)) {
@@ -332,6 +336,19 @@ func TestReconcileWorkspace(t *testing.T) {
 
 			if tt.storageAssertions != nil {
 				tt.storageAssertions(t, r.StorageClient)
+			}
+
+			// RBAC resources should always have been created so check them
+			// unless explicitly told not to
+			if !tt.disableRBACAssertions {
+				serviceAccount := corev1.ServiceAccount{}
+				assert.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: ServiceAccountName}, &serviceAccount))
+
+				role := rbacv1.Role{}
+				assert.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: RoleName}, &role))
+
+				roleBinding := rbacv1.RoleBinding{}
+				assert.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: RoleBindingName}, &roleBinding))
 			}
 		})
 	}

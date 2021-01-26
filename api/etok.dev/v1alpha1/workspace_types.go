@@ -43,17 +43,6 @@ type WorkspaceList struct {
 
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
-	// +kubebuilder:default=etok
-
-	// Name of the secret resource. Its keys and values will be made available
-	// as environment variables on the workspace pod.
-	SecretName string `json:"secretName,omitempty"`
-
-	// +kubebuilder:default=etok
-
-	// Name of the service account configured for the workspace pod.
-	ServiceAccountName string `json:"serviceAccountName,omitempty"`
-
 	// Persistent Volume Claim specification for workspace's cache.
 	Cache WorkspaceCacheSpec `json:"cache,omitempty"`
 

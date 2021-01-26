@@ -57,11 +57,11 @@ func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {
 	return pvc
 }
 
-func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
+func newRoleForNamespace(ws *v1alpha1.Workspace) *rbacv1.Role {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.Name,
 			Namespace: ws.Namespace,
+			Name:      RoleName,
 		},
 		Rules: []rbacv1.PolicyRule{
 			// Runner may need to persist a lock file to a new config map
@@ -100,22 +100,22 @@ func newRoleForWS(ws *v1alpha1.Workspace) *rbacv1.Role {
 	return role
 }
 
-func newRoleBindingForWS(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
+func newRoleBindingForNamespace(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
 	binding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.Name,
 			Namespace: ws.Namespace,
+			Name:      RoleBindingName,
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
-				Name:      ws.Spec.ServiceAccountName,
+				Name:      ServiceAccountName,
 				Namespace: ws.Namespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
 			Kind:     "Role",
-			Name:     ws.Name,
+			Name:     RoleName,
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
@@ -126,4 +126,20 @@ func newRoleBindingForWS(ws *v1alpha1.Workspace) *rbacv1.RoleBinding {
 	labels.SetLabel(binding, labels.WorkspaceComponent)
 
 	return binding
+}
+
+func newServiceAccountForNamespace(ws *v1alpha1.Workspace) *corev1.ServiceAccount {
+	serviceAccount := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: ws.Namespace,
+			Name:      ServiceAccountName,
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(serviceAccount)
+	// Permit filtering etok resources by component
+	labels.SetLabel(serviceAccount, labels.WorkspaceComponent)
+
+	return serviceAccount
 }

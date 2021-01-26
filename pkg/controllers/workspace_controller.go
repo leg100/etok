@@ -32,6 +32,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+const (
+	// Names given to RBAC resources. Only one of each is created in any given
+	// namespace.
+	ServiceAccountName = "etok"
+	RoleName           = "etok"
+	RoleBindingName    = "etok"
+)
+
 var (
 	// List of functions that update the workspace status
 	workspaceReconcileStatusChain []workspaceUpdater
@@ -78,7 +86,7 @@ func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceRec
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.handleDeletion)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageQueue)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageVariables)
-	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageRBAC)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageRBACForNamespace)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageState)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePVC)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePod)
@@ -574,47 +582,54 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Worksp
 	return nil, nil
 }
 
-func (r *WorkspaceReconciler) manageRBAC(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+// manageRBACForNamespace creates RBAC resources in the Workspace's namespace if
+// they don't already exist. They don't belong to the Workspace nor does the
+// Workspace rely on them. But a Run in the namespace does; its Pod relies on
+// the privileges to carry out k8s API calls (e.g. terraform talking to its
+// state residing in a Secret). A user may also add annotations to the
+// ServiceAccount to enable things like Workspace Identity.
+func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
-	// Manage RBAC role for workspace
-	var role rbacv1.Role
-	if err := r.Get(ctx, namespacedNameFromObj(ws), &role); err != nil {
+	var serviceAccount corev1.ServiceAccount
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ServiceAccountName}, &serviceAccount); err != nil {
 		if kerrors.IsNotFound(err) {
-			role := *newRoleForWS(ws)
+			serviceAccount := *newServiceAccountForNamespace(ws)
 
-			if err := controllerutil.SetControllerReference(ws, &role, r.Scheme); err != nil {
-				log.Error(err, "unable to set role ownership")
+			if err = r.Create(ctx, &serviceAccount); err != nil {
+				log.Error(err, "unable to create service account")
 				return nil, err
 			}
+		} else if err != nil {
+			log.Error(err, "unable to get service account")
+			return nil, err
+		}
+	}
+
+	var role rbacv1.Role
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleName}, &role); err != nil {
+		if kerrors.IsNotFound(err) {
+			role := *newRoleForNamespace(ws)
 
 			if err = r.Create(ctx, &role); err != nil {
 				log.Error(err, "unable to create role")
 				return nil, err
 			}
-			return workspacePending("Creating RBAC role"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get role")
 			return nil, err
 		}
 	}
 
-	// Manage RBAC role binding for workspace
 	var binding rbacv1.RoleBinding
-	if err := r.Get(ctx, namespacedNameFromObj(ws), &binding); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleBindingName}, &binding); err != nil {
 		if kerrors.IsNotFound(err) {
-			binding := *newRoleBindingForWS(ws)
-
-			if err := controllerutil.SetControllerReference(ws, &binding, r.Scheme); err != nil {
-				log.Error(err, "unable to set binding ownership")
-				return nil, err
-			}
+			binding := *newRoleBindingForNamespace(ws)
 
 			if err = r.Create(ctx, &binding); err != nil {
 				log.Error(err, "unable to create binding")
 				return nil, err
 			}
-			return workspacePending("Creating RBAC binding"), nil
 		} else if err != nil {
 			log.Error(err, "unable to get binding")
 			return nil, err

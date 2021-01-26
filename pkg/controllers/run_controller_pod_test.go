@@ -11,10 +11,12 @@ import (
 
 func TestRunPod(t *testing.T) {
 	tests := []struct {
-		name       string
-		run        *v1alpha1.Run
-		workspace  *v1alpha1.Workspace
-		assertions func(*corev1.Pod)
+		name                string
+		run                 *v1alpha1.Run
+		workspace           *v1alpha1.Workspace
+		secretFound         bool
+		serviceAccountFound bool
+		assertions          func(*corev1.Pod)
 	}{
 		{
 			name:      "Non-default working dir",
@@ -84,9 +86,10 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
-			name:      "Set environment variables for secrets",
-			run:       testobj.Run("default", "run-12345", "plan"),
-			workspace: testobj.Workspace("default", "foo", testobj.WithSecret("etok")),
+			name:        "Set environment variables for secrets",
+			run:         testobj.Run("default", "run-12345", "plan"),
+			workspace:   testobj.Workspace("default", "foo"),
+			secretFound: true,
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
 					SecretRef: &corev1.SecretEnvSource{
@@ -122,7 +125,7 @@ func TestRunPod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.assertions(runPod(tt.run, tt.workspace, "etok:latest"))
+			tt.assertions(runPod(tt.run, tt.workspace, tt.secretFound, tt.serviceAccountFound, "etok:latest"))
 		})
 	}
 }

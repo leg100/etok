@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod {
+func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccountFound bool, image string) *corev1.Pod {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      run.PodName(),
@@ -123,8 +123,7 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 					WorkingDir: filepath.Join(workspaceDir, run.ConfigMapPath),
 				},
 			},
-			RestartPolicy:      corev1.RestartPolicyNever,
-			ServiceAccountName: ws.Spec.ServiceAccountName,
+			RestartPolicy: corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
 				{
 					Name: "cache",
@@ -167,11 +166,15 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, image string) *corev1.Pod
 	// Permit filtering pods by the run command
 	labels.SetLabel(pod, labels.Command(run.Command))
 
-	if ws.Spec.SecretName != "" {
+	if serviceAccountFound {
+		pod.Spec.ServiceAccountName = "etok"
+	}
+
+	if secretFound {
 		pod.Spec.Containers[0].EnvFrom = append(pod.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: ws.Spec.SecretName,
+					Name: "etok",
 				},
 			},
 		})

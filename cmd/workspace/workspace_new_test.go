@@ -18,7 +18,6 @@ import (
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,46 +57,6 @@ func TestNewWorkspace(t *testing.T) {
 			},
 		},
 		{
-			name: "create default secret and service account",
-			args: []string{"foo"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
-				assert.NoError(t, err)
-				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "create custom secret and service account",
-			args: []string{"foo", "--service-account", "foo", "--secret", "bar"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), "foo", metav1.GetOptions{})
-				assert.NoError(t, err)
-				_, err = o.SecretsClient(o.namespace).Get(context.Background(), "bar", metav1.GetOptions{})
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "do not create secret",
-			args: []string{"foo", "--no-create-secret"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				_, err := o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
-				assert.True(t, kerrors.IsNotFound(err))
-			},
-		},
-		{
-			name: "do not create service account",
-			args: []string{"foo", "--no-create-service-account"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				_, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.True(t, kerrors.IsNotFound(err))
-			},
-		},
-		{
 			name: "non-default namespace",
 			args: []string{"foo", "--namespace", "bar"},
 			objs: []runtime.Object{testobj.WorkspacePod("bar", "foo")},
@@ -118,12 +77,6 @@ func TestNewWorkspace(t *testing.T) {
 			assertions: func(t *testutil.T, o *newOptions) {
 				_, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
-
-				_, err = o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
-				assert.True(t, kerrors.IsNotFound(err))
-
-				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
@@ -139,31 +92,6 @@ func TestNewWorkspace(t *testing.T) {
 			assertions: func(t *testutil.T, o *newOptions) {
 				_, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				assert.NoError(t, err)
-
-				_, err = o.SecretsClient(o.namespace).Get(context.Background(), o.workspaceSpec.SecretName, metav1.GetOptions{})
-				assert.NoError(t, err)
-
-				_, err = o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				assert.NoError(t, err)
-			},
-		},
-		{
-			name: "with existing custom secret and service account",
-			args: []string{"foo", "--secret", "foo", "--service-account", "bar"},
-			objs: []runtime.Object{
-				testobj.WorkspacePod("default", "foo"),
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "foo",
-						Namespace: "default",
-					},
-				},
-				&corev1.ServiceAccount{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bar",
-						Namespace: "default",
-					},
-				},
 			},
 		},
 		{
@@ -273,18 +201,6 @@ func TestNewWorkspace(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.Equal(t, []string{"apply", "destroy", "sh"}, ws.Spec.PrivilegedCommands)
-			},
-		},
-		{
-			name: "set service account annotations",
-			args: []string{"foo", "--sa-annotations", "foo=bar,baz=haj"},
-			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
-			assertions: func(t *testutil.T, o *newOptions) {
-				// Get service account
-				sa, err := o.ServiceAccountsClient(o.namespace).Get(context.Background(), o.workspaceSpec.ServiceAccountName, metav1.GetOptions{})
-				require.NoError(t, err)
-
-				assert.Equal(t, map[string]string{"foo": "bar", "baz": "haj"}, sa.GetAnnotations())
 			},
 		},
 		{
