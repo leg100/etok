@@ -51,57 +51,42 @@ etok plan
 etok apply
 ```
 
-## Usage
+## Supported Terraform Commands
 
-Usage is similar to the terraform CLI:
+* apply
+* console
+* destroy
+* fmt
+* force-unlock
+* get
+* graph
+* import
+* init
+* output
+* plan
+* providers
+* providers lock
+* refresh
+* state list
+* state mv
+* state pull
+* state push
+* state replace-provider
+* state rm
+* state show
+* show
+* state
+* taint
+* untaint
+* validate
 
-```
-Usage:
-  etok [command]
+## Additional Commands
 
-Available Commands:
-  apply        Run terraform apply
-  console      Run terraform console
-  destroy      Run terraform destroy
-  fmt          Run terraform fmt
-  force-unlock Run terraform force-unlock
-  get          Run terraform get
-  graph        Run terraform graph
-  help         Help about any command
-  import       Run terraform import
-  init         Run terraform init
-  install      Install etok operator
-  output       Run terraform output
-  plan         Run terraform plan
-  providers    Run terraform providers
-  refresh      Run terraform refresh
-  sh           Run shell session in workspace
-  show         Run terraform show
-  state        Terraform state management
-  taint        Run terraform taint
-  untaint      Run terraform untaint
-  validate     Run terraform validate
-  version      Print client version information
-  workspace    Etok workspace management
+* sh - run shell or arbitrary command in workspace
 
-Flags:
-      --add_dir_header                   If true, adds the file directory to the header of the log messages
-      --alsologtostderr                  log to standard error as well as files
-  -h, --help                             help for etok
-      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                   If non-empty, write log files in this directory
-      --log_file string                  If non-empty, use this log file
-      --log_file_max_size uint           Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited. (defa
-ult 1800)
-      --logtostderr                      log to standard error instead of files (default true)
-      --skip_headers                     If true, avoid header prefixes in the log messages
-      --skip_log_headers                 If true, avoid headers when opening log files
-      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
-  -v, --v Level                          number for the log level verbosity
-      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
+## Privileged Commands
 
-Use "etok [command] --help" for more information about a command.
-```
+Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
 ## RBAC
 
@@ -117,10 +102,6 @@ kubectl edit clusterrolebinding etok-user
 ```
 
 Note: To restrict users to individual namespaces you'll want to create RoleBindings referencing the ClusterRoles.
-
-## Privileged Commands
-
-Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands. Pass them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
 ## State
 
