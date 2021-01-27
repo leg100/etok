@@ -89,13 +89,21 @@ etok apply
 
 ## Privileged Commands
 
-Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
+Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see below) can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
 ## Queueable Commands
 
 Commands with the ability to alter state are deemed 'queueable'. Only one queueable command at a time can run on a workspace. The currently running command is designated as 'active', and commands waiting to become active wait in a workspace FIFO queue.
 
 All other commands run immediately and concurrently.
+
+## Terraform Flags
+
+Terraform flags need to be passed after a double dash, like so:
+
+```
+etok apply -- -auto-approve
+```
 
 ## RBAC
 
