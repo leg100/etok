@@ -215,3 +215,25 @@ Disable TTY. Pass the `--no-tty` flag to the command. By default, if a TTY is de
 Use fast persistent volume storage class for workspace cache. If you're using GKE, pass `--storage-class=premium-rwo` when creating a new workspace with `workspace new`.
 
 Also, configure the GKE cluster to use the [CSI driver](https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gce-pd-csi-driver).
+
+## E2E Tests
+
+```
+make e2e
+```
+
+You need to specify:
+
+* `BACKUP_BUCKET` - GCS bucket to backup state to during the tests
+
+By default the tests assume you're running [kind](https://kind.sigs.k8s.io/). For tests targeting kind you need to also specify:
+
+* `GOOGLE_APPLICATION_CREDENTIALS` - Path to a file containing a service account key with credentials to read and write to `$BACKUP_BUCKET`
+
+To target a GKE cluster, set `ENV=gke` along with:
+
+* `BACKUP_SERVICE_ACCOUNT` - GCP service account with permissions to read and write to `$BACKUP_BUCKET`
+* `GKE_IMAGE` - Name to assign to the docker image that is built and pushed, e.g. `eu.gcr.io/my-project/etok`
+* `GKE_KUBE_CONTEXT` - Name of the kubectl context for the GKE cluster
+
+Because the GKE tests use workload identity, you need to [set an IAM policy](#workload-identity) on `$BACKUP_SERVICE_ACCOUNT`.
