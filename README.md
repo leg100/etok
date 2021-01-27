@@ -53,39 +53,35 @@ etok apply
 
 ## Supported Terraform Commands
 
-* `apply`*
+* `apply`(Q)
 * `console`
-* `destroy`*
+* `destroy`(Q)
 * `fmt`
-* `force-unlock`*
+* `force-unlock`(Q)
 * `get`
 * `graph`
-* `import`*
-* `init`*
+* `import`(Q)
+* `init`(Q)
 * `output`
 * `plan`
 * `providers`
 * `providers lock`
-* `refresh`*
+* `refresh`(Q)
 * `state list`
-* `state mv`*
+* `state mv`(Q)
 * `state pull`
-* `state push`*
-* `state replace-provider`*
-* `state rm`*
+* `state push`(Q)
+* `state replace-provider`(Q)
+* `state rm`(Q)
 * `state show`
 * `show`
-* `taint`*
-* `untaint`*
+* `taint`(Q)
+* `untaint`(Q)
 * `validate`
-
-\* Queueable (see below)
 
 ## Additional Commands
 
-* `sh`* - run shell or arbitrary command in workspace
-
-\* Queueable (see below)
+* `sh`(Q) - run shell or arbitrary command in workspace
 
 ## Privileged Commands
 
