@@ -88,6 +88,24 @@ etok apply
 
 Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see above) can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
+## Queueable Commands
+
+Commands with the ability to alter state are deemed 'queueable'. Only one queueable command at a time can run on a workspace. The currently running queueable command is designated as 'active', and commands waiting to become active wait in a workspace FIFO queue. The following commands are queueable:
+
+* apply
+* destroy
+* force-unlock
+* import
+* init
+* refresh
+* sh
+* state mv
+* state push
+* state replace-provider
+* state rm
+* taint
+* untaint
+
 ## RBAC
 
 The `install` command also installs ClusterRoles (and ClusterRoleBindings) for your convenience:
