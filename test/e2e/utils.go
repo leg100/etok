@@ -19,7 +19,7 @@ import (
 // step invokes command with a pty, expecting the input/output to match the
 // batch expectations. Blocks until process has finished.
 func step(t *testing.T, name string, args []string, batch []expect.Batcher) error {
-	exp, errch, err := expect.SpawnWithArgs(args, 60*time.Second, expect.Tee(nopWriteCloser{t}))
+	exp, errch, err := expect.SpawnWithArgs(args, 60*time.Second, expect.PartialMatch(true), expect.Tee(nopWriteCloser{t}))
 	if err != nil {
 		return err
 	}
