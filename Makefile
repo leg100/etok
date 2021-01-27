@@ -2,26 +2,35 @@ VERSION = $(shell git describe --tags --dirty --always)
 GIT_COMMIT = $(shell git rev-parse HEAD)
 REPO = github.com/leg100/etok
 RANDOM_SUFFIX := $(shell cat /dev/urandom | tr -dc 'a-z0-9' | head -c5)
-WORKSPACE_NAMESPACE ?= default
-ALL_CRD = ./config/crd/bases/etok.dev_all.yaml
 BUILD_BIN ?= ./etok
 KUBECTL = kubectl --context=$(KUBECTX)
-KUBE_VERSION=v0.18.2
+KUBE_VERSION = v0.18.2
 LD_FLAGS = " \
 	-X '$(REPO)/pkg/version.Version=$(VERSION)' \
 	-X '$(REPO)/pkg/version.Commit=$(GIT_COMMIT)' \
 	" \
 
+ENV ?= kind
+IMG ?= etok
+TAG ?= $(VERSION)-$(RANDOM_SUFFIX)
+DEPLOY_FLAGS ?= --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
+KUBECTX=""
+
+# Override vars if ENV=gke
 ifeq ($(ENV),gke)
-KUBECTX=gke_automatize-admin_europe-west2-a_etok-1
-IMG=eu.gcr.io/automatize-admin/etok:$(VERSION)-$(RANDOM_SUFFIX)
-else
-KUBECTX=kind-kind
-IMG=leg100/etok:$(VERSION)
+IMG = $(GKE_IMAGE)
+DEPLOY_FLAGS = --sa-annotations iam.gke.io/gcp-service-account=$(BACKUP_SERVICE_ACCOUNT)
+KUBECTX = $(GKE_KUBE_CONTEXT)
 endif
-BACKUP_SERVICE_ACCOUNT=backup@automatize-admin.iam.gserviceaccount.com
+
+# Override vars if ENV=kind
+ifeq ($(ENV),kind)
+KUBECTX=kind-kind
+endif
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -33,18 +42,12 @@ endif
 # be built and pushed/loaded first.
 .PHONY: local
 local: image push
-	ETOK_IMAGE=$(IMG) $(BUILD_BIN) operator --context $(KUBECTX)
+	ETOK_IMAGE=$(IMG):$(TAG) $(BUILD_BIN) operator --context $(KUBECTX)
 
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy
 deploy: image push
-ifeq ($(ENV),gke)
-	# For GKE, use workload identity
-	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --sa-annotations iam.gke.io/gcp-service-account=$(BACKUP_SERVICE_ACCOUNT)
-else
-	# All other clusters, place key in a secret resource
-	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG) --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
-endif
+	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS)
 
 # Tail operator logs
 .PHONY: logs
@@ -60,41 +63,9 @@ crds: build
 undeploy: build
 	$(BUILD_BIN) install --local --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
-.PHONY: create-namespace
-create-namespace:
-	$(KUBECTL) get ns $(WORKSPACE_NAMESPACE) > /dev/null 2>&1 || $(KUBECTL) create ns $(NAMESPACE)
-
-.PHONY: create-secret
-create-secret:
-	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) get secret etok || \
-		$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) create secret generic etok \
-			--from-file=GOOGLE_CREDENTIALS=$(GOOGLE_APPLICATION_CREDENTIALS)
-
-.PHONY: delete-secret
-delete-secret:
-	$(KUBECTL) --namespace $(WORKSPACE_NAMESPACE) delete secret etok --ignore-not-found=true
-
 .PHONY: e2e
-e2e: image push deploy e2e-run e2e-clean
-
-.PHONY: e2e-clean
-e2e-clean: undeploy
-
-.PHONY: e2e-run
-e2e-run:
+e2e: image push deploy
 	go test -v ./test/e2e -failfast -context $(KUBECTX)
-
-# delete all etok custom resources (via kubectl)
-.PHONY: delete-custom-resources
-delete-custom-resources:
-	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all --wait $$($(KUBECTL) api-resources \
-		--api-group=etok.dev -o name \
-		| tr '\n' ',' | sed 's/.$$//') || true
-
-# delete all etok custom resources except workspace
-.PHONY: delete-run-resources
-delete-run-resources:
-	$(KUBECTL) delete -n $(WORKSPACE_NAMESPACE) --all runs.etok.dev
 
 .PHONY: unit
 unit:
@@ -118,14 +89,14 @@ install-latest-release:
 
 .PHONY: image
 image: build
-	docker build -f build/Dockerfile -t $(IMG) .
+	docker build -f build/Dockerfile -t $(IMG):$(TAG) .
 
 .PHONY: push
 push:
-ifeq ($(ENV),gke)
-	docker push $(IMG)
+ifeq ($(ENV),kind)
+	kind load docker-image $(IMG):$(TAG)
 else
-	kind load docker-image $(IMG)
+	docker push $(IMG):$(TAG)
 endif
 
 # Generate manifests e.g. CRD, RBAC etc.
