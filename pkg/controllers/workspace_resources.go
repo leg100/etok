@@ -9,25 +9,37 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func newVariablesForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
-	variables := &corev1.ConfigMap{
+const (
+	builtinVariables = `
+variable "namespace" {}
+variable "workspace" {}
+`
+
+	builtinConfig = `
+terraform {
+  backend "kubernetes" {}
+}
+`
+)
+
+func newBuiltinsForWS(ws *v1alpha1.Workspace) *corev1.ConfigMap {
+	builtins := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ws.VariablesConfigMapName(),
+			Name:      ws.BuiltinsConfigMapName(),
 			Namespace: ws.Namespace,
 		},
 		Data: map[string]string{
-			variablesPath: `variable "namespace" {}
-variable "workspace" {}
-`,
+			variablesPath: builtinVariables,
+			backendPath:   builtinConfig,
 		},
 	}
 
 	// Set etok's common labels
-	labels.SetCommonLabels(variables)
+	labels.SetCommonLabels(builtins)
 	// Permit filtering etok resources by component
-	labels.SetLabel(variables, labels.WorkspaceComponent)
+	labels.SetLabel(builtins, labels.WorkspaceComponent)
 
-	return variables
+	return builtins
 }
 
 func newPVCForWS(ws *v1alpha1.Workspace) *corev1.PersistentVolumeClaim {

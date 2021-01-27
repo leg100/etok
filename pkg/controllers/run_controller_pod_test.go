@@ -74,14 +74,26 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
-			name:      "variables volume mount",
+			name:      "builtin variables volume mount",
 			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
 			workspace: testobj.Workspace("default", "foo"),
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-					Name:      "variables",
+					Name:      "builtins",
 					MountPath: "/workspace/subdir/_etok_variables.tf",
 					SubPath:   "_etok_variables.tf",
+				})
+			},
+		},
+		{
+			name:      "builtin backend config volume mount",
+			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
+			workspace: testobj.Workspace("default", "foo"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "builtins",
+					MountPath: "/workspace/subdir/_etok_backend.tf",
+					SubPath:   "_etok_backend.tf",
 				})
 			},
 		},

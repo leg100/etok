@@ -85,7 +85,7 @@ func NewWorkspaceReconciler(cl client.Client, image string, opts ...WorkspaceRec
 	workspaceReconcileStatusChain = []workspaceUpdater{}
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.handleDeletion)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageQueue)
-	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageVariables)
+	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageBuiltins)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageRBACForNamespace)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.manageState)
 	workspaceReconcileStatusChain = append(workspaceReconcileStatusChain, r.managePVC)
@@ -494,27 +494,27 @@ func (r *WorkspaceReconciler) handleStorageError(err error, ws *v1alpha1.Workspa
 	return nil, err
 }
 
-func (r *WorkspaceReconciler) manageVariables(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) manageBuiltins(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
 	log := log.FromContext(ctx)
 
-	// Manage ConfigMap containing variables for workspace
-	var variables corev1.ConfigMap
-	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.VariablesConfigMapName()}, &variables)
+	// Manage ConfigMap containing built-in terraform config for workspace
+	var builtins corev1.ConfigMap
+	err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ws.BuiltinsConfigMapName()}, &builtins)
 	if kerrors.IsNotFound(err) {
-		variables := *newVariablesForWS(ws)
+		builtins := *newBuiltinsForWS(ws)
 
-		if err := controllerutil.SetControllerReference(ws, &variables, r.Scheme); err != nil {
+		if err := controllerutil.SetControllerReference(ws, &builtins, r.Scheme); err != nil {
 			log.Error(err, "unable to set config map ownership")
 			return nil, err
 		}
 
-		if err = r.Create(ctx, &variables); err != nil {
-			log.Error(err, "unable to create configmap for variables")
+		if err = r.Create(ctx, &builtins); err != nil {
+			log.Error(err, "unable to create configmap for builtins")
 			return nil, err
 		}
-		return workspacePending("Creating configmap containing terraform variables"), nil
+		return workspacePending("Creating configmap containing terraform builtins"), nil
 	} else if err != nil {
-		log.Error(err, "unable to get configmap for variables")
+		log.Error(err, "unable to get configmap for builtins")
 		return nil, err
 	}
 	return nil, nil

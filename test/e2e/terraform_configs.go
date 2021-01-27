@@ -12,8 +12,6 @@ var (
 	// Terraform rootModuleConfig
 	rootModuleConfig = `
 terraform {
-  backend "kubernetes" {}
-
   required_providers {
 	random = {
 	  source  = "hashicorp/random"

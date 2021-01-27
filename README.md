@@ -28,27 +28,19 @@ etok install
 
 ## First run
 
-Ensure you're in a directory containing terraform configuration:
+Create a workspace:
+
+```bash
+etok workspace new default
+```
+
+Write some terraform configuration:
 
 ```bash
 $ cat random.tf
 resource "random_id" "test" {
   byte_length = 2
 }
-```
-You also want to specify the kubernetes backend like so:
-
-```bash
-$ cat backend.tf
-terraform {
-  backend "kubernetes" {}
-}
-```
-
-Create a workspace:
-
-```bash
-etok workspace new default
 ```
 
 Run terraform commands:
@@ -132,19 +124,15 @@ Commands can be specified as privileged. Only users possessing the RBAC permissi
 
 ## State
 
-It's highly recommended that you use the [terraform kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html). If you do so, it's important you specify an empty backend configuration like so:
-
-```
-terraform {
-  backend "kubernetes" {}
-}
-```
+Terraform state is stored in a secret using the [kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html). It comes into existence once you run `etok init`. If the workspace is deleted then so is the state.
 
 ### State Persistence
 
-Persistence of state to cloud storage is supported. Every update to the state is backed up to a cloud storage bucket. The state is restored if it's deleted.
+Persistence of state to cloud storage is supported. If enabled, every update to the state is backed up to a cloud storage bucket.
 
-To enable persistence, pass the name of an existing bucket via the `--backup-bucket` flag when creating a new workspace with `workspace new`. Note: only GCS is supported at present.
+To enable persistence, pass the name of an existing bucket via the `--backup-bucket` flag when creating a new workspace with `workspace new`. If the secret storing the state cannot be found, the workspace checks if a backup exists in the bucket. If found, it restores the state to the secret.
+
+Note: only GCS is supported at present.
 
 The operator is responsible for persisting the state. Therefore be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
 

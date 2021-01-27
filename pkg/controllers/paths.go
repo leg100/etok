@@ -23,4 +23,8 @@ const (
 	// variablesPath is the filename in <WorkingDir> containing declarations of
 	// built-in variables such as namespace and workspace.
 	variablesPath = "_etok_variables.tf"
+
+	// backendPath is the filename in <WorkingDir> containing declaration of
+	// backend configuration.
+	backendPath = "_etok_backend.tf"
 )

@@ -114,10 +114,16 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 							SubPath:   run.ConfigMapKey,
 						},
 						{
-							Name: "variables",
+							Name: "builtins",
 							// <WorkingDir>/_etok_variables.tf
 							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, variablesPath),
 							SubPath:   variablesPath,
+						},
+						{
+							Name: "builtins",
+							// <WorkingDir>/_etok_backend.tf
+							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, backendPath),
+							SubPath:   backendPath,
 						},
 					},
 					WorkingDir: filepath.Join(workspaceDir, run.ConfigMapPath),
@@ -144,11 +150,11 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 					},
 				},
 				{
-					Name: "variables",
+					Name: "builtins",
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
-								Name: ws.VariablesConfigMapName(),
+								Name: ws.BuiltinsConfigMapName(),
 							},
 						},
 					},

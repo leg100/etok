@@ -111,7 +111,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs: []runtime.Object{
 				testobj.WorkspacePod("", "workspace-1", testobj.WithPhase(corev1.PodRunning)),
 				testobj.PVC("", "workspace-1", testobj.WithPVCPhase(corev1.ClaimBound)),
-				testobj.ConfigMap("", v1alpha1.WorkspaceVariablesConfigMapName("workspace-1")),
+				testobj.ConfigMap("", v1alpha1.WorkspaceBuiltinsConfigMapName("workspace-1")),
 				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName}},
 				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleBindingName}},
 				&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: ServiceAccountName}},
@@ -201,10 +201,11 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 		},
 		{
-			name:      "Variables: has data",
+			name:      "Builtin configuration is present",
 			workspace: testobj.Workspace("", "workspace-1"),
 			configMapAssertions: func(t *testutil.T, vars *corev1.ConfigMap) {
 				assert.NotEmpty(t, vars.Data[variablesPath])
+				assert.NotEmpty(t, vars.Data[backendPath])
 			},
 		},
 		{
@@ -318,7 +319,7 @@ func TestReconcileWorkspace(t *testing.T) {
 
 			if tt.configMapAssertions != nil {
 				vars := corev1.ConfigMap{}
-				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.VariablesConfigMapName()}, &vars))
+				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.BuiltinsConfigMapName()}, &vars))
 				tt.configMapAssertions(t, &vars)
 			}
 

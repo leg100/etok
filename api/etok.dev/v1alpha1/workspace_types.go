@@ -165,12 +165,12 @@ func (ws *Workspace) BackupObjectName() string {
 	return fmt.Sprintf("%s/%s.yaml", ws.Namespace, ws.Name)
 }
 
-func (ws *Workspace) VariablesConfigMapName() string {
-	return WorkspaceVariablesConfigMapName(ws.Name)
+func (ws *Workspace) BuiltinsConfigMapName() string {
+	return WorkspaceBuiltinsConfigMapName(ws.Name)
 }
 
-func WorkspaceVariablesConfigMapName(name string) string {
-	return name + "-variables"
+func WorkspaceBuiltinsConfigMapName(name string) string {
+	return name + "-builtins"
 }
 
 func (ws *Workspace) IsPrivilegedCommand(cmd string) bool {
