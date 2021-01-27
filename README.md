@@ -53,36 +53,39 @@ etok apply
 
 ## Supported Terraform Commands
 
-* `apply`
+* `apply`*
 * `console`
-* `destroy`
+* `destroy`*
 * `fmt`
-* `force-unlock`
+* `force-unlock`*
 * `get`
 * `graph`
-* `import`
-* `init`
+* `import`*
+* `init`*
 * `output`
 * `plan`
 * `providers`
 * `providers lock`
-* `refresh`
+* `refresh`*
 * `state list`
-* `state mv`
+* `state mv`*
 * `state pull`
-* `state push`
-* `state replace-provider`
-* `state rm`
+* `state push`*
+* `state replace-provider`*
+* `state rm`*
 * `state show`
 * `show`
-* `state`
-* `taint`
-* `untaint`
+* `taint`*
+* `untaint`*
 * `validate`
+
+\* Queueable (see below)
 
 ## Additional Commands
 
-* `sh` - run shell or arbitrary command in workspace
+* `sh`* - run shell or arbitrary command in workspace
+
+\* Queueable (see below)
 
 ## Privileged Commands
 
@@ -90,21 +93,9 @@ Commands can be specified as privileged. Only users possessing the RBAC permissi
 
 ## Queueable Commands
 
-Commands with the ability to alter state are deemed 'queueable'. Only one queueable command at a time can run on a workspace. The currently running queueable command is designated as 'active', and commands waiting to become active wait in a workspace FIFO queue. The following commands are queueable:
+Commands with the ability to alter state are deemed 'queueable'. Only one queueable command at a time can run on a workspace. The currently running command is designated as 'active', and commands waiting to become active wait in a workspace FIFO queue.
 
-* `apply`
-* `destroy`
-* `force-unlock`
-* `import`
-* `init`
-* `refresh`
-* `sh`
-* `state mv`
-* `state push`
-* `state replace-provider`
-* `state rm`
-* `taint`
-* `untaint`
+All other commands run immediately and concurrently.
 
 ## RBAC
 
