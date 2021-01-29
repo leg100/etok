@@ -235,3 +235,7 @@ To target a GKE cluster, set `ENV=gke` along with:
 * `GKE_KUBE_CONTEXT` - Name of the kubectl context for the GKE cluster
 
 Because the GKE tests use workload identity, you need to [set an IAM policy](#workload-identity) on `$BACKUP_SERVICE_ACCOUNT`.
+
+## Support
+
+Reach out to the [slack channel](https://join.slack.com/t/etokworkspace/shared_invite/zt-lbqgojdj-IS6aDIydMXe2X3EYf8ZRow)
