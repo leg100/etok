@@ -120,6 +120,8 @@ Note: To restrict users to individual namespaces you'll want to create RoleBindi
 
 Terraform state is stored in a secret using the [kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html). It comes into existence once you run `etok init`. If the workspace is deleted then so is the state.
 
+Note: Do not define a backend in your terraform configuration - it will conflict with the configuration Etok automatically installs.
+
 ### State Persistence
 
 Persistence of state to cloud storage is supported. If enabled, every update to the state is backed up to a cloud storage bucket.
