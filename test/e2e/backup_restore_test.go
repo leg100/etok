@@ -36,7 +36,7 @@ func TestBackupRestore(t *testing.T) {
 					"--path", path,
 					"--context", *kubectx,
 					"--variables", "suffix=bar",
-					"--backup-bucket", backupBucket,
+					"--backup-bucket", *backupBucket,
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
@@ -75,7 +75,7 @@ func TestBackupRestore(t *testing.T) {
 
 		// Check state backup exists
 		t.Run("state backup", func(t *testing.T) {
-			_, err := sclient.Bucket(backupBucket).Object(fmt.Sprintf("%s/foo.yaml", namespace)).Attrs(context.Background())
+			_, err := sclient.Bucket(*backupBucket).Object(fmt.Sprintf("%s/foo.yaml", namespace)).Attrs(context.Background())
 			require.NoError(t, err)
 		})
 
@@ -98,7 +98,7 @@ func TestBackupRestore(t *testing.T) {
 					"--path", path,
 					"--context", *kubectx,
 					"--variables", "suffix=bar",
-					"--backup-bucket", backupBucket,
+					"--backup-bucket", *backupBucket,
 				},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
