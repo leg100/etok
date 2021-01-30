@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,15 +17,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
-const (
-	backupBucket = "automatize-tfstate-backup"
-)
-
 var (
 	// absolute path to the etok binary
 	buildPath string
 
-	kubectx = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
+	kubectx      = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
+	backupBucket = flag.String("backup-bucket", "", "GCS bucket for terraform state backups")
 
 	client *etokclient.Client
 
@@ -54,8 +52,17 @@ func TestMain(m *testing.M) {
 		errExit(err)
 	}
 
+	// Ensure backup bucket is specified via a CLI flag, or failing that, as an
+	// environment variable.
+	if *backupBucket == "" {
+		*backupBucket = os.Getenv("BACKUP_BUCKET")
+		if *backupBucket == "" {
+			errExit(errors.New("you need to specify a backup bucket"))
+		}
+	}
+
 	// Scrub backup bucket
-	bh := sclient.Bucket(backupBucket)
+	bh := sclient.Bucket(*backupBucket)
 	it := bh.Objects(context.Background(), &storage.Query{Prefix: ""})
 	for {
 		attrs, err := it.Next()
