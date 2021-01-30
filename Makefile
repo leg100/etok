@@ -82,10 +82,9 @@ install:
 .PHONY: install-latest-release
 install-latest-release:
 	curl -s https://api.github.com/repos/leg100/etok/releases/latest \
-		| jq -r '.assets[] | select(.name | test(".*_linux_amd64$$")) | .browser_download_url' \
-		| xargs -I{} curl -Lo /tmp/etok {}
-	chmod +x /tmp/etok
-	mv /tmp/etok ~/go/bin/
+		| jq -r '.assets[] | select(.name | test(".*_linux_amd64.zip$$")) | .browser_download_url' \
+		| xargs -I{} curl -Lo /tmp/etok.zip {}
+	unzip -o -d ~/go/bin /tmp/etok.zip
 
 .PHONY: image
 image: build
