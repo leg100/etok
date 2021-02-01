@@ -27,6 +27,11 @@ ifeq ($(ENV),kind)
 KUBECTX=kind-kind
 endif
 
+# Development-mode
+ifeq ($(BINDATA_DEBUG),true)
+BINDATA_FLAGS=-debug
+endif
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -129,6 +134,10 @@ endif
 .PHONY: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+
+.PHONY: dist
+dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
+	rm -f ./pkg/static/bindata.go && go-bindata-assetfs $(BINDATA_FLAGS) -pkg static -prefix pkg pkg/static/... && mv bindata.go ./pkg/static/
 
 # Run go fmt against code
 .PHONY: fmt
