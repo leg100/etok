@@ -237,7 +237,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 			storageAssertions: func(t *testutil.T, client *storage.Client) {
 				// Check object exists in bucket
-				obj := client.Bucket("backup-bucket").Object("default/workspace-1.yaml")
+				obj := client.Bucket("backup-bucket").Object("default/tfstate-default-workspace-1.yaml")
 				_, err := obj.Attrs(context.Background())
 				require.NoError(t, err)
 			},
@@ -294,7 +294,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			defer server.Stop()
 
 			// Reconcile
-			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()), WithEventRecorder(record.NewFakeRecorder(100)))
+			r := NewWorkspaceReconciler(cl, "", WithGCSClient(server.Client()), WithEventRecorder(record.NewFakeRecorder(100)))
 			req := requestFromObject(tt.workspace)
 			_, err = r.Reconcile(context.Background(), req)
 			if tt.wantErr {
@@ -336,7 +336,7 @@ func TestReconcileWorkspace(t *testing.T) {
 			}
 
 			if tt.storageAssertions != nil {
-				tt.storageAssertions(t, r.StorageClient)
+				tt.storageAssertions(t, r.gcsClient)
 			}
 
 			// RBAC resources should always have been created so check them

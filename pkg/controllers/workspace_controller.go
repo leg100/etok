@@ -1,18 +1,15 @@
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"google.golang.org/api/googleapi"
-	"sigs.k8s.io/yaml"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -49,17 +46,18 @@ type workspaceUpdater func(context.Context, *v1alpha1.Workspace) (*metav1.Condit
 
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	Image         string
-	StorageClient *storage.Client
-	recorder      record.EventRecorder
+	Scheme   *runtime.Scheme
+	Image    string
+	recorder record.EventRecorder
+
+	gcsClient *storage.Client
 }
 
 type WorkspaceReconcilerOption func(r *WorkspaceReconciler)
 
-func WithStorageClient(sc *storage.Client) WorkspaceReconcilerOption {
+func WithGCSClient(c *storage.Client) WorkspaceReconcilerOption {
 	return func(r *WorkspaceReconciler) {
-		r.StorageClient = sc
+		r.gcsClient = c
 	}
 }
 
@@ -364,38 +362,12 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 }
 
 func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace, secret *corev1.Secret, sfile *state) (*metav1.Condition, error) {
-	// Re-use client or create if not yet created
-	if r.StorageClient == nil {
-		var err error
-		r.StorageClient, err = storage.NewClient(ctx)
-		if err != nil {
-			return r.handleStorageError(err, ws, "BackupError")
-		}
+	p := gcsPersistence{
+		bucket:        ws.Spec.BackupBucket,
+		storageClient: r.gcsClient,
 	}
-
-	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
-	_, err := bh.Attrs(ctx)
-	if err != nil {
-		return r.handleStorageError(err, ws, "BackupError")
-	}
-
-	oh := bh.Object(ws.BackupObjectName())
-
-	// Marshal state file first to json then to yaml
-	y, err := yaml.Marshal(secret)
-	if err != nil {
-		return r.handleStorageError(err, ws, "BackupError")
-	}
-
-	// Copy state file to GCS
-	owriter := oh.NewWriter(ctx)
-	_, err = io.Copy(owriter, bytes.NewBuffer(y))
-	if err != nil {
-		return r.handleStorageError(err, ws, "BackupError")
-	}
-
-	if err := owriter.Close(); err != nil {
-		return r.handleStorageError(err, ws, "BackupError")
+	if err := p.backup(ctx, secret); err != nil {
+		return nil, err
 	}
 
 	// Update latest backup serial
@@ -406,64 +378,25 @@ func (r *WorkspaceReconciler) backup(ctx context.Context, ws *v1alpha1.Workspace
 }
 
 func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
-	var secret corev1.Secret
-
-	// Re-use client or create if not yet created
-	if r.StorageClient == nil {
-		var err error
-		r.StorageClient, err = storage.NewClient(ctx)
-		if err != nil {
-			return nil, err
-		}
+	p := gcsPersistence{
+		bucket:        ws.Spec.BackupBucket,
+		storageClient: r.gcsClient,
 	}
-
-	bh := r.StorageClient.Bucket(ws.Spec.BackupBucket)
-	_, err := bh.Attrs(ctx)
-	if err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
-	}
-
-	// Try to retrieve existing backup
-	oh := bh.Object(ws.BackupObjectName())
-	_, err = oh.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	oreader, err := oh.NewReader(ctx)
-	if err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
-	}
-
-	// Copy state file from GCS
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, oreader)
-	if err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
-	}
-
-	// Unmarshal state file into secret obj
-	if err := yaml.Unmarshal(buf.Bytes(), &secret); err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
-	}
-
-	if err := oreader.Close(); err != nil {
-		return r.handleStorageError(err, ws, "RestoreError")
+	secret, err := p.restore(ctx, ws.Namespace, ws.StateSecretName())
+	if ferr, ok := err.(fatal); ok {
+		return workspaceFailure(fmt.Sprintf("%s: %s", reason, "bucket does not exist")), nil
 	}
 
 	// Blank out certain fields to avoid errors upon create
 	secret.ResourceVersion = ""
 	secret.OwnerReferences = nil
 
-	if err := r.Create(ctx, &secret); err != nil {
+	if err := r.Create(ctx, secret); err != nil {
 		return r.handleStorageError(err, ws, "RestoreError")
 	}
 
 	// Parse state file
-	state, err := readState(ctx, &secret)
+	state, err := readState(ctx, secret)
 	if err != nil {
 		return r.handleStorageError(err, ws, "RestoreError")
 	}
