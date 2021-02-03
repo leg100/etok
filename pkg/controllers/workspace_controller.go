@@ -308,7 +308,7 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 			// Backup if current backup serial doesn't match serial of state
 			if ws.Status.BackupSerial == nil || *ws.Status.BackupSerial != state.Serial {
 				if err := r.BackupProvider.Backup(ctx, &secret); err != nil {
-					return nil, err
+					return r.sendWarningEvent(err, ws, "BackupError")
 				}
 
 				ws.Status.BackupSerial = &state.Serial
@@ -369,7 +369,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	secretKey := types.NamespacedName{Namespace: ws.Namespace, Name: ws.StateSecretName()}
 	secret, err := r.BackupProvider.Restore(ctx, secretKey)
 	if err != nil {
-		return nil, err
+		return r.sendWarningEvent(err, ws, "RestoreError")
 	}
 	if secret == nil {
 		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
