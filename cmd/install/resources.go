@@ -89,21 +89,3 @@ func adminClusterRoleBinding() *rbacv1.ClusterRoleBinding {
 		},
 	}
 }
-
-func secret(namespace string, key []byte) *corev1.Secret {
-	secret := &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: corev1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "etok",
-			Namespace: namespace,
-		},
-		Data: map[string][]byte{
-			"secret-file.json": key,
-		},
-	}
-
-	return secret
-}

@@ -3,6 +3,8 @@ package manager
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"runtime"
 
 	"k8s.io/klog/v2"
@@ -75,6 +77,17 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 			}
 
 			klog.V(0).Info("Runner image: " + o.Image)
+
+			// Convert GOOGLE_CREDENTIALS=<key> to
+			// GOOGLE_APPLICATION_CREDENTIALS=<file-path-containing-key>
+			if gcreds := os.Getenv("GOOGLE_CREDENTIALS"); gcreds != "" {
+				if err := ioutil.WriteFile("/google_application_credentials.json", []byte(gcreds), 0400); err != nil {
+					return fmt.Errorf("unable to write google credentials to disk: %w", err)
+				}
+				if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/google_application_credentials.json"); err != nil {
+					return fmt.Errorf("unable to create environment variable GOOGLE_APPLICATION_CREDENTIALS: %w", err)
+				}
+			}
 
 			var backupProvider backup.Provider
 			if o.backupProviderName != "" {

@@ -25,6 +25,7 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,17 +73,36 @@ func TestInstall(t *testing.T) {
 			name: "fresh install with custom image",
 			args: []string{"install", "--wait=false", "--image", "bugsbunny:v123"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d = deploy()
-				client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(d), d)
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
 				assert.Equal(t, "bugsbunny:v123", d.Spec.Template.Spec.Containers[0].Image)
+			},
+		},
+		{
+			name: "fresh install with secret found",
+			args: []string{"install", "--wait=false"},
+			objs: []runtimeclient.Object{testobj.Secret("etok", "etok")},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "etok",
+						},
+					},
+				})
 			},
 		},
 		{
 			name: "fresh install with backups enabled",
 			args: []string{"install", "--wait=false", "--backup-provider=gcs", "--gcs-bucket=backups-bucket"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d = deploy()
-				client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(d), d)
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
 				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
 				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: "backups-bucket"})
 			},
@@ -119,10 +139,6 @@ func TestInstall(t *testing.T) {
 			cmd.SetOut(buf)
 			cmd.SetArgs(tt.args)
 
-			// Set path to secret file
-			secretTmpDir := t.NewTempDir().Write("secret.txt", []byte("secret-sauce"))
-			opts.secretFile = secretTmpDir.Path("secret.txt")
-
 			// Mock a remote web server from which YAML files will be retrieved
 			mockWebServer(t)
 
@@ -149,8 +165,7 @@ func TestInstall(t *testing.T) {
 				assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
 			}
 
-			// assert non-CRD resources are present unless only CRDs are
-			// requested
+			// assert non-CRD resources are present
 			if !opts.crdsOnly {
 				for _, res := range wantedResources() {
 					assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
@@ -210,6 +225,9 @@ func TestInstallDryRun(t *testing.T) {
 
 		out := new(bytes.Buffer)
 		opts := &installOptions{
+			Client: &etokclient.Client{
+				RuntimeClient: fake.NewFakeClientWithScheme(scheme.Scheme),
+			},
 			Factory: &cmdutil.Factory{
 				IOStreams: cmdutil.IOStreams{Out: out},
 			},
@@ -241,7 +259,6 @@ func wantedCRDs() (resources []runtimeclient.Object) {
 func wantedResources() (resources []runtimeclient.Object) {
 	resources = append(resources, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
 	resources = append(resources, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
-	resources = append(resources, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
