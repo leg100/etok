@@ -134,7 +134,7 @@ etok install --backup-provider=gcs --gcs-bucket=backups-bucket
 
 Note: only GCS is supported at present.
 
-Be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
+Be sure to provide the appropriate credentials of a GCP service account to the operator at install time. Either [create a secret containing credentials](#credentials), or [setup workload identity](#workload-identity). The service account needs the following permissions on the bucket:
 
 ```
 storage.buckets.get
@@ -147,9 +147,9 @@ To opt a workspace out of automatic backup and restore, pass the `--ephemeral` f
 
 ## Credentials
 
-Etok looks for credentials in a secret named `etok`. If found, the credentials contained within are made available to terraform as environment variables.
+Etok looks for credentials in a secret named `etok` in the relevant namespace. The credentials contained within are made available as environment variables.
 
-For instance to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
+For instance to set credentials for the [Terraform GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference), or for making backups to GCS:
 
 ```
 kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]

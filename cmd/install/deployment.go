@@ -121,24 +121,12 @@ func deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 	deployment.Spec.Template.Labels = selector
 
 	if c.withSecret {
-		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: "secrets",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: "etok",
+		deployment.Spec.Template.Spec.Containers[0].EnvFrom = append(deployment.Spec.Template.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: "etok",
 				},
 			},
-		})
-
-		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      "secrets",
-			MountPath: "/secrets/secret-file.json",
-			SubPath:   "secret-file.json",
-		})
-
-		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: "/secrets/secret-file.json",
 		})
 	}
 

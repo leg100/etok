@@ -12,8 +12,10 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -68,8 +70,6 @@ type installOptions struct {
 	image       string
 	kubeContext string
 
-	// Path on local fs containing GCP service account key
-	secretFile string
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
@@ -128,7 +128,6 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	cmd.Flags().BoolVar(&o.wait, "wait", true, "Toggle waiting for deployment to be ready")
 	cmd.Flags().DurationVar(&o.timeout, "timeout", 60*time.Second, "Timeout for waiting for deployment to be ready")
 
-	cmd.Flags().StringVar(&o.secretFile, "secret-file", "", "Path on local filesystem to key file")
 	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 	cmd.Flags().BoolVar(&o.crdsOnly, "crds-only", o.crdsOnly, "Only generate CRD resources. Useful for updating CRDs for an existing Etok install.")
 
@@ -180,7 +179,15 @@ func (o *installOptions) install(ctx context.Context) error {
 		resources = append(resources, namespace(o.namespace))
 		resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
 
-		secretPresent := o.secretFile != ""
+		// Determine if a secret named 'etok' is present
+		var secretPresent bool
+		err := o.RuntimeClient.Get(ctx, types.NamespacedName{Namespace: "etok", Name: "etok"}, &corev1.Secret{})
+		if err != nil && !kerrors.IsNotFound(err) {
+			return fmt.Errorf("unable to check for secret: %w", err)
+		}
+		if err == nil {
+			secretPresent = true
+		}
 
 		// Deploy options
 		dopts := []podTemplateOption{}
@@ -192,15 +199,6 @@ func (o *installOptions) install(ctx context.Context) error {
 
 		deploy = deployment(o.namespace, dopts...)
 		resources = append(resources, deploy)
-
-		if o.secretFile != "" {
-			key, err := ioutil.ReadFile(o.secretFile)
-			if err != nil {
-				return err
-			}
-
-			resources = append(resources, secret(o.namespace, key))
-		}
 	}
 
 	// Set labels
