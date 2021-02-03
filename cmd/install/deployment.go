@@ -33,26 +33,17 @@ func WithAnnotations(annotations map[string]string) podTemplateOption {
 	}
 }
 
-func WithEnvFromSecretKey(varName, secret, key string) podTemplateOption {
-	return func(c *podTemplateConfig) {
-		c.envVars = append(c.envVars, corev1.EnvVar{
-			Name: varName,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: secret,
-					},
-					Key: key,
-				},
-			},
-		})
-	}
-}
-
 func WithSecret(secretPresent bool) podTemplateOption {
 	return func(c *podTemplateConfig) {
 		c.withSecret = secretPresent
 
+	}
+}
+
+func WithGCSProvider(bucket string) podTemplateOption {
+	return func(c *podTemplateConfig) {
+		c.envVars = append(c.envVars, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
+		c.envVars = append(c.envVars, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: bucket})
 	}
 }
 
@@ -113,6 +104,11 @@ func deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 				},
 			},
 		},
+	}
+
+	// Add environment variables to container
+	for _, ev := range c.envVars {
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, ev)
 	}
 
 	// Label selector for operator pod.  It must match the pod template's

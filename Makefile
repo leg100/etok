@@ -47,7 +47,8 @@ local: image push
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy
 deploy: image push
-	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS)
+	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
+		--backup-provider=gcs --gcs-bucket=$(BACKUP_BUCKET)
 
 # Tail operator logs
 .PHONY: logs

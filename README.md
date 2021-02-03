@@ -122,15 +122,19 @@ Terraform state is stored in a secret using the [kubernetes backend](https://www
 
 Note: Do not define a backend in your terraform configuration - it will conflict with the configuration Etok automatically installs.
 
-### State Persistence
+### State Backup and Restore
 
-Persistence of state to cloud storage is supported. If enabled, every update to the state is backed up to a cloud storage bucket.
+Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
 
-To enable persistence, pass the name of an existing bucket via the `--backup-bucket` flag when creating a new workspace with `workspace new`. If the secret storing the state cannot be found, the workspace checks if a backup exists in the bucket. If found, it restores the state to the secret.
+To enable backups, install the operator with the relevant flags. For example, to backup to a GCS bucket:
+
+```
+etok install --backup-provider=gcs --gcs-bucket=backups-bucket
+```
 
 Note: only GCS is supported at present.
 
-The operator is responsible for persisting the state. Therefore be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
+Be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
 
 ```
 storage.buckets.get
@@ -138,6 +142,8 @@ storage.objects.create
 storage.objects.delete
 storage.objects.get
 ```
+
+To opt a workspace out of automatic backup and restore, pass the `--ephemeral` flag when creating a new workspace with `workspace new`. This is useful if you intend for your workspace to be short-lived.
 
 ## Credentials
 

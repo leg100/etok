@@ -9,6 +9,7 @@ import (
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/controllers"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/version"
@@ -38,6 +39,12 @@ type ManagerOptions struct {
 	EnableLeaderElection bool
 
 	args []string
+
+	// Toggle state backups
+	backupProviderName string
+
+	// GCS backup bucket
+	gcsBucket string
 }
 
 func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
@@ -69,11 +76,24 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 
 			klog.V(0).Info("Runner image: " + o.Image)
 
+			var backupProvider backup.Provider
+			if o.backupProviderName != "" {
+				switch o.backupProviderName {
+				case "gcs":
+					backupProvider, err = backup.NewGCSProvider(cmd.Context(), o.gcsBucket, nil)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
 			// Setup workspace ctrl with mgr
 			workspaceReconciler := controllers.NewWorkspaceReconciler(
 				mgr.GetClient(),
 				o.Image,
+				controllers.WithBackupProvider(backupProvider),
 				controllers.WithEventRecorder(mgr.GetEventRecorderFor("workspace-controller")))
+
 			if err := workspaceReconciler.SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create workspace controller: %w", err)
 			}
@@ -101,6 +121,10 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	cmd.Flags().StringVar(&o.Image, "image", version.Image, "Docker image used for both the operator and the runner")
+
+	cmd.Flags().StringVar(&o.backupProviderName, "backup-provider", "", "Enable backups specifying a provider")
+
+	cmd.Flags().StringVar(&o.gcsBucket, "gcs-bucket", "", "Specify GCS bucket for terraform state backups")
 
 	return cmd
 }

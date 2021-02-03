@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -38,7 +39,7 @@ func TestInstall(t *testing.T) {
 		name       string
 		args       []string
 		objs       []runtimeclient.Object
-		err        bool
+		err        error
 		assertions func(*testutil.T, runtimeclient.Client)
 	}{
 		{
@@ -76,6 +77,31 @@ func TestInstall(t *testing.T) {
 				assert.Equal(t, "bugsbunny:v123", d.Spec.Template.Spec.Containers[0].Image)
 			},
 		},
+		{
+			name: "fresh install with backups enabled",
+			args: []string{"install", "--wait=false", "--backup-provider=gcs", "--gcs-bucket=backups-bucket"},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var d = deploy()
+				client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(d), d)
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: "backups-bucket"})
+			},
+		},
+		{
+			name: "missing backup bucket name",
+			args: []string{"install", "--wait=false", "--backup-provider=gcs"},
+			err:  errInvalidBackupConfig,
+		},
+		{
+			name: "missing backup provider name",
+			args: []string{"install", "--wait=false", "--gcs-bucket=backups-bucket"},
+			err:  errInvalidBackupConfig,
+		},
+		{
+			name: "invalid backup provider name",
+			args: []string{"install", "--wait=false", "--backup-provider=alibaba-cloud-blob"},
+			err:  errInvalidBackupConfig,
+		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
@@ -103,7 +129,17 @@ func TestInstall(t *testing.T) {
 			// Override wait interval to ensure fast tests
 			t.Override(&interval, 10*time.Millisecond)
 
-			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+			// Run command and assert returned error is either nil or wraps
+			// expected error
+			err := cmd.ExecuteContext(context.Background())
+			if !assert.True(t, errors.Is(err, tt.err)) {
+				t.Errorf("unexpected error: %w", err)
+				t.FailNow()
+			}
+			if err != nil {
+				// Expected error occurred; there's no point in continuing
+				return
+			}
 
 			// get runtime client now that it's been created
 			client := opts.RuntimeClient
