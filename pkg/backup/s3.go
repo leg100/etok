@@ -3,11 +3,13 @@ package backup
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -80,4 +82,32 @@ func (p *s3Provider) Restore(ctx context.Context, key client.ObjectKey) (*corev1
 	}
 
 	return &secret, nil
+}
+
+func init() {
+	providerToFlagsMaker["s3"] = func() flags { return &s3Flags{} }
+}
+
+type s3Flags struct {
+	bucket string
+	region string
+}
+
+func (f *s3Flags) addToFlagSet(fs *pflag.FlagSet) {
+	fs.StringVar(&f.bucket, "s3-bucket", "", "Specify s3 bucket for terraform state backups")
+	fs.StringVar(&f.region, "s3-region", "", "Specify s3 region for terraform state backups")
+}
+
+func (f *s3Flags) createProvider(ctx context.Context) (Provider, error) {
+	return NewS3Provider(ctx, f.bucket, &aws.Config{Region: aws.String(f.region)})
+}
+
+func (f *s3Flags) validate() error {
+	if f.bucket == "" {
+		return fmt.Errorf("%w: missing s3 bucket name", ErrInvalidConfig)
+	}
+	if f.region == "" {
+		return fmt.Errorf("%w: missing s3 region name", ErrInvalidConfig)
+	}
+	return nil
 }

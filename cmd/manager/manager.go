@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/backup"
@@ -47,6 +48,9 @@ type ManagerOptions struct {
 
 	// GCS backup bucket
 	gcsBucket string
+
+	// s3 backup bucket
+	s3Bucket string
 }
 
 func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
@@ -97,6 +101,12 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 					if err != nil {
 						return err
 					}
+				case "s3":
+					cfg := aws.Config{Region: aws.String("eu-west-2")}
+					backupProvider, err = backup.NewS3Provider(cmd.Context(), o.s3Bucket, &cfg)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
@@ -138,6 +148,7 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&o.backupProviderName, "backup-provider", "", "Enable backups specifying a provider")
 
 	cmd.Flags().StringVar(&o.gcsBucket, "gcs-bucket", "", "Specify GCS bucket for terraform state backups")
+	cmd.Flags().StringVar(&o.s3Bucket, "s3-bucket", "", "Specify s3 bucket for terraform state backups")
 
 	return cmd
 }

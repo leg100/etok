@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"cloud.google.com/go/storage"
+	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -110,6 +111,25 @@ func (p *gcsProvider) Restore(ctx context.Context, key client.ObjectKey) (*corev
 	return &secret, nil
 }
 
-func path(key client.ObjectKey) string {
-	return fmt.Sprintf("%s.yaml", key)
+func init() {
+	providerToFlagsMaker["gcs"] = func() flags { return &gcsFlags{} }
+}
+
+type gcsFlags struct {
+	bucket string
+}
+
+func (f *gcsFlags) addToFlagSet(fs *pflag.FlagSet) {
+	fs.StringVar(&f.bucket, "gcs-bucket", "", "Specify gcs bucket for terraform state backups")
+}
+
+func (f *gcsFlags) createProvider(ctx context.Context) (Provider, error) {
+	return NewGCSProvider(ctx, f.bucket, nil)
+}
+
+func (f *gcsFlags) validate() error {
+	if f.bucket == "" {
+		return fmt.Errorf("%w: missing gcs bucket name", ErrInvalidConfig)
+	}
+	return nil
 }

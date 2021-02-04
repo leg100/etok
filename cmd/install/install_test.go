@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/backup"
 	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
@@ -110,17 +111,12 @@ func TestInstall(t *testing.T) {
 		{
 			name: "missing backup bucket name",
 			args: []string{"install", "--wait=false", "--backup-provider=gcs"},
-			err:  errInvalidBackupConfig,
-		},
-		{
-			name: "missing backup provider name",
-			args: []string{"install", "--wait=false", "--gcs-bucket=backups-bucket"},
-			err:  errInvalidBackupConfig,
+			err:  backup.ErrInvalidConfig,
 		},
 		{
 			name: "invalid backup provider name",
 			args: []string{"install", "--wait=false", "--backup-provider=alibaba-cloud-blob"},
-			err:  errInvalidBackupConfig,
+			err:  backup.ErrInvalidConfig,
 		},
 	}
 	for _, tt := range tests {
@@ -225,6 +221,7 @@ func TestInstallDryRun(t *testing.T) {
 
 		out := new(bytes.Buffer)
 		opts := &installOptions{
+			backupCfg: backup.NewConfig(),
 			Client: &etokclient.Client{
 				RuntimeClient: fake.NewFakeClientWithScheme(scheme.Scheme),
 			},

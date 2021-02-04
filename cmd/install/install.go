@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
@@ -56,8 +56,6 @@ var (
 
 	// Interval between polling deployment status
 	interval = time.Second
-
-	errInvalidBackupConfig = errors.New("invalid backup config")
 )
 
 type installOptions struct {
@@ -87,15 +85,13 @@ type installOptions struct {
 	// Print out resources and don't install
 	dryRun bool
 
-	// Toggle state backups
-	backupProviderName string
-
-	// GCS backup bucket
-	gcsBucket string
+	// State backup configuration
+	backupCfg *backup.Config
 }
 
 func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	o := &installOptions{
+		backupCfg: backup.NewConfig(),
 		Factory:   f,
 		namespace: defaultNamespace,
 	}
@@ -104,7 +100,8 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 		Use:   "install",
 		Short: "Install etok operator",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := o.validateBackupOptions(); err != nil {
+			// Validate backup flags
+			if err := o.backupCfg.Validate(); err != nil {
 				return err
 			}
 
@@ -120,6 +117,8 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	flags.AddNamespaceFlag(cmd, &o.namespace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 
+	o.backupCfg.AddToFlagSet(cmd.Flags())
+
 	cmd.Flags().StringVar(&o.name, "name", "etok-operator", "Name for kubernetes resources")
 	cmd.Flags().StringVar(&o.image, "image", version.Image, "Docker image used for both the operator and the runner")
 
@@ -131,26 +130,21 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 	cmd.Flags().BoolVar(&o.crdsOnly, "crds-only", o.crdsOnly, "Only generate CRD resources. Useful for updating CRDs for an existing Etok install.")
 
-	cmd.Flags().StringVar(&o.backupProviderName, "backup-provider", "", "Enable backups specifying a provider (only 'gcs' supported currently)")
-
-	cmd.Flags().StringVar(&o.gcsBucket, "gcs-bucket", "", "Specify GCS bucket for terraform state backups")
-
 	return cmd, o
 }
 
-func (o *installOptions) validateBackupOptions() error {
-	if o.backupProviderName != "" {
-		if o.backupProviderName != "gcs" {
-			return fmt.Errorf("%w: %s is invalid value for --backup-provider, valid options are: gcs", errInvalidBackupConfig, o.backupProviderName)
-		}
-	}
-
-	if (o.backupProviderName == "" && o.gcsBucket != "") || (o.backupProviderName != "" && o.gcsBucket == "") {
-		return fmt.Errorf("%w: you must specify both --backup-provider and --gcs-bucket", errInvalidBackupConfig)
-	}
-
-	return nil
-}
+//func (o *installOptions) validateBackupOptions() error { if
+//o.backupProviderName != "" { if o.backupProviderName != "gcs" &&
+//o.backupProviderName != "s3" { return fmt.Errorf("%w: %s is invalid value for
+//--backup-provider, valid options are: gcs, s3", errInvalidBackupConfig,
+//o.backupProviderName) } }
+//
+//	if (o.backupProviderName == "" && o.gcsBucket != "") || (o.backupProviderName != "" && o.gcsBucket == "") {
+//		return fmt.Errorf("%w: you must specify both --backup-provider and --gcs-bucket", errInvalidBackupConfig)
+//	}
+//
+//	return nil
+//}
 
 func (o *installOptions) install(ctx context.Context) error {
 	var deploy *appsv1.Deployment
@@ -191,11 +185,9 @@ func (o *installOptions) install(ctx context.Context) error {
 
 		// Deploy options
 		dopts := []podTemplateOption{}
+		dopts = append(dopts, WithBackupConfig(o.backupCfg))
 		dopts = append(dopts, WithSecret(secretPresent))
 		dopts = append(dopts, WithImage(o.image))
-		if o.backupProviderName == "gcs" {
-			dopts = append(dopts, WithGCSProvider(o.gcsBucket))
-		}
 
 		deploy = deployment(o.namespace, dopts...)
 		resources = append(resources, deploy)
