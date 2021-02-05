@@ -237,12 +237,11 @@ func TestNewWorkspace(t *testing.T) {
 			err: handlers.ErrWorkspaceFailed,
 		},
 		{
-			name: "restore timeout exceeded",
-			args: []string{"foo", "--backup-bucket", "my-bucket", "--restore-timeout", "100ms"},
+			name: "ready timeout exceeded",
+			args: []string{"foo", "--ready-timeout", "100ms"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			overrideStatus: func(status *v1alpha1.WorkspaceStatus) {
-				// Mock operator failing to provide restoreFailure condition
-				// status
+				// Mock operator failing to provide ready condition status
 				status.Conditions = nil
 			},
 			err: errReadyTimeout,
