@@ -3,12 +3,12 @@ package install
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -21,12 +21,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,11 +36,12 @@ import (
 
 func TestInstall(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		objs       []runtimeclient.Object
-		err        bool
-		assertions func(*testutil.T, runtimeclient.Client)
+		name             string
+		args             []string
+		objs             []runtimeclient.Object
+		err              error
+		assertions       func(*testutil.T, runtimeclient.Client)
+		dryRunAssertions func(*testutil.T, *bytes.Buffer)
 	}{
 		{
 			name: "fresh install",
@@ -71,9 +73,57 @@ func TestInstall(t *testing.T) {
 			name: "fresh install with custom image",
 			args: []string{"install", "--wait=false", "--image", "bugsbunny:v123"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d = deploy()
-				client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(d), d)
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
 				assert.Equal(t, "bugsbunny:v123", d.Spec.Template.Spec.Containers[0].Image)
+			},
+		},
+		{
+			name: "fresh install with secret found",
+			args: []string{"install", "--wait=false"},
+			objs: []runtimeclient.Object{testobj.Secret("etok", "etok")},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "etok",
+						},
+					},
+				})
+			},
+		},
+		{
+			name: "fresh install with backups enabled",
+			args: []string{"install", "--wait=false", "--backup-provider=gcs", "--gcs-bucket=backups-bucket"},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				var d appsv1.Deployment
+				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
+				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: "backups-bucket"})
+			},
+		},
+		{
+			name: "missing backup bucket name",
+			args: []string{"install", "--wait=false", "--backup-provider=gcs"},
+			err:  backup.ErrInvalidConfig,
+		},
+		{
+			name: "invalid backup provider name",
+			args: []string{"install", "--wait=false", "--backup-provider=alibaba-cloud-blob"},
+			err:  backup.ErrInvalidConfig,
+		},
+		{
+			name: "dry run",
+			args: []string{"install", "--dry-run", "--local"},
+			dryRunAssertions: func(t *testutil.T, out *bytes.Buffer) {
+				// Assert correct number of k8s objs are serialized to yaml
+				docs := strings.Split(out.String(), "---\n")
+				assert.Equal(t, 11, len(docs))
 			},
 		},
 	}
@@ -85,7 +135,7 @@ func TestInstall(t *testing.T) {
 
 			buf := new(bytes.Buffer)
 			f := &cmdutil.Factory{
-				IOStreams:            cmdutil.IOStreams{Out: os.Stdout},
+				IOStreams:            cmdutil.IOStreams{Out: buf},
 				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
 			}
 
@@ -93,17 +143,29 @@ func TestInstall(t *testing.T) {
 			cmd.SetOut(buf)
 			cmd.SetArgs(tt.args)
 
-			// Set path to secret file
-			secretTmpDir := t.NewTempDir().Write("secret.txt", []byte("secret-sauce"))
-			opts.secretFile = secretTmpDir.Path("secret.txt")
-
 			// Mock a remote web server from which YAML files will be retrieved
 			mockWebServer(t)
 
 			// Override wait interval to ensure fast tests
 			t.Override(&interval, 10*time.Millisecond)
 
-			t.CheckError(tt.err, cmd.ExecuteContext(context.Background()))
+			// Run command and assert returned error is either nil or wraps
+			// expected error
+			err := cmd.ExecuteContext(context.Background())
+			if !assert.True(t, errors.Is(err, tt.err)) {
+				t.Errorf("unexpected error: %w", err)
+				t.FailNow()
+			}
+			if err != nil {
+				// Expected error occurred; there's no point in continuing
+				return
+			}
+
+			// Perform dry run assertions and skip k8s tests
+			if tt.dryRunAssertions != nil {
+				tt.dryRunAssertions(t, buf)
+				return
+			}
 
 			// get runtime client now that it's been created
 			client := opts.RuntimeClient
@@ -113,8 +175,7 @@ func TestInstall(t *testing.T) {
 				assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
 			}
 
-			// assert non-CRD resources are present unless only CRDs are
-			// requested
+			// assert non-CRD resources are present
 			if !opts.crdsOnly {
 				for _, res := range wantedResources() {
 					assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
@@ -166,27 +227,6 @@ func TestInstallWait(t *testing.T) {
 	}
 }
 
-func TestInstallDryRun(t *testing.T) {
-	testutil.Run(t, "default", func(t *testutil.T) {
-		// When retrieve local paths to YAML files, it's assumed the user's pwd
-		// is the repo root
-		t.Chdir("../../")
-
-		out := new(bytes.Buffer)
-		opts := &installOptions{
-			Factory: &cmdutil.Factory{
-				IOStreams: cmdutil.IOStreams{Out: out},
-			},
-			dryRun: true,
-			local:  true,
-		}
-		require.NoError(t, opts.install(context.Background()))
-
-		docs := strings.Split(out.String(), "---\n")
-		assert.Equal(t, 11, len(docs))
-	})
-}
-
 // Convert []client.Object to []runtime.Object (the CR real client works with
 // the former, whereas the CR fake client works with the latter)
 func convertObjs(objs ...runtimeclient.Object) (converted []runtime.Object) {
@@ -205,7 +245,6 @@ func wantedCRDs() (resources []runtimeclient.Object) {
 func wantedResources() (resources []runtimeclient.Object) {
 	resources = append(resources, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
 	resources = append(resources, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
-	resources = append(resources, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
 	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})

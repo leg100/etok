@@ -63,9 +63,9 @@ func WithDeleteTimestamp() func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithBackupBucket(bucket string) func(*v1alpha1.Workspace) {
+func WithEphemeral() func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.BackupBucket = bucket
+		ws.Spec.Ephemeral = true
 	}
 }
 

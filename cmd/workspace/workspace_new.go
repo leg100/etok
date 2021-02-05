@@ -60,9 +60,8 @@ type newOptions struct {
 	// Timeout for workspace pod to be ready
 	podTimeout time.Duration
 
-	// Timeout for workspace restore failure condition to report either true or
-	// false (did the restore fail or not?).
-	restoreTimeout time.Duration
+	// Timeout for workspace ready condition to be true
+	readyTimeout time.Duration
 
 	// Disable default behaviour of deleting resources upon error
 	disableResourceCleanup bool
@@ -76,9 +75,6 @@ type newOptions struct {
 
 	variables            map[string]string
 	environmentVariables map[string]string
-
-	// backupBucket is the bucket to which the state file will backed up to
-	backupBucket string
 
 	etokenv *env.Env
 }
@@ -131,7 +127,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().StringVar(&o.workspaceSpec.Cache.Size, "size", defaultCacheSize, "Size of PersistentVolume for cache")
 	cmd.Flags().StringVar(&o.workspaceSpec.TerraformVersion, "terraform-version", "", "Override terraform version")
-	cmd.Flags().StringVar(&o.workspaceSpec.BackupBucket, "backup-bucket", "", "Backup state to GCS bucket")
+	cmd.Flags().BoolVarP(&o.workspaceSpec.Ephemeral, "ephemeral", "e", false, "Disable state backup (and restore)")
 
 	// We want nil to be the default but it doesn't seem like pflags supports
 	// that so use empty string and override later (see above)
@@ -139,7 +135,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
 	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready")
-	cmd.Flags().DurationVar(&o.restoreTimeout, "restore-timeout", defaultReadyTimeout, "timeout for restore condition to report back")
+	cmd.Flags().DurationVar(&o.readyTimeout, "ready-timeout", defaultReadyTimeout, "timeout for ready condition to report true")
 
 	cmd.Flags().StringSliceVar(&o.workspaceSpec.PrivilegedCommands, "privileged-commands", []string{}, "Set privileged commands")
 
@@ -294,7 +290,7 @@ func (o *newOptions) waitForReady(ctx context.Context, ws *v1alpha1.Workspace) e
 	lw := &k8s.WorkspaceListWatcher{Client: o.EtokClient, Name: ws.Name, Namespace: ws.Namespace}
 	hdlr := handlers.WorkspaceReady()
 
-	ctx, cancel := context.WithTimeout(ctx, o.restoreTimeout)
+	ctx, cancel := context.WithTimeout(ctx, o.readyTimeout)
 	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Workspace{}, nil, hdlr)
