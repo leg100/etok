@@ -3,7 +3,6 @@ package install
 import (
 	"testing"
 
-	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/stretchr/testify/assert"
@@ -36,25 +35,6 @@ func TestDeployment(t *testing.T) {
 							Name: "etok",
 						},
 					},
-				})
-			},
-		},
-		{
-			name:      "with backup enabled",
-			namespace: "default",
-			opts:      []podTemplateOption{WithBackupConfig(backup.NewConfig())},
-			assertions: func(deploy *appsv1.Deployment) {
-				assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "ETOK_BACKUP_PROVIDER",
-					Value: "",
-				})
-				assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "ETOK_GCS_BUCKET",
-					Value: "",
-				})
-				assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "ETOK_S3_BUCKET",
-					Value: "",
 				})
 			},
 		},

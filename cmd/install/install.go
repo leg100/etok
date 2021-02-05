@@ -20,13 +20,14 @@ import (
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -87,6 +88,9 @@ type installOptions struct {
 
 	// State backup configuration
 	backupCfg *backup.Config
+
+	// flags are the install command's parsed flags
+	flags *pflag.FlagSet
 }
 
 func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
@@ -101,9 +105,11 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 		Short: "Install etok operator",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			// Validate backup flags
-			if err := o.backupCfg.Validate(); err != nil {
+			if err := o.backupCfg.Validate(cmd.Flags()); err != nil {
 				return err
 			}
+
+			o.flags = cmd.Flags()
 
 			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
@@ -185,7 +191,7 @@ func (o *installOptions) install(ctx context.Context) error {
 
 		// Deploy options
 		dopts := []podTemplateOption{}
-		dopts = append(dopts, WithBackupConfig(o.backupCfg))
+		dopts = append(dopts, WithBackupConfig(o.backupCfg, o.flags))
 		dopts = append(dopts, WithSecret(secretPresent))
 		dopts = append(dopts, WithImage(o.image))
 

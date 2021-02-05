@@ -5,8 +5,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
-	"github.com/leg100/etok/pkg/backup"
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/pkg/version"
+	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -41,9 +42,9 @@ func WithSecret(secretPresent bool) podTemplateOption {
 	}
 }
 
-func WithBackupConfig(cfg *backup.Config) podTemplateOption {
+func WithBackupConfig(cfg *backup.Config, fs *pflag.FlagSet) podTemplateOption {
 	return func(c *podTemplateConfig) {
-		for _, ev := range cfg.GetEnvVars() {
+		for _, ev := range cfg.GetEnvVars(fs) {
 			c.envVars = append(c.envVars, ev)
 		}
 	}

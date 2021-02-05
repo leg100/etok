@@ -9,10 +9,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/controllers"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/version"
@@ -43,18 +42,15 @@ type ManagerOptions struct {
 
 	args []string
 
-	// Toggle state backups
-	backupProviderName string
-
-	// GCS backup bucket
-	gcsBucket string
-
-	// s3 backup bucket
-	s3Bucket string
+	// State backup configuration
+	backupCfg *backup.Config
 }
 
 func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
-	o := &ManagerOptions{Factory: f}
+	o := &ManagerOptions{
+		backupCfg: backup.NewConfig(),
+		Factory:   f,
+	}
 	cmd := &cobra.Command{
 		Use:    "operator",
 		Short:  "Run the etok operator",
@@ -63,6 +59,11 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 			ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
 
 			printVersion()
+
+			// Validate backup flags
+			if err := o.backupCfg.Validate(cmd.Flags()); err != nil {
+				return err
+			}
 
 			client, err := f.Create(o.KubeContext)
 			if err != nil {
@@ -93,21 +94,13 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 				}
 			}
 
-			var backupProvider backup.Provider
-			if o.backupProviderName != "" {
-				switch o.backupProviderName {
-				case "gcs":
-					backupProvider, err = backup.NewGCSProvider(cmd.Context(), o.gcsBucket, nil)
-					if err != nil {
-						return err
-					}
-				case "s3":
-					cfg := aws.Config{Region: aws.String("eu-west-2")}
-					backupProvider, err = backup.NewS3Provider(cmd.Context(), o.s3Bucket, &cfg)
-					if err != nil {
-						return err
-					}
-				}
+			// Select backup provider based on parsed flags
+			backupProvider, err := o.backupCfg.CreateSelectedProvider(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if backupProvider != nil {
+				klog.V(0).Infof("Created backup provider: %s", o.backupCfg.Selected)
 			}
 
 			// Setup workspace ctrl with mgr
@@ -137,6 +130,8 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
 
+	o.backupCfg.AddToFlagSet(cmd.Flags())
+
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 
 	cmd.Flags().StringVar(&o.MetricsAddress, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -144,11 +139,6 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	cmd.Flags().StringVar(&o.Image, "image", version.Image, "Docker image used for both the operator and the runner")
-
-	cmd.Flags().StringVar(&o.backupProviderName, "backup-provider", "", "Enable backups specifying a provider")
-
-	cmd.Flags().StringVar(&o.gcsBucket, "gcs-bucket", "", "Specify GCS bucket for terraform state backups")
-	cmd.Flags().StringVar(&o.s3Bucket, "s3-bucket", "", "Specify s3 bucket for terraform state backups")
 
 	return cmd
 }

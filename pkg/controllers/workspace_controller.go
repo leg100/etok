@@ -381,7 +381,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	secret.OwnerReferences = nil
 
 	if err := r.Create(ctx, secret); err != nil {
-		return r.sendWarningEvent(err, ws, "RestoreError")
+		return nil, err
 	}
 
 	// Parse state file

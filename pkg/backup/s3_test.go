@@ -3,7 +3,6 @@ package backup
 import (
 	"context"
 	"net/http/httptest"
-	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -11,18 +10,20 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/johannesboyne/gofakes3"
 	"github.com/johannesboyne/gofakes3/backend/s3mem"
-	"github.com/leg100/etok/pkg/testobj"
-	"github.com/stretchr/testify/assert"
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/require"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestS3Provider(t *testing.T) {
+type s3TestProvider struct {
+	*s3Provider
+}
+
+func (p *s3TestProvider) createProviderWithBuckets(t *testutil.T, providerBucket string, createBuckets ...string) (Provider, error) {
 	// fake s3
 	backend := s3mem.New()
 	faker := gofakes3.New(backend)
 	ts := httptest.NewServer(faker.Server())
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	// configure S3 client
 	cfg := &aws.Config{
@@ -37,18 +38,12 @@ func TestS3Provider(t *testing.T) {
 
 	client := s3.New(sess)
 
-	_, err = client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String("backups-bucket"),
-	})
-	require.NoError(t, err)
+	for _, b := range createBuckets {
+		_, err = client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(b),
+		})
+		require.NoError(t, err)
+	}
 
-	p, err := NewS3Provider(context.Background(), "backups-bucket", cfg)
-	require.NoError(t, err)
-
-	secret := testobj.Secret("default", "tfstate-default-workspace-1")
-
-	// Assert that backed up secret matches restored secret
-	require.NoError(t, p.Backup(context.Background(), secret))
-	restored, err := p.Restore(context.Background(), runtimeclient.ObjectKeyFromObject(secret))
-	assert.Equal(t, secret, restored)
+	return NewS3Provider(context.Background(), providerBucket, cfg)
 }

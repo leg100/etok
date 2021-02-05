@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,14 +21,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/backup"
 	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,11 +36,12 @@ import (
 
 func TestInstall(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		objs       []runtimeclient.Object
-		err        error
-		assertions func(*testutil.T, runtimeclient.Client)
+		name             string
+		args             []string
+		objs             []runtimeclient.Object
+		err              error
+		assertions       func(*testutil.T, runtimeclient.Client)
+		dryRunAssertions func(*testutil.T, *bytes.Buffer)
 	}{
 		{
 			name: "fresh install",
@@ -118,6 +117,15 @@ func TestInstall(t *testing.T) {
 			args: []string{"install", "--wait=false", "--backup-provider=alibaba-cloud-blob"},
 			err:  backup.ErrInvalidConfig,
 		},
+		{
+			name: "dry run",
+			args: []string{"install", "--dry-run", "--local"},
+			dryRunAssertions: func(t *testutil.T, out *bytes.Buffer) {
+				// Assert correct number of k8s objs are serialized to yaml
+				docs := strings.Split(out.String(), "---\n")
+				assert.Equal(t, 11, len(docs))
+			},
+		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
@@ -127,7 +135,7 @@ func TestInstall(t *testing.T) {
 
 			buf := new(bytes.Buffer)
 			f := &cmdutil.Factory{
-				IOStreams:            cmdutil.IOStreams{Out: os.Stdout},
+				IOStreams:            cmdutil.IOStreams{Out: buf},
 				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
 			}
 
@@ -150,6 +158,12 @@ func TestInstall(t *testing.T) {
 			}
 			if err != nil {
 				// Expected error occurred; there's no point in continuing
+				return
+			}
+
+			// Perform dry run assertions and skip k8s tests
+			if tt.dryRunAssertions != nil {
+				tt.dryRunAssertions(t, buf)
 				return
 			}
 
@@ -211,31 +225,6 @@ func TestInstallWait(t *testing.T) {
 			assert.Equal(t, tt.err, opts.deploymentIsReady(context.Background(), deploy()))
 		})
 	}
-}
-
-func TestInstallDryRun(t *testing.T) {
-	testutil.Run(t, "default", func(t *testutil.T) {
-		// When retrieve local paths to YAML files, it's assumed the user's pwd
-		// is the repo root
-		t.Chdir("../../")
-
-		out := new(bytes.Buffer)
-		opts := &installOptions{
-			backupCfg: backup.NewConfig(),
-			Client: &etokclient.Client{
-				RuntimeClient: fake.NewFakeClientWithScheme(scheme.Scheme),
-			},
-			Factory: &cmdutil.Factory{
-				IOStreams: cmdutil.IOStreams{Out: out},
-			},
-			dryRun: true,
-			local:  true,
-		}
-		require.NoError(t, opts.install(context.Background()))
-
-		docs := strings.Split(out.String(), "---\n")
-		assert.Equal(t, 11, len(docs))
-	})
 }
 
 // Convert []client.Object to []runtime.Object (the CR real client works with
