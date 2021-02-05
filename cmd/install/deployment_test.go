@@ -38,21 +38,6 @@ func TestDeployment(t *testing.T) {
 				})
 			},
 		},
-		{
-			name:      "with backup enabled",
-			namespace: "default",
-			opts:      []podTemplateOption{WithGCSProvider("backups-bucket")},
-			assertions: func(deploy *appsv1.Deployment) {
-				assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "ETOK_BACKUP_PROVIDER",
-					Value: "gcs",
-				})
-				assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "ETOK_GCS_BUCKET",
-					Value: "backups-bucket",
-				})
-			},
-		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {

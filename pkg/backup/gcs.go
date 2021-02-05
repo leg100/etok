@@ -29,6 +29,9 @@ func NewGCSProvider(ctx context.Context, bucket string, client *storage.Client) 
 	// Check bucket exists
 	bh := client.Bucket(bucket)
 	_, err := bh.Attrs(ctx)
+	if err == storage.ErrBucketNotExist {
+		return nil, fmt.Errorf("%w: %s", ErrBucketNotFound, bucket)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +111,4 @@ func (p *gcsProvider) Restore(ctx context.Context, key client.ObjectKey) (*corev
 	}
 
 	return &secret, nil
-}
-
-func path(key client.ObjectKey) string {
-	return fmt.Sprintf("%s.yaml", key)
 }

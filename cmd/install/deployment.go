@@ -5,7 +5,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/pkg/version"
+	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -40,10 +42,11 @@ func WithSecret(secretPresent bool) podTemplateOption {
 	}
 }
 
-func WithGCSProvider(bucket string) podTemplateOption {
+func WithBackupConfig(cfg *backup.Config, fs *pflag.FlagSet) podTemplateOption {
 	return func(c *podTemplateConfig) {
-		c.envVars = append(c.envVars, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
-		c.envVars = append(c.envVars, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: bucket})
+		for _, ev := range cfg.GetEnvVars(fs) {
+			c.envVars = append(c.envVars, ev)
+		}
 	}
 }
 
