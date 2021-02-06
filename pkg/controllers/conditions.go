@@ -5,6 +5,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func workspaceReady(message string) *metav1.Condition {
+	return &metav1.Condition{
+		Type:    v1alpha1.WorkspaceReadyCondition,
+		Status:  metav1.ConditionTrue,
+		Reason:  v1alpha1.ReadyReason,
+		Message: message,
+	}
+}
+
 func workspaceFailure(message string) *metav1.Condition {
 	return &metav1.Condition{
 		Type:    v1alpha1.WorkspaceReadyCondition,

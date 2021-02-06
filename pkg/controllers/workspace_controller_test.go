@@ -144,7 +144,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
-			wantErr: true,
 		},
 		{
 			name:      "Pod failed",
@@ -153,7 +152,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
-			wantErr: true,
 		},
 		{
 			name:      "Unknown phase",
