@@ -40,7 +40,7 @@ var (
 	workspaceReconcileStatusChain []workspaceUpdater
 )
 
-type workspaceUpdater func(context.Context, *v1alpha1.Workspace) (*metav1.Condition, error)
+type workspaceUpdater func(context.Context, *v1alpha1.Workspace) (bool, error)
 
 type WorkspaceReconciler struct {
 	client.Client
@@ -158,21 +158,16 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Update status one step in the chain at a time. Returns a ready condition.
-	ready, backoff := processWorkspaceReconcileStatusChain(ctx, &ws)
-	if ready != nil {
-		// Add condition to status
-		meta.SetStatusCondition(&ws.Status.Conditions, *ready)
+	// Update status one step in the chain at a time
+	backoff := processWorkspaceReconcileStatusChain(ctx, &ws)
 
-		// Ensure phase reflects ready condition
-		ws.Status.Phase = setPhase(ready.Reason)
+	// Ensure phase reflects ready condition
+	ws.Status.Phase = setPhase(&ws)
 
-		if err := r.updateStatus(ctx, req, ws.Status); err != nil {
-			return ctrl.Result{}, err
-		}
+	if err := r.updateStatus(ctx, req, ws.Status); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	// Non-nil backoff triggers an exponential backoff
 	return ctrl.Result{}, backoff
 }
 
@@ -195,46 +190,24 @@ func (r *WorkspaceReconciler) updateStatus(ctx context.Context, req ctrl.Request
 // condition. Depending on the value of the condition, either the list continues
 // to be enumerated or the condition is returned. A non-nil error indicates the
 // reconcile should be exponentially backed off.
-func processWorkspaceReconcileStatusChain(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
-	var pending *metav1.Condition
+func processWorkspaceReconcileStatusChain(ctx context.Context, ws *v1alpha1.Workspace) error {
 	for _, f := range workspaceReconcileStatusChain {
-		ready, err := f(ctx, ws)
-		if err != nil {
-			return nil, err
-		}
-
-		if ready == nil {
-			continue
-		}
-
-		switch ready.Reason {
-		case v1alpha1.UnknownReason, v1alpha1.FailureReason:
-			// Update condition and trigger exponential back-off
-			return ready, errors.New(ready.Message)
-		case v1alpha1.DeletionReason:
-			// Update condition
-			return ready, nil
-		case v1alpha1.PendingReason:
-			// Last pending wins
-			pending = ready
+		bail, err := f(ctx, ws)
+		if err != nil || bail {
+			return err
 		}
 	}
-
-	if pending != nil {
-		return pending, nil
-	}
-
-	// If no other reason is found, the workspace is ready
-	return &metav1.Condition{
-		Type:   v1alpha1.WorkspaceReadyCondition,
-		Status: metav1.ConditionTrue,
-		Reason: v1alpha1.ReadyReason,
-	}, nil
+	return nil
 }
 
 // setPhase maps the Ready condition's reason field to a phase string
-func setPhase(reason string) v1alpha1.WorkspacePhase {
-	switch reason {
+func setPhase(ws *v1alpha1.Workspace) v1alpha1.WorkspacePhase {
+	ready := meta.FindStatusCondition(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)
+	if ready == nil {
+		return v1alpha1.WorkspacePhaseUnknown
+	}
+
+	switch ready.Reason {
 	case v1alpha1.ReadyReason:
 		return v1alpha1.WorkspacePhaseReady
 	case v1alpha1.DeletionReason:
@@ -249,19 +222,21 @@ func setPhase(reason string) v1alpha1.WorkspacePhase {
 }
 
 // Determine if workspace is being deleted
-func (r *WorkspaceReconciler) handleDeletion(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) handleDeletion(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	if !ws.GetDeletionTimestamp().IsZero() {
-		return &metav1.Condition{
+		meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
 			Type:    v1alpha1.WorkspaceReadyCondition,
 			Status:  metav1.ConditionFalse,
 			Reason:  v1alpha1.DeletionReason,
 			Message: "Workspace is being deleted",
-		}, nil
+		})
+		// Bail out
+		return true, nil
 	}
-	return nil, nil
+	return false, nil
 }
 
-func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	var secret corev1.Secret
@@ -273,22 +248,22 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 		}
 	case err != nil:
 		log.Error(err, "unable to get state secret")
-		return nil, err
+		return false, err
 	default:
 		// Make workspace owner of state secret, so that if workspace is deleted
 		// so is the state
 		if err := controllerutil.SetOwnerReference(ws, &secret, r.Scheme); err != nil {
 			log.Error(err, "unable to set state secret ownership")
-			return nil, err
+			return false, err
 		}
 		if err := r.Update(ctx, &secret); err != nil {
-			return nil, err
+			return false, err
 		}
 
 		// Retrieve state file secret
 		state, err := readState(ctx, &secret)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
 
 		// Report state serial number in workspace status
@@ -318,7 +293,7 @@ func (r *WorkspaceReconciler) manageState(ctx context.Context, ws *v1alpha1.Work
 		}
 	}
 
-	return nil, nil
+	return false, nil
 }
 
 func (r *WorkspaceReconciler) addFinalizers(ctx context.Context, ws v1alpha1.Workspace) (v1alpha1.Workspace, error) {
@@ -365,7 +340,7 @@ func (r *WorkspaceReconciler) pruneApprovals(ctx context.Context, ws v1alpha1.Wo
 	return annotations, nil
 }
 
-func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	secretKey := types.NamespacedName{Namespace: ws.Namespace, Name: ws.StateSecretName()}
 	secret, err := r.BackupProvider.Restore(ctx, secretKey)
 	if err != nil {
@@ -373,7 +348,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	}
 	if secret == nil {
 		r.recorder.Eventf(ws, "Normal", "RestoreSkipped", "There is no state to restore")
-		return nil, nil
+		return false, nil
 	}
 
 	// Blank out certain fields to avoid errors upon create
@@ -381,7 +356,7 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 	secret.OwnerReferences = nil
 
 	if err := r.Create(ctx, secret); err != nil {
-		return nil, err
+		return false, err
 	}
 
 	// Parse state file
@@ -395,16 +370,16 @@ func (r *WorkspaceReconciler) restore(ctx context.Context, ws *v1alpha1.Workspac
 
 	r.recorder.Eventf(ws, "Normal", "RestoreSuccessful", "Restored state #%d", state.Serial)
 
-	return nil, nil
+	return false, nil
 }
 
 // Send warning event as well as propagating error to caller
-func (r *WorkspaceReconciler) sendWarningEvent(err error, ws *v1alpha1.Workspace, reason string) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) sendWarningEvent(err error, ws *v1alpha1.Workspace, reason string) (bool, error) {
 	r.recorder.Eventf(ws, "Warning", reason, err.Error())
-	return nil, err
+	return false, err
 }
 
-func (r *WorkspaceReconciler) manageBuiltins(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) manageBuiltins(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	// Manage ConfigMap containing built-in terraform config for workspace
@@ -415,38 +390,38 @@ func (r *WorkspaceReconciler) manageBuiltins(ctx context.Context, ws *v1alpha1.W
 
 		if err := controllerutil.SetControllerReference(ws, &builtins, r.Scheme); err != nil {
 			log.Error(err, "unable to set config map ownership")
-			return nil, err
+			return false, err
 		}
 
 		if err = r.Create(ctx, &builtins); err != nil {
 			log.Error(err, "unable to create configmap for builtins")
-			return nil, err
+			return false, err
 		}
-		return workspacePending("Creating configmap containing terraform builtins"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspacePending("Creating configmap containing terraform builtins"))
 	} else if err != nil {
 		log.Error(err, "unable to get configmap for builtins")
-		return nil, err
+		return false, err
 	}
-	return nil, nil
+	return false, nil
 }
 
 func namespacedNameFromObj(obj controllerutil.Object) types.NamespacedName {
 	return types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 }
 
-func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) manageQueue(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	// Fetch run resources
 	runlist := &v1alpha1.RunList{}
 	if err := r.List(ctx, runlist, client.InNamespace(ws.Namespace)); err != nil {
-		return nil, err
+		return false, err
 	}
 
 	updateCombinedQueue(ws, runlist.Items)
-	return nil, nil
+	return false, nil
 }
 
 // Manage Pod for workspace
-func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	var pod corev1.Pod
@@ -455,41 +430,42 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Worksp
 		pod, err := workspacePod(ws, r.Image)
 		if err != nil {
 			log.Error(err, "unable to construct pod")
-			return nil, err
+			return false, err
 		}
 
 		if err := controllerutil.SetControllerReference(ws, pod, r.Scheme); err != nil {
 			log.Error(err, "unable to set pod ownership")
-			return nil, err
+			return false, err
 		}
 
 		if err = r.Create(ctx, pod); err != nil {
 			log.Error(err, "unable to create pod")
-			return nil, err
+			return false, err
 		}
 
 		// TODO: event
 		//podOK(ws, v1alpha1.PendingReason, "Creating pod")
-		return workspacePending("Creating pod"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspacePending("Creating pod"))
+		return false, nil
 	} else if err != nil {
 		log.Error(err, "unable to get pod")
-		return nil, err
+		return false, err
 	}
 
 	switch phase := pod.Status.Phase; phase {
 	case corev1.PodRunning:
-		// TODO: event
-		break
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspaceReady("Pod is running"))
 	case corev1.PodPending:
-		return workspacePending("Pod in pending phase"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspacePending("Pod in pending phase"))
 	case corev1.PodFailed:
-		return workspaceFailure("Pod failed"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspaceFailure("Pod failed"))
 	case corev1.PodSucceeded:
-		return workspaceFailure("Pod unexpectedly exited"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspaceFailure("Pod unexpectedly exited"))
 	default:
-		return workspaceUnknown("Pod state unknown"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspaceUnknown("Pod state unknown"))
+		return false, errors.New("Pod state unknown")
 	}
-	return nil, nil
+	return false, nil
 }
 
 // manageRBACForNamespace creates RBAC resources in the Workspace's namespace if
@@ -498,7 +474,7 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Worksp
 // the privileges to carry out k8s API calls (e.g. terraform talking to its
 // state residing in a Secret). A user may also add annotations to the
 // ServiceAccount to enable things like Workspace Identity.
-func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	var serviceAccount corev1.ServiceAccount
@@ -508,11 +484,11 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 
 			if err = r.Create(ctx, &serviceAccount); err != nil {
 				log.Error(err, "unable to create service account")
-				return nil, err
+				return false, err
 			}
 		} else if err != nil {
 			log.Error(err, "unable to get service account")
-			return nil, err
+			return false, err
 		}
 	}
 
@@ -523,11 +499,11 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 
 			if err = r.Create(ctx, &role); err != nil {
 				log.Error(err, "unable to create role")
-				return nil, err
+				return false, err
 			}
 		} else if err != nil {
 			log.Error(err, "unable to get role")
-			return nil, err
+			return false, err
 		}
 	}
 
@@ -538,18 +514,18 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 
 			if err = r.Create(ctx, &binding); err != nil {
 				log.Error(err, "unable to create binding")
-				return nil, err
+				return false, err
 			}
 		} else if err != nil {
 			log.Error(err, "unable to get binding")
-			return nil, err
+			return false, err
 		}
 	}
 
-	return nil, nil
+	return false, nil
 }
 
-func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	var pvc corev1.PersistentVolumeClaim
@@ -559,31 +535,34 @@ func (r *WorkspaceReconciler) managePVC(ctx context.Context, ws *v1alpha1.Worksp
 
 		if err := controllerutil.SetControllerReference(ws, &pvc, r.Scheme); err != nil {
 			log.Error(err, "unable to set PVC ownership")
-			return nil, err
+			return false, err
 		}
 
 		if err = r.Create(ctx, &pvc); err != nil {
 			log.Error(err, "unable to create PVC")
-			return nil, err
+			return false, err
 		}
 		//cacheOK(ws, v1alpha1.PendingReason, "PVC is being created")
-		return workspacePending("Creating PVC"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspacePending("Creating PVC"))
+		return false, nil
 	} else if err != nil {
 		log.Error(err, "unable to get PVC")
-		return nil, err
+		return false, err
 	}
 
 	switch pvc.Status.Phase {
+	case corev1.ClaimBound:
+		// proceed
 	case corev1.ClaimLost:
 		r.recorder.Event(ws, "Warning", "CacheLost", "Cache persistent volume has been lost")
-		return nil, errors.New("PVC has lost its persistent volume")
+		return false, errors.New("PVC has lost its persistent volume")
 	case corev1.ClaimPending:
-		return workspacePending("Cache's PVC in pending state"), nil
-	case corev1.ClaimBound:
-		return nil, nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspacePending("Cache's PVC in pending state"))
 	default:
-		return workspaceUnknown("Cache PVC status unknown"), nil
+		meta.SetStatusCondition(&ws.Status.Conditions, *workspaceUnknown("Cache PVC status unknown"))
+		return false, errors.New("Cache PVC status unknown")
 	}
+	return false, nil
 }
 
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {

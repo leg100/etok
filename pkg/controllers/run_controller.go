@@ -118,9 +118,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Update status struct
-	reconcileErr := processRunReconcileStatusChain(ctx, &run, ws)
-
-	// Regardless of reconcile error, status still needs to be updated
+	backoff := processRunReconcileStatusChain(ctx, &run, ws)
 
 	run.Phase = setRunPhase(&run)
 
@@ -128,7 +126,7 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, reconcileErr
+	return ctrl.Result{}, backoff
 }
 
 func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.RunStatus) error {
