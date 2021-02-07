@@ -28,19 +28,19 @@ func TestReconcileWorkspace(t *testing.T) {
 	var localPathStorageClass string = "local-path"
 
 	tests := []struct {
-		name                  string
-		workspace             *v1alpha1.Workspace
-		objs                  []runtime.Object
-		bucketObjs            []*corev1.Secret
-		workspaceAssertions   func(*testutil.T, *v1alpha1.Workspace)
-		podAssertions         func(*testutil.T, *corev1.Pod)
-		pvcAssertions         func(*testutil.T, *corev1.PersistentVolumeClaim)
-		configMapAssertions   func(*testutil.T, *corev1.ConfigMap)
-		backupAssertions      func(*testutil.T, []*corev1.Secret)
-		stateAssertions       func(*testutil.T, *corev1.Secret)
-		storageAssertions     func(*testutil.T, *storage.Client)
-		disableRBACAssertions bool
-		wantErr               bool
+		name                string
+		workspace           *v1alpha1.Workspace
+		objs                []runtime.Object
+		bucketObjs          []*corev1.Secret
+		workspaceAssertions func(*testutil.T, *v1alpha1.Workspace)
+		podAssertions       func(*testutil.T, *corev1.Pod)
+		pvcAssertions       func(*testutil.T, *corev1.PersistentVolumeClaim)
+		configMapAssertions func(*testutil.T, *corev1.ConfigMap)
+		backupAssertions    func(*testutil.T, []*corev1.Secret)
+		stateAssertions     func(*testutil.T, *corev1.Secret)
+		storageAssertions   func(*testutil.T, *storage.Client)
+		rbacAssertions      func(*testutil.T, *v1alpha1.Workspace, *rbacv1.Role, *rbacv1.RoleBinding, *corev1.ServiceAccount)
+		wantErr             bool
 	}{
 		{
 			name:      "Queue no runs",
@@ -128,7 +128,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			name:      "Deleting phase",
 			workspace: testobj.Workspace("", "workspace-1", testobj.WithDeleteTimestamp()),
 			// RBAC resources won't have been created so don't check for them
-			disableRBACAssertions: true,
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseDeleting, ws.Status.Phase)
 				if assert.True(t, meta.IsStatusConditionFalse(ws.Status.Conditions, v1alpha1.WorkspaceReadyCondition)) {
@@ -276,6 +275,31 @@ func TestReconcileWorkspace(t *testing.T) {
 				assert.Nil(t, ws.Status.BackupSerial)
 			},
 		},
+		{
+			name:      "RBAC resources are present",
+			workspace: testobj.Workspace("", "workspace-1"),
+			rbacAssertions: func(t *testutil.T, ws *v1alpha1.Workspace, role *rbacv1.Role, binding *rbacv1.RoleBinding, account *corev1.ServiceAccount) {
+				assert.Equal(t, 4, len(role.Rules))
+				assert.Equal(t, "etok", binding.RoleRef.Name)
+				assert.Equal(t, "etok", binding.Subjects[0].Name)
+			},
+		},
+		{
+			name:      "Update Role rules",
+			workspace: testobj.Workspace("", "workspace-1"),
+			objs: []runtime.Object{
+				// Test case where we an existing role with a rule, to be
+				// updated with a role which no longer has that rule.
+				testobj.Role("dev", "workspace-1", testobj.WithRule(rbacv1.PolicyRule{
+					Resources: []string{"pods"},
+					Verbs:     []string{"create"},
+					APIGroups: []string{""},
+				})),
+			},
+			rbacAssertions: func(t *testutil.T, ws *v1alpha1.Workspace, role *rbacv1.Role, binding *rbacv1.RoleBinding, account *corev1.ServiceAccount) {
+				assert.Equal(t, newRoleForNamespace(ws).Rules, role.Rules)
+			},
+		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
@@ -332,9 +356,10 @@ func TestReconcileWorkspace(t *testing.T) {
 				tt.pvcAssertions(t, &cache)
 			}
 
-			// RBAC resources should always have been created so check them
-			// unless explicitly told not to
-			if !tt.disableRBACAssertions {
+			if tt.rbacAssertions != nil {
+				ws := &v1alpha1.Workspace{}
+				require.NoError(t, r.Get(context.TODO(), req.NamespacedName, ws))
+
 				serviceAccount := corev1.ServiceAccount{}
 				assert.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: ServiceAccountName}, &serviceAccount))
 
@@ -343,6 +368,8 @@ func TestReconcileWorkspace(t *testing.T) {
 
 				roleBinding := rbacv1.RoleBinding{}
 				assert.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: RoleBindingName}, &roleBinding))
+
+				tt.rbacAssertions(t, ws, &role, &roleBinding, &serviceAccount)
 			}
 		})
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/scheme"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -477,6 +476,10 @@ func (r *WorkspaceReconciler) managePod(ctx context.Context, ws *v1alpha1.Worksp
 func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
+	// Don't update if already exists because user may have added annotations to
+	// enable things like workload identity, and an update would overwrite such
+	// changes.
+	// TODO(leg100): implement SSA
 	var serviceAccount corev1.ServiceAccount
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: ServiceAccountName}, &serviceAccount); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -492,34 +495,16 @@ func (r *WorkspaceReconciler) manageRBACForNamespace(ctx context.Context, ws *v1
 		}
 	}
 
-	var role rbacv1.Role
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleName}, &role); err != nil {
-		if kerrors.IsNotFound(err) {
-			role := *newRoleForNamespace(ws)
-
-			if err = r.Create(ctx, &role); err != nil {
-				log.Error(err, "unable to create role")
-				return false, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get role")
-			return false, err
-		}
+	role := newRoleForNamespace(ws)
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, role, func() error { return nil })
+	if err != nil {
+		return false, err
 	}
 
-	var binding rbacv1.RoleBinding
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ws.Namespace, Name: RoleBindingName}, &binding); err != nil {
-		if kerrors.IsNotFound(err) {
-			binding := *newRoleBindingForNamespace(ws)
-
-			if err = r.Create(ctx, &binding); err != nil {
-				log.Error(err, "unable to create binding")
-				return false, err
-			}
-		} else if err != nil {
-			log.Error(err, "unable to get binding")
-			return false, err
-		}
+	binding := newRoleBindingForNamespace(ws)
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, binding, func() error { return nil })
+	if err != nil {
+		return false, err
 	}
 
 	return false, nil
