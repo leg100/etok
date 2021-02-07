@@ -11,19 +11,23 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -65,8 +69,6 @@ type installOptions struct {
 	image       string
 	kubeContext string
 
-	// Path on local fs containing GCP service account key
-	secretFile string
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
@@ -83,10 +85,17 @@ type installOptions struct {
 
 	// Print out resources and don't install
 	dryRun bool
+
+	// State backup configuration
+	backupCfg *backup.Config
+
+	// flags are the install command's parsed flags
+	flags *pflag.FlagSet
 }
 
 func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	o := &installOptions{
+		backupCfg: backup.NewConfig(),
 		Factory:   f,
 		namespace: defaultNamespace,
 	}
@@ -95,6 +104,13 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 		Use:   "install",
 		Short: "Install etok operator",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			// Validate backup flags
+			if err := o.backupCfg.Validate(cmd.Flags()); err != nil {
+				return err
+			}
+
+			o.flags = cmd.Flags()
+
 			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
@@ -107,6 +123,8 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	flags.AddNamespaceFlag(cmd, &o.namespace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 
+	o.backupCfg.AddToFlagSet(cmd.Flags())
+
 	cmd.Flags().StringVar(&o.name, "name", "etok-operator", "Name for kubernetes resources")
 	cmd.Flags().StringVar(&o.image, "image", version.Image, "Docker image used for both the operator and the runner")
 
@@ -115,12 +133,24 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	cmd.Flags().BoolVar(&o.wait, "wait", true, "Toggle waiting for deployment to be ready")
 	cmd.Flags().DurationVar(&o.timeout, "timeout", 60*time.Second, "Timeout for waiting for deployment to be ready")
 
-	cmd.Flags().StringVar(&o.secretFile, "secret-file", "", "Path on local filesystem to key file")
 	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the etok ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 	cmd.Flags().BoolVar(&o.crdsOnly, "crds-only", o.crdsOnly, "Only generate CRD resources. Useful for updating CRDs for an existing Etok install.")
 
 	return cmd, o
 }
+
+//func (o *installOptions) validateBackupOptions() error { if
+//o.backupProviderName != "" { if o.backupProviderName != "gcs" &&
+//o.backupProviderName != "s3" { return fmt.Errorf("%w: %s is invalid value for
+//--backup-provider, valid options are: gcs, s3", errInvalidBackupConfig,
+//o.backupProviderName) } }
+//
+//	if (o.backupProviderName == "" && o.gcsBucket != "") || (o.backupProviderName != "" && o.gcsBucket == "") {
+//		return fmt.Errorf("%w: you must specify both --backup-provider and --gcs-bucket", errInvalidBackupConfig)
+//	}
+//
+//	return nil
+//}
 
 func (o *installOptions) install(ctx context.Context) error {
 	var deploy *appsv1.Deployment
@@ -149,18 +179,24 @@ func (o *installOptions) install(ctx context.Context) error {
 		resources = append(resources, namespace(o.namespace))
 		resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
 
-		secretPresent := o.secretFile != ""
-		deploy = deployment(o.namespace, WithSecret(secretPresent), WithImage(o.image))
-		resources = append(resources, deploy)
-
-		if o.secretFile != "" {
-			key, err := ioutil.ReadFile(o.secretFile)
-			if err != nil {
-				return err
-			}
-
-			resources = append(resources, secret(o.namespace, key))
+		// Determine if a secret named 'etok' is present
+		var secretPresent bool
+		err := o.RuntimeClient.Get(ctx, types.NamespacedName{Namespace: "etok", Name: "etok"}, &corev1.Secret{})
+		if err != nil && !kerrors.IsNotFound(err) {
+			return fmt.Errorf("unable to check for secret: %w", err)
 		}
+		if err == nil {
+			secretPresent = true
+		}
+
+		// Deploy options
+		dopts := []podTemplateOption{}
+		dopts = append(dopts, WithBackupConfig(o.backupCfg, o.flags))
+		dopts = append(dopts, WithSecret(secretPresent))
+		dopts = append(dopts, WithImage(o.image))
+
+		deploy = deployment(o.namespace, dopts...)
+		resources = append(resources, deploy)
 	}
 
 	// Set labels

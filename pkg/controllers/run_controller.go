@@ -38,7 +38,7 @@ var (
 	runPodPendingTimeout = 60 * time.Second
 )
 
-type runUpdater func(context.Context, *v1alpha1.Run, v1alpha1.Workspace) (*metav1.Condition, error)
+type runUpdater func(context.Context, *v1alpha1.Run, v1alpha1.Workspace) (bool, error)
 
 type RunReconciler struct {
 	client.Client
@@ -118,24 +118,15 @@ func (r *RunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Update status struct
-	condition, err := processRunReconcileStatusChain(ctx, &run, ws)
-	if err != nil {
+	backoff := processRunReconcileStatusChain(ctx, &run, ws)
+
+	run.Phase = setRunPhase(&run)
+
+	if err := r.updateStatus(ctx, req, run.RunStatus); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if condition != nil {
-		// Add condition to status
-		meta.SetStatusCondition(&run.RunStatus.Conditions, *condition)
-
-		// Summarise conditions to single phase
-		run.Phase = setRunPhase(*condition)
-
-		if err := r.updateStatus(ctx, req, run.RunStatus); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, backoff
 }
 
 func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newStatus v1alpha1.RunStatus) error {
@@ -149,97 +140,90 @@ func (r *RunReconciler) updateStatus(ctx context.Context, req ctrl.Request, newS
 	return r.Status().Update(ctx, &run)
 }
 
-func processRunReconcileStatusChain(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (condition *metav1.Condition, err error) {
+func processRunReconcileStatusChain(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) error {
 	for _, f := range runReconcileStatusChain {
-		condition, err = f(ctx, run, ws)
-		if err != nil {
-			return condition, err
-		}
-
-		if condition == nil {
-			continue
-		}
-
-		if condition.Type == v1alpha1.RunFailedCondition && condition.Status == metav1.ConditionTrue {
-			return condition, nil
-		}
-
-		if condition.Type == v1alpha1.RunCompleteCondition {
-			if condition.Status == metav1.ConditionTrue {
-				return condition, nil
-			}
-
-			if condition.Status == metav1.ConditionFalse {
-				switch condition.Reason {
-				case v1alpha1.RunUnqueuedReason:
-					if condition.LastTransitionTime.Add(runEnqueueTimeout).After(time.Now()) {
-						return runFailed(v1alpha1.RunEnqueueTimeoutReason, "Timed out waiting to be enqueued"), nil
-					}
-					// Do not proceed to creating pod
-					return condition, nil
-				case v1alpha1.RunQueuedReason:
-					if condition.LastTransitionTime.Add(runQueueTimeout).After(time.Now()) {
-						return runFailed(v1alpha1.QueueTimeoutReason, "Timed out waiting in the queue"), nil
-					}
-					// Do not proceed to creating pod
-					return condition, nil
-				case v1alpha1.PodPendingReason:
-					if condition.LastTransitionTime.Add(runPodPendingTimeout).After(time.Now()) {
-						return runFailed(v1alpha1.RunPendingTimeoutReason, "Timed out waiting for pod in pending phase"), nil
-					}
-				}
-			}
+		bail, err := f(ctx, run, ws)
+		if err != nil || bail {
+			return err
 		}
 	}
 
-	return condition, nil
+	return nil
 }
 
 // setRunPhase maps the Run's conditions to a single phase
-func setRunPhase(condition metav1.Condition) v1alpha1.RunPhase {
-	if condition.Type == v1alpha1.RunFailedCondition && condition.Status == metav1.ConditionTrue {
+func setRunPhase(run *v1alpha1.Run) v1alpha1.RunPhase {
+	if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.RunFailedCondition) {
 		return v1alpha1.RunPhaseFailed
 	}
 
-	if condition.Type == v1alpha1.RunCompleteCondition {
-		switch condition.Status {
-		case metav1.ConditionTrue:
-			return v1alpha1.RunPhaseCompleted
-		case metav1.ConditionFalse:
-			switch condition.Reason {
-			case v1alpha1.RunUnqueuedReason:
-				return v1alpha1.RunPhaseWaiting
-			case v1alpha1.RunQueuedReason:
-				return v1alpha1.RunPhaseQueued
-			case v1alpha1.PodCreatedReason, v1alpha1.PodPendingReason:
-				return v1alpha1.RunPhaseProvisioning
-			case v1alpha1.PodRunningReason:
-				return v1alpha1.RunPhaseRunning
-			}
+	if meta.IsStatusConditionTrue(run.Conditions, v1alpha1.RunCompleteCondition) {
+		return v1alpha1.RunPhaseCompleted
+	}
+
+	if meta.IsStatusConditionFalse(run.Conditions, v1alpha1.RunCompleteCondition) {
+		switch meta.FindStatusCondition(run.Conditions, v1alpha1.RunCompleteCondition).Reason {
+		case v1alpha1.RunUnqueuedReason:
+			return v1alpha1.RunPhaseWaiting
+		case v1alpha1.RunQueuedReason:
+			return v1alpha1.RunPhaseQueued
+		case v1alpha1.PodCreatedReason, v1alpha1.PodPendingReason:
+			return v1alpha1.RunPhaseProvisioning
+		case v1alpha1.PodRunningReason:
+			return v1alpha1.RunPhaseRunning
 		}
 	}
 
 	return v1alpha1.RunPhaseUnknown
 }
 
-func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
 	if !launcher.IsQueueable(run.Command) {
-		return nil, nil
+		// Proceed to creating pod
+		return false, nil
 	}
 
 	if ws.Status.Active == run.Name {
-		return nil, nil
+		// Proceed to creating pod
+		return false, nil
 	}
 
+	var cond *metav1.Condition
 	if pos := slice.StringIndex(ws.Status.Queue, run.Name); pos >= 0 {
-		return runIncomplete(v1alpha1.RunQueuedReason, "Run waiting in workspace queue"), nil
+		cond = runIncomplete(v1alpha1.RunQueuedReason, "Run waiting in workspace queue")
 	} else {
-		return runIncomplete(v1alpha1.RunUnqueuedReason, "Run is waiting to be made active or to be added to workspace queue"), nil
+		cond = runIncomplete(v1alpha1.RunUnqueuedReason, "Run is waiting to be made active or to be added to workspace queue")
 	}
+	meta.SetStatusCondition(&run.RunStatus.Conditions, *cond)
+
+	// Fail run if it has exceeded one of two timeouts
+	complete := meta.FindStatusCondition(run.RunStatus.Conditions, v1alpha1.RunCompleteCondition)
+	lastUpdate := complete.LastTransitionTime.Time
+
+	if complete.Reason == v1alpha1.RunUnqueuedReason {
+		if time.Now().After(lastUpdate.Add(runEnqueueTimeout)) {
+			// Run has been waiting to be enqueued for too long
+			failed := runFailed(v1alpha1.RunEnqueueTimeoutReason, "Timed out waiting to be enqueued")
+			meta.SetStatusCondition(&run.RunStatus.Conditions, *failed)
+			return true, errors.New("enqueue timeout exceeded")
+		}
+	}
+
+	if complete.Reason == v1alpha1.RunQueuedReason {
+		if time.Now().After(lastUpdate.Add(runQueueTimeout)) {
+			// Run has been waiting in queue for too long
+			failed := runFailed(v1alpha1.QueueTimeoutReason, "Timed out waiting in the queue")
+			meta.SetStatusCondition(&run.RunStatus.Conditions, *failed)
+			return true, errors.New("queue wait timeout exceeded")
+		}
+	}
+
+	// Bail out, do not proceed to creating pod just yet
+	return true, nil
 }
 
 // Manage run's pod. Update run status to reflect pod status.
-func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (*metav1.Condition, error) {
+func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
 	log := log.FromContext(ctx)
 
 	// Check if optional secret "etok" is available
@@ -248,7 +232,7 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 	if kerrors.IsNotFound(err) {
 		secretFound = false
 	} else if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	// Check if optional service account "etok" is available
@@ -257,7 +241,7 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 	if kerrors.IsNotFound(err) {
 		serviceAccountFound = false
 	} else if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	var pod corev1.Pod
@@ -267,16 +251,17 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 
 		// Make run owner of pod
 		if err := controllerutil.SetControllerReference(run, &pod, r.Scheme); err != nil {
-			return nil, err
+			return false, err
 		}
 
 		if err := r.Create(ctx, &pod); err != nil {
 			log.Error(err, "unable to create pod")
-			return nil, err
+			return false, err
 		}
-		return runIncomplete(v1alpha1.PodCreatedReason, ""), nil
+		meta.SetStatusCondition(&run.RunStatus.Conditions, *runIncomplete(v1alpha1.PodCreatedReason, ""))
+		return false, nil
 	} else if err != nil {
-		return nil, err
+		return false, err
 	}
 
 	var isCompleted = metav1.ConditionFalse
@@ -285,18 +270,31 @@ func (r *RunReconciler) managePod(ctx context.Context, run *v1alpha1.Run, ws v1a
 		// Record exit code in run status
 		code, err := getExitCode(&pod)
 		if err != nil {
-			return nil, errors.New("unable to retrieve container status")
+			return false, errors.New("unable to retrieve container status")
 		}
 		run.RunStatus.ExitCode = &code
 
 		isCompleted = metav1.ConditionTrue
 	}
 
-	return &metav1.Condition{
+	meta.SetStatusCondition(&run.RunStatus.Conditions, metav1.Condition{
 		Type:   v1alpha1.RunCompleteCondition,
 		Status: isCompleted,
 		Reason: getReasonFromPodPhase(pod.Status.Phase),
-	}, nil
+	})
+
+	// Fail run if pod has been pending too long
+	complete := meta.FindStatusCondition(run.RunStatus.Conditions, v1alpha1.RunCompleteCondition)
+	if complete.Reason == v1alpha1.PodPendingReason {
+		lastUpdate := complete.LastTransitionTime.Time
+
+		if time.Now().After(lastUpdate.Add(runPodPendingTimeout)) {
+			failed := runFailed(v1alpha1.RunPendingTimeoutReason, "Timed out waiting for pod in pending phase")
+			meta.SetStatusCondition(&run.RunStatus.Conditions, *failed)
+		}
+	}
+
+	return false, nil
 }
 
 // Translate pod phase to a reason string for the run completed condition

@@ -34,6 +34,7 @@ func TestTerraform(t *testing.T) {
 					"--namespace", namespace,
 					"--path", path,
 					"--context", *kubectx,
+					"--ephemeral",
 					"--variables", "suffix=bar",
 				},
 				[]expect.Batcher{

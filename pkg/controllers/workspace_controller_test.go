@@ -6,8 +6,8 @@ import (
 
 	"cloud.google.com/go/storage"
 
-	"github.com/fsouza/fake-gcs-server/fakestorage"
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/backup"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -30,11 +31,12 @@ func TestReconcileWorkspace(t *testing.T) {
 		name                string
 		workspace           *v1alpha1.Workspace
 		objs                []runtime.Object
-		bucketObjs          []fakestorage.Object
+		bucketObjs          []*corev1.Secret
 		workspaceAssertions func(*testutil.T, *v1alpha1.Workspace)
 		podAssertions       func(*testutil.T, *corev1.Pod)
 		pvcAssertions       func(*testutil.T, *corev1.PersistentVolumeClaim)
 		configMapAssertions func(*testutil.T, *corev1.ConfigMap)
+		backupAssertions    func(*testutil.T, []*corev1.Secret)
 		stateAssertions     func(*testutil.T, *corev1.Secret)
 		storageAssertions   func(*testutil.T, *storage.Client)
 		rbacAssertions      func(*testutil.T, *v1alpha1.Workspace, *rbacv1.Role, *rbacv1.RoleBinding, *corev1.ServiceAccount)
@@ -141,7 +143,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
-			wantErr: true,
 		},
 		{
 			name:      "Pod failed",
@@ -150,7 +151,6 @@ func TestReconcileWorkspace(t *testing.T) {
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
 			},
-			wantErr: true,
 		},
 		{
 			name:      "Unknown phase",
@@ -224,58 +224,55 @@ func TestReconcileWorkspace(t *testing.T) {
 			},
 		},
 		{
+			// Demonstrate that the state secret is backed up into (fake) backup
+			// provider, and that the backup serial status gets updated
 			name:      "Backup",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithBackupBucket("backup-bucket")),
+			workspace: testobj.Workspace("default", "workspace-1"),
 			objs: []runtime.Object{
 				testobj.Secret("default", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
-			bucketObjs: []fakestorage.Object{
-				{
-					BucketName: "backup-bucket",
-				},
-			},
-			storageAssertions: func(t *testutil.T, client *storage.Client) {
-				// Check object exists in bucket
-				obj := client.Bucket("backup-bucket").Object("default/workspace-1.yaml")
-				_, err := obj.Attrs(context.Background())
-				require.NoError(t, err)
+			backupAssertions: func(t *testutil.T, stateFiles []*corev1.Secret) {
+				wantKey := types.NamespacedName{Namespace: "default", Name: "tfstate-default-workspace-1"}
+				for _, s := range stateFiles {
+					if client.ObjectKeyFromObject(s) == wantKey {
+						return
+					}
+				}
+				t.Error("failed to find state secret in backup")
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, 4, *ws.Status.BackupSerial)
 			},
 		},
 		{
+			// Demonstrate that the state secret gets restored, and that the
+			// backup serial status gets updated
 			name:      "Restore",
-			workspace: testobj.Workspace("default", "workspace-1", testobj.WithBackupBucket("backup-bucket")),
-			objs: []runtime.Object{
+			workspace: testobj.Workspace("default", "workspace-1"),
+			bucketObjs: []*corev1.Secret{
 				testobj.Secret("default", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
-			bucketObjs: []fakestorage.Object{
-				{
-					BucketName: "backup-bucket",
-					Name:       "default/workspace-1.yaml",
-					Content:    readFile("testdata/tfstate.yaml"),
-				},
-			},
-			storageAssertions: func(t *testutil.T, client *storage.Client) {
-				// Check object exists in bucket
-				obj := client.Bucket("backup-bucket").Object("default/workspace-1.yaml")
-				_, err := obj.Attrs(context.Background())
-				require.NoError(t, err)
+			stateAssertions: func(t *testutil.T, state *corev1.Secret) {
+				// Empty func causes test to check for existance of state secret
+				// (see below).
 			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
 				assert.Equal(t, 4, *ws.Status.BackupSerial)
 			},
 		},
 		{
-			name:      "Non-existent backup bucket",
-			workspace: testobj.Workspace("", "workspace-1", testobj.WithBackupBucket("does-not-exist")),
+			// Demonstrate that an ephemeral workspace's state does *not* get
+			// backed up.
+			name:      "Ephemeral workspace",
+			workspace: testobj.Workspace("default", "workspace-1", testobj.WithEphemeral()),
 			objs: []runtime.Object{
-				testobj.Secret("dev", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
+				testobj.Secret("default", "tfstate-default-workspace-1", testobj.WithCompressedDataFromFile("tfstate", "testdata/tfstate.json")),
 			},
-			wantErr: true,
+			backupAssertions: func(t *testutil.T, stateFiles []*corev1.Secret) {
+				assert.Equal(t, 0, len(stateFiles))
+			},
 			workspaceAssertions: func(t *testutil.T, ws *v1alpha1.Workspace) {
-				assert.Equal(t, v1alpha1.WorkspacePhaseError, ws.Status.Phase)
+				assert.Nil(t, ws.Status.BackupSerial)
 			},
 		},
 		{
@@ -309,19 +306,13 @@ func TestReconcileWorkspace(t *testing.T) {
 			objs := append(tt.objs, runtime.Object(tt.workspace))
 			cl := fake.NewFakeClientWithScheme(scheme.Scheme, objs...)
 
-			// Setup up new fake GCS server for each test
-			server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
-				InitialObjects: tt.bucketObjs,
-				Host:           "127.0.0.1",
-				Port:           8081,
-			})
-			require.NoError(t, err)
-			defer server.Stop()
+			// Create fake backup provider
+			backupProvider := backup.FakeProvider{BucketObjs: tt.bucketObjs}
 
 			// Reconcile
-			r := NewWorkspaceReconciler(cl, "", WithStorageClient(server.Client()), WithEventRecorder(record.NewFakeRecorder(100)))
+			r := NewWorkspaceReconciler(cl, "", WithBackupProvider(&backupProvider), WithEventRecorder(record.NewFakeRecorder(100)))
 			req := requestFromObject(tt.workspace)
-			_, err = r.Reconcile(context.Background(), req)
+			_, err := r.Reconcile(context.Background(), req)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -342,6 +333,11 @@ func TestReconcileWorkspace(t *testing.T) {
 				tt.stateAssertions(t, &state)
 			}
 
+			// Fetch fresh state secret for assertions
+			if tt.backupAssertions != nil {
+				tt.backupAssertions(t, backupProvider.BucketObjs)
+			}
+
 			if tt.configMapAssertions != nil {
 				vars := corev1.ConfigMap{}
 				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.BuiltinsConfigMapName()}, &vars))
@@ -358,10 +354,6 @@ func TestReconcileWorkspace(t *testing.T) {
 				cache := corev1.PersistentVolumeClaim{}
 				require.NoError(t, r.Get(context.TODO(), types.NamespacedName{Namespace: tt.workspace.Namespace, Name: tt.workspace.PVCName()}, &cache))
 				tt.pvcAssertions(t, &cache)
-			}
-
-			if tt.storageAssertions != nil {
-				tt.storageAssertions(t, r.StorageClient)
 			}
 
 			if tt.rbacAssertions != nil {

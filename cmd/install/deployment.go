@@ -5,7 +5,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/pkg/version"
+	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -33,26 +35,18 @@ func WithAnnotations(annotations map[string]string) podTemplateOption {
 	}
 }
 
-func WithEnvFromSecretKey(varName, secret, key string) podTemplateOption {
-	return func(c *podTemplateConfig) {
-		c.envVars = append(c.envVars, corev1.EnvVar{
-			Name: varName,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: secret,
-					},
-					Key: key,
-				},
-			},
-		})
-	}
-}
-
 func WithSecret(secretPresent bool) podTemplateOption {
 	return func(c *podTemplateConfig) {
 		c.withSecret = secretPresent
 
+	}
+}
+
+func WithBackupConfig(cfg *backup.Config, fs *pflag.FlagSet) podTemplateOption {
+	return func(c *podTemplateConfig) {
+		for _, ev := range cfg.GetEnvVars(fs) {
+			c.envVars = append(c.envVars, ev)
+		}
 	}
 }
 
@@ -115,6 +109,11 @@ func deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 		},
 	}
 
+	// Add environment variables to container
+	for _, ev := range c.envVars {
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, ev)
+	}
+
 	// Label selector for operator pod.  It must match the pod template's
 	// labels.
 	selector := labels.MakeLabels(
@@ -125,24 +124,12 @@ func deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 	deployment.Spec.Template.Labels = selector
 
 	if c.withSecret {
-		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: "secrets",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: "etok",
+		deployment.Spec.Template.Spec.Containers[0].EnvFrom = append(deployment.Spec.Template.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: "etok",
 				},
 			},
-		})
-
-		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      "secrets",
-			MountPath: "/secrets/secret-file.json",
-			SubPath:   "secret-file.json",
-		})
-
-		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: "/secrets/secret-file.json",
 		})
 	}
 

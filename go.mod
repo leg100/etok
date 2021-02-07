@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	cloud.google.com/go/storage v1.12.0
+	github.com/aws/aws-sdk-go v1.37.3
 	github.com/creack/pty v1.1.9
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/fatih/color v1.7.0
@@ -11,6 +12,7 @@ require (
 	github.com/google/go-cmp v0.5.4
 	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20201102131242-0c45ba392e51
+	github.com/johannesboyne/gofakes3 v0.0.0-20210124080349-901cf567bf01
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.4 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect

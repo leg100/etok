@@ -13,7 +13,6 @@ LD_FLAGS = " \
 ENV ?= kind
 IMG ?= etok
 TAG ?= $(VERSION)-$(RANDOM_SUFFIX)
-DEPLOY_FLAGS ?= --secret-file $(GOOGLE_APPLICATION_CREDENTIALS)
 KUBECTX=""
 
 # Override vars if ENV=gke
@@ -46,8 +45,9 @@ local: image push
 
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy
-deploy: image push
-	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS)
+deploy: image push deploy-operator-secret
+	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
+		--backup-provider=gcs --gcs-bucket=$(BACKUP_BUCKET)
 
 # Tail operator logs
 .PHONY: logs
@@ -60,8 +60,29 @@ crds: build
 	$(BUILD_BIN) install --context $(KUBECTX) --local --crds-only
 
 .PHONY: undeploy
-undeploy: build
+undeploy: build delete-operator-secret
 	$(BUILD_BIN) install --local --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true
+
+
+# Deploy a secret containing GCP svc acc key, on kind, for the operator to use
+.PHONY: deploy-operator-secret
+deploy-operator-secret: delete-operator-secret create-operator-namespace
+ifeq ($(ENV),kind)
+	$(KUBECTL) --namespace=etok create secret generic etok --from-file=GOOGLE_CREDENTIALS=$(GOOGLE_APPLICATION_CREDENTIALS)
+endif
+
+.PHONY: delete-operator-secret
+delete-operator-secret:
+ifeq ($(ENV),kind)
+	$(KUBECTL) --namespace=etok delete secret etok --ignore-not-found
+endif
+
+# Create operator namespace, ignore already exists errors
+.PHONY: create-operator-namespace
+create-operator-namespace:
+ifeq ($(ENV),kind)
+	$(KUBECTL) create namespace etok 2>/dev/null || true
+endif
 
 .PHONY: e2e
 e2e: image push deploy
@@ -81,11 +102,14 @@ install:
 
 .PHONY: install-latest-release
 install-latest-release:
-	curl -s https://api.github.com/repos/leg100/etok/releases/latest \
-		| jq -r '.assets[] | select(.name | test(".*_linux_amd64$$")) | .browser_download_url' \
-		| xargs -I{} curl -Lo /tmp/etok {}
-	chmod +x /tmp/etok
-	mv /tmp/etok ~/go/bin/
+	{ \
+	set -e ;\
+	ZIP_FILE=$$(tempfile --prefix=etok --suffix=.zip) ;\
+	RELEASE_URL=$$(curl -s https://api.github.com/repos/leg100/etok/releases/latest | \
+		jq -r '.assets[] | select(.name | test(".*_linux_amd64.zip$$")) | .browser_download_url') ;\
+	curl -Lo $$ZIP_FILE $$RELEASE_URL ;\
+	unzip -o -d $(GOBIN) $$ZIP_FILE ;\
+	}
 
 .PHONY: image
 image: build

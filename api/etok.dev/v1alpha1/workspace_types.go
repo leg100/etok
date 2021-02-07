@@ -69,10 +69,9 @@ type WorkspaceSpec struct {
 	// Variables as inputs to module
 	Variables []*Variable `json:"variables,omitempty"`
 
-	// +kubebuilder:validation:Pattern=`^[0-9a-z][0-9a-z\-_]{0,61}[0-9a-z]$`
-
-	// GCS bucket to which to backup state file
-	BackupBucket string `json:"backupBucket,omitempty"`
+	// Ephemeral turns off state backup (and restore) - intended for short-lived
+	// workspaces.
+	Ephemeral bool `json:"ephemeral,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage

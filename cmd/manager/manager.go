@@ -3,10 +3,13 @@ package manager
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"runtime"
 
 	"k8s.io/klog/v2"
 
+	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/controllers"
@@ -38,10 +41,16 @@ type ManagerOptions struct {
 	EnableLeaderElection bool
 
 	args []string
+
+	// State backup configuration
+	backupCfg *backup.Config
 }
 
 func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
-	o := &ManagerOptions{Factory: f}
+	o := &ManagerOptions{
+		backupCfg: backup.NewConfig(),
+		Factory:   f,
+	}
 	cmd := &cobra.Command{
 		Use:    "operator",
 		Short:  "Run the etok operator",
@@ -50,6 +59,11 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 			ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
 
 			printVersion()
+
+			// Validate backup flags
+			if err := o.backupCfg.Validate(cmd.Flags()); err != nil {
+				return err
+			}
 
 			client, err := f.Create(o.KubeContext)
 			if err != nil {
@@ -69,11 +83,33 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 
 			klog.V(0).Info("Runner image: " + o.Image)
 
+			// Convert GOOGLE_CREDENTIALS=<key> to
+			// GOOGLE_APPLICATION_CREDENTIALS=<file-path-containing-key>
+			if gcreds := os.Getenv("GOOGLE_CREDENTIALS"); gcreds != "" {
+				if err := ioutil.WriteFile("/google_application_credentials.json", []byte(gcreds), 0400); err != nil {
+					return fmt.Errorf("unable to write google credentials to disk: %w", err)
+				}
+				if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/google_application_credentials.json"); err != nil {
+					return fmt.Errorf("unable to create environment variable GOOGLE_APPLICATION_CREDENTIALS: %w", err)
+				}
+			}
+
+			// Select backup provider based on parsed flags
+			backupProvider, err := o.backupCfg.CreateSelectedProvider(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if backupProvider != nil {
+				klog.V(0).Infof("Created backup provider: %s", o.backupCfg.Selected)
+			}
+
 			// Setup workspace ctrl with mgr
 			workspaceReconciler := controllers.NewWorkspaceReconciler(
 				mgr.GetClient(),
 				o.Image,
+				controllers.WithBackupProvider(backupProvider),
 				controllers.WithEventRecorder(mgr.GetEventRecorderFor("workspace-controller")))
+
 			if err := workspaceReconciler.SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create workspace controller: %w", err)
 			}
@@ -93,6 +129,8 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 	}
 
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+
+	o.backupCfg.AddToFlagSet(cmd.Flags())
 
 	flags.AddKubeContextFlag(cmd, &o.KubeContext)
 

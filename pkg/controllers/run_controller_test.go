@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"testing"
+	"time"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/scheme"
@@ -225,6 +226,40 @@ func TestRunReconciler(t *testing.T) {
 			},
 			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
 				assert.Equal(t, 5, *run.RunStatus.ExitCode)
+			},
+		},
+		{
+			name: "Enqueue timeout exceeded",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithNotCompleteConditionForTimeout(v1alpha1.RunUnqueuedReason, time.Hour)),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1"),
+			},
+			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseFailed, run.Phase)
+			},
+			reconcileError: true,
+		},
+		{
+			name: "Queue wait timeout exceeded",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithNotCompleteConditionForTimeout(v1alpha1.RunQueuedReason, 2*time.Hour)),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("active-run-1", "apply-1")),
+			},
+			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseFailed, run.Phase)
+			},
+			reconcileError: true,
+		},
+		{
+			name: "Pending timeout exceeded",
+			run:  testobj.Run("operator-test", "apply-1", "apply", testobj.WithWorkspace("workspace-1"), testobj.WithNotCompleteConditionForTimeout(v1alpha1.PodPendingReason, time.Hour)),
+			objs: []runtime.Object{
+				testobj.Workspace("operator-test", "workspace-1", testobj.WithCombinedQueue("apply-1")),
+				testobj.RunPod("operator-test", "apply-1", testobj.WithPhase(corev1.PodPending)),
+				testobj.Secret("operator-test", "etok"),
+			},
+			runAssertions: func(t *testutil.T, run *v1alpha1.Run) {
+				assert.Equal(t, v1alpha1.RunPhaseFailed, run.Phase)
 			},
 		},
 	}

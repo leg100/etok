@@ -63,9 +63,9 @@ func WithDeleteTimestamp() func(*v1alpha1.Workspace) {
 	}
 }
 
-func WithBackupBucket(bucket string) func(*v1alpha1.Workspace) {
+func WithEphemeral() func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.BackupBucket = bucket
+		ws.Spec.Ephemeral = true
 	}
 }
 
@@ -255,6 +255,19 @@ func WithCondition(condition string) func(*v1alpha1.Run) {
 		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
 			Type:   condition,
 			Status: metav1.ConditionTrue,
+		})
+	}
+}
+
+// Produces a ready condition that is false, with the given reason, and a last
+// transition time set to now minus time. Intended for use with faking timeouts.
+func WithNotCompleteConditionForTimeout(reason string, ago time.Duration) func(*v1alpha1.Run) {
+	return func(run *v1alpha1.Run) {
+		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
+			Type:               v1alpha1.RunCompleteCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             reason,
+			LastTransitionTime: metav1.NewTime(time.Now().Add(-ago)),
 		})
 	}
 }

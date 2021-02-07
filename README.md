@@ -122,15 +122,25 @@ Terraform state is stored in a secret using the [kubernetes backend](https://www
 
 Note: Do not define a backend in your terraform configuration - it will conflict with the configuration Etok automatically installs.
 
-### State Persistence
+### State Backup and Restore
 
-Persistence of state to cloud storage is supported. If enabled, every update to the state is backed up to a cloud storage bucket.
+Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
 
-To enable persistence, pass the name of an existing bucket via the `--backup-bucket` flag when creating a new workspace with `workspace new`. If the secret storing the state cannot be found, the workspace checks if a backup exists in the bucket. If found, it restores the state to the secret.
+To enable backups, install the operator with the relevant flags. For example, to backup to a GCS bucket:
 
-Note: only GCS is supported at present.
+```
+etok install --backup-provider=gcs --gcs-bucket=backups-bucket
+```
 
-The operator is responsible for persisting the state. Therefore be sure to provide the appropriate credentials to the operator at install time. Either provide the path to a file containing a GCP service account key via the `--secret-file` flag, or setup workload identity (see below). The service account needs the following permissions on the bucket:
+Or to backup to an S3 bucket:
+
+```
+etok install --backup-provider=s3 --s3-bucket=backups-bucket --s3-region=eu-west-2
+```
+
+Be sure to provide the appropriate credentials to the operator at install time.  Either [create a secret containing credentials](#credentials), or [setup workload identity](#workload-identity).
+
+For GCP, the service account needs the following IAM permissions on the bucket:
 
 ```
 storage.buckets.get
@@ -139,17 +149,53 @@ storage.objects.delete
 storage.objects.get
 ```
 
+On AWS, the user needs the following IAM policy:
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:PutObject",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${BACKUP_BUCKET}/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${BACKUP_BUCKET}"
+            ]
+        }
+    ]
+}
+```
+
+To opt a workspace out of automatic backup and restore, pass the `--ephemeral` flag when creating a new workspace with `workspace new`. This is useful if you intend for your workspace to be short-lived.
+
+Note: only GCS and S3 are currently supported.
+
 ## Credentials
 
-Etok looks for credentials in a secret named `etok`. If found, the credentials contained within are made available to terraform as environment variables.
+Etok looks for credentials in a secret named `etok` in the relevant namespace. The credentials contained within are made available as environment variables.
 
-For instance to set credentials for the [GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference):
+For instance to set credentials for the [Terraform GCP provider](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#full-reference), or for making backups to GCS:
 
 ```
 kubectl create secret generic etok --from-file=GOOGLE_CREDENTIALS=[path to service account key]
 ```
 
-Or, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html):
+Or, to set credentials for the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html), or for making backups to S3:
 
 ```
 kubectl create secret generic etok \
