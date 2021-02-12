@@ -4,6 +4,7 @@ import (
 	"flag"
 	"strconv"
 
+	"github.com/leg100/etok/cmd/github"
 	"github.com/leg100/etok/cmd/install"
 	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/cmd/manager"
@@ -42,6 +43,8 @@ func RootCmd(f *cmdutil.Factory) *cobra.Command {
 
 	installCmd, _ := install.InstallCmd(f)
 	cmd.AddCommand(installCmd)
+
+	cmd.AddCommand(github.GithubCmd(f))
 
 	// Terraform commands (and shell command)
 	launcher.AddToRoot(cmd, f)

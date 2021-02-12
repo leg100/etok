@@ -4,27 +4,37 @@ go 1.15
 
 require (
 	cloud.google.com/go/storage v1.12.0
+	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/aws/aws-sdk-go v1.37.3
-	github.com/creack/pty v1.1.9
+	github.com/creack/pty v1.1.11
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/fatih/color v1.7.0
+	github.com/elazarl/go-bindata-assetfs v1.0.0
+	github.com/fatih/color v1.10.0
 	github.com/fsouza/fake-gcs-server v1.22.0
 	github.com/google/go-cmp v0.5.4
+	github.com/google/go-github/v31 v31.0.0
 	github.com/google/goexpect v0.0.0-20200816234442-b5b77125c2c5
+	github.com/gorilla/mux v1.8.0
+	github.com/hashicorp/hcl/v2 v2.6.0 // indirect
 	github.com/hashicorp/terraform-config-inspect v0.0.0-20201102131242-0c45ba392e51
+	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/johannesboyne/gofakes3 v0.0.0-20210124080349-901cf567bf01
 	github.com/kr/text v0.2.0 // indirect
-	github.com/mattn/go-colorable v0.1.4 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
+	github.com/unrolled/render v1.0.3
+	github.com/zclconf/go-cty v1.5.1 // indirect
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
 	google.golang.org/api v0.36.0
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.19.2
 	k8s.io/apiextensions-apiserver v0.19.2
