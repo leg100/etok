@@ -29,14 +29,14 @@ type createOptions struct {
 	namespace   string
 	kubeContext string
 
-	flow *flowServer
+	flow *flowServerOptions
 }
 
 func createCmd(f *cmdutil.Factory) (*cobra.Command, *createOptions) {
 	o := &createOptions{
 		Factory:   f,
 		namespace: defaultNamespace,
-		flow: &flowServer{
+		flow: &flowServerOptions{
 			creds: &credentials{
 				name:    secretName,
 				timeout: defaultTimeout,
@@ -62,8 +62,13 @@ func createCmd(f *cmdutil.Factory) (*cobra.Command, *createOptions) {
 			o.flow.creds.namespace = o.namespace
 			o.flow.creds.client = o.Client.KubeClient
 
+			flowServer, err := newFlowServer(o.flow)
+			if err != nil {
+				return err
+			}
+
 			// Skip app creation if credentials already exist
-			exists, err := o.flow.creds.exists(cmd.Context())
+			exists, err := flowServer.creds.exists(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("unable to check if credentials exist: %w", err)
 			}
@@ -72,7 +77,7 @@ func createCmd(f *cmdutil.Factory) (*cobra.Command, *createOptions) {
 				return nil
 			}
 
-			if err := o.flow.run(cmd.Context()); err != nil {
+			if err := flowServer.run(cmd.Context()); err != nil {
 				return fmt.Errorf("unable to complete app creation: %w", err)
 			}
 

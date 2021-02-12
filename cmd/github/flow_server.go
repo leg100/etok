@@ -29,6 +29,28 @@ type errHttpServerInternalError struct{}
 
 // flowServer handles the creation and setup of a new GitHub app
 type flowServer struct {
+	*flowServerOptions
+
+	listener net.Listener
+
+	*render.Render
+
+	// Error channel for http handlers to report back a fatal error
+	errch chan error
+
+	// Success channel receives empty struct when flow has successfully
+	// completed
+	success chan struct{}
+
+	// Started channel receives empty struct when server has successfully
+	// started up
+	started chan struct{}
+
+	// HTTP handler
+	handler http.Handler
+}
+
+type flowServerOptions struct {
 	// Github's hostname
 	githubHostname string
 
@@ -45,47 +67,36 @@ type flowServer struct {
 	// Github webhook events are sent to this URL
 	webhook string
 
-	// HTML template renderer
-	*render.Render
-
 	// Toggle automatically opening flow server in browser
 	disableBrowser bool
-
-	listener net.Listener
 
 	// Toggle development mode.
 	devMode bool
 
 	creds *credentials
-
-	// Error channel for http handlers to report back a fatal error
-	errch chan error
-
-	success chan struct{}
 }
 
-func (s *flowServer) run(ctx context.Context) error {
-	s.errch = make(chan error)
-
+func newFlowServer(opts *flowServerOptions) (*flowServer, error) {
 	// Validate and parse webhook url
-	if s.webhook == "" {
-		return fmt.Errorf("--webhook is required")
+	if opts.webhook == "" {
+		return nil, fmt.Errorf("--webhook is required")
 	}
 
-	_, err := url.Parse(s.webhook)
+	_, err := url.Parse(opts.webhook)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if s.devMode {
-		fmt.Println("Development mode is enabled")
+	s := flowServer{
+		flowServerOptions: opts,
 	}
 
 	// Listen on dynamic port (unless port set to non-zero)
 	s.listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 	if err != nil {
-		return err
+		return nil, err
 	}
+	s.port = s.listener.Addr().(*net.TCPAddr).Port
 
 	// Setup template renderer
 	s.Render = render.New(
@@ -97,6 +108,10 @@ func (s *flowServer) run(ctx context.Context) error {
 		},
 	)
 
+	if s.devMode {
+		fmt.Println("Development mode is enabled")
+	}
+
 	// Setup flow server routes
 	r := mux.NewRouter()
 	r.HandleFunc("/exchange-code", s.exchangeCode)
@@ -106,10 +121,17 @@ func (s *flowServer) run(ctx context.Context) error {
 	})
 	r.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
 
-	http.Handle("/", r)
+	s.handler = r
 
-	// Run flow server
-	server := &http.Server{}
+	s.errch = make(chan error)
+	s.success = make(chan struct{})
+	s.started = make(chan struct{}, 1)
+
+	return &s, nil
+}
+
+func (s *flowServer) run(ctx context.Context) error {
+	server := &http.Server{Handler: s.handler}
 	go func() {
 		if err := server.Serve(s.listener); err != http.ErrServerClosed {
 			panic(err.Error())
@@ -124,6 +146,9 @@ func (s *flowServer) run(ctx context.Context) error {
 	if err := s.wait(); err != nil {
 		return err
 	}
+
+	// Indicate to upstream that server has successfully started
+	s.started <- struct{}{}
 
 	if !s.disableBrowser {
 		// Send user to browser to kick off app creation
@@ -170,12 +195,7 @@ func pollUrl(url string, interval, timeout time.Duration) error {
 
 // Get a flow server URL with the given path
 func (s *flowServer) getUrl(path string) string {
-	return fmt.Sprintf("http://localhost:%d%s", s.getPort(), path)
-}
-
-// Get dynamically assigned port of flow server
-func (s *flowServer) getPort() int {
-	return s.listener.Addr().(*net.TCPAddr).Port
+	return fmt.Sprintf("http://localhost:%d%s", s.port, path)
 }
 
 func (s *flowServer) githubNewAppUrl() string {

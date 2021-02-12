@@ -29,7 +29,7 @@ func TestCreate(t *testing.T) {
 	}{
 		{
 			name: "plan",
-			args: []string{"--namespace=fake", "--disable-browser", fmt.Sprintf("--hostname=%s", githubHostname)},
+			args: []string{"--namespace=fake", "--disable-browser", fmt.Sprintf("--hostname=%s", githubHostname), "--webhook=events.etok.dev"},
 		},
 	}
 
@@ -48,18 +48,20 @@ func TestCreate(t *testing.T) {
 			}()
 
 			// wait for listener to be started
-			attempts := 5
-			for i := 0; i < attempts; i++ {
+			var attempts int
+			for {
 				if opts.flow.port != 0 {
 					break
 				}
-				if i == attempts {
+				if attempts == 10 {
 					t.Error("listener failed to start")
 					return
 				}
 				time.Sleep(100 * time.Millisecond)
+				attempts++
 			}
 
+			// Wait for http to fully start
 			healthzUrl := fmt.Sprintf("http://localhost:%d/healthz", opts.flow.port)
 			require.NoError(t, pollUrl(healthzUrl, 100*time.Millisecond, 2*time.Second))
 

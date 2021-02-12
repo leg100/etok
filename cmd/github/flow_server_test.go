@@ -5,14 +5,13 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/leg100/etok/pkg/static"
 	"github.com/leg100/etok/pkg/vcs/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/unrolled/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -23,44 +22,38 @@ func TestFlowServer(t *testing.T) {
 	githubHostname, err := fixtures.GithubAppTestServer(t)
 	require.NoError(t, err)
 
-	flow := &flowServer{
+	opts := &flowServerOptions{
 		githubHostname: githubHostname,
 		name:           "etok-app",
 		port:           12345,
 		webhook:        "https://webhook.etok.dev",
-		Render: render.New(
-			render.Options{
-				Asset:      static.Asset,
-				AssetNames: static.AssetNames,
-				Directory:  "static/templates",
-			},
-		),
+		disableBrowser: true,
 		creds: &credentials{
-			name:    secretName,
-			timeout: defaultTimeout,
-			client:  fake.NewSimpleClientset(),
+			name:      secretName,
+			namespace: "fake",
+			timeout:   defaultTimeout,
+			client:    fake.NewSimpleClientset(),
 		},
 	}
+
+	flow, err := newFlowServer(opts)
+	require.NoError(t, err)
 
 	errch := make(chan error)
 	go func() {
 		errch <- flow.run(context.Background())
 	}()
 
-	req, err := http.NewRequest("GET", "/github-app/setup", nil)
-	require.NoError(t, err)
+	// Wait for flow server to startup
+	<-flow.started
 
 	w := httptest.NewRecorder()
-	flow.newApp(w, req)
+	flow.newApp(w, nil)
 	assert.Equal(t, 200, w.Result().StatusCode)
-
-	// Make request for exchange code.
-	req, err = http.NewRequest("GET", "/exchange-code?code=good-code", nil)
-	require.NoError(t, err)
 
 	// Check that it responds with redirect to install app
 	w = httptest.NewRecorder()
-	flow.exchangeCode(w, req)
+	flow.exchangeCode(w, &http.Request{URL: &url.URL{RawQuery: "code=good-code"}})
 	assert.Equal(t, 302, w.Result().StatusCode)
 	loc, err := w.Result().Location()
 	assert.NoError(t, err)
