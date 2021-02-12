@@ -97,7 +97,7 @@ func staticCssCustomCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/css/custom.css", size: 6940, mode: os.FileMode(436), modTime: time.Unix(1612906509, 0)}
+	info := bindataFileInfo{name: "static/css/custom.css", size: 6940, mode: os.FileMode(420), modTime: time.Unix(1613132647, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -117,7 +117,7 @@ func staticCssNormalizeCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/css/normalize.css", size: 6138, mode: os.FileMode(436), modTime: time.Unix(1541384983, 0)}
+	info := bindataFileInfo{name: "static/css/normalize.css", size: 6138, mode: os.FileMode(420), modTime: time.Unix(1613132647, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -137,7 +137,7 @@ func staticCssSkeletonCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/css/skeleton.css", size: 11452, mode: os.FileMode(436), modTime: time.Unix(1612697454, 0)}
+	info := bindataFileInfo{name: "static/css/skeleton.css", size: 11452, mode: os.FileMode(420), modTime: time.Unix(1613132647, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -157,7 +157,7 @@ func staticJsJquery351MinJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/js/jquery-3.5.1.min.js", size: 89476, mode: os.FileMode(436), modTime: time.Unix(1612697454, 0)}
+	info := bindataFileInfo{name: "static/js/jquery-3.5.1.min.js", size: 89476, mode: os.FileMode(420), modTime: time.Unix(1613132647, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -177,7 +177,7 @@ func staticTemplatesGithubAppTmpl() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/templates/github-app.tmpl", size: 1652, mode: os.FileMode(436), modTime: time.Unix(1613067506, 0)}
+	info := bindataFileInfo{name: "static/templates/github-app.tmpl", size: 1652, mode: os.FileMode(420), modTime: time.Unix(1613132647, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
