@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -23,6 +24,8 @@ const (
 	// name of the secret containing the github app credentials
 	secretName = "creds"
 )
+
+type errHttpServerInternalError struct{}
 
 // flowServer handles the creation and setup of a new GitHub app
 type flowServer struct {
@@ -54,10 +57,17 @@ type flowServer struct {
 	devMode bool
 
 	creds *credentials
+
+	// Error channel for http handlers to report back a fatal error
+	errch chan error
+
+	success chan struct{}
 }
 
 func (s *flowServer) run(ctx context.Context) error {
-	// validate and parse webhook url
+	s.errch = make(chan error)
+
+	// Validate and parse webhook url
 	if s.webhook == "" {
 		return fmt.Errorf("--webhook is required")
 	}
@@ -71,11 +81,13 @@ func (s *flowServer) run(ctx context.Context) error {
 		fmt.Println("Development mode is enabled")
 	}
 
+	// Listen on dynamic port (unless port set to non-zero)
 	s.listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 	if err != nil {
 		return err
 	}
 
+	// Setup template renderer
 	s.Render = render.New(
 		render.Options{
 			Asset:         static.Asset,
@@ -85,6 +97,7 @@ func (s *flowServer) run(ctx context.Context) error {
 		},
 	)
 
+	// Setup flow server routes
 	r := mux.NewRouter()
 	r.HandleFunc("/exchange-code", s.exchangeCode)
 	r.HandleFunc("/github-app/setup", s.newApp)
@@ -95,6 +108,7 @@ func (s *flowServer) run(ctx context.Context) error {
 
 	http.Handle("/", r)
 
+	// Run flow server
 	server := &http.Server{}
 	go func() {
 		if err := server.Serve(s.listener); err != http.ErrServerClosed {
@@ -102,10 +116,11 @@ func (s *flowServer) run(ctx context.Context) error {
 		}
 	}()
 	defer func() {
-		klog.V(0).Info("Gracefully shutting down web server...")
+		fmt.Println("Gracefully shutting down web server...")
 		server.Shutdown(ctx)
 	}()
 
+	// Wait for server to be running
 	if err := s.wait(); err != nil {
 		return err
 	}
@@ -120,19 +135,16 @@ func (s *flowServer) run(ctx context.Context) error {
 		}
 	}
 
-	// Wait for secret to be created
-	fmt.Printf("Waiting for github app credentials to be created...")
-	if err := s.creds.poll(ctx); err != nil {
-		return fmt.Errorf("encountered error while waiting for credentials to be created: %w", err)
+	select {
+	case <-s.success:
+		return nil
+	case err := <-s.errch:
+		return err
 	}
-
-	fmt.Printf("Github app credentials created")
-
-	return nil
 }
 
+// Wait for web server to be running
 func (s *flowServer) wait() error {
-	// Wait for web server to be running (in foreground)
 	if err := pollUrl(s.getUrl("/healthz"), 500*time.Millisecond, 10*time.Second); err != nil {
 		return fmt.Errorf("encountered error while waiting for web server to startup: %w", err)
 	}
@@ -156,11 +168,12 @@ func pollUrl(url string, interval, timeout time.Duration) error {
 	})
 }
 
+// Get a flow server URL with the given path
 func (s *flowServer) getUrl(path string) string {
 	return fmt.Sprintf("http://localhost:%d%s", s.getPort(), path)
 }
 
-// Get dynamically assigned port
+// Get dynamically assigned port of flow server
 func (s *flowServer) getPort() int {
 	return s.listener.Addr().(*net.TCPAddr).Port
 }
@@ -214,30 +227,35 @@ func (s *flowServer) newApp(w http.ResponseWriter, r *http.Request) {
 
 	jsonManifest, err := json.MarshalIndent(manifest, "", " ")
 	if err != nil {
-		respond(w, http.StatusBadRequest, "Failed to serialize manifest: %s", err)
+		s.Render.Text(w, http.StatusBadRequest, "Failed to serialize manifest")
+		s.errch <- err
 		return
 	}
 
-	err = s.HTML(w, http.StatusOK, "github-app", GithubSetupData{
+	err = s.HTML(w, http.StatusOK, "github-app", struct {
+		Target   string
+		Manifest string
+	}{
 		Target:   s.githubNewAppUrl(),
 		Manifest: string(jsonManifest),
 	})
 	if err != nil {
-		klog.Error(err.Error())
+		s.errch <- err
 		return
 	}
 
 	return
 }
 
-// exchangeCode handles the user coming back from creating their app A code
+// exchangeCode handles the user coming back from creating their app. A code
 // query parameter is exchanged for this app's ID, key, and webhook_secret
 // Implements
 // https://developer.github.com/apps/building-github-apps/creating-github-apps-from-a-manifest/#implementing-the-github-app-manifest-flow
 func (s *flowServer) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		respond(w, http.StatusBadRequest, "Missing exchange code query parameter")
+		s.Render.Text(w, http.StatusBadRequest, "Missing exchange code query parameter")
+		s.errch <- errors.New("Missing exchange code query parameter")
 		return
 	}
 
@@ -246,36 +264,30 @@ func (s *flowServer) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	creds := &vcs.GithubAnonymousCredentials{}
 	client, err := vcs.NewGithubClient(s.githubHostname, creds)
 	if err != nil {
-		respond(w, http.StatusInternalServerError, "Failed to exchange code for github app: %s", err)
+		s.Render.Text(w, http.StatusInternalServerError, "Failed to instantiate github client")
+		s.errch <- fmt.Errorf("Failed to instantiate github client: %w", err)
 		return
 	}
 
 	app, err := client.ExchangeCode(code)
 	if err != nil {
-		respond(w, http.StatusInternalServerError, "Failed to exchange code for github app: %s", err)
+		s.Render.Text(w, http.StatusInternalServerError, "Failed to exchange code for github app")
+		s.errch <- fmt.Errorf("Failed to exchange code for github app: %w", err)
 		return
 	}
 
-	klog.V(1).Infof("Found credentials for GitHub app %q with id %d", app.Name, app.ID)
+	fmt.Printf("Found credentials for GitHub app %q with id %d\n", app.Name, app.ID)
 
 	// Persist credentials to k8s secret
 	if err := s.creds.create(context.Background(), app); err != nil {
-		respond(w, http.StatusInternalServerError, "Unable to create secret %s: %s", s.creds, err.Error())
+		s.Render.Text(w, http.StatusInternalServerError, fmt.Sprintf("Unable to create secret %s: %s", s.creds, err.Error()))
+		s.errch <- fmt.Errorf("Unable to create secret %s: %w", s.creds, err)
 		return
 	}
+	fmt.Printf("Persisted credentials to secret %s\n", s.creds)
 
 	http.Redirect(w, r, app.URL+"/installations/new", http.StatusFound)
-}
 
-func respond(w http.ResponseWriter, code int, format string, args ...interface{}) {
-	response := fmt.Sprintf(format, args...)
-
-	if code < 300 {
-		klog.Info(response)
-	} else {
-		klog.Warning(response)
-	}
-
-	w.WriteHeader(code)
-	fmt.Fprintln(w, response)
+	// Signal flow completion
+	s.success <- struct{}{}
 }

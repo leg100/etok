@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -35,14 +34,10 @@ func (c *credentials) exists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// Wait for secret to be created
 func (c *credentials) poll(ctx context.Context) error {
-	// Wait for secret to be created
-	fmt.Printf("Waiting for github app credentials to be created...")
-	//return fmt.Errorf("encountered error while waiting for credentials to
-	//be created: %w", err)
-
 	return wait.PollImmediate(time.Second, c.timeout, func() (bool, error) {
-		klog.V(2).Infof("polling for credentials secret")
+		klog.V(2).Infof("polling for secret: %s", c)
 		return c.exists(ctx)
 	})
 }

@@ -29,7 +29,7 @@ func TestCreate(t *testing.T) {
 	}{
 		{
 			name: "plan",
-			args: []string{"--namespace=fake", "--disable-auto-open-browser", fmt.Sprintf("--hostname=%s", githubHostname)},
+			args: []string{"--namespace=fake", "--disable-browser", fmt.Sprintf("--hostname=%s", githubHostname)},
 		},
 	}
 
@@ -42,9 +42,6 @@ func TestCreate(t *testing.T) {
 			cmd, opts := createCmd(f)
 			cmd.SetArgs(tt.args)
 
-			// Don't actually open browser
-			opts.runner = fakeRunner{}
-
 			execErr := make(chan error)
 			go func() {
 				execErr <- cmd.Execute()
@@ -53,7 +50,7 @@ func TestCreate(t *testing.T) {
 			// wait for listener to be started
 			attempts := 5
 			for i := 0; i < attempts; i++ {
-				if opts.port != 0 {
+				if opts.flow.port != 0 {
 					break
 				}
 				if i == attempts {
@@ -63,11 +60,11 @@ func TestCreate(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 			}
 
-			healthzUrl := fmt.Sprintf("http://localhost:%d/healthz", opts.port)
+			healthzUrl := fmt.Sprintf("http://localhost:%d/healthz", opts.flow.port)
 			require.NoError(t, pollUrl(healthzUrl, 100*time.Millisecond, 2*time.Second))
 
 			// make request to exchange-code
-			resp, err := http.Get(fmt.Sprintf("http://localhost:%d/exchange-code?code=good-code", opts.port))
+			resp, err := http.Get(fmt.Sprintf("http://localhost:%d/exchange-code?code=good-code", opts.flow.port))
 			require.NoError(t, err)
 			assert.Equal(t, 200, resp.StatusCode)
 			content, err := ioutil.ReadAll(resp.Body)
