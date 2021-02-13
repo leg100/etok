@@ -2,26 +2,26 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Categories on Etok Documentation</title>
-    <link>https://docs.etok.dev/categories/</link>
+    <link>https://leg100.github.io/etok/categories/</link>
     <description>Recent content in Categories on Etok Documentation</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 02 Apr 2014 00:00:00 +0000</lastBuildDate><atom:link href="https://docs.etok.dev/categories/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Wed, 02 Apr 2014 00:00:00 +0000</lastBuildDate><atom:link href="https://leg100.github.io/etok/categories/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Development</title>
-      <link>https://docs.etok.dev/categories/development/</link>
+      <link>https://leg100.github.io/etok/categories/development/</link>
       <pubDate>Wed, 02 Apr 2014 00:00:00 +0000</pubDate>
       
-      <guid>https://docs.etok.dev/categories/development/</guid>
+      <guid>https://leg100.github.io/etok/categories/development/</guid>
       <description></description>
     </item>
     
     <item>
       <title>golang</title>
-      <link>https://docs.etok.dev/categories/golang/</link>
+      <link>https://leg100.github.io/etok/categories/golang/</link>
       <pubDate>Wed, 02 Apr 2014 00:00:00 +0000</pubDate>
       
-      <guid>https://docs.etok.dev/categories/golang/</guid>
+      <guid>https://leg100.github.io/etok/categories/golang/</guid>
       <description></description>
     </item>
     
