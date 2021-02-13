@@ -1,0 +1,4 @@
+baseURL = "https://docs.etok.dev/"
+languageCode = "en-us"
+title = "Etok Documentation"
+theme = "book"
