@@ -11,14 +11,14 @@ This document is a brief primer on using Go templates.">
 <meta property="og:description" content="Hugo uses the excellent Go html/template library for its template engine. It is an extremely lightweight engine that provides a very small amount of logic. In our experience that it is just the right amount of logic to be able to create a good static website. If you have used other template systems from different languages or frameworks you will find a lot of similarities in Go templates.
 This document is a brief primer on using Go templates." />
 <meta property="og:type" content="article" />
-<meta property="og:url" content="https://docs.etok.dev/posts/goisforlovers/" />
+<meta property="og:url" content="https://leg100.github.io/etok/posts/goisforlovers/" />
 <meta property="article:published_time" content="2014-04-02T00:00:00+00:00" />
 <meta property="article:modified_time" content="2014-04-02T00:00:00+00:00" />
 <title>(Hu)go Template Primer | Etok Documentation</title>
-<link rel="manifest" href="../../manifest.json">
-<link rel="icon" href="../../favicon.png" type="image/x-icon">
-<link rel="stylesheet" href="../../book.min.6c7c6446dfdee7c8c933e9bbc6e80ee3ed6c913b2a59519f2092c3c6a9d63e55.css" integrity="sha256-bHxkRt/e58jJM&#43;m7xugO4&#43;1skTsqWVGfIJLDxqnWPlU=">
-<script defer src="../../en.search.min.b058edf587cc787855b3d071254fe14f8dde3f72958d02e619e4aa992f47ef07.js" integrity="sha256-sFjt9YfMeHhVs9BxJU/hT43eP3KVjQLmGeSqmS9H7wc="></script>
+<link rel="manifest" href="/etok/manifest.json">
+<link rel="icon" href="/etok/favicon.png" type="image/x-icon">
+<link rel="stylesheet" href="/etok/book.min.6c7c6446dfdee7c8c933e9bbc6e80ee3ed6c913b2a59519f2092c3c6a9d63e55.css" integrity="sha256-bHxkRt/e58jJM&#43;m7xugO4&#43;1skTsqWVGfIJLDxqnWPlU=">
+<script defer src="/etok/en.search.min.04194c17d4a3c7cccb76c0c9a1aa73aabd2ef8ccded8a4656ddf73653bd15b5f.js" integrity="sha256-BBlMF9Sjx8zLdsDJoapzqr0u&#43;Mze2KRlbd9zZTvRW18="></script>
 <!--
 Made with Book Theme
 https://github.com/alex-shpak/hugo-book
@@ -36,7 +36,7 @@ https://github.com/alex-shpak/hugo-book
         
   <nav>
 <h2 class="book-brand">
-  <a href="../../"><span>Etok Documentation</span>
+  <a href="/etok"><span>Etok Documentation</span>
   </a>
 </h2>
 
@@ -71,7 +71,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/" class="">Example Site</a>
+    <a href="https://leg100.github.io/etok/docs/example/" class="">Example Site</a>
   
 
           
@@ -84,7 +84,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/table-of-contents/" class="">Table of Contents</a>
+    <a href="https://leg100.github.io/etok/docs/example/table-of-contents/" class="">Table of Contents</a>
   
 
           
@@ -97,7 +97,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/table-of-contents/with-toc/" class="">With ToC</a>
+    <a href="https://leg100.github.io/etok/docs/example/table-of-contents/with-toc/" class="">With ToC</a>
   
 
         </li>
@@ -110,7 +110,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/table-of-contents/without-toc/" class="">Without ToC</a>
+    <a href="https://leg100.github.io/etok/docs/example/table-of-contents/without-toc/" class="">Without ToC</a>
   
 
         </li>
@@ -145,7 +145,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/collapsed/3rd-level/" class="">3rd Level</a>
+    <a href="https://leg100.github.io/etok/docs/example/collapsed/3rd-level/" class="">3rd Level</a>
   
 
           
@@ -158,7 +158,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/example/collapsed/3rd-level/4th-level/" class="">4th Level</a>
+    <a href="https://leg100.github.io/etok/docs/example/collapsed/3rd-level/4th-level/" class="">4th Level</a>
   
 
         </li>
@@ -199,7 +199,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/buttons/" class="">Buttons</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/buttons/" class="">Buttons</a>
   
 
         </li>
@@ -212,7 +212,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/columns/" class="">Columns</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/columns/" class="">Columns</a>
   
 
         </li>
@@ -225,7 +225,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/details/" class="">Details</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/details/" class="">Details</a>
   
 
         </li>
@@ -238,7 +238,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/expand/" class="">Expand</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/expand/" class="">Expand</a>
   
 
         </li>
@@ -251,7 +251,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/hints/" class="">Hints</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/hints/" class="">Hints</a>
   
 
         </li>
@@ -264,7 +264,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/katex/" class="">Katex</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/katex/" class="">Katex</a>
   
 
         </li>
@@ -277,7 +277,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/mermaid/" class="">Mermaid</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/mermaid/" class="">Mermaid</a>
   
 
         </li>
@@ -292,7 +292,7 @@ https://github.com/alex-shpak/hugo-book
   
     <input type="checkbox" id="section-d3fc1bf6d66cd84b896a0af9f40cb1d5" class="toggle"  />
     <label for="section-d3fc1bf6d66cd84b896a0af9f40cb1d5" class="flex justify-between">
-      <a href="https://docs.etok.dev/docs/shortcodes/section/" class="">Section</a>
+      <a href="https://leg100.github.io/etok/docs/shortcodes/section/" class="">Section</a>
       <span>▾</span>
     </label>
   
@@ -307,7 +307,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/section/page1/" class="">Page1</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/section/page1/" class="">Page1</a>
   
 
         </li>
@@ -320,7 +320,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/section/page2/" class="">Page2</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/section/page2/" class="">Page2</a>
   
 
         </li>
@@ -338,7 +338,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/shortcodes/tabs/" class="">Tabs</a>
+    <a href="https://leg100.github.io/etok/docs/shortcodes/tabs/" class="">Tabs</a>
   
 
         </li>
@@ -365,7 +365,7 @@ https://github.com/alex-shpak/hugo-book
 <ul>
   
   <li>
-    <a href="../../posts/" >
+    <a href="/etok/posts/" >
         Blog
       </a>
   </li>
@@ -394,14 +394,14 @@ https://github.com/alex-shpak/hugo-book
         
   <div class="flex align-center justify-between">
   <label for="menu-control">
-    <img src="../../svg/menu.svg" class="book-icon" alt="Menu" />
+    <img src="/etok/svg/menu.svg" class="book-icon" alt="Menu" />
   </label>
 
   <strong>(Hu)go Template Primer</strong>
 
   <label for="toc-control">
     
-    <img src="../../svg/toc.svg" class="book-icon" alt="Table of Contents" />
+    <img src="/etok/svg/toc.svg" class="book-icon" alt="Table of Contents" />
     
   </label>
 </div>
@@ -445,7 +445,7 @@ https://github.com/alex-shpak/hugo-book
       
 <article class="markdown">
   <h1>
-    <a href="../../posts/goisforlovers/">(Hu)go Template Primer</a>
+    <a href="/etok/posts/goisforlovers/">(Hu)go Template Primer</a>
   </h1>
   
   <h5>April 2, 2014</h5>
@@ -455,19 +455,19 @@ https://github.com/alex-shpak/hugo-book
   
   <div>
     
-      <a href="../../categories/development/">Development</a>, 
-      <a href="../../categories/golang/">golang</a>
+      <a href="/etok/categories/development/">Development</a>, 
+      <a href="/etok/categories/golang/">golang</a>
   </div>
   
 
   
   <div>
     
-      <a href="../../tags/go/">go</a>, 
-      <a href="../../tags/golang/">golang</a>, 
-      <a href="../../tags/templates/">templates</a>, 
-      <a href="../../tags/themes/">themes</a>, 
-      <a href="../../tags/development/">development</a>
+      <a href="/etok/tags/go/">go</a>, 
+      <a href="/etok/tags/golang/">golang</a>, 
+      <a href="/etok/tags/templates/">templates</a>, 
+      <a href="/etok/tags/themes/">themes</a>, 
+      <a href="/etok/tags/development/">development</a>
   </div>
   
 
@@ -518,7 +518,7 @@ functions.</p>
 <p>Each Go template has a struct (object) made available to it. In hugo each
 template is passed either a page or a node struct depending on which type of
 page you are rendering. More details are available on the
-<a href="../../layout/variables">variables</a> page.</p>
+<a href="/layout/variables">variables</a> page.</p>
 <p>A variable is accessed by referencing the variable name.</p>
 <pre><code>&lt;title&gt;{{ .Title }}&lt;/title&gt;
 </code></pre>
@@ -532,7 +532,7 @@ page you are rendering. More details are available on the
 </h2>
 <p>Go template ship with a few functions which provide basic functionality. The Go
 template system also provides a mechanism for applications to extend the
-available functions with their own. <a href="../../layout/functions">Hugo template
+available functions with their own. <a href="/layout/functions">Hugo template
 functions</a> provide some additional functionality we believe
 are useful for building websites. Functions are called by using their name
 followed by the required parameters separated by spaces. Template
@@ -687,7 +687,7 @@ you want to inside of your templates.</p>
   <a class="anchor" href="#using-content-page-parameters">#</a>
 </h2>
 <p>In each piece of content you can provide variables to be used by the
-templates. This happens in the <a href="../../content/front-matter">front matter</a>.</p>
+templates. This happens in the <a href="/content/front-matter">front matter</a>.</p>
 <p>An example of this is used in this documentation site. Most of the pages
 benefit from having the table of contents provided. Sometimes the TOC just
 doesn&rsquo;t make a lot of sense. We&rsquo;ve defined a variable in our front matter
