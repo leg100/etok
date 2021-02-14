@@ -1,4 +1,0 @@
-baseURL = "https://leg100.github.io/etok"
-languageCode = "en-us"
-title = "Etok Documentation"
-theme = "book"
