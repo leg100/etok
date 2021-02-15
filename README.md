@@ -101,89 +101,11 @@ Terraform flags need to be passed after a double dash, like so:
 etok apply -- -auto-approve
 ```
 
-## RBAC
-
-The `install` command also installs ClusterRoles (and ClusterRoleBindings) for your convenience:
-
-* [etok-user](./config/rbac/user.yaml): includes the permissions necessary for running unprivileged commands
-* [etok-admin](./config/rbac/admin.yaml): additional permissions for managing workspaces and running [privileged commands](#privileged-commands)
-
-Amend the bindings accordingly to add/remove users. For example to amend the etok-user binding:
-
-```
-kubectl edit clusterrolebinding etok-user
-```
-
-Note: To restrict users to individual namespaces you'll want to create RoleBindings referencing the ClusterRoles.
-
 ## State
 
 Terraform state is stored in a secret using the [kubernetes backend](https://www.terraform.io/docs/backends/types/kubernetes.html). It comes into existence once you run `etok init`. If the workspace is deleted then so is the state.
 
 Note: Do not define a backend in your terraform configuration - it will conflict with the configuration Etok automatically installs.
-
-### State Backup and Restore
-
-Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
-
-To enable backups, install the operator with the relevant flags. For example, to backup to a GCS bucket:
-
-```
-etok install --backup-provider=gcs --gcs-bucket=backups-bucket
-```
-
-Or to backup to an S3 bucket:
-
-```
-etok install --backup-provider=s3 --s3-bucket=backups-bucket --s3-region=eu-west-2
-```
-
-Be sure to provide the appropriate credentials to the operator at install time.  Either [create a secret containing credentials](#credentials), or [setup workload identity](#workload-identity).
-
-For GCP, the service account needs the following IAM permissions on the bucket:
-
-```
-storage.buckets.get
-storage.objects.create
-storage.objects.delete
-storage.objects.get
-```
-
-On AWS, the user needs the following IAM policy:
-
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:DeleteObject",
-                "s3:PutObject",
-                "s3:AbortMultipartUpload",
-                "s3:ListMultipartUploadParts"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${BACKUP_BUCKET}/*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${BACKUP_BUCKET}"
-            ]
-        }
-    ]
-}
-```
-
-To opt a workspace out of automatic backup and restore, pass the `--ephemeral` flag when creating a new workspace with `workspace new`. This is useful if you intend for your workspace to be short-lived.
-
-Note: only GCS and S3 are currently supported.
 
 ## Credentials
 
@@ -202,33 +124,6 @@ kubectl create secret generic etok \
   --from-literal=AWS_ACCESS_KEY_ID="youraccesskeyid"  \
   --from-literal=AWS_SECRET_ACCESS_KEY="yoursecretaccesskey"
 ```
-
-### Workload Identity
-
-https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
-
-To use Workload Identity for the operator, first ensure you have a GCP service account (GSA). Then bind a policy to the GSA, like so:
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding \
-    --role roles/iam.workloadIdentityUser \
-    --member "serviceAccount:[PROJECT_ID].svc.id.goog[etok/etok]" \
-    [GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
-```
-
-Where `[etok/etok]` refers to the kubernetes service account (KSA) named `etok` in the namespace `etok` (the installation defaults).
-
-Then install the operator with a service account annotation:
-
-```bash
-etok install --sa-annotations iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com
-```
-
-To use Workload Identity for workspaces, bind a policy to a GSA, as above, but setting the namespace to that of the workspace. The add the annotation to the KSA named `etok` in the namespace of the workspace:
-
-`kubectl annotate serviceaccounts etok iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_ID].iam.gserviceaccount.com`
-
-(`workspace new` creates the KSA if it doesn't already exist)
 
 ## Restrictions
 

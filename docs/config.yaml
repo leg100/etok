@@ -2,3 +2,14 @@ baseURL: "https://docs.etok.dev"
 languageCode: "en-us"
 title: "Etok Documentation"
 theme: "book"
+
+menu:
+  # before: []
+  after:
+    - name: "Github"
+      url: "https://github.com/leg100/etok"
+      weight: 10
+
+params:
+  BookRepo: "https://github.com/leg100/etok"
+  BookEditPath: "edit/master/docs/content"
