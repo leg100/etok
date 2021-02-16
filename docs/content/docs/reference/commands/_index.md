@@ -6,7 +6,7 @@ There are some useful [additional commands]({{< ref "additional.md" >}}) as well
 
 ## Privileged Commands
 
-Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace (see below) can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
+Commands can be specified as privileged. Only users possessing the RBAC permission to update the workspace can run privileged commands. Specify them via the `--privileged-commands` flag when creating a new workspace with `workspace new`.
 
 ## Queueable Commands (Q)
 
