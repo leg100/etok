@@ -3,8 +3,6 @@
 # test config for trialling etok from root of repo
 /test.tf
 /.terraform.lock.hcl
-# example terraform
-example/
 # docker push artefacts
 /push.out
 /etok.digest

@@ -1,0 +1,18 @@
+baseURL: "https://docs.etok.dev"
+languageCode: "en-us"
+title: "Etok Documentation"
+theme: "book"
+
+menu:
+  # before: []
+  after:
+    - name: "Github"
+      url: "https://github.com/leg100/etok"
+      weight: 10
+    - name: "Slack"
+      url: "https://join.slack.com/t/etokworkspace/shared_invite/zt-lbqgojdj-IS6aDIydMXe2X3EYf8ZRow"
+      weight: 20
+
+params:
+  BookRepo: "https://github.com/leg100/etok"
+  BookEditPath: "edit/master/docs/content"
