@@ -1,0 +1,5 @@
+@media screen and (min-width: $container-max-width) {
+    .container {
+        margin-left: calc(50vw - #{$container-max-width} / 2);
+    }
+}
