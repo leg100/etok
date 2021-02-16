@@ -1,0 +1,133 @@
+<!doctype html><html lang=en dir=ltr><head><meta name=generator content="Hugo 0.80.0"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="Getting Started #  This tutorial will guide you through installing and running etok for the first time.
+You&rsquo;re expected to be familiar with both terraform and kubernetes.
+Kubernetes Cluster #  Firstly ensure you have access to a kubernetes cluster. If you don&rsquo;t have access to a cluster then you might want to install kind, a tool for locally running a cluster in a docker container.
+Also, in order to install etok, ensure you have extensions permissions on the cluster."><meta name=theme-color content="#FFFFFF"><meta property="og:title" content><meta property="og:description" content="Getting Started #  This tutorial will guide you through installing and running etok for the first time.
+You&rsquo;re expected to be familiar with both terraform and kubernetes.
+Kubernetes Cluster #  Firstly ensure you have access to a kubernetes cluster. If you don&rsquo;t have access to a cluster then you might want to install kind, a tool for locally running a cluster in a docker container.
+Also, in order to install etok, ensure you have extensions permissions on the cluster."><meta property="og:type" content="article"><meta property="og:url" content="https://docs.etok.dev/docs/tutorials/getting_started/"><title>Getting Started | Etok Documentation</title><link rel=manifest href=/manifest.json><link rel=icon href=/favicon.png type=image/x-icon><link rel=stylesheet href=/book.min.6c7c6446dfdee7c8c933e9bbc6e80ee3ed6c913b2a59519f2092c3c6a9d63e55.css integrity="sha256-bHxkRt/e58jJM+m7xugO4+1skTsqWVGfIJLDxqnWPlU="><script defer src=/en.search.min.f37a4b87b9e917d6f71b3caa314711acc6fa48a7433f84890f7815684a23914d.js integrity="sha256-83pLh7npF9b3GzyqMUcRrMb6SKdDP4SJD3gVaEojkU0="></script></head><body dir=ltr><input type=checkbox class="hidden toggle" id=menu-control>
+<input type=checkbox class="hidden toggle" id=toc-control><main class="container flex"><aside class=book-menu><div class=book-menu-content><nav><h2 class=book-brand><a href=/><span>Etok Documentation</span></a></h2><div class=book-search><input type=text id=book-search-input placeholder=Search aria-label=Search maxlength=64 data-hotkeys=s/><div class="book-search-spinner hidden"></div><ul id=book-search-results></ul></div><ul><li class=book-section-flat><span>Tutorials</span><ul><li><a href=https://docs.etok.dev/docs/tutorials/getting_started/ class=active>Getting Started</a></li></ul></li><li class=book-section-flat><span>Guides</span><ul><li><a href=https://docs.etok.dev/docs/guides/state_backup/>State Backup</a></li><li><a href=https://docs.etok.dev/docs/guides/workload_identity/>Workload Identity</a></li></ul></li><li class=book-section-flat><span>Reference</span><ul><li><a href=https://docs.etok.dev/docs/reference/operator_install/>Operator Install</a></li><li><a href=https://docs.etok.dev/docs/reference/access_control/>Access Control</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/>Commands</a><ul><li><a href=https://docs.etok.dev/docs/reference/commands/terraform/>Terraform</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/additional/>Additional</a></li></ul></li><li><a href=https://docs.etok.dev/docs/reference/credentials/>Credentials</a></li><li><a href=https://docs.etok.dev/docs/reference/restrictions/>Restrictions</a></li><li><a href=https://docs.etok.dev/docs/reference/state/>State</a></li><li><a href=https://docs.etok.dev/docs/reference/testing/>Testing</a></li></ul></li><li class=book-section-flat><span>Background</span><ul><li><a href=https://docs.etok.dev/docs/background/configuration_upload/>Configuration Upload</a></li><li><a href=https://docs.etok.dev/docs/background/performance_optimization/>Performance Optimization</a></li><li><a href=https://docs.etok.dev/docs/background/crds/>CRDs</a></li></ul></li></ul><ul><li><a href=https://github.com/leg100/etok target=_blank rel=noopener>Github</a></li><li><a href=https://join.slack.com/t/etokworkspace/shared_invite/zt-lbqgojdj-IS6aDIydMXe2X3EYf8ZRow target=_blank rel=noopener>Slack</a></li></ul></nav><script>(function(){var menu=document.querySelector("aside.book-menu nav");addEventListener("beforeunload",function(event){localStorage.setItem("menu.scrollTop",menu.scrollTop);});menu.scrollTop=localStorage.getItem("menu.scrollTop");})();</script></div></aside><div class=book-page><header class=book-header><div class="flex align-center justify-between"><label for=menu-control><img src=/svg/menu.svg class=book-icon alt=Menu></label>
+<strong>Getting Started</strong>
+<label for=toc-control><img src=/svg/toc.svg class=book-icon alt="Table of Contents"></label></div><aside class="hidden clearfix"><nav id=TableOfContents><ul><li><a href=#kubernetes-cluster>Kubernetes Cluster</a></li><li><a href=#install>Install</a></li><li><a href=#first-workspace>First Workspace</a></li><li><a href=#first-terraform-run>First Terraform Run</a></li><li><a href=#terraform-plan-and-apply>Terraform Plan and Apply</a></li><li><a href=#next-steps>Next Steps</a></li></ul></nav></aside></header><article class=markdown><h1 id=getting-started>Getting Started
+<a class=anchor href=#getting-started>#</a></h1><p>This tutorial will guide you through installing and running etok for the first time.</p><p>You&rsquo;re expected to be familiar with both terraform and kubernetes.</p><h2 id=kubernetes-cluster>Kubernetes Cluster
+<a class=anchor href=#kubernetes-cluster>#</a></h2><p>Firstly ensure you have access to a kubernetes cluster. If you don&rsquo;t have access to a cluster then you might want to install <a href=https://kind.sigs.k8s.io/>kind</a>, a tool for locally running a cluster in a docker container.</p><p>Also, in order to install etok, ensure you have extensions permissions on the cluster.</p><h2 id=install>Install
+<a class=anchor href=#install>#</a></h2><p>Download etok from <a href=https://github.com/leg100/etok/releases>releases</a>. Extract the <code>etok</code> binary from the zipfile and copy it to a directory in your <code>PATH</code>, such as <code>/usr/local/bin</code>.</p><p>Etok is composed of two components: the <strong>operator</strong> (or server), which runs on the cluster, and the <strong>client</strong> (or CLI), which runs on your workstation.</p><p>The operator first needs to be installed. To do so run the following command:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok install
+</code></pre></div><p>You should see output related to the the installation:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>Creating resource CustomResourceDefinition workspaces.etok.dev
+Creating resource CustomResourceDefinition runs.etok.dev
+Creating resource ClusterRole etok
+Creating resource ClusterRole etok-user
+Creating resource ClusterRole etok-admin
+Creating resource ClusterRoleBinding etok
+Creating resource ClusterRoleBinding etok-user
+Creating resource ClusterRoleBinding etok-admin
+Creating resource Namespace etok
+Creating resource ServiceAccount etok/etok
+Creating resource Deployment etok/etok
+Waiting for Deployment to be ready
+</code></pre></div><p>It may take up to several minutes to install. The resources are installed into the <code>etok</code> namespace.</p><p>Any problems can be diagnosed using <code>kubectl</code>. To check the status of the deployment run the following command:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl --namespace<span style=color:#f92672>=</span>etok get deploy
+</code></pre></div><p>You can also check the versions of the currently deployed components by running the following command:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>&gt; etok version
+</code></pre></div><p>This&rsquo;ll print out both the version and the git commit of the respective components, like so:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>Client Version: 0.0.9	adf6e514340e49ba98dc86574990a488b2335965
+Server Version: 0.0.9	adf6e514340e49ba98dc86574990a488b2335965
+</code></pre></div><p>(<em>Server</em> refers to the operator component)</p><p>Once installed you can proceed to creating your first workspace.</p><h2 id=first-workspace>First Workspace
+<a class=anchor href=#first-workspace>#</a></h2><p>An etok workspace is much the same as a terraform workspace. Unlike terraform, there is no default workspace and a workspace must first be created before you can run terraform commands.</p><p>Run the following command to create a workspace named <code>dev</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok workspace new dev
+</code></pre></div><p>You should see output similar to the following:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>Created workspace default/dev
+Waiting for workspace pod to be ready...
+Requested terraform version is 0.14.3
+Current terraform version is 0.14.3
+Skipping terraform installation
+</code></pre></div><p>If there are problems you can again help diagnose them using <code>kubectl</code>. The check the status of the workspace, run:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl get ws
+</code></pre></div><p>If all is well then you should see the following:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>NAME   PHASE   VERSION   AGE    ACTIVE   QUEUE
+dev    ready   0.14.3    113s
+</code></pre></div><h2 id=first-terraform-run>First Terraform Run
+<a class=anchor href=#first-terraform-run>#</a></h2><p>Now you&rsquo;re ready to run a terraform command. Ensure you&rsquo;re still in the same directory as the one in which you created the workspace.</p><p>First, write some terraform configuration. Add the following in a new file named <code>random.tf</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-terraform data-lang=terraform><span style=color:#66d9ef>resource</span> <span style=color:#e6db74>&#34;random_id&#34;</span> <span style=color:#e6db74>&#34;test&#34;</span> {
+  <span style=color:#a6e22e>byte_length</span> = <span style=color:#ae81ff>2</span>
+}
+</code></pre></div><p>Now run the <code>init</code> command:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok init
+</code></pre></div><p>This command creates a new kubernetes pod, uploads <code>random.tf</code> and runs <code>terraform init</code> on the pod. And then it&rsquo;ll stream the output to the client:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>Initializing the backend...
+
+Successfully configured the backend &#34;kubernetes&#34;! Terraform will automatically
+use this backend unless the backend configuration changes.
+
+Initializing provider plugins...
+- Finding latest version of hashicorp/random...
+- Installing hashicorp/random v3.0.1...
+- Installed hashicorp/random v3.0.1 (signed by HashiCorp)
+
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run &#34;terraform init&#34; in the future.
+
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running &#34;terraform plan&#34; to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+</code></pre></div><p>If there are any problems, run <code>kubectl</code> to retrieve information about the run:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl get run
+</code></pre></div><p>It should provide output similar to the following:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>NAME        COMMAND   WORKSPACE   PHASE       AGE
+run-w6nc4   init      dev         completed   11m
+</code></pre></div><p><code>run-w6nc4</code> is the unique ID of the run. You can use this to probe for more information, for instance to retrieve information about the run&rsquo;s pod:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl describe pod run-w6nc4
+</code></pre></div><p>You can now proceed to running further terraform commands.</p><h2 id=terraform-plan-and-apply>Terraform Plan and Apply
+<a class=anchor href=#terraform-plan-and-apply>#</a></h2><p>Having run <code>init</code> you can now run a <code>plan</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok plan
+</code></pre></div><p>This should output:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # random_id.test will be created
+  + resource &#34;random_id&#34; &#34;test&#34; {
+      + b64_std     = (known after apply)
+      + b64_url     = (known after apply)
+      + byte_length = 2
+      + dec         = (known after apply)
+      + hex         = (known after apply)
+      + id          = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+------------------------------------------------------------------------
+
+Note: You didn&#39;t specify an &#34;-out&#34; parameter to save this plan, so Terraform
+can&#39;t guarantee that exactly these actions will be performed if
+&#34;terraform apply&#34; is subsequently run.
+</code></pre></div><p>Again you can use <code>kubectl</code> to diagnose any issues:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl get run
+</code></pre></div><p>Which should show information about both runs:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>NAME        COMMAND   WORKSPACE   PHASE       AGE
+run-ir7wb   plan      dev         completed   88s
+run-w6nc4   init      dev         completed   21m
+</code></pre></div><p>If the <code>plan</code> succeeded you can now run an <code>apply</code>:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok apply
+</code></pre></div><p>This&rsquo;ll print out the usual terraform output, and prompt for confirmation:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # random_id.test will be created
+  + resource &#34;random_id&#34; &#34;test&#34; {
+      + b64_std     = (known after apply)
+      + b64_url     = (known after apply)
+      + byte_length = 2
+      + dec         = (known after apply)
+      + hex         = (known after apply)
+      + id          = (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only &#39;yes&#39; will be accepted to approve.
+
+  Enter a value: yes
+
+random_id.test: Creating...
+random_id.test: Creation complete after 0s [id=kOM]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+</code></pre></div><h2 id=next-steps>Next Steps
+<a class=anchor href=#next-steps>#</a></h2><p>You should now be comfortable with basic usage of etok. However to appreciate its advantages (versus running terraform on your workstation) you&rsquo;ll want to read the documentation further, in particular with regard to RBAC, configuring privileged commands, and the handling of credentials.</p></article><footer class=book-footer><div class="flex flex-wrap justify-between"><div><a class="flex align-center" href=https://github.com/leg100/etok/edit/master/docs/content//docs/tutorials/getting_started.md target=_blank rel=noopener><img src=/svg/edit.svg class=book-icon alt=Edit>
+<span>Edit this page</span></a></div></div></footer><div class=book-comments></div><label for=menu-control class="hidden book-menu-overlay"></label></div><aside class=book-toc><div class=book-toc-content><nav id=TableOfContents><ul><li><a href=#kubernetes-cluster>Kubernetes Cluster</a></li><li><a href=#install>Install</a></li><li><a href=#first-workspace>First Workspace</a></li><li><a href=#first-terraform-run>First Terraform Run</a></li><li><a href=#terraform-plan-and-apply>Terraform Plan and Apply</a></li><li><a href=#next-steps>Next Steps</a></li></ul></nav></div></aside></main></body></html>

@@ -1,0 +1,96 @@
+<!doctype html><html lang=en dir=ltr><head><meta name=generator content="Hugo 0.80.0"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="State Backup and Restore #  Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
+Setup Cloud Storage #  First follow instructions for configuring backups for either GCS or S3:
+GCS   Create a GCS bucket:
+gsutil mb gs://my-backup-bucket   Provide the etok operator with the necessary privileges."><meta name=theme-color content="#FFFFFF"><meta property="og:title" content><meta property="og:description" content="State Backup and Restore #  Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
+Setup Cloud Storage #  First follow instructions for configuring backups for either GCS or S3:
+GCS   Create a GCS bucket:
+gsutil mb gs://my-backup-bucket   Provide the etok operator with the necessary privileges."><meta property="og:type" content="article"><meta property="og:url" content="https://docs.etok.dev/docs/guides/state_backup/"><title>State Backup | Etok Documentation</title><link rel=manifest href=/manifest.json><link rel=icon href=/favicon.png type=image/x-icon><link rel=stylesheet href=/book.min.6c7c6446dfdee7c8c933e9bbc6e80ee3ed6c913b2a59519f2092c3c6a9d63e55.css integrity="sha256-bHxkRt/e58jJM+m7xugO4+1skTsqWVGfIJLDxqnWPlU="><script defer src=/en.search.min.f37a4b87b9e917d6f71b3caa314711acc6fa48a7433f84890f7815684a23914d.js integrity="sha256-83pLh7npF9b3GzyqMUcRrMb6SKdDP4SJD3gVaEojkU0="></script></head><body dir=ltr><input type=checkbox class="hidden toggle" id=menu-control>
+<input type=checkbox class="hidden toggle" id=toc-control><main class="container flex"><aside class=book-menu><div class=book-menu-content><nav><h2 class=book-brand><a href=/><span>Etok Documentation</span></a></h2><div class=book-search><input type=text id=book-search-input placeholder=Search aria-label=Search maxlength=64 data-hotkeys=s/><div class="book-search-spinner hidden"></div><ul id=book-search-results></ul></div><ul><li class=book-section-flat><span>Tutorials</span><ul><li><a href=https://docs.etok.dev/docs/tutorials/getting_started/>Getting Started</a></li></ul></li><li class=book-section-flat><span>Guides</span><ul><li><a href=https://docs.etok.dev/docs/guides/state_backup/ class=active>State Backup</a></li><li><a href=https://docs.etok.dev/docs/guides/workload_identity/>Workload Identity</a></li></ul></li><li class=book-section-flat><span>Reference</span><ul><li><a href=https://docs.etok.dev/docs/reference/operator_install/>Operator Install</a></li><li><a href=https://docs.etok.dev/docs/reference/access_control/>Access Control</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/>Commands</a><ul><li><a href=https://docs.etok.dev/docs/reference/commands/terraform/>Terraform</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/additional/>Additional</a></li></ul></li><li><a href=https://docs.etok.dev/docs/reference/credentials/>Credentials</a></li><li><a href=https://docs.etok.dev/docs/reference/restrictions/>Restrictions</a></li><li><a href=https://docs.etok.dev/docs/reference/state/>State</a></li><li><a href=https://docs.etok.dev/docs/reference/testing/>Testing</a></li></ul></li><li class=book-section-flat><span>Background</span><ul><li><a href=https://docs.etok.dev/docs/background/configuration_upload/>Configuration Upload</a></li><li><a href=https://docs.etok.dev/docs/background/performance_optimization/>Performance Optimization</a></li><li><a href=https://docs.etok.dev/docs/background/crds/>CRDs</a></li></ul></li></ul><ul><li><a href=https://github.com/leg100/etok target=_blank rel=noopener>Github</a></li><li><a href=https://join.slack.com/t/etokworkspace/shared_invite/zt-lbqgojdj-IS6aDIydMXe2X3EYf8ZRow target=_blank rel=noopener>Slack</a></li></ul></nav><script>(function(){var menu=document.querySelector("aside.book-menu nav");addEventListener("beforeunload",function(event){localStorage.setItem("menu.scrollTop",menu.scrollTop);});menu.scrollTop=localStorage.getItem("menu.scrollTop");})();</script></div></aside><div class=book-page><header class=book-header><div class="flex align-center justify-between"><label for=menu-control><img src=/svg/menu.svg class=book-icon alt=Menu></label>
+<strong>State Backup</strong>
+<label for=toc-control><img src=/svg/toc.svg class=book-icon alt="Table of Contents"></label></div><aside class="hidden clearfix"><nav id=TableOfContents><ul><li><a href=#setup-cloud-storage>Setup Cloud Storage</a></li><li><a href=#testing-backup>Testing Backup</a></li><li><a href=#testing-restore>Testing Restore</a></li><li><a href=#opt-out>Opt-out</a></li></ul></nav></aside></header><article class=markdown><h1 id=state-backup-and-restore>State Backup and Restore
+<a class=anchor href=#state-backup-and-restore>#</a></h1><p>Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.</p><h2 id=setup-cloud-storage>Setup Cloud Storage
+<a class=anchor href=#setup-cloud-storage>#</a></h2><p>First follow instructions for configuring backups for either GCS or S3:</p><div class=book-tabs><input type=radio class=toggle name=tabs-backup id=tabs-backup-0 checked>
+<label for=tabs-backup-0>GCS</label><div class="book-tabs-content markdown-inner"><ol><li><p>Create a GCS bucket:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>gsutil mb gs://my-backup-bucket
+</code></pre></div></li><li><p>Provide the etok operator with the necessary privileges.</p><p>a. Either <a href=#credentials>create a secret containing a service account key</a>, or <a href=#workload-identity>setup workload identity</a>.</p><p>b. Ensure the service account possesses the following IAM permissions on the bucket:</p><pre><code>storage.buckets.get
+storage.objects.create
+storage.objects.delete
+storage.objects.get
+</code></pre></li><li><p>Install/update the operator, configuring it to use the GCS backup provider, and providing the name of the bucket:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok install --backup-provider<span style=color:#f92672>=</span>gcs --gcs-bucket<span style=color:#f92672>=</span>backups-bucket
+</code></pre></div><p>If you&rsquo;re using Workload Identity then you&rsquo;ll need to set the service account annotation too:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok install --backup-provider<span style=color:#f92672>=</span>gcs --gcs-bucket<span style=color:#f92672>=</span>backups-bucket <span style=color:#ae81ff>\
+</span><span style=color:#ae81ff></span>    --sa-annotations iam.gke.io/gcp-service-account<span style=color:#f92672>=[</span>GSA_NAME<span style=color:#f92672>]</span>@<span style=color:#f92672>[</span>PROJECT_NAME<span style=color:#f92672>]</span>.iam.gserviceaccount.com
+</code></pre></div></li></ol></div><input type=radio class=toggle name=tabs-backup id=tabs-backup-1>
+<label for=tabs-backup-1>S3</label><div class="book-tabs-content markdown-inner"><ol><li><p>Create an S3 bucket:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>aws s3 mb s3://my-backup-bucket --region eu-west-2
+</code></pre></div></li><li><p>Provide the etok operator with the necessary privileges.</p><p>a. Create a secret containing an AWS access key and secret key.</p><p>b. Ensure the keys belong to a user that can access the bucket. The following IAM policy provides the necessary permissions:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-yaml data-lang=yaml>{
+    <span style=color:#f92672>&#34;Version&#34;: </span><span style=color:#e6db74>&#34;2012-10-17&#34;</span>,
+    <span style=color:#f92672>&#34;Statement&#34;: </span>[
+        {
+            <span style=color:#f92672>&#34;Effect&#34;: </span><span style=color:#e6db74>&#34;Allow&#34;</span>,
+            <span style=color:#f92672>&#34;Action&#34;: </span>[
+                <span style=color:#e6db74>&#34;s3:GetObject&#34;</span>,
+                <span style=color:#e6db74>&#34;s3:DeleteObject&#34;</span>,
+                <span style=color:#e6db74>&#34;s3:PutObject&#34;</span>,
+                <span style=color:#e6db74>&#34;s3:AbortMultipartUpload&#34;</span>,
+                <span style=color:#e6db74>&#34;s3:ListMultipartUploadParts&#34;</span>
+            ],
+            <span style=color:#f92672>&#34;Resource&#34;: </span>[
+                <span style=color:#e6db74>&#34;arn:aws:s3:::${BACKUP_BUCKET}/*&#34;</span>
+            ]
+        },
+        {
+            <span style=color:#f92672>&#34;Effect&#34;: </span><span style=color:#e6db74>&#34;Allow&#34;</span>,
+            <span style=color:#f92672>&#34;Action&#34;: </span>[
+                <span style=color:#e6db74>&#34;s3:ListBucket&#34;</span>
+            ],
+            <span style=color:#f92672>&#34;Resource&#34;: </span>[
+                <span style=color:#e6db74>&#34;arn:aws:s3:::${BACKUP_BUCKET}&#34;</span>
+            ]
+        }
+    ]
+}
+</code></pre></div></li><li><p>Install/update the operator, configuring it to use the S3 backup provider, providing the name of the bucket and the bucket&rsquo;s region:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok install --backup-provider<span style=color:#f92672>=</span>s3 --s3-bucket<span style=color:#f92672>=</span>backups-bucket --s3-region<span style=color:#f92672>=</span>eu-west-2
+</code></pre></div></li></ol></div></div><h2 id=testing-backup>Testing Backup
+<a class=anchor href=#testing-backup>#</a></h2><p>Now you can check that your terraform state is successfully backed up:</p><ol><li><p>Create a workspace if you haven&rsquo;t already:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok workspace new foo
+</code></pre></div></li><li><p>Initialize the terraform state:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok init
+</code></pre></div></li><li><p>Retrieve workspace status and events:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl describe ws foo
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>...
+  Terraform Version:  0.14.3
+Status:
+  Backup Serial:  2
+  Conditions:
+    Last Transition Time:  2021-02-15T12:19:10Z
+    Message:
+    Reason:                AllSystemsOperational
+    Status:                True
+    Type:                  Ready
+  Phase:                   ready
+  Serial:                  2
+Events:
+  Type    Reason            Age                   From                  Message
+  ----    ------            ----                  ----                  -------
+  Normal  RestoreSkipped    9m32s (x14 over 15m)  workspace-controller  There is no state to restore
+  Normal  BackupSuccessful  9m28s                 workspace-controller  Backed up state #0
+  Normal  BackupSuccessful  83s                   workspace-controller  Backed up state #1
+  Normal  BackupSuccessful  25s                   workspace-controller  Backed up state #2
+</code></pre></div><p>If <code>Backup Serial</code> and <code>Serial</code> both refer to the same serial number then the most recent version of the state has been successfully backed up.</p></li></ol><h2 id=testing-restore>Testing Restore
+<a class=anchor href=#testing-restore>#</a></h2><p>To check that state can be restored follow these steps:</p><ol><li><p>Delete the workspace we previously worked with:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok workspace delete foo
+</code></pre></div><p>That deletes the kubernetes secret containing its state.</p></li><li><p>Now re-create the workspace with the same name:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok workspace new foo
+</code></pre></div></li><li><p>Retrieve workspace status and events:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl describe ws foo
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text>...
+  Terraform Version:  0.14.3
+Status:
+  Backup Serial:  2
+  Conditions:
+    Last Transition Time:  2021-02-15T12:56:41Z
+    Message:
+    Reason:                AllSystemsOperational
+    Status:                True
+    Type:                  Ready
+  Phase:                   ready
+  Serial:                  2
+Events:
+  Type    Reason             Age   From                  Message
+  ----    ------             ----  ----                  -------
+  Normal  RestoreSuccessful  35s   workspace-controller  Restored state #2
+</code></pre></div><p>Which should indicate the state has been successfully restored.</p></li></ol><h2 id=opt-out>Opt-out
+<a class=anchor href=#opt-out>#</a></h2><p>To opt a workspace out of automatic backup and restore, pass the <code>--ephemeral</code> flag when creating a new workspace with <code>workspace new</code>. This is useful if you intend for your workspace to be short-lived.</p></article><footer class=book-footer><div class="flex flex-wrap justify-between"><div><a class="flex align-center" href=https://github.com/leg100/etok/edit/master/docs/content//docs/guides/state_backup.md target=_blank rel=noopener><img src=/svg/edit.svg class=book-icon alt=Edit>
+<span>Edit this page</span></a></div></div></footer><div class=book-comments></div><label for=menu-control class="hidden book-menu-overlay"></label></div><aside class=book-toc><div class=book-toc-content><nav id=TableOfContents><ul><li><a href=#setup-cloud-storage>Setup Cloud Storage</a></li><li><a href=#testing-backup>Testing Backup</a></li><li><a href=#testing-restore>Testing Restore</a></li><li><a href=#opt-out>Opt-out</a></li></ul></nav></div></aside></main></body></html>
