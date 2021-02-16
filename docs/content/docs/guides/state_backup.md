@@ -2,7 +2,9 @@
 
 Backup of state to cloud storage is supported. If enabled, every update to state is backed up to a cloud storage bucket. When a new workspace is created, the operator checks if a backup exists. If so, it is restored.
 
-Currently backups to either S3 or GCS buckets are supported.
+## Setup Cloud Storage
+
+First follow instructions for configuring backups for either GCS or S3:
 
 {{< tabs "backup" >}}
 {{< tab "GCS" >}} 
@@ -92,5 +94,99 @@ Currently backups to either S3 or GCS buckets are supported.
 
 {{< /tab >}}
 {{< /tabs >}}
+
+## Testing Backup
+
+Now you can check that your terraform state is successfully backed up:
+
+1. Create a workspace if you haven't already:
+
+    ```bash
+    etok workspace new foo
+    ```
+
+2. Initialize the terraform state:
+
+    ```bash
+    etok init
+    ```
+
+3. Retrieve workspace status and events:
+
+    ```bash
+    kubectl describe ws foo
+    ```
+
+    ```text
+    ...
+      Terraform Version:  0.14.3
+    Status:
+      Backup Serial:  2
+      Conditions:
+        Last Transition Time:  2021-02-15T12:19:10Z
+        Message:
+        Reason:                AllSystemsOperational
+        Status:                True
+        Type:                  Ready
+      Phase:                   ready
+      Serial:                  2
+    Events:
+      Type    Reason            Age                   From                  Message
+      ----    ------            ----                  ----                  -------
+      Normal  RestoreSkipped    9m32s (x14 over 15m)  workspace-controller  There is no state to restore
+      Normal  BackupSuccessful  9m28s                 workspace-controller  Backed up state #0
+      Normal  BackupSuccessful  83s                   workspace-controller  Backed up state #1
+      Normal  BackupSuccessful  25s                   workspace-controller  Backed up state #2
+    ```
+
+    If `Backup Serial` and `Serial` both refer to the same serial number then the most recent version of the state has been successfully backed up.
+
+## Testing Restore
+
+To check that state can be restored follow these steps:
+
+1. Delete the workspace we previously worked with:
+
+    ```bash
+    etok workspace delete foo
+    ```
+
+    That deletes the kubernetes secret containing its state.
+
+2. Now re-create the workspace with the same name:
+
+    ```bash
+    etok workspace new foo
+    ```
+
+3. Retrieve workspace status and events:
+
+    ```bash
+    kubectl describe ws foo
+    ```
+
+    ```text
+    ...
+      Terraform Version:  0.14.3
+    Status:
+      Backup Serial:  2
+      Conditions:
+        Last Transition Time:  2021-02-15T12:56:41Z
+        Message:
+        Reason:                AllSystemsOperational
+        Status:                True
+        Type:                  Ready
+      Phase:                   ready
+      Serial:                  2
+    Events:
+      Type    Reason             Age   From                  Message
+      ----    ------             ----  ----                  -------
+      Normal  RestoreSuccessful  35s   workspace-controller  Restored state #2
+      ```
+
+    Which should indicate the state has been successfully restored.
+
+
+## Opt-out
 
 To opt a workspace out of automatic backup and restore, pass the `--ephemeral` flag when creating a new workspace with `workspace new`. This is useful if you intend for your workspace to be short-lived.
