@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Etok Documentation</title>
+    <link>https://docs.etok.dev/docs/tutorials/</link>
+    <description>Recent content on Etok Documentation</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language><atom:link href="https://docs.etok.dev/docs/tutorials/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title></title>
+      <link>https://docs.etok.dev/docs/tutorials/getting_started/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://docs.etok.dev/docs/tutorials/getting_started/</guid>
+      <description>Getting Started #  This tutorial will guide you through installing and running etok for the first time.
+You&amp;rsquo;re expected to be familiar with both terraform and kubernetes.
+Kubernetes Cluster #  Firstly ensure you have access to a kubernetes cluster. If you don&amp;rsquo;t have access to a cluster then you might want to install kind, a tool for locally running a cluster in a docker container.
+Also, in order to install etok, ensure you have extensions permissions on the cluster.</description>
+    </item>
+    
+  </channel>
+</rss>

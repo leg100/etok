@@ -3,167 +3,95 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   
   <url>
-    <loc>https://docs.etok.dev/docs/example/</loc>
+    <loc>https://docs.etok.dev/docs/reference/commands/terraform/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/docs/example/table-of-contents/with-toc/</loc>
+    <loc>https://docs.etok.dev/docs/reference/operator_install/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/docs/example/table-of-contents/without-toc/</loc>
+    <loc>https://docs.etok.dev/docs/tutorials/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/posts/creating-a-new-theme/</loc>
-    <lastmod>2014-09-28T00:00:00+00:00</lastmod>
+    <loc>https://docs.etok.dev/docs/guides/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/posts/migrate-from-jekyll/</loc>
-    <lastmod>2014-03-10T00:00:00+00:00</lastmod>
+    <loc>https://docs.etok.dev/docs/reference/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/docs/example/table-of-contents/</loc>
+    <loc>https://docs.etok.dev/docs/background/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/docs/example/collapsed/</loc>
+    <loc>https://docs.etok.dev/docs/background/configuration_upload/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/posts/</loc>
-    <lastmod>2014-09-28T00:00:00+00:00</lastmod>
+    <loc>https://docs.etok.dev/docs/background/performance_optimization/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/</loc>
-    <lastmod>2014-09-28T00:00:00+00:00</lastmod>
+    <loc>https://docs.etok.dev/docs/guides/state_backup/</loc>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/posts/goisforlovers/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
+    <loc>https://docs.etok.dev/docs/reference/access_control/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/commands/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/commands/additional/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/credentials/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/restrictions/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/state/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/reference/testing/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/tutorials/getting_started/</loc>
   </url>
   
   <url>
     <loc>https://docs.etok.dev/categories/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
   </url>
   
   <url>
-    <loc>https://docs.etok.dev/categories/development/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/development/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/posts/hugoisforlovers/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/go/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/golang/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/categories/golang/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/hugo/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/templates/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/tags/themes/</loc>
-    <lastmod>2014-04-02T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/example/collapsed/3rd-level/4th-level/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/example/collapsed/3rd-level/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/example/hidden/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/buttons/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/columns/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/details/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/expand/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/hints/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/katex/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/mermaid/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/section/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/section/page1/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/section/page2/</loc>
-  </url>
-  
-  <url>
-    <loc>https://docs.etok.dev/docs/shortcodes/tabs/</loc>
+    <loc>https://docs.etok.dev/docs/background/crds/</loc>
   </url>
   
   <url>
     <loc>https://docs.etok.dev/docs/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/tags/</loc>
+  </url>
+  
+  <url>
+    <loc>https://docs.etok.dev/docs/guides/workload_identity/</loc>
   </url>
   
 </urlset>

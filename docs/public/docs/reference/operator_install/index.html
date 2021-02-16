@@ -5,19 +5,23 @@
   <meta name="generator" content="Hugo 0.80.0" />
   <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Introduction #  Etok is software for running terraform commands on a kubernetes cluster. In organizations with teams of engineers working with terraform, it can be difficult managing terraform securely and systematically. Etok leverages kubernetes&#39; control plane and security to help teams work with terraform in just such a manner.
-Features #   Kubernetes operator CLI app etok provides for familiar and fast terraform UX Granular access control via Kubernetes RBAC Single platform suitable for both workstation and CI/CD usage Credential-free via mechanisms such as GKE Workload Identity Queueable terraform operations Built-in state backend with automatic backup to cloud storage Plus all the advantages kubernetes has to offer: scaling, security, instrumention, etc  Motivation #  Running terraform locally is often a bad idea.">
-<meta name="theme-color" content="#FFFFFF"><meta property="og:title" content="Introduction" />
-<meta property="og:description" content="" />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://docs.etok.dev/" />
+<meta name="description" content="Operator Install #  The command etok install installs the operator component onto the cluster.
+It will perform an upgrade if it is already installed. This can also be useful for making configuration changes to an existing installation.
+By default, it&rsquo;ll use the namespace etok. It&rsquo;ll create the namespace if it doesn&rsquo;t already exist. To use a non-default namespace, pass the --namespace flag.
+Run the version command to retrieve the currently installed operator version:">
+<meta name="theme-color" content="#FFFFFF"><meta property="og:title" content="" />
+<meta property="og:description" content="Operator Install #  The command etok install installs the operator component onto the cluster.
+It will perform an upgrade if it is already installed. This can also be useful for making configuration changes to an existing installation.
+By default, it&rsquo;ll use the namespace etok. It&rsquo;ll create the namespace if it doesn&rsquo;t already exist. To use a non-default namespace, pass the --namespace flag.
+Run the version command to retrieve the currently installed operator version:" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://docs.etok.dev/docs/reference/operator_install/" />
 
-<title>Introduction | Etok Documentation</title>
+<title>Operator Install | Etok Documentation</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.png" type="image/x-icon">
 <link rel="stylesheet" href="/book.min.6c7c6446dfdee7c8c933e9bbc6e80ee3ed6c913b2a59519f2092c3c6a9d63e55.css" integrity="sha256-bHxkRt/e58jJM&#43;m7xugO4&#43;1skTsqWVGfIJLDxqnWPlU=">
 <script defer src="/en.search.min.68efaf2fed99057d51f15574c24b623c1d7b2859f45f0a6c732681b5e76c7cc8.js" integrity="sha256-aO&#43;vL&#43;2ZBX1R8VV0wktiPB17KFn0XwpscyaBtedsfMg="></script>
-<link rel="alternate" type="application/rss+xml" href="https://docs.etok.dev/index.xml" title="Etok Documentation" />
 <!--
 Made with Book Theme
 https://github.com/alex-shpak/hugo-book
@@ -158,7 +162,7 @@ https://github.com/alex-shpak/hugo-book
   
 
   
-    <a href="https://docs.etok.dev/docs/reference/operator_install/" class="">Operator Install</a>
+    <a href="https://docs.etok.dev/docs/reference/operator_install/" class=" active">Operator Install</a>
   
 
         </li>
@@ -389,7 +393,7 @@ https://github.com/alex-shpak/hugo-book
     <img src="/svg/menu.svg" class="book-icon" alt="Menu" />
   </label>
 
-  <strong>Introduction</strong>
+  <strong>Operator Install</strong>
 
   <label for="toc-control">
     
@@ -403,12 +407,7 @@ https://github.com/alex-shpak/hugo-book
   <aside class="hidden clearfix">
     
   
-<nav id="TableOfContents">
-  <ul>
-    <li><a href="#features">Features</a></li>
-    <li><a href="#motivation">Motivation</a></li>
-  </ul>
-</nav>
+<nav id="TableOfContents"></nav>
 
 
 
@@ -419,36 +418,19 @@ https://github.com/alex-shpak/hugo-book
 
       
       
-  <article class="markdown"><h1 id="introduction">
-  Introduction
-  <a class="anchor" href="#introduction">#</a>
+  <article class="markdown"><h1 id="operator-install">
+  Operator Install
+  <a class="anchor" href="#operator-install">#</a>
 </h1>
-<p>Etok is software for running terraform commands on a kubernetes cluster. In organizations with teams of engineers working with terraform, it can be difficult managing terraform securely and systematically. Etok leverages kubernetes' control plane and security to help teams work with terraform in just such a manner.</p>
-<h2 id="features">
-  Features
-  <a class="anchor" href="#features">#</a>
-</h2>
-<ul>
-<li>Kubernetes operator</li>
-<li>CLI app <code>etok</code> provides for familiar and fast terraform UX</li>
-<li>Granular access control via Kubernetes RBAC</li>
-<li>Single platform suitable for both workstation and CI/CD usage</li>
-<li>Credential-free via mechanisms such as GKE Workload Identity</li>
-<li>Queueable terraform operations</li>
-<li>Built-in state backend with automatic backup to cloud storage</li>
-<li>Plus all the advantages kubernetes has to offer: scaling, security, instrumention, etc</li>
-</ul>
-<h2 id="motivation">
-  Motivation
-  <a class="anchor" href="#motivation">#</a>
-</h2>
-<p>Running terraform locally is often a bad idea. You may have to keep credentials for cloud providers on your workstation. You may have to open up firewalls to permit connectivity from workstations to cloud APIs. And running <code>terraform plan</code> can generate thousands of API calls, in which case the workstation connection can be a bottleneck.</p>
-<p>Discrepancies between running terraform locally and running it in CI/CD pipelines are a perpetual source of irritation for engineers. The IAM permissions assigned to the local account versus the CI/CD account are very likely to be different, which means a <code>terraform plan</code> that succeeds locally can fail on the CI/CD pipeline, for instance if the CI/CD account is missing a certain permission. Other differences in their respective environments such as firewalls, API connectivity, can cause unexpected errors.</p>
-<p>Running commands locally that can manipulate state need careful orchestration. While many state backends support locking, you&rsquo;d still want to ensure the rest of the team are aware of that you&rsquo;re going to run a command such as <code>terraform import</code>, particularly if you intend to run multiple such commands one after the other. You&rsquo;d rather ensure no CI/CD jobs are going to run and fail when they try to lock the state. And then there&rsquo;s no auditing that you ran <code>terraform import</code>.</p>
-<p>Running terraform instead on kubernetes resolves these problems. If you run your cluster in the cloud, then securing connectivity to the cloud APIs is easier, and its proximity to the cloud APIs can only make for a faster <code>terraform plan</code>.</p>
-<p>The same platform is shared by both users and CI/CD pipelines. Both trigger terraform commands through the use of the <code>etok</code> CLI. Sharing the same platform mitigates the unexpected errors on CI/CD pipelines described above.</p>
-<p>Kubernetes RBAC provides for granular and tried and tested access control of terraform operations. Its control plane and tooling permits interrogation, monitoring and auditing of terraform operations. And of course its scaling abilities permits massively concurrently use of terraform.</p>
-<p>And of course kubernetes opens up all sorts of opportunities for integration, whether with your application deployments or with other kubernetes operators and controllers.</p>
+<p>The command <code>etok install</code> installs the operator component onto the cluster.</p>
+<p>It will perform an upgrade if it is already installed. This can also be useful for making configuration changes to an existing installation.</p>
+<p>By default, it&rsquo;ll use the namespace <code>etok</code>. It&rsquo;ll create the namespace if it doesn&rsquo;t already exist. To use a non-default namespace, pass the <code>--namespace</code> flag.</p>
+<p>Run the <code>version</code> command to retrieve the currently installed operator version:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">&gt; etok version
+</code></pre></div><p>This&rsquo;ll print out both the version and the git commit of both the client and operator components, like so:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-text" data-lang="text">Client Version: 0.0.9	adf6e514340e49ba98dc86574990a488b2335965
+Server Version: 0.0.9	adf6e514340e49ba98dc86574990a488b2335965
+</code></pre></div><p>(<em>Server</em> refers to the operator component)</p>
 </article>
  
       
@@ -462,7 +444,7 @@ https://github.com/alex-shpak/hugo-book
 
 
   <div>
-    <a class="flex align-center" href="https://github.com/leg100/etok/edit/master/docs/content//_index.md" target="_blank" rel="noopener">
+    <a class="flex align-center" href="https://github.com/leg100/etok/edit/master/docs/content//docs/reference/operator_install.md" target="_blank" rel="noopener">
       <img src="/svg/edit.svg" class="book-icon" alt="Edit" />
       <span>Edit this page</span>
     </a>
@@ -490,12 +472,7 @@ https://github.com/alex-shpak/hugo-book
       <div class="book-toc-content">
         
   
-<nav id="TableOfContents">
-  <ul>
-    <li><a href="#features">Features</a></li>
-    <li><a href="#motivation">Motivation</a></li>
-  </ul>
-</nav>
+<nav id="TableOfContents"></nav>
 
 
  

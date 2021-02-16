@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Etok Documentation</title>
+    <link>https://docs.etok.dev/docs/background/</link>
+    <description>Recent content on Etok Documentation</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language><atom:link href="https://docs.etok.dev/docs/background/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title></title>
+      <link>https://docs.etok.dev/docs/background/configuration_upload/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://docs.etok.dev/docs/background/configuration_upload/</guid>
+      <description>What is uploaded to the pod when running a command? #  The contents of the root module (the current working directory, or the value of the path flag) is uploaded. Additionally, if the root module configuration contains references to other modules on the local filesystem, then these too are uploaded, along with all such modules recursively referenced (modules referencing modules, and so forth). The directory structure containing all modules is maintained on the kubernetes pod, ensuring relative references remain valid (e.</description>
+    </item>
+    
+    <item>
+      <title></title>
+      <link>https://docs.etok.dev/docs/background/performance_optimization/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://docs.etok.dev/docs/background/performance_optimization/</guid>
+      <description>How do I optimize performance? #  You can reasonably expect commands to start running in less than a couple of seconds. That depends on several factors.
+Minimize upload of data. As documented above, use a .terraformignore file to skip files you don&amp;rsquo;t need to upload. Pass the flag -v=3 to see which files are being uploaded and which are ignored.
+Disable TTY. Pass the --no-tty flag to the command. By default, if a TTY is detected, Etok performs a handshake with the pod which adds a delay.</description>
+    </item>
+    
+    <item>
+      <title>CRDs</title>
+      <link>https://docs.etok.dev/docs/background/crds/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://docs.etok.dev/docs/background/crds/</guid>
+      <description>CRDs #  Etok uses two CRDs (custom resource definitions):
+ Run Workspace  Run #  Whenever you run a terraform command with etok, a Run resource is created:
+&amp;gt; etok plan &amp;gt; kubectl get run NAME COMMAND WORKSPACE PHASE AGE run-290w7 plan dev completed 12s Workspace #  A Workspace resource maps to a terraform workspace. The command etok workspace new is a convenience method for creating a Workspace resource:</description>
+    </item>
+    
+  </channel>
+</rss>
