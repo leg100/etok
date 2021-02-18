@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leg100/etok/cmd/github/fixtures"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/testutil"
-	"github.com/leg100/etok/pkg/vcs/fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

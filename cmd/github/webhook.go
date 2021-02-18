@@ -10,29 +10,36 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/gorilla/mux"
 	"github.com/leg100/etok/pkg/util"
-	"github.com/leg100/etok/pkg/vcs"
+	"github.com/urfave/negroni"
+	"k8s.io/klog/v2"
 )
 
 const githubHeader = "X-Github-Event"
 
 type webhookServerOptions struct {
+	// Github's hostname
+	githubHostname string
+
 	// Port on which to listen for github events
 	port int
 
-	creds *vcs.GithubAppCredentials
+	creds *githubAppCredentials
 
-	webhookSecret string
+	// Webhook secret with which incoming events are validated - nil value skips
+	// validation
+	webhookSecret []byte
 
 	// Path to directory to which git repositories are cloned
 	cloneDir string
 }
 
 func (o *webhookServerOptions) run(ctx context.Context) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", o.port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", o.port))
 	if err != nil {
 		return err
 	}
@@ -43,18 +50,22 @@ func (o *webhookServerOptions) run(ctx context.Context) error {
 	})
 	r.HandleFunc("/events", o.webhookEvent).Methods("POST")
 
-	server := &http.Server{Handler: r}
+	// Add middleware
+	n := negroni.Classic()
+	n.UseHandler(r)
+
+	server := &http.Server{Handler: n}
 	go func() {
-		if err := server.Serve(listener); err != http.ErrServerClosed {
-			panic(err.Error())
+		if err := server.Serve(listener); err == http.ErrServerClosed {
+			klog.Error(err.Error())
 		}
 	}()
-	defer func() {
-		fmt.Println("Gracefully shutting down webhook server...")
-		server.Shutdown(ctx)
-	}()
 
-	return nil
+	<-ctx.Done()
+
+	fmt.Println("Gracefully shutting down webhook server...")
+	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second) // nolint: vet
+	return server.Shutdown(ctx)
 }
 
 func (o *webhookServerOptions) webhookEvent(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +76,7 @@ func (o *webhookServerOptions) webhookEvent(w http.ResponseWriter, r *http.Reque
 
 	payload, err := github.ValidatePayload(r, []byte(o.webhookSecret))
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -84,41 +95,39 @@ func (o *webhookServerOptions) webhookEvent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Retrieve app install info from event
 	install := pr.GetInstallation()
 	if install == nil {
-		// Ignoring unsupported event
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	install.CreatedAt
-
-	// Github requires authentication against installation that generated event
+	// Github requires authentication against specific installation that
+	// generated event
 	o.creds.InstallationID = install.GetID()
 
 	// Update status on PR
-	client, err := vcs.NewGithubClient(o.creds.Hostname, o.creds)
+	client, err := newGithubClient(o.githubHostname, o.creds)
 	if err != nil {
 		// Ignoring unsupported event
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	vcs.UpdateStatus(client, "pending", "in progress...", "plan", pr)
+	updateStatus(client, "pending", "in progress...", "plan", pr)
 
 	// Clone repo
 	path := filepath.Join(o.cloneDir, strconv.FormatInt(*pr.PullRequest.ID, 10), util.GenerateRandomString(4))
 
 	// Create the directory and parents if necessary.
 	if err := os.MkdirAll(path, 0700); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		panic(err.Error())
 	}
 
-	token, err := o.creds.GetToken()
+	// Get fresh access token for cloning repo
+	token, err := client.refreshToken()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		panic(err.Error())
 	}
 
 	// Insert access token into clone url
@@ -137,8 +146,7 @@ func (o *webhookServerOptions) webhookEvent(w http.ResponseWriter, r *http.Reque
 
 		_, err := cmd.CombinedOutput()
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			panic(err.Error())
 		}
 	}
 }

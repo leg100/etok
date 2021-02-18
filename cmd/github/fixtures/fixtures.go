@@ -10,7 +10,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/leg100/etok/pkg/vcs"
+	"github.com/leg100/etok/pkg/github"
 )
 
 const GithubPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
@@ -275,7 +275,7 @@ func GithubServerRouter(hostname string) http.Handler {
 			return
 		}
 
-		manifest := vcs.GithubManifest{}
+		manifest := github.GithubManifest{}
 		manifestReader := strings.NewReader(r.PostFormValue("manifest"))
 		if err := json.NewDecoder(manifestReader).Decode(&manifest); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

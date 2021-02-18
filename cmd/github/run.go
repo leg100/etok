@@ -54,11 +54,11 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 	flags.AddNamespaceFlag(cmd, &o.namespace)
 	flags.AddKubeContextFlag(cmd, &o.kubeContext)
 
-	cmd.Flags().StringVar(&o.creds.Hostname, "hostname", "github.com", "Github hostname")
+	cmd.Flags().StringVar(&o.githubHostname, "hostname", "github.com", "Github hostname")
 	cmd.Flags().Int64Var(&o.creds.AppID, "app-id", 0, "Github app ID")
 	cmd.Flags().StringVar(&o.creds.KeyPath, "key-path", "", "Github app private key path")
 
-	cmd.Flags().StringVar(&o.webhookSecret, "webhook-secret", "", "Github app webhook secret")
+	cmd.Flags().BytesHexVar(&o.webhookSecret, "webhook-secret", nil, "Github app webhook secret")
 
 	cmd.Flags().IntVar(&o.port, "port", defaultWebhookServerPort, "Webhook port")
 

@@ -13,8 +13,8 @@ import (
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
+	"github.com/leg100/etok/pkg/github"
 	"github.com/leg100/etok/pkg/static"
-	"github.com/leg100/etok/pkg/vcs"
 	"github.com/unrolled/render"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -214,13 +214,13 @@ func (s *flowServer) githubNewAppUrl() string {
 
 // newApp sends the user to github to create an app
 func (s *flowServer) newApp(w http.ResponseWriter, r *http.Request) {
-	manifest := &vcs.GithubManifest{
+	manifest := &github.GithubManifest{
 		Name:        s.name,
 		Description: "etok",
 		URL:         s.webhook,
 		RedirectURL: s.getUrl("/exchange-code"),
 		Public:      false,
-		Webhook: &vcs.GithubWebhook{
+		Webhook: &github.GithubWebhook{
 			Active: true,
 			URL:    fmt.Sprintf("%s/events", s.webhook),
 		},
@@ -281,8 +281,7 @@ func (s *flowServer) exchangeCode(w http.ResponseWriter, r *http.Request) {
 
 	klog.V(1).Info("Exchanging GitHub app code for app credentials")
 
-	creds := &vcs.GithubAnonymousCredentials{}
-	client, err := vcs.NewGithubClient(s.githubHostname, creds)
+	client, err := newGithubClient(s.githubHostname, nil)
 	if err != nil {
 		s.Render.Text(w, http.StatusInternalServerError, "Failed to instantiate github client")
 		s.errch <- fmt.Errorf("Failed to instantiate github client: %w", err)

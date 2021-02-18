@@ -1,4 +1,4 @@
-package vcs
+package github
 
 // appRequest contains the query parameters for
 // https://developer.github.com/apps/building-github-apps/creating-github-apps-from-a-manifest
