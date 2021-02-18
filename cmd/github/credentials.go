@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/leg100/etok/pkg/vcs"
+	"github.com/google/go-github/v31/github"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +42,7 @@ func (c *credentials) poll(ctx context.Context) error {
 	})
 }
 
-func (c *credentials) create(ctx context.Context, s *vcs.GithubAppTemporarySecrets) error {
+func (c *credentials) create(ctx context.Context, cfg *github.AppConfig) error {
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
@@ -52,9 +52,9 @@ func (c *credentials) create(ctx context.Context, s *vcs.GithubAppTemporarySecre
 			Name: c.name,
 		},
 		StringData: map[string]string{
-			"id":             strconv.FormatInt(s.ID, 10),
-			"key":            s.Key,
-			"webhook-secret": s.WebhookSecret,
+			"id":             strconv.FormatInt(cfg.GetID(), 10),
+			"key":            cfg.GetPEM(),
+			"webhook-secret": cfg.GetWebhookSecret(),
 		},
 	}
 

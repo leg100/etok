@@ -2,6 +2,7 @@ package vcs
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/pkg/errors"
@@ -9,29 +10,8 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
-// GithubClient is used to perform GitHub actions.
-type GithubClient struct {
-	user   string
-	client *github.Client
-	ctx    context.Context
-}
-
-// GithubAppTemporarySecrets holds app credentials obtained from github after creation.
-type GithubAppTemporarySecrets struct {
-	// ID is the app id.
-	ID int64
-	// Key is the app's PEM-encoded key.
-	Key string
-	// Name is the app name.
-	Name string
-	// WebhookSecret is the generated webhook secret for this app.
-	WebhookSecret string
-	// URL is a link to the app, like https://github.com/apps/octoapp.
-	URL string
-}
-
 // NewGithubClient returns a valid GitHub client.
-func NewGithubClient(hostname string, credentials GithubCredentials) (*GithubClient, error) {
+func NewGithubClient(hostname string, credentials GithubCredentials) (*github.Client, error) {
 	transport, err := credentials.Client()
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing github authentication transport")
@@ -48,26 +28,7 @@ func NewGithubClient(hostname string, credentials GithubCredentials) (*GithubCli
 		}
 	}
 
-	return &GithubClient{
-		user:   credentials.GetUser(),
-		client: client,
-		ctx:    context.Background(),
-	}, nil
-}
-
-// ExchangeCode returns a newly created app's info
-func (g *GithubClient) ExchangeCode(code string) (*GithubAppTemporarySecrets, error) {
-	ctx := context.Background()
-	cfg, _, err := g.client.Apps.CompleteAppManifest(ctx, code)
-	data := &GithubAppTemporarySecrets{
-		ID:            cfg.GetID(),
-		Key:           cfg.GetPEM(),
-		WebhookSecret: cfg.GetWebhookSecret(),
-		Name:          cfg.GetName(),
-		URL:           cfg.GetHTMLURL(),
-	}
-
-	return data, err
+	return client, nil
 }
 
 func resolveGithubAPIURL(hostname string) *url.URL {
@@ -86,4 +47,16 @@ func resolveGithubAPIURL(hostname string) *url.URL {
 	}
 
 	return baseURL
+}
+
+// UpdateStatus updates the status badge on the pull request.  See
+// https://github.com/blog/1227-commit-status-api.
+func UpdateStatus(client *github.Client, state, description, cmd string, pr *github.PullRequestEvent) error {
+	status := &github.RepoStatus{
+		State:       github.String(state),
+		Description: github.String(description),
+		Context:     github.String(fmt.Sprintf("etok/%s", cmd)),
+	}
+	_, _, err := client.Repositories.CreateStatus(context.Background(), *pr.Repo.Owner.Login, *pr.Repo.Name, *pr.PullRequest.Head.Ref, status)
+	return err
 }

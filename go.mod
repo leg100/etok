@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/storage v1.12.0
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/aws/aws-sdk-go v1.37.3
+	github.com/bradleyfalzon/ghinstallation v1.1.1
 	github.com/creack/pty v1.1.11
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect

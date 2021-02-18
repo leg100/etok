@@ -289,24 +289,25 @@ func (s *flowServer) exchangeCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, err := client.ExchangeCode(code)
+	ctx := context.Background()
+	cfg, _, err := client.Apps.CompleteAppManifest(ctx, code)
 	if err != nil {
 		s.Render.Text(w, http.StatusInternalServerError, "Failed to exchange code for github app")
 		s.errch <- fmt.Errorf("Failed to exchange code for github app: %w", err)
 		return
 	}
 
-	fmt.Printf("Found credentials for GitHub app %q with id %d\n", app.Name, app.ID)
+	fmt.Printf("Found credentials for GitHub app %q with id %d\n", cfg.GetName(), cfg.GetID())
 
 	// Persist credentials to k8s secret
-	if err := s.creds.create(context.Background(), app); err != nil {
+	if err := s.creds.create(context.Background(), cfg); err != nil {
 		s.Render.Text(w, http.StatusInternalServerError, fmt.Sprintf("Unable to create secret %s: %s", s.creds, err.Error()))
 		s.errch <- fmt.Errorf("Unable to create secret %s: %w", s.creds, err)
 		return
 	}
 	fmt.Printf("Persisted credentials to secret %s\n", s.creds)
 
-	http.Redirect(w, r, app.URL+"/installations/new", http.StatusFound)
+	http.Redirect(w, r, cfg.GetHTMLURL()+"/installations/new", http.StatusFound)
 
 	// Signal flow completion
 	s.success <- struct{}{}
