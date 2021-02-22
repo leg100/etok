@@ -78,7 +78,7 @@ var githubConversionJSON = `{
 	"pem":            "%s"
 }`
 
-var githubAppInstallationJSON = `[
+var GithubAppInstallationJSON = `[
 	{
 		"id": 1,
 		"account": {
@@ -117,7 +117,7 @@ var githubAppInstallationJSON = `[
 ]`
 
 // nolint: gosec
-var githubAppTokenJSON = `{
+var GithubAppTokenJSON = `{
 	"token":      "v1.1f699f1069f60xx%d",
 	"expires_at": "2050-01-01T00:00:00Z",
 	"permissions": {
@@ -238,7 +238,7 @@ var githubAppTokenJSON = `{
 	]
 }`
 
-func validateGithubToken(tokenString string) error {
+func ValidateGithubToken(tokenString string) error {
 	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(GithubPrivateKey))
 	if err != nil {
 		return fmt.Errorf("could not parse private key: %s", err)
@@ -294,25 +294,28 @@ func GithubServerRouter(hostname string) http.Handler {
 	r.HandleFunc("/apps/etok/installations/new", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("github app installation page")) // nolint: errcheck
 	})
+	r.HandleFunc("/api/v3/repos/Codertocat/Hello-World/statuses/changes", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
 	r.HandleFunc("/api/v3/app/installations", func(w http.ResponseWriter, r *http.Request) {
 		token := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
-		if err := validateGithubToken(token); err != nil {
+		if err := ValidateGithubToken(token); err != nil {
 			w.WriteHeader(403)
 			w.Write([]byte("Invalid token")) // nolint: errcheck
 			return
 		}
 
-		w.Write([]byte(githubAppInstallationJSON)) // nolint: errcheck
+		w.Write([]byte(GithubAppInstallationJSON)) // nolint: errcheck
 	})
-	r.HandleFunc("/api/v3/app/installations/1/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/api/v3/app/installations/123/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		token := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
-		if err := validateGithubToken(token); err != nil {
+		if err := ValidateGithubToken(token); err != nil {
 			w.WriteHeader(403)
 			w.Write([]byte("Invalid token")) // nolint: errcheck
 			return
 		}
 
-		appToken := fmt.Sprintf(githubAppTokenJSON, counter)
+		appToken := fmt.Sprintf(GithubAppTokenJSON, counter)
 		counter++
 		w.Write([]byte(appToken)) // nolint: errcheck
 	})

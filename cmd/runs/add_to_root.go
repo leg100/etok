@@ -1,7 +1,8 @@
-package launcher
+package runs
 
 import (
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/spf13/cobra"
 )
 
@@ -24,15 +25,15 @@ func AddToRoot(root *cobra.Command, f *cmdutil.Factory) {
 		"untaint",
 		"validate",
 	} {
-		root.AddCommand(launcherCommand(f, &launcherOptions{command: cmd}))
+		root.AddCommand(runCommand(f, &launcher.LauncherOptions{Command: cmd}))
 	}
 
 	// Terraform providers command
-	providers := launcherCommand(f, &launcherOptions{command: "providers"})
+	providers := runCommand(f, &launcher.LauncherOptions{Command: "providers"})
 	root.AddCommand(providers)
 
 	// Terraform providers lock command
-	providers.AddCommand(launcherCommand(f, &launcherOptions{command: "providers lock"}))
+	providers.AddCommand(runCommand(f, &launcher.LauncherOptions{Command: "providers lock"}))
 
 	// Terraform state commands
 	state := &cobra.Command{
@@ -50,11 +51,11 @@ func AddToRoot(root *cobra.Command, f *cmdutil.Factory) {
 		"rm",
 		"show",
 	} {
-		state.AddCommand(launcherCommand(f, &launcherOptions{command: "state " + stateSubCmd}))
+		state.AddCommand(runCommand(f, &launcher.LauncherOptions{Command: "state " + stateSubCmd}))
 	}
 
 	// Shell command
-	shell := launcherCommand(f, &launcherOptions{command: "sh"})
+	shell := runCommand(f, &launcher.LauncherOptions{Command: "sh"})
 	shell.Short = "Run shell session in workspace"
 	root.AddCommand(shell)
 }

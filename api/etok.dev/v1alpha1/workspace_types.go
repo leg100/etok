@@ -72,6 +72,22 @@ type WorkspaceSpec struct {
 	// Ephemeral turns off state backup (and restore) - intended for short-lived
 	// workspaces.
 	Ephemeral bool `json:"ephemeral,omitempty"`
+
+	// Details of the VCS repository we want to connect to the workspace
+	VCS VCS `json:"vcs"`
+}
+
+// Details of the VCS repository we want to connect to the workspace
+type VCS struct {
+	// VCS Repository to connect to workspace
+	Repository string `json:"repository,omitempty"`
+
+	// VCS Repository branch to connect to workspace. Leave blank to use the VCS
+	// provider's default branch.
+	Branch string `json:"branch,omitempty"`
+
+	// Sub-directory within VCS repository to connect to the workspace
+	WorkingDir string `json:"workingDir,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage

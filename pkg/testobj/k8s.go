@@ -43,6 +43,24 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 	return ws
 }
 
+func WithWorkingDir(dir string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.WorkingDir = dir
+	}
+}
+
+func WithRepository(repo string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.Repository = repo
+	}
+}
+
+func WithBranch(branch string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.Branch = branch
+	}
+}
+
 func WithPrivilegedCommands(cmds ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.PrivilegedCommands = cmds

@@ -1,6 +1,4 @@
-package fixtures
-
-const pullRequestEvent = `{
+{
   "action": "opened",
   "number": 2,
   "pull_request": {
@@ -454,7 +452,7 @@ const pullRequestEvent = `{
     "site_admin": false
   },
   "installation": {
-    "id": 12345,
-    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uMzc1NzA2"
+    "id": 123,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uMzcxNjQx"
   }
-}`
+}

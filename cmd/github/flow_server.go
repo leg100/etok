@@ -281,7 +281,7 @@ func (s *flowServer) exchangeCode(w http.ResponseWriter, r *http.Request) {
 
 	klog.V(1).Info("Exchanging GitHub app code for app credentials")
 
-	client, err := newGithubClient(s.githubHostname, nil)
+	client, err := NewGithubClient(s.githubHostname, nil)
 	if err != nil {
 		s.Render.Text(w, http.StatusInternalServerError, "Failed to instantiate github client")
 		s.errch <- fmt.Errorf("Failed to instantiate github client: %w", err)

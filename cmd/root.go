@@ -6,7 +6,6 @@ import (
 
 	"github.com/leg100/etok/cmd/github"
 	"github.com/leg100/etok/cmd/install"
-	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/cmd/manager"
 	"github.com/leg100/etok/cmd/runner"
 	cmdutil "github.com/leg100/etok/cmd/util"

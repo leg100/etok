@@ -1,4 +1,4 @@
-package launcher
+package runs
 
 import (
 	"github.com/leg100/etok/pkg/executor"

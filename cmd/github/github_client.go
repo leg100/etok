@@ -13,29 +13,30 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
-type githubClient struct {
+type GithubClient struct {
 	*github.Client
 
 	itr *ghinstallation.Transport
 }
 
-// githubAppCredentials contains credentials for a github app installation.
-type githubAppCredentials struct {
+// GithubAppCredentials contains credentials for a github app installation.
+type GithubAppCredentials struct {
 	AppID          int64
 	KeyPath        string
 	InstallationID int64
 }
 
-// newGithubClient returns a valid GitHub client. If credentials is nil then an
+// NewGithubClient returns a valid GitHub client. If credentials is nil then an
 // 'anonymous' client will be returned.
-func newGithubClient(hostname string, creds *githubAppCredentials) (*githubClient, error) {
+func NewGithubClient(hostname string, creds *GithubAppCredentials) (*GithubClient, error) {
 	var itr *ghinstallation.Transport
 	httpClient := http.DefaultClient
 
 	url := resolveGithubAPIURL(hostname)
 
 	if creds != nil {
-		itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, creds.AppID, creds.InstallationID, creds.KeyPath)
+		var err error
+		itr, err = ghinstallation.NewKeyFromFile(http.DefaultTransport, creds.AppID, creds.InstallationID, creds.KeyPath)
 		if err != nil {
 			return nil, errors.Wrap(err, "error initializing github authentication transport")
 		}
@@ -56,14 +57,14 @@ func newGithubClient(hostname string, creds *githubAppCredentials) (*githubClien
 		}
 	}
 
-	return &githubClient{
+	return &GithubClient{
 		Client: client,
 		itr:    itr,
 	}, nil
 }
 
 // refreshToken returns a fresh installation token.
-func (c *githubClient) refreshToken() (string, error) {
+func (c *GithubClient) refreshToken() (string, error) {
 	if c.itr != nil {
 		return c.itr.Token(context.Background())
 	}
@@ -90,7 +91,7 @@ func resolveGithubAPIURL(hostname string) *url.URL {
 
 // updateStatus updates the status badge on the pull request.  See
 // https://github.com/blog/1227-commit-status-api.
-func updateStatus(client *githubClient, state, description, cmd string, pr *github.PullRequestEvent) error {
+func updateStatus(client *GithubClient, state, description, cmd string, pr *github.PullRequestEvent) error {
 	status := &github.RepoStatus{
 		State:       github.String(state),
 		Description: github.String(description),

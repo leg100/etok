@@ -6,12 +6,14 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/attacher"
+	etokclient "github.com/leg100/etok/pkg/client"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/logstreamer"
@@ -29,8 +31,6 @@ func TestLauncher(t *testing.T) {
 
 	tests := []struct {
 		name string
-		args []string
-		env  *env.Env
 		err  error
 		objs []runtime.Object
 		// Override default command "plan"
@@ -40,96 +40,71 @@ func TestLauncher(t *testing.T) {
 		// Mock exit code of runner container
 		code int32
 		// Override run status
-		overrideStatus   func(*v1alpha1.RunStatus)
-		factoryOverrides func(*cmdutil.Factory)
-		assertions       func(*launcherOptions)
+		overrideStatus func(*v1alpha1.RunStatus)
+		setOpts        func(*LauncherOptions)
+		assertions     func(*testutil.T, *Launcher)
 	}{
 		{
 			name: "plan",
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "default", o.namespace)
-				assert.Equal(t, "default", o.workspace)
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
 			},
 		},
 		{
 			name: "queueable commands",
 			cmd:  "apply",
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "default", o.namespace)
-				assert.Equal(t, "default", o.workspace)
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
 			},
 		},
 		{
 			name: "specific namespace and workspace",
-			env:  &env.Env{Namespace: "foo", Workspace: "bar"},
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "foo", o.namespace)
-				assert.Equal(t, "bar", o.workspace)
+			setOpts: func(o *LauncherOptions) {
+				o.Namespace = "foo"
+				o.Workspace = "bar"
 			},
-		},
-		{
-			name: "namespace flag overrides environment",
-			args: []string{"--namespace", "foo"},
-			objs: []runtime.Object{testobj.Workspace("foo", "default", testobj.WithCombinedQueue("run-12345"))},
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "foo", o.namespace)
-				assert.Equal(t, "default", o.workspace)
-			},
-		},
-		{
-			name: "workspace flag overrides environment",
-			args: []string{"--workspace", "bar"},
-			objs: []runtime.Object{testobj.Workspace("default", "bar", testobj.WithCombinedQueue("run-12345"))},
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "default", o.namespace)
-				assert.Equal(t, "bar", o.workspace)
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "foo", o.Namespace)
+				assert.Equal(t, "bar", o.Workspace)
 			},
 		},
 		{
 			name: "arbitrary terraform flag",
-			args: []string{"--", "-input", "false"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, []string{"-input", "false"}, o.args)
+			setOpts: func(o *LauncherOptions) {
+				o.Args = []string{"-input", "false"}
 			},
-		},
-		{
-			name: "context flag",
-			args: []string{"--context", "oz-cluster"},
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "oz-cluster", o.kubeContext)
+			assertions: func(t *testutil.T, o *Launcher) {
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"-input", "false"}, run.Args)
 			},
 		},
 		{
 			name: "approved",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *Launcher) {
 				// Get run
-				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// Get workspace
-				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				ws, err := o.WorkspacesClient(o.Namespace).Get(context.Background(), o.Workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 				// Check run's approval annotation is set on workspace
 				assert.Equal(t, true, ws.IsRunApproved(run))
 			},
 		},
 		{
-			name: "without env file",
+			name: "defaults",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
-				assert.Equal(t, "default", o.namespace)
-				assert.Equal(t, "default", o.workspace)
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
 			},
 		},
 		{
@@ -140,40 +115,40 @@ func TestLauncher(t *testing.T) {
 			name: "cleanup resources upon error",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *LauncherOptions) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *launcherOptions) {
-				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+			assertions: func(t *testutil.T, o *Launcher) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 
-				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 			},
 		},
 		{
 			name: "disable cleanup resources upon error",
-			args: []string{"--no-cleanup"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *LauncherOptions) {
+				o.DisableResourceCleanup = true
+
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *launcherOptions) {
-				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+			assertions: func(t *testutil.T, o *Launcher) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
 		{
 			name: "resources are not cleaned up upon exit code error",
-			args: []string{},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			overrideStatus: func(status *v1alpha1.RunStatus) {
 				// Mock pod returning exit code 5
@@ -182,28 +157,28 @@ func TestLauncher(t *testing.T) {
 			},
 			// Expect exit error with exit code 5
 			err: etokerrors.NewExitError(5),
-			assertions: func(o *launcherOptions) {
-				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+			assertions: func(t *testutil.T, o *Launcher) {
+				_, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
-				_, err = o.ConfigMapsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				_, err = o.ConfigMapsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				assert.NoError(t, err)
 			},
 		},
 		{
 			name: "with tty",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			factoryOverrides: func(opts *cmdutil.Factory) {
+			setOpts: func(o *LauncherOptions) {
 				var err error
-				opts.In, _, err = pty.Open()
+				o.In, _, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *Launcher) {
 				// With a tty, launcher should attach not stream logs
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
 
 				// Get run
-				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// With a tty, a handshake is required
 				assert.True(t, run.Handshake)
@@ -211,20 +186,21 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "disable tty",
-			args: []string{"--no-tty"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			factoryOverrides: func(f *cmdutil.Factory) {
+			setOpts: func(o *LauncherOptions) {
+				o.DisableTTY = true
+
 				// Ensure tty is overridden
 				var err error
-				_, f.In, err = pty.Open()
+				_, o.In, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *Launcher) {
 				// With tty disabled, launcher should stream logs not attach
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
 
 				// Get run
-				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
 				require.NoError(t, err)
 				// With tty disabled, there should be no handshake
 				assert.False(t, run.Handshake)
@@ -237,9 +213,9 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "pod completed with tty",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			factoryOverrides: func(f *cmdutil.Factory) {
+			setOpts: func(o *LauncherOptions) {
 				var err error
-				_, f.In, err = pty.Open()
+				_, o.In, err = pty.Open()
 				require.NoError(t, err)
 			},
 			overrideStatus: func(status *v1alpha1.RunStatus) {
@@ -262,8 +238,10 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "reconcile timeout exceeded",
-			args: []string{"--reconcile-timeout", "10ms"},
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
+			setOpts: func(o *LauncherOptions) {
+				o.ReconcileTimeout = 10 * time.Millisecond
+			},
 			overrideStatus: func(status *v1alpha1.RunStatus) {
 				// Triggers reconcile timeout
 				status.Phase = ""
@@ -283,29 +261,29 @@ func TestLauncher(t *testing.T) {
 					},
 				}
 			},
-			assertions: func(o *launcherOptions) {
-				assert.Contains(t, o.Out.(*bytes.Buffer).String(), "Error: run failed: mock failure message")
-			},
 			err: handlers.ErrRunFailed,
+		},
+		{
+			name: "increased verbosity",
+			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
+			setOpts: func(o *LauncherOptions) {
+				o.Verbosity = 3
+			},
+			assertions: func(t *testutil.T, l *Launcher) {
+				// Get run
+				run, err := l.RunsClient(l.Namespace).Get(context.Background(), l.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, 3, run.Verbosity)
+			},
 		},
 	}
 
-	// Run tests for each command
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
-
-			// Write .terraform/environment
-			if tt.env != nil {
-				require.NoError(t, tt.env.Write(path))
-			}
+			t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size)
 
 			out := new(bytes.Buffer)
-			f := cmdutil.NewFakeFactory(out, tt.objs...)
-
-			if tt.factoryOverrides != nil {
-				tt.factoryOverrides(f)
-			}
 
 			// Default to plan command
 			command := "plan"
@@ -314,9 +292,31 @@ func TestLauncher(t *testing.T) {
 				command = tt.cmd
 			}
 
-			opts := &launcherOptions{command: command, runName: "run-12345"}
+			// Create k8s clients
+			cc := etokclient.NewFakeClientCreator(tt.objs...)
+			client, err := cc.Create("")
+			require.NoError(t, err)
 
-			// Mock the workspace controller by setting status up front
+			opts := &LauncherOptions{
+				AttachFunc:  attacher.FakeAttach,
+				Client:      client,
+				Command:     command,
+				GetLogsFunc: logstreamer.FakeGetLogs,
+				RunName:     "run-12345",
+				IOStreams: &cmdutil.IOStreams{
+					Out: out,
+				},
+			}
+
+			// Permit individual tests to override options
+			if tt.setOpts != nil {
+				tt.setOpts(opts)
+			}
+
+			l, err := NewLauncher(opts)
+			require.NoError(t, err)
+
+			// Mock the run controller by setting status up front
 			var code int
 			status := v1alpha1.RunStatus{
 				Conditions: []metav1.Condition{
@@ -329,24 +329,19 @@ func TestLauncher(t *testing.T) {
 				Phase:    v1alpha1.RunPhaseRunning,
 				ExitCode: &code,
 			}
-			// Permit individual tests to override workspace status
+			// Permit individual tests to override run status
 			if tt.overrideStatus != nil {
 				tt.overrideStatus(&status)
 			}
-			opts.status = &status
+			l.Status = &status
 
-			// create cobra command
-			cmd := launcherCommand(f, opts)
-			cmd.SetOut(out)
-			cmd.SetArgs(tt.args)
-
-			err := cmd.ExecuteContext(context.Background())
+			err = l.Launch(context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
 				t.Errorf("unexpected error: %w", err)
 			}
 
 			if tt.assertions != nil {
-				tt.assertions(opts)
+				tt.assertions(t, l)
 			}
 		})
 	}
