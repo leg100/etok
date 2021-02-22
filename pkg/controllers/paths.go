@@ -3,7 +3,7 @@ package controllers
 const (
 	// binMountPath is container path to terraform binaries
 	binMountPath = "/terraform-bins"
-	// binSubPath is path within persistent volume to mount on BinMountPath
+	// binSubPath is path within persistent volume to mount on binMountPath
 	binSubPath = "terraform-bins/"
 
 	// pluginMountPath is container path to terraform plugin cache
@@ -11,6 +11,11 @@ const (
 	// pluginSubPath is path within persistent volume to mount on
 	// pluginMountPath
 	pluginSubPath = "plugin-cache/"
+
+	// plansMountPath is container path to plan files
+	plansMountPath = "/plans"
+	// plansSubPath is path within persistent volume to mount on plansMountPath
+	plansSubPath = "plans/"
 
 	// dotTerraformSubPath is path within persistent volume to mount on
 	// <WorkingDir>/.terraform
