@@ -14,38 +14,49 @@ import (
 )
 
 type GithubClient struct {
+	installID int64
+
 	*github.Client
 
 	itr *ghinstallation.Transport
 }
 
-// GithubAppCredentials contains credentials for a github app installation.
-type GithubAppCredentials struct {
-	AppID          int64
-	KeyPath        string
-	InstallationID int64
-}
-
-// NewGithubClient returns a valid GitHub client. If credentials is nil then an
-// 'anonymous' client will be returned.
-func NewGithubClient(hostname string, creds *GithubAppCredentials) (*GithubClient, error) {
-	var itr *ghinstallation.Transport
-	httpClient := http.DefaultClient
-
+// NewGithubClient returns a wrapped github client using the 'anonymous' user
+func NewAnonymousGithubClient(hostname string) (*GithubClient, error) {
 	url := resolveGithubAPIURL(hostname)
 
-	if creds != nil {
-		var err error
-		itr, err = ghinstallation.NewKeyFromFile(http.DefaultTransport, creds.AppID, creds.InstallationID, creds.KeyPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "error initializing github authentication transport")
-		}
-
-		itr.BaseURL = strings.TrimSuffix(url.String(), "/")
-
-		httpClient = &http.Client{Transport: itr}
+	ghClient, err := newGithubClient(url, http.DefaultClient)
+	if err != nil {
+		return nil, errors.Wrap(err, "error initializing github authentication transport")
 	}
 
+	return &GithubClient{
+		Client: ghClient,
+	}, nil
+}
+
+// NewAppGithubClient returns a valid GitHub client.
+func NewGithubAppClient(hostname string, appID int64, keyPath string, installID int64) (*GithubClient, error) {
+	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID, installID, keyPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "error initializing github authentication transport")
+	}
+
+	url := resolveGithubAPIURL(hostname)
+	itr.BaseURL = strings.TrimSuffix(url.String(), "/")
+
+	ghClient, err := newGithubClient(url, &http.Client{Transport: itr})
+	if err != nil {
+		return nil, errors.Wrap(err, "error initializing github authentication transport")
+	}
+
+	return &GithubClient{
+		Client: ghClient,
+		itr:    itr,
+	}, nil
+}
+
+func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, error) {
 	var client *github.Client
 	if url.Host == "api.github.com" {
 		client = github.NewClient(httpClient)
@@ -57,10 +68,7 @@ func NewGithubClient(hostname string, creds *GithubAppCredentials) (*GithubClien
 		}
 	}
 
-	return &GithubClient{
-		Client: client,
-		itr:    itr,
-	}, nil
+	return client, nil
 }
 
 // refreshToken returns a fresh installation token.
