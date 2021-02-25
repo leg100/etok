@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/google/go-github/v31/github"
 	"github.com/gorilla/mux"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/github/fixtures"
@@ -20,26 +23,37 @@ import (
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type githubStatus struct {
-	State string
-}
-
-func webhookGithubTestServerRouter() (http.Handler, chan string) {
+func webhookGithubTestServerRouter(headSHA, repo string) (http.Handler, chan github.CheckRun) {
 	var counter int
-	statuses := make(chan string)
+	checkRuns := make(chan github.CheckRun, 100)
 	r := mux.NewRouter()
-	r.HandleFunc("/api/v3/repos/Codertocat/Hello-World/statuses/changes", func(w http.ResponseWriter, r *http.Request) {
-		var s githubStatus
-		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+	r.HandleFunc("/api/v3/repos/Codertocat/Hello-World/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		var cr github.CheckRun
+		if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
-		go func() { statuses <- s.State }()
-
 		w.WriteHeader(http.StatusCreated)
+
+		// Respond back with check run with faked ID
+		var id int64 = 666
+		cr.ID = &id
+		cr.CheckSuite = fixtures.GithubCheckSuite(headSHA, repo)
+		json.NewEncoder(w).Encode(cr)
+
+		checkRuns <- cr
+	})
+	r.HandleFunc("/api/v3/repos/Codertocat/Hello-World/check-runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var cr github.CheckRun
+		if err := json.NewDecoder(r.Body).Decode(&cr); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+		checkRuns <- cr
 	})
 	r.HandleFunc("/api/v3/app/installations", func(w http.ResponseWriter, r *http.Request) {
 		token := strings.Replace(r.Header.Get("Authorization"), "Bearer ", "", 1)
@@ -63,15 +77,15 @@ func webhookGithubTestServerRouter() (http.Handler, chan string) {
 		counter++
 		w.Write([]byte(appToken)) // nolint: errcheck
 	})
-	return r, statuses
+	return r, checkRuns
 }
 
-func webhookGithubTestServer(t *testing.T) (string, chan string) {
+func webhookGithubTestServer(t *testing.T, headSHA, repo string) (string, chan github.CheckRun) {
 	testServer := httptest.NewUnstartedServer(nil)
 
 	// Our fake github router needs the hostname before starting server
 	hostname := testServer.Listener.Addr().String()
-	router, statuses := webhookGithubTestServerRouter()
+	router, statuses := webhookGithubTestServerRouter(headSHA, repo)
 	testServer.Config.Handler = router
 
 	testServer.StartTLS()
@@ -83,7 +97,7 @@ func TestWebhookServer(t *testing.T) {
 
 	repo, headSHA := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
 
-	githubHostname, statuses := webhookGithubTestServer(t)
+	githubHostname, checkRuns := webhookGithubTestServer(t, headSHA, repo)
 
 	ws := testobj.Workspace("default", "default", testobj.WithRepository("file://"+repo), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir"))
 
@@ -91,48 +105,60 @@ func TestWebhookServer(t *testing.T) {
 	client, err := cc.Create("")
 	require.NoError(t, err)
 
-	opts := webhookServerOptions{
-		Client:   client,
-		cloneDir: testutil.NewTempDir(t).Root(),
-		creds: &githubAppCredentials{
-			AppID:   1,
-			KeyPath: testutil.TempFile(t, "wank", []byte(fixtures.GithubPrivateKey)),
-		},
-		githubHostname: githubHostname,
-		runName:        "run-12345",
-	}
+	server := newWebhookServer()
+	// k8s client
+	server.Client = client
+
+	server.cloneDir = testutil.NewTempDir(t).Root()
+	server.appID = 1
+	server.keyPath = testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
+	server.githubHostname = githubHostname
 
 	var code int
-	opts.runStatus = &v1alpha1.RunStatus{
-		Conditions: []metav1.Condition{
-			{
-				Type:   v1alpha1.RunCompleteCondition,
-				Status: metav1.ConditionFalse,
-				Reason: v1alpha1.PodRunningReason,
+	server.checkRunOptions = checkRunOptions{
+		runStatus: &v1alpha1.RunStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   v1alpha1.RunCompleteCondition,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha1.PodRunningReason,
+				},
 			},
+			Phase:    v1alpha1.RunPhaseRunning,
+			ExitCode: &code,
 		},
-		Phase:    v1alpha1.RunPhaseRunning,
-		ExitCode: &code,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errch := make(chan error)
 	go func() {
-		errch <- opts.run(ctx)
+		errch <- server.run(ctx)
 	}()
 
-	req := fixtures.GitHubPullRequestOpenedEvent(t, headSHA, repo)
+	req := fixtures.GitHubNewCheckSuiteEvent(t, headSHA, repo)
 
 	w := httptest.NewRecorder()
-	opts.webhookEvent(w, req)
+	go server.eventHandler(w, req)
+
 	body, _ := ioutil.ReadAll(w.Result().Body)
 	if !assert.Equal(t, 200, w.Result().StatusCode) {
 		t.Errorf(string(body))
 	}
-	assert.Equal(t, "progressing...", string(body))
 
-	assert.Equal(t, "pending", <-statuses)
-	assert.Equal(t, "success", <-statuses)
+	// Expect check run creation
+	create := <-checkRuns
+	assert.Equal(t, "inprogress", *create.Status)
+
+	// Expect check run update
+	update := <-checkRuns
+	assert.Equal(t, "completed", *update.Status)
+	assert.Equal(t, "success", *update.Conclusion)
+	assert.Equal(t, "fake logs", *update.Output.Text)
+
+	// Expect one run to have been created
+	runlist, err := client.RunsClient("default").List(context.Background(), metav1.ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(runlist.Items))
 
 	cancel()
 	require.NoError(t, <-errch)

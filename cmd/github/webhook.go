@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/gorilla/mux"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/urfave/negroni"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -41,6 +44,15 @@ type webhookServer struct {
 
 	// Maintain a github client per installation
 	ghClientMap GithubClientMap
+
+	// Permit tests to override run status
+	checkRunOptions
+}
+
+func newWebhookServer() *webhookServer {
+	return &webhookServer{
+		ghClientMap: newGithubClientMap(),
+	}
 }
 
 func (o *webhookServer) run(ctx context.Context) error {
@@ -100,7 +112,7 @@ func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	install, ok := event.(InstallationEvent)
-	if !ok {
+	if !ok || install.GetInstallation() == nil {
 		// Irrelevant event
 		w.WriteHeader(http.StatusOK)
 		return
@@ -114,35 +126,110 @@ func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
-		if *ev.Action == "requested" || *ev.Action == "rerequested" {
-			checkSuite := newWebhookCheckSuite(o.Client, ghClient, o.cloneDir, ev)
-			if err := checkSuite.run(); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+		switch *ev.Action {
+		case "requested", "rerequested":
+			// Get access token for cloning repo
+			token, err := ghClient.refreshToken()
+			if err != nil {
+				panic(err.Error())
 			}
-			w.Write([]byte("progressing..."))
-			return
+
+			// Ensure we have a cloned repo on disk
+			err = ensureCloned(*ev.Repo.CloneURL, clonePath(o.cloneDir, *ev.CheckSuite.ID), *ev.CheckSuite.HeadBranch, *ev.CheckSuite.HeadSHA, token)
+			if err != nil {
+				panic(err.Error())
+			}
+
+			// Find connected workspaces and create a check-run for each one.
+			// Record the workspace name in the check-run's ExternalID attribute
+			// so that if the check-run needs to be re-run we know which
+			// workspace to use.
+			connected, err := getConnectedWorkspaces(o.Client, *ev.Repo.CloneURL)
+			if err != nil {
+				panic(err.Error())
+			}
+
+			// Create check-run for each connected workspace
+			for _, ws := range connected.Items {
+				// Get full path to workspace's working directory
+				path := workspacePath(o.cloneDir, *ev.CheckSuite.ID, ws.Spec.VCS.WorkingDir)
+
+				// Skip workspaces with a non-existent working dir
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					klog.Warningf("skipping workspace %s with non-existent working directory: %s", klog.KObj(&ws), ws.Spec.VCS.WorkingDir)
+					continue
+				}
+
+				// TODO: github API calls will eventually use a transport that
+				// deliberately delays calls in order to avoid rate-limiting.
+				// Once we do that we might want to consider employing a channel
+				// instead.
+				name := klog.KObj(&ws).String()
+				checkRun, _, err := ghClient.Checks.CreateCheckRun(context.Background(), *ev.Repo.Owner.Login, *ev.Repo.Name, github.CreateCheckRunOptions{
+					Name:       name,
+					HeadSHA:    *ev.CheckSuite.HeadSHA,
+					ExternalID: &name,
+					Status:     github.String("inprogress"),
+				})
+				if err != nil {
+					klog.Errorf("unable to create check run : %s", err.Error())
+					continue
+				}
+
+				// Launch an etok run in a goroutine
+				go launch(checkRun, ghClient, o.Client, path, ws.Name, ws.Namespace, &o.checkRunOptions)
+			}
+
+			w.Write([]byte("check runs created"))
 		}
 	case *github.CheckRunEvent:
-		opts := webhookCheckRunOptions{
-		}
-
 		switch *ev.Action {
-		case "created":
-			w.WriteHeader(http.StatusOK)
-			return
 		case "rerequested":
-			checkRun, err := reRequestedCheckRun(ev.CheckRun, o.cloneDir, &opts)
-			if err := (ev.CheckRun, o.cloneDir, &opts); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+			// User has requested that a check-run be re-created. We recorded
+			// the connected Workspace in the original check-run's ExternalID
+			// attribute, so we can use that for the new check-run.
+			parts := strings.Split(*ev.CheckRun.ExternalID, "/")
+			if len(parts) != 2 {
+				panic("found malformed check-run external ID: " + *ev.CheckRun.ExternalID)
 			}
-			w.Write([]byte("progressing..."))
-			return
+			namespace, workspace := parts[0], parts[1]
+
+			ws, err := o.WorkspacesClient(namespace).Get(context.Background(), workspace, metav1.GetOptions{})
+			if err != nil {
+				panic(err.Error())
+			}
+
+			// Get full path to workspace's working directory
+			path := workspacePath(o.cloneDir, *ev.CheckRun.CheckSuite.ID, ws.Spec.VCS.WorkingDir)
+
+			// Get access token for cloning repo
+			token, err := ghClient.refreshToken()
+			if err != nil {
+				panic(err.Error())
+			}
+
+			// Ensure we have a cloned repo on disk
+			err = ensureCloned(*ev.Repo.CloneURL, clonePath(o.cloneDir, *ev.CheckRun.CheckSuite.ID), *ev.CheckRun.CheckSuite.HeadBranch, *ev.CheckRun.HeadSHA, token)
+			if err != nil {
+				panic(err.Error())
+			}
+
+			checkRun, _, err := ghClient.Checks.CreateCheckRun(context.Background(), *ev.Repo.Owner.Login, *ev.Repo.Name, github.CreateCheckRunOptions{
+				Name:       *ev.CheckRun.ExternalID,
+				HeadSHA:    *ev.CheckRun.HeadSHA,
+				ExternalID: ev.CheckRun.ExternalID,
+			})
+			if err != nil {
+				panic(err.Error())
+			}
+
+			// Launch an etok run in a goroutine
+			go launch(checkRun, ghClient, o.Client, path, ws.Name, ws.Namespace, &checkRunOptions{})
+
+			w.Write([]byte("re-running check run"))
 		}
 	}
 
-	// Irrelevant event
 	w.WriteHeader(http.StatusOK)
 	return
 }

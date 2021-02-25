@@ -111,7 +111,7 @@ type Launcher struct {
 
 // NewLauncher constructs Launcher, validating required options, setting
 // defaults on optional
-func NewLauncher(opts *LauncherOptions) (*Launcher, error) {
+func NewLauncher(opts *LauncherOptions) *Launcher {
 	l := &Launcher{LauncherOptions: opts}
 
 	if opts.Namespace == "" {
@@ -145,7 +145,7 @@ func NewLauncher(opts *LauncherOptions) (*Launcher, error) {
 		opts.GetLogsFunc = logstreamer.GetLogs
 	}
 
-	return l, nil
+	return l
 }
 
 func (l *Launcher) Launch(ctx context.Context) error {

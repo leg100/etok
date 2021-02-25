@@ -29,7 +29,7 @@ type runOptions struct {
 func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 	o := &runOptions{
 		namespace:     defaultNamespace,
-		webhookServer: &webhookServer{},
+		webhookServer: newWebhookServer(),
 	}
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -55,6 +55,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 	cmd.Flags().StringVar(&o.githubHostname, "hostname", "github.com", "Github hostname")
 	cmd.Flags().Int64Var(&o.appID, "app-id", 0, "Github app ID")
 	cmd.Flags().StringVar(&o.keyPath, "key-path", "", "Github app private key path")
+	cmd.Flags().StringVar(&o.cloneDir, "clone-path", "/clones", "Path to a directory in which to clone repos")
 
 	cmd.Flags().BytesHexVar(&o.webhookSecret, "webhook-secret", nil, "Github app webhook secret")
 

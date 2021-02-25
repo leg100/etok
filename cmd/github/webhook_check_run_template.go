@@ -17,10 +17,10 @@ func init() {
 `))
 }
 
-func generateSummary(out io.Writer, run *webhookCheckRun) error {
+func generateSummary(out io.Writer, runName string) error {
 	return summary.Execute(out, struct {
 		RunName string
 	}{
-		RunName: run.runName,
+		RunName: runName,
 	})
 }

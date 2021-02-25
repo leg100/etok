@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -95,16 +94,4 @@ func resolveGithubAPIURL(hostname string) *url.URL {
 	}
 
 	return baseURL
-}
-
-// updateStatus updates the status badge on the pull request.  See
-// https://github.com/blog/1227-commit-status-api.
-func updateStatus(client *GithubClient, state, description, cmd string, pr *github.PullRequestEvent) error {
-	status := &github.RepoStatus{
-		State:       github.String(state),
-		Description: github.String(description),
-		Context:     github.String(fmt.Sprintf("etok/%s", cmd)),
-	}
-	_, _, err := client.Repositories.CreateStatus(context.Background(), *pr.Repo.Owner.Login, *pr.Repo.Name, *pr.PullRequest.Head.Ref, status)
-	return err
 }
