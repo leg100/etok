@@ -9,24 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGithubClientMap(t *testing.T) {
-	clientMap := newGithubClientMap()
+func TestGithubClientManager(t *testing.T) {
+	clientManager := newGithubClientManager()
 
 	keyPath := testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
 
-	client, err := clientMap.getClient("app.net", keyPath, 123, 123)
+	client, err := clientManager.getOrCreate("app.net", keyPath, 123, 123)
 	require.NoError(t, err)
 	assert.NotNil(t, client)
-	assert.Equal(t, 1, len(clientMap))
+	assert.Equal(t, 1, len(clientManager))
 
-	client, err = clientMap.getClient("app.net", keyPath, 123, 456)
+	client, err = clientManager.getOrCreate("app.net", keyPath, 123, 456)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(clientMap))
+	assert.Equal(t, 2, len(clientManager))
 
 	// Test that it retrieves previously created client for install 456 and
 	// doesn't create another client
-	client2, err := clientMap.getClient("app.net", keyPath, 123, 456)
+	client2, err := clientManager.getOrCreate("app.net", keyPath, 123, 456)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(clientMap))
+	assert.Equal(t, 2, len(clientManager))
 	assert.Equal(t, client, client2)
 }

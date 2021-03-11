@@ -11,13 +11,16 @@ import (
 
 	"github.com/leg100/etok/cmd/github/fixtures"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestCreate(t *testing.T) {
+func TestDeploy(t *testing.T) {
 	disableSSLVerification(t)
 
 	githubHostname, err := fixtures.GithubAppTestServer(t)
@@ -29,7 +32,7 @@ func TestCreate(t *testing.T) {
 	}{
 		{
 			name: "plan",
-			args: []string{"--namespace=fake", "--disable-browser", fmt.Sprintf("--hostname=%s", githubHostname), "--webhook=events.etok.dev"},
+			args: []string{"--namespace=fake", "--manifest-port=12345", "--wait=false", "--manifest-disable-browser", fmt.Sprintf("--hostname=%s", githubHostname), "--url=events.etok.dev"},
 		},
 	}
 
@@ -37,9 +40,12 @@ func TestCreate(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			out := new(bytes.Buffer)
-			f := cmdutil.NewFakeFactory(out)
+			f := &cmdutil.Factory{
+				IOStreams:            cmdutil.IOStreams{Out: out},
+				RuntimeClientCreator: client.NewFakeRuntimeClientCreator(),
+			}
 
-			cmd, opts := createCmd(f)
+			cmd, opts := deployCmd(f)
 			cmd.SetArgs(tt.args)
 
 			execErr := make(chan error)
@@ -47,33 +53,21 @@ func TestCreate(t *testing.T) {
 				execErr <- cmd.Execute()
 			}()
 
-			// wait for listener to be started
-			var attempts int
-			for {
-				if opts.flow.port != 0 {
-					break
-				}
-				if attempts == 10 {
-					t.Error("listener failed to start")
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
-				attempts++
-			}
+			err := pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
+			require.NoError(t, err)
 
-			// Wait for http to fully start
-			healthzUrl := fmt.Sprintf("http://localhost:%d/healthz", opts.flow.port)
-			require.NoError(t, pollUrl(healthzUrl, 100*time.Millisecond, 2*time.Second))
+			// Skip request to new app endpoint
 
-			// make request to exchange-code
-			resp, err := http.Get(fmt.Sprintf("http://localhost:%d/exchange-code?code=good-code", opts.flow.port))
+			// Make request to exchange-code
+			resp, err := http.Get("http://localhost:12345/exchange-code?code=good-code")
 			require.NoError(t, err)
 			assert.Equal(t, 200, resp.StatusCode)
 			content, err := ioutil.ReadAll(resp.Body)
 			assert.Equal(t, "github app installation page", string(content))
 
 			// Check that credentials secret was created
-			_, err = opts.SecretsClient("fake").Get(context.Background(), secretName, metav1.GetOptions{})
+			secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "fake", Name: secretName}}
+			err = opts.RuntimeClient.Get(context.Background(), runtimeclient.ObjectKeyFromObject(&secret), &secret)
 			assert.NoError(t, err)
 
 			// Check command completed without error

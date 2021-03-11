@@ -1,4 +1,4 @@
-package runs
+package launchers
 
 import (
 	cmdutil "github.com/leg100/etok/cmd/util"

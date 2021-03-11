@@ -12,6 +12,11 @@ const (
 	// pluginMountPath
 	pluginSubPath = "plugin-cache/"
 
+	// plansMountPath is container path to terraform plan files
+	PlansMountPath = "/plans"
+	// plansSubPath is path within persistent volume to mount on plansMountPath
+	plansSubPath = "plans/"
+
 	// dotTerraformSubPath is path within persistent volume to mount on
 	// <WorkingDir>/.terraform
 	dotTerraformSubPath = ".terraform/"

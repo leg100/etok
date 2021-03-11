@@ -1,8 +1,6 @@
 package install
 
 import (
-	"time"
-
 	appsv1 "k8s.io/api/apps/v1"
 
 	"github.com/leg100/etok/cmd/backup"
@@ -134,16 +132,4 @@ func deployment(namespace string, opts ...podTemplateOption) *appsv1.Deployment 
 	}
 
 	return deployment
-}
-
-func isAvailable(c appsv1.DeploymentCondition) bool {
-	// Make sure that the deployment has been available for at least 10 seconds.
-	// This is because the deployment can show as Ready momentarily before the pods fall into a CrashLoopBackOff.
-	// See podutils.IsPodAvailable upstream for similar logic with pods
-	if c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionTrue {
-		if !c.LastTransitionTime.IsZero() && c.LastTransitionTime.Add(10*time.Second).Before(time.Now()) {
-			return true
-		}
-	}
-	return false
 }

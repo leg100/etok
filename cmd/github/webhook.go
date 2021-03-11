@@ -2,20 +2,22 @@ package github
 
 import (
 	"context"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/gorilla/mux"
-	"github.com/leg100/etok/pkg/client"
 	"github.com/urfave/negroni"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
+
+type githubApp interface {
+	handleEvent(*GithubClient, interface{}) error
+}
 
 const githubHeader = "X-Github-Event"
 
@@ -23,6 +25,9 @@ type InstallationEvent interface {
 	GetInstallation() *github.Installation
 }
 
+// WebhookServer listens for github events and dispatches them to a github app.
+// Credentials for the app are required, which are used to create a github
+// client. The client is provided to the app along with the event.
 type webhookServer struct {
 	// Github's hostname
 	githubHostname string
@@ -32,27 +37,51 @@ type webhookServer struct {
 
 	// Webhook secret with which incoming events are validated - nil value skips
 	// validation
-	webhookSecret []byte
-
-	// Path to directory to which git repositories are cloned
-	cloneDir string
-
-	*client.Client
+	webhookSecret string
 
 	appID   int64
 	keyPath string
 
 	// Maintain a github client per installation
-	ghClientMap GithubClientMap
+	ghClientMgr GithubClientManager
 
-	// Permit tests to override run status
-	checkRunOptions
+	// Server context. Req handlers use the context to cancel background tasks.
+	ctx context.Context
+
+	// The github app to which to dispatch received events
+	app githubApp
 }
 
-func newWebhookServer() *webhookServer {
+func newWebhookServer(app githubApp) *webhookServer {
 	return &webhookServer{
-		ghClientMap: newGithubClientMap(),
+		app:         app,
+		ghClientMgr: newGithubClientManager(),
 	}
+}
+
+func (o *webhookServer) validate() error {
+	if o.webhookSecret == "" {
+		return fmt.Errorf("webhook secret cannot be an empty string")
+	}
+
+	if o.appID == 0 {
+		return fmt.Errorf("app-id cannot be zero")
+	}
+	klog.Infof("Github app ID: %d\n", o.appID)
+
+	if o.keyPath == "" {
+		return fmt.Errorf("key-path cannot be an empty string")
+	}
+	key, err := ioutil.ReadFile(o.keyPath)
+	if err != nil {
+		return fmt.Errorf("unable to read %s: %w", o.keyPath, err)
+	}
+	block, _ := pem.Decode(key)
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
+		return fmt.Errorf("unable to decode private key in %s", o.keyPath)
+	}
+
+	return nil
 }
 
 func (o *webhookServer) run(ctx context.Context) error {
@@ -60,6 +89,7 @@ func (o *webhookServer) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	klog.Infof("Listening on %s\n", listener.Addr())
 
 	r := mux.NewRouter()
 	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -68,12 +98,14 @@ func (o *webhookServer) run(ctx context.Context) error {
 	r.HandleFunc("/events", o.eventHandler).Methods("POST")
 
 	// Add middleware
-	n := negroni.Classic()
+	n := negroni.New()
+	n.Use(negroni.NewRecovery())
+	n.Use(NewLogger())
 	n.UseHandler(r)
 
 	server := &http.Server{Handler: n}
 	go func() {
-		if err := server.Serve(listener); err == http.ErrServerClosed {
+		if err := server.Serve(listener); err != http.ErrServerClosed {
 			klog.Error(err.Error())
 		}
 	}()
@@ -85,27 +117,19 @@ func (o *webhookServer) run(ctx context.Context) error {
 	return server.Shutdown(ctx)
 }
 
-func validateAndParse(r *http.Request, webhookSecret []byte) (interface{}, error) {
-	payload, err := github.ValidatePayload(r, webhookSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	event, err := github.ParseWebHook(github.WebHookType(r), payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return event, nil
-}
-
 func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get(githubHeader) == "" {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
-	event, err := validateAndParse(r, o.webhookSecret)
+	payload, err := github.ValidatePayload(r, []byte(o.webhookSecret))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -114,122 +138,20 @@ func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	install, ok := event.(InstallationEvent)
 	if !ok || install.GetInstallation() == nil {
 		// Irrelevant event
-		w.WriteHeader(http.StatusOK)
+		klog.Infof("ignoring event: not associated with an app install")
 		return
 	}
 
-	// Get github client now we have install ID
-	ghClient, err := o.ghClientMap.getClient(o.githubHostname, o.keyPath, o.appID, *install.GetInstallation().ID)
+	// Now we have an install ID we can fetch an install specific client
+	client, err := o.ghClientMgr.getOrCreate(o.githubHostname, o.keyPath, o.appID, *install.GetInstallation().ID)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	switch ev := event.(type) {
-	case *github.CheckSuiteEvent:
-		switch *ev.Action {
-		case "requested", "rerequested":
-			// Get access token for cloning repo
-			token, err := ghClient.refreshToken()
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Ensure we have a cloned repo on disk
-			err = ensureCloned(*ev.Repo.CloneURL, clonePath(o.cloneDir, *ev.CheckSuite.ID), *ev.CheckSuite.HeadBranch, *ev.CheckSuite.HeadSHA, token)
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Find connected workspaces and create a check-run for each one.
-			// Record the workspace name in the check-run's ExternalID attribute
-			// so that if the check-run needs to be re-run we know which
-			// workspace to use.
-			connected, err := getConnectedWorkspaces(o.Client, *ev.Repo.CloneURL)
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Create check-run for each connected workspace
-			for _, ws := range connected.Items {
-				// Get full path to workspace's working directory
-				path := workspacePath(o.cloneDir, *ev.CheckSuite.ID, ws.Spec.VCS.WorkingDir)
-
-				// Skip workspaces with a non-existent working dir
-				if _, err := os.Stat(path); os.IsNotExist(err) {
-					klog.Warningf("skipping workspace %s with non-existent working directory: %s", klog.KObj(&ws), ws.Spec.VCS.WorkingDir)
-					continue
-				}
-
-				// TODO: github API calls will eventually use a transport that
-				// deliberately delays calls in order to avoid rate-limiting.
-				// Once we do that we might want to consider employing a channel
-				// instead.
-				name := klog.KObj(&ws).String()
-				checkRun, _, err := ghClient.Checks.CreateCheckRun(context.Background(), *ev.Repo.Owner.Login, *ev.Repo.Name, github.CreateCheckRunOptions{
-					Name:       name,
-					HeadSHA:    *ev.CheckSuite.HeadSHA,
-					ExternalID: &name,
-					Status:     github.String("inprogress"),
-				})
-				if err != nil {
-					klog.Errorf("unable to create check run : %s", err.Error())
-					continue
-				}
-
-				// Launch an etok run in a goroutine
-				go launch(checkRun, ghClient, o.Client, path, ws.Name, ws.Namespace, &o.checkRunOptions)
-			}
-
-			w.Write([]byte("check runs created"))
-		}
-	case *github.CheckRunEvent:
-		switch *ev.Action {
-		case "rerequested":
-			// User has requested that a check-run be re-created. We recorded
-			// the connected Workspace in the original check-run's ExternalID
-			// attribute, so we can use that for the new check-run.
-			parts := strings.Split(*ev.CheckRun.ExternalID, "/")
-			if len(parts) != 2 {
-				panic("found malformed check-run external ID: " + *ev.CheckRun.ExternalID)
-			}
-			namespace, workspace := parts[0], parts[1]
-
-			ws, err := o.WorkspacesClient(namespace).Get(context.Background(), workspace, metav1.GetOptions{})
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Get full path to workspace's working directory
-			path := workspacePath(o.cloneDir, *ev.CheckRun.CheckSuite.ID, ws.Spec.VCS.WorkingDir)
-
-			// Get access token for cloning repo
-			token, err := ghClient.refreshToken()
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Ensure we have a cloned repo on disk
-			err = ensureCloned(*ev.Repo.CloneURL, clonePath(o.cloneDir, *ev.CheckRun.CheckSuite.ID), *ev.CheckRun.CheckSuite.HeadBranch, *ev.CheckRun.HeadSHA, token)
-			if err != nil {
-				panic(err.Error())
-			}
-
-			checkRun, _, err := ghClient.Checks.CreateCheckRun(context.Background(), *ev.Repo.Owner.Login, *ev.Repo.Name, github.CreateCheckRunOptions{
-				Name:       *ev.CheckRun.ExternalID,
-				HeadSHA:    *ev.CheckRun.HeadSHA,
-				ExternalID: ev.CheckRun.ExternalID,
-			})
-			if err != nil {
-				panic(err.Error())
-			}
-
-			// Launch an etok run in a goroutine
-			go launch(checkRun, ghClient, o.Client, path, ws.Name, ws.Namespace, &checkRunOptions{})
-
-			w.Write([]byte("re-running check run"))
-		}
+	if err := o.app.handleEvent(client, event); err != nil {
+		panic(err.Error())
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.Write(nil)
 	return
 }

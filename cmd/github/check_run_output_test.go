@@ -1,4 +1,4 @@
-package output
+package github
 
 import (
 	"io/ioutil"

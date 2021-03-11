@@ -313,8 +313,7 @@ func TestLauncher(t *testing.T) {
 				tt.setOpts(opts)
 			}
 
-			l, err := NewLauncher(opts)
-			require.NoError(t, err)
+			l := NewLauncher(opts)
 
 			// Mock the run controller by setting status up front
 			var code int

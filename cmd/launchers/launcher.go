@@ -1,4 +1,4 @@
-package runs
+package launchers
 
 import (
 	"fmt"
@@ -55,11 +55,7 @@ func runCommand(f *cmdutil.Factory, o *launcher.LauncherOptions) *cobra.Command 
 				}
 			}
 
-			l, err := launcher.NewLauncher(o)
-			if err != nil {
-				return err
-			}
-
+			l := launcher.NewLauncher(o)
 			return l.Launch(cmd.Context())
 		},
 	}

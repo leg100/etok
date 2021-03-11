@@ -8,9 +8,14 @@ import (
 
 	"github.com/bradleyfalzon/ghinstallation"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"github.com/google/go-github/v31/github"
 )
+
+type githubOperation interface {
+	invoke(*GithubClient) error
+}
 
 type GithubClient struct {
 	installID int64
@@ -18,6 +23,8 @@ type GithubClient struct {
 	*github.Client
 
 	itr *ghinstallation.Transport
+
+	queue chan githubOperation
 }
 
 // NewGithubClient returns a wrapped github client using the 'anonymous' user
@@ -49,10 +56,15 @@ func NewGithubAppClient(hostname string, appID int64, keyPath string, installID 
 		return nil, errors.Wrap(err, "error initializing github authentication transport")
 	}
 
-	return &GithubClient{
+	client := &GithubClient{
 		Client: ghClient,
 		itr:    itr,
-	}, nil
+		queue:  make(chan githubOperation, 100),
+	}
+
+	go client.processQueue(context.Background())
+
+	return client, err
 }
 
 func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, error) {
@@ -68,6 +80,25 @@ func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, err
 	}
 
 	return client, nil
+}
+
+func (c *GithubClient) send(op githubOperation) {
+	c.queue <- op
+}
+
+// Process queue of operations to send to the GH API
+func (c *GithubClient) processQueue(ctx context.Context) {
+	for {
+		select {
+		case op := <-c.queue:
+			if err := op.invoke(c); err != nil {
+				klog.Errorf("failed to invoke github API operation: %s", err.Error())
+			}
+		case <-ctx.Done():
+			klog.Infof("github client: ending process queue: %s", ctx.Err().Error())
+			return
+		}
+	}
 }
 
 // refreshToken returns a fresh installation token.

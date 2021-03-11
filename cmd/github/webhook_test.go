@@ -147,7 +147,7 @@ func TestWebhookServer(t *testing.T) {
 
 	// Expect check run creation
 	create := <-checkRuns
-	assert.Equal(t, "inprogress", *create.Status)
+	assert.Equal(t, "in_progress", *create.Status)
 
 	// Expect check run update
 	update := <-checkRuns

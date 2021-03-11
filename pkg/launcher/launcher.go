@@ -95,6 +95,9 @@ type LauncherOptions struct {
 
 	// For testing purposes set run Status
 	Status *v1alpha1.RunStatus
+
+	// Additional labels to add to the Run resource
+	AdditionalLabels map[string]string
 }
 
 type Launcher struct {
@@ -380,6 +383,10 @@ func (l *Launcher) createRun(ctx context.Context, name, configMapName string, re
 	labels.SetLabel(run, labels.Workspace(l.Workspace))
 	// Permit filtering etok resources by component
 	labels.SetLabel(run, labels.RunComponent)
+
+	for k, v := range l.AdditionalLabels {
+		labels.SetLabel(run, labels.Label{Name: k, Value: v})
+	}
 
 	run.Workspace = l.Workspace
 

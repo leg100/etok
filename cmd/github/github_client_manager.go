@@ -1,13 +1,13 @@
 package github
 
 // Cache of github clients keyed by install ID
-type GithubClientMap map[int64]*GithubClient
+type GithubClientManager map[int64]*GithubClient
 
-func newGithubClientMap() GithubClientMap {
+func newGithubClientManager() GithubClientManager {
 	return make(map[int64]*GithubClient)
 }
 
-func (m GithubClientMap) getClient(hostname, keyPath string, appID, installID int64) (*GithubClient, error) {
+func (m GithubClientManager) getOrCreate(hostname, keyPath string, appID, installID int64) (*GithubClient, error) {
 	// See if we have a cached client
 	ghClient, ok := m[installID]
 	if !ok {

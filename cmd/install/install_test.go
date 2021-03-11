@@ -19,19 +19,15 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	etokclient "github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestInstall(t *testing.T) {
@@ -136,7 +132,7 @@ func TestInstall(t *testing.T) {
 			buf := new(bytes.Buffer)
 			f := &cmdutil.Factory{
 				IOStreams:            cmdutil.IOStreams{Out: buf},
-				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
+				RuntimeClientCreator: client.NewFakeRuntimeClientCreator(tt.objs...),
 			}
 
 			cmd, opts := InstallCmd(f)
@@ -189,53 +185,6 @@ func TestInstall(t *testing.T) {
 	}
 }
 
-func TestInstallWait(t *testing.T) {
-	tests := []struct {
-		name string
-		objs []runtimeclient.Object
-		err  error
-	}{
-		{
-			name: "successful",
-			// Seed fake client with already successful deploy
-			objs: []runtimeclient.Object{successfulDeploy()},
-		},
-		{
-			name: "failure",
-			objs: []runtimeclient.Object{deploy()},
-			err:  wait.ErrWaitTimeout,
-		},
-	}
-	for _, tt := range tests {
-		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Override wait interval to ensure fast tests
-			t.Override(&interval, 10*time.Millisecond)
-
-			// Create fake client and seed with any objs
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, convertObjs(tt.objs...)...)
-			opts := &installOptions{
-				Client: &etokclient.Client{
-					RuntimeClient: client,
-				},
-				Factory: &cmdutil.Factory{
-					IOStreams: cmdutil.IOStreams{Out: new(bytes.Buffer)},
-				},
-				timeout: 100 * time.Millisecond,
-			}
-			assert.Equal(t, tt.err, opts.deploymentIsReady(context.Background(), deploy()))
-		})
-	}
-}
-
-// Convert []client.Object to []runtime.Object (the CR real client works with
-// the former, whereas the CR fake client works with the latter)
-func convertObjs(objs ...runtimeclient.Object) (converted []runtime.Object) {
-	for _, o := range objs {
-		converted = append(converted, o.(runtime.Object))
-	}
-	return
-}
-
 func wantedCRDs() (resources []runtimeclient.Object) {
 	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "workspaces.etok.dev"}})
 	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "runs.etok.dev"}})
@@ -253,33 +202,6 @@ func wantedResources() (resources []runtimeclient.Object) {
 	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
 	resources = append(resources, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
 	return
-}
-
-func deploy() *appsv1.Deployment {
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "etok",
-			Namespace: "etok",
-		},
-	}
-}
-
-func successfulDeploy() *appsv1.Deployment {
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "etok",
-			Namespace: "etok",
-		},
-		Status: appsv1.DeploymentStatus{
-			Conditions: []appsv1.DeploymentCondition{
-				{
-					Type:               appsv1.DeploymentAvailable,
-					Status:             corev1.ConditionTrue,
-					LastTransitionTime: metav1.Time{Time: time.Now().Add(-11 * time.Second)},
-				},
-			},
-		},
-	}
 }
 
 func mockWebServer(t *testutil.T) {

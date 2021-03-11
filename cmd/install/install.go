@@ -15,7 +15,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -24,6 +23,7 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
@@ -139,19 +139,6 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	return cmd, o
 }
 
-//func (o *installOptions) validateBackupOptions() error { if
-//o.backupProviderName != "" { if o.backupProviderName != "gcs" &&
-//o.backupProviderName != "s3" { return fmt.Errorf("%w: %s is invalid value for
-//--backup-provider, valid options are: gcs, s3", errInvalidBackupConfig,
-//o.backupProviderName) } }
-//
-//	if (o.backupProviderName == "" && o.gcsBucket != "") || (o.backupProviderName != "" && o.gcsBucket == "") {
-//		return fmt.Errorf("%w: you must specify both --backup-provider and --gcs-bucket", errInvalidBackupConfig)
-//	}
-//
-//	return nil
-//}
-
 func (o *installOptions) install(ctx context.Context) error {
 	var deploy *appsv1.Deployment
 	var resources []runtimeclient.Object
@@ -227,7 +214,7 @@ func (o *installOptions) install(ctx context.Context) error {
 
 	if o.wait && !o.crdsOnly {
 		fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
-		if err := o.deploymentIsReady(ctx, deploy); err != nil {
+		if err := k8s.DeploymentIsReady(ctx, o.RuntimeClient, deploy, interval, o.timeout); err != nil {
 			return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
 		}
 	}
@@ -271,29 +258,6 @@ func (o *installOptions) createOrUpdate(ctx context.Context, resources []runtime
 	}
 
 	return nil
-}
-
-// DeploymentIsReady will poll the kubernetes API server to see if the velero
-// deployment is ready to service user requests.
-func (o *installOptions) deploymentIsReady(ctx context.Context, deploy *appsv1.Deployment) error {
-	var readyObservations int32
-	return wait.PollImmediate(interval, o.timeout, func() (bool, error) {
-		if err := o.RuntimeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(deploy), deploy); err != nil {
-			return false, err
-		}
-
-		for _, cond := range deploy.Status.Conditions {
-			if isAvailable(cond) {
-				readyObservations++
-			}
-		}
-		// Make sure we query the deployment enough times to see the state change, provided there is one.
-		if readyObservations > 4 {
-			return true, nil
-		} else {
-			return false, nil
-		}
-	})
 }
 
 // CRDs. Unlike most other resources this is read from a YAML file from the
