@@ -60,6 +60,7 @@ func newEtokRun(kClient *client.Client, command, previous string, workspace *v1a
 		id:           id,
 		maxFieldSize: defaultMaxFieldSize,
 		previous:     previous,
+		repo:         repo,
 		workspace:    workspace,
 	}
 
@@ -75,6 +76,7 @@ func newEtokRun(kClient *client.Client, command, previous string, workspace *v1a
 			Out: &run,
 		},
 		RunName: id,
+		Status:  &opts.runStatus,
 	}
 
 	return &run, nil
@@ -255,7 +257,7 @@ func launcherArgs(id, command, previous string) ([]string, error) {
 		planPath = filepath.Join(controllers.PlansMountPath, previous)
 	}
 
-	if err := generateCheckRunScript(script, planPath, command); err != nil {
+	if err := generateEtokRunScript(script, planPath, command); err != nil {
 		klog.Errorf("unable to generate check run script: %s", err.Error())
 		return nil, err
 	}

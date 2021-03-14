@@ -19,18 +19,23 @@ type etokRunApp struct {
 	kClient *client.Client
 
 	etokAppOptions
+
+	*repoManager
 }
 
 type etokAppOptions struct {
 	// Path to directory to which git repositories are cloned
 	cloneDir        string
 	stripRefreshing bool
+	// Override run state - for testing purposes
+	runStatus v1alpha1.RunStatus
 }
 
 func newEtokRunApp(kClient *client.Client, opts etokAppOptions) *etokRunApp {
 	return &etokRunApp{
 		etokAppOptions: opts,
 		kClient:        kClient,
+		repoManager:    newRepoManager(opts.cloneDir),
 	}
 }
 
@@ -47,14 +52,26 @@ func (o *etokRunApp) handleEvent(client *GithubClient, event interface{}) error 
 	return nil
 }
 
-func (o *etokRunApp) createEtokRuns(client *GithubClient, event interface{}) ([]*etokRun, error) {
+// For a github event create a list of etok runs. The token refresher is
+// required to clone repo from github.
+func (o *etokRunApp) createEtokRuns(refresher tokenRefresher, event interface{}) ([]*etokRun, error) {
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
 		klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
 
 		switch *ev.Action {
 		case "requested", "rerequested":
-			runs, err := o.createRuns(client, o.newRepoFromCheckSuiteEvent(ev))
+			repo, err := o.repoManager.clone(
+				*ev.Repo.CloneURL,
+				*ev.CheckSuite.HeadBranch,
+				*ev.CheckSuite.HeadSHA,
+				*ev.Repo.Owner.Login,
+				*ev.Repo.Name, refresher)
+			if err != nil {
+				return nil, err
+			}
+
+			runs, err := o.createRuns(refresher, repo)
 			if err != nil {
 				return nil, err
 			}
@@ -71,14 +88,22 @@ func (o *etokRunApp) createEtokRuns(client *GithubClient, event interface{}) ([]
 			// the original connected etok run and workspace, so that we know
 			// what to re-run (or apply)
 
-			repo := o.newRepoFromCheckRunEvent(ev)
+			repo, err := o.repoManager.clone(
+				*ev.CheckRun.CheckSuite.Repository.CloneURL,
+				*ev.CheckRun.CheckSuite.HeadBranch,
+				*ev.CheckRun.CheckSuite.HeadCommit.SHA,
+				*ev.CheckRun.CheckSuite.Repository.Owner.Login,
+				*ev.CheckRun.CheckSuite.Repository.Name, refresher)
+			if err != nil {
+				return nil, err
+			}
 
 			command := "plan"
 			if ev.RequestedAction != nil && ev.RequestedAction.Identifier == "apply" {
 				command = "apply"
 			}
 
-			run, err := o.rerun(client, repo, *ev.CheckRun.ExternalID, command)
+			run, err := o.rerun(refresher, repo, *ev.CheckRun.ExternalID, command)
 			if err != nil {
 				return nil, err
 			}
@@ -93,7 +118,7 @@ func (o *etokRunApp) createEtokRuns(client *GithubClient, event interface{}) ([]
 }
 
 // Re-run, or apply, a previous plan.
-func (a *etokRunApp) rerun(ghClient *GithubClient, repo *repo, previous, command string) (*etokRun, error) {
+func (a *etokRunApp) rerun(refresher tokenRefresher, repo *repo, previous, command string) (*etokRun, error) {
 	namespace, originalRun, err := splitObjectRef(previous)
 	if err != nil {
 		return nil, err
@@ -109,18 +134,13 @@ func (a *etokRunApp) rerun(ghClient *GithubClient, repo *repo, previous, command
 		return nil, err
 	}
 
-	// Ensure we have a cloned repo on disk
-	if err := repo.ensureCloned(ghClient); err != nil {
-		return nil, err
-	}
-
 	// Skip workspaces with a non-existent working dir
 	if _, err := os.Stat(repo.workspacePath(ws)); os.IsNotExist(err) {
 		klog.Warningf("skipping workspace %s with non-existent working directory: %s", klog.KObj(ws), ws.Spec.VCS.WorkingDir)
 		return nil, err
 	}
 
-	etokRun, err := newEtokRun(a.kClient, "plan", "", ws, repo, a.etokAppOptions)
+	etokRun, err := newEtokRun(a.kClient, command, "", ws, repo, a.etokAppOptions)
 	if err != nil {
 		klog.Errorf("unable to create etok run: %s", err.Error())
 		return nil, err
@@ -129,9 +149,8 @@ func (a *etokRunApp) rerun(ghClient *GithubClient, repo *repo, previous, command
 	return etokRun, nil
 }
 
-// Create a slice of etok runs for the given repo.
-func (a *etokRunApp) createRuns(ghClient *GithubClient, repo *repo) ([]*etokRun, error) {
-	// Find connected workspaces and create a check-run for each one.
+// Create etok runs for each workspace 'connected' to the repo.
+func (a *etokRunApp) createRuns(refresher tokenRefresher, repo *repo) ([]*etokRun, error) {
 	connected, err := getConnectedWorkspaces(a.kClient, repo.url)
 	if err != nil {
 		return nil, err
@@ -139,11 +158,6 @@ func (a *etokRunApp) createRuns(ghClient *GithubClient, repo *repo) ([]*etokRun,
 	if len(connected.Items) == 0 {
 		// No connected workspaces found
 		return nil, nil
-	}
-
-	// Ensure we have a cloned repo on disk
-	if err := repo.ensureCloned(ghClient); err != nil {
-		return nil, err
 	}
 
 	// Create check-run for each connected workspace
@@ -168,28 +182,6 @@ func (a *etokRunApp) createRuns(ghClient *GithubClient, repo *repo) ([]*etokRun,
 	}
 
 	return etokRuns, nil
-}
-
-func (o *etokRunApp) newRepoFromCheckSuiteEvent(ev *github.CheckSuiteEvent) *repo {
-	return &repo{
-		parentDir: o.cloneDir,
-		url:       *ev.CheckSuite.GetRepository().CloneURL,
-		branch:    *ev.CheckSuite.HeadBranch,
-		sha:       *ev.CheckSuite.GetHeadCommit().SHA,
-		owner:     *ev.CheckSuite.GetRepository().GetOwner().Login,
-		name:      *ev.CheckSuite.GetRepository().Name,
-	}
-}
-
-func (o *etokRunApp) newRepoFromCheckRunEvent(ev *github.CheckRunEvent) *repo {
-	return &repo{
-		parentDir: o.cloneDir,
-		url:       *ev.GetRepo().CloneURL,
-		branch:    *ev.CheckRun.CheckSuite.HeadBranch,
-		sha:       *ev.GetCheckRun().HeadSHA,
-		owner:     *ev.GetRepo().GetOwner().Login,
-		name:      *ev.GetRepo().GetOwner().Name,
-	}
 }
 
 // Get workspaces connected to the repo url

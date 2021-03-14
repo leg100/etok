@@ -91,6 +91,10 @@ func (o *webhookServer) run(ctx context.Context) error {
 	}
 	klog.Infof("Listening on %s\n", listener.Addr())
 
+	// Record port for testing purposes (a test may want to know which port was
+	// dynamically assigned)
+	o.port = listener.Addr().(*net.TCPAddr).Port
+
 	r := mux.NewRouter()
 	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(nil)

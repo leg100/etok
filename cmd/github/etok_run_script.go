@@ -5,21 +5,19 @@ import (
 	"text/template"
 )
 
-var checkRunScriptTemplate = template.Must(template.New("check_run_script").Parse(`set -e
+var etokRunScriptTemplate = template.Must(template.New("etok_run_script").Parse(`set -e
 
 terraform init -no-color -input=false
 
 {{ if eq .Command "plan" }}
 terraform plan -no-color -input=false -out={{ .PlanPath }}
 {{ end }}
-
 {{ if eq .Command "apply" }}
 terraform apply -no-color -input=false {{ .PlanPath }}
-{{ end }}
-`))
+{{ end }}`))
 
-func generateCheckRunScript(out io.Writer, planPath string, command string) error {
-	return checkRunScriptTemplate.Execute(out, struct {
+func generateEtokRunScript(out io.Writer, planPath string, command string) error {
+	return etokRunScriptTemplate.Execute(out, struct {
 		Command  string
 		PlanPath string
 	}{
