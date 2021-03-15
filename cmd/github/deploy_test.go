@@ -23,8 +23,7 @@ import (
 func TestDeploy(t *testing.T) {
 	disableSSLVerification(t)
 
-	githubHostname, err := fixtures.GithubAppTestServer(t)
-	require.NoError(t, err)
+	githubHostname, _ := fixtures.GithubServer(t)
 
 	tests := []struct {
 		name string

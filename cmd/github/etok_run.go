@@ -229,14 +229,14 @@ func (r *etokRun) invoke(client *GithubClient) error {
 	if r.checkRunId != nil {
 		err := op.update(context.Background(), client, *r.checkRunId)
 		if err != nil {
-			klog.Errorf("unable to create check run: %s", err.Error())
+			klog.Errorf("unable to update check run: %s", err.Error())
 			return err
 		}
 		klog.InfoS("updated check run", "id", *r.checkRunId, "ref", r.repo.sha)
 	} else {
 		id, err := op.create(context.Background(), client)
 		if err != nil {
-			klog.Errorf("unable to update check run: %s", err.Error())
+			klog.Errorf("unable to create check run: %s", err.Error())
 			return err
 		}
 		r.checkRunId = &id

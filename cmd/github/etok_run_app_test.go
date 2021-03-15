@@ -31,15 +31,13 @@ func TestEtokRunApp(t *testing.T) {
 					Action: github.String("requested"),
 					CheckSuite: &github.CheckSuite{
 						HeadBranch: github.String("changes"),
-						HeadCommit: &github.Commit{
-							SHA: &sha,
-						},
-						Repository: &github.Repository{
-							CloneURL: github.String("file://" + url),
-							Name:     github.String("myrepo"),
-							Owner: &github.User{
-								Login: github.String("bob"),
-							},
+						HeadSHA:    &sha,
+					},
+					Repo: &github.Repository{
+						CloneURL: github.String("file://" + url),
+						Name:     github.String("myrepo"),
+						Owner: &github.User{
+							Login: github.String("bob"),
 						},
 					},
 				}

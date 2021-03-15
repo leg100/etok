@@ -21,8 +21,9 @@ import (
 func TestE2E(t *testing.T) {
 	disableSSLVerification(t)
 
-	hdlr, checkRunObjs := webhookGithubTestServerRouter()
-	githubHostname := webhookGithubTestServer(t, hdlr)
+	// Start a mock github API, which sends any checkrun updates it receives via
+	// the checkRunObjs channel
+	githubHostname, checkRunObjs := fixtures.GithubServer(t)
 
 	ws1 := testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir"))
 
@@ -30,9 +31,6 @@ func TestE2E(t *testing.T) {
 	cc := etokclient.NewFakeClientCreator(ws1)
 	client, err := cc.Create("")
 	require.NoError(t, err)
-
-	// Setup mock repo
-	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
 
 	app := newEtokRunApp(client, etokAppOptions{
 		cloneDir: testutil.NewTempDir(t).Root(),
@@ -57,6 +55,9 @@ func TestE2E(t *testing.T) {
 		}
 	}
 
+	// Setup mock repo
+	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
+
 	req := fixtures.GitHubNewCheckSuiteEvent(t, server.port, sha, path)
 	res, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
@@ -67,6 +68,7 @@ func TestE2E(t *testing.T) {
 		runs, err := client.RunsClient("default").List(context.Background(), metav1.ListOptions{})
 		require.NoError(t, err)
 		if len(runs.Items) == 1 {
+			t.Log("run successfully created")
 			return true, nil
 		}
 		return false, nil

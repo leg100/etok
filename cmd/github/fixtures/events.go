@@ -2,14 +2,12 @@ package fixtures
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/google/go-github/v31/github"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,25 +26,19 @@ func GitHubNewCheckSuiteEvent(t *testing.T, port int, headSHA, repo string) *htt
 	return req
 }
 
-func GithubCheckSuite(headSHA, repo string) *github.CheckSuite {
-	eventStr := newCheckSuiteEvent(headSHA, repo)
-
-	var event github.CheckSuiteEvent
-
-	_ = json.Unmarshal([]byte(eventStr), &event)
-
-	return event.CheckSuite
-}
-
 func newCheckSuiteEvent(headSHA, repo string) string {
 	requestJSON, _ := ioutil.ReadFile("fixtures/newCheckSuiteEvent.json")
 
 	// Replace sha with expected sha.
 	requestJSONStr := strings.Replace(string(requestJSON), "ec26c3e57ca3a959ca5aad62de7213c562f8c821", headSHA, -1)
 	// Replace repo with expected repo.
-	requestJSONStr = strings.Replace(string(requestJSON), "https://github.com/Codertocat/Hello-World.git", "file://"+repo, -1)
+	requestJSONStr = strings.Replace(requestJSONStr, "https://github.com/Codertocat/Hello-World.git", "file://"+repo, -1)
 	// Replace owner with expected owner
-	requestJSONStr = strings.Replace(string(requestJSON), "Codertocat", "file://"+repo, -1)
+	requestJSONStr = strings.Replace(requestJSONStr, "Codertocat", "bob", -1)
+	// Replace repo name with expected name
+	requestJSONStr = strings.Replace(requestJSONStr, "Hello-World", "myrepo", -1)
+
+	ioutil.WriteFile("/tmp/request.json", []byte(requestJSONStr), 0700)
 
 	return requestJSONStr
 }

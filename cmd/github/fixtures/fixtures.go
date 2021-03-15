@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/go-github/v31/github"
 	"github.com/gorilla/mux"
-	"github.com/leg100/etok/pkg/github"
+	etokgithub "github.com/leg100/etok/pkg/github"
 )
 
 const GithubPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
@@ -265,9 +267,11 @@ func ValidateGithubToken(tokenString string) error {
 	return nil
 }
 
-func GithubServerRouter(hostname string) http.Handler {
-	counter := 0
+func GithubServerRouter(hostname string) (http.Handler, chan interface{}) {
+	checkRunObjs := make(chan interface{}, 100)
+	var counter int
 	r := mux.NewRouter()
+
 	r.HandleFunc("/settings/apps/new", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -275,7 +279,7 @@ func GithubServerRouter(hostname string) http.Handler {
 			return
 		}
 
-		manifest := github.GithubManifest{}
+		manifest := etokgithub.GithubManifest{}
 		manifestReader := strings.NewReader(r.PostFormValue("manifest"))
 		if err := json.NewDecoder(manifestReader).Decode(&manifest); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -319,17 +323,43 @@ func GithubServerRouter(hostname string) http.Handler {
 		counter++
 		w.Write([]byte(appToken)) // nolint: errcheck
 	})
-	return r
+	r.HandleFunc("/api/v3/repos/bob/myrepo/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		opts := github.CreateCheckRunOptions{}
+		if err := json.NewDecoder(r.Body).Decode(&opts); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Unable to decode JSON into a create check runs options object"))
+			return
+		}
+		checkRunObjs <- opts
+
+		// Client expects check run obj in response, with new check run ID
+		checkRun := github.CheckRun{
+			ID: github.Int64(123456789),
+		}
+		buf := new(bytes.Buffer)
+		if err := json.NewEncoder(buf).Encode(&checkRun); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Unable to encode JSON into a create check run object"))
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write(buf.Bytes())
+	}).Methods("POST")
+
+	return r, checkRunObjs
 }
 
-func GithubAppTestServer(t *testing.T) (string, error) {
+func GithubServer(t *testing.T) (string, chan interface{}) {
 	testServer := httptest.NewUnstartedServer(nil)
 
 	// Our fake github router needs the hostname before starting server
 	hostname := testServer.Listener.Addr().String()
-	testServer.Config.Handler = GithubServerRouter(hostname)
+
+	hdlr, updates := GithubServerRouter(hostname)
+
+	testServer.Config.Handler = hdlr
 
 	testServer.StartTLS()
 
-	return hostname, nil
+	return hostname, updates
 }

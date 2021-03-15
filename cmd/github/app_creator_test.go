@@ -22,8 +22,7 @@ import (
 func TestAppCreator(t *testing.T) {
 	disableSSLVerification(t)
 
-	githubHostname, err := fixtures.GithubAppTestServer(t)
-	require.NoError(t, err)
+	githubHostname, _ := fixtures.GithubServer(t)
 
 	client := fake.NewClientBuilder().Build()
 
@@ -41,7 +40,7 @@ func TestAppCreator(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	err = pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
+	err := pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
 	require.NoError(t, err)
 
 	resp, err := http.Get("http://localhost:12345/github-app/setup")
