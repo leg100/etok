@@ -22,7 +22,9 @@ type runOptions struct {
 
 // runCmd creates a cobra command for running github app
 func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
-	o := &runOptions{}
+	o := &runOptions{
+		webhookServer: &webhookServer{},
+	}
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run github app",
@@ -36,10 +38,14 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			// Set func to use for streaming logs from a run's pod
 			o.etokAppOptions.getLogsFunc = logstreamer.GetLogs
 
-			app := newEtokRunApp(client, o.etokAppOptions)
+			// Configure webhook server to forward events to our 'github app'
+			o.webhookServer.app = newEtokRunApp(client, o.etokAppOptions)
 
-			o.webhookServer = newWebhookServer(app)
+			// Initialise github client manager
+			o.webhookServer.ghClientMgr = newGithubClientManager()
 
+			// Ensure webhook server is properly constructed since we're not
+			// using a constructor
 			if err := o.webhookServer.validate(); err != nil {
 				return err
 			}

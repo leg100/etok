@@ -263,5 +263,5 @@ func launcherArgs(id, command, previous string) ([]string, error) {
 		return nil, err
 	}
 
-	return []string{"-c", script.String()}, nil
+	return []string{script.String()}, nil
 }

@@ -109,6 +109,11 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 							SubPath:   dotTerraformSubPath,
 						},
 						{
+							Name:      "cache",
+							MountPath: PlansMountPath,
+							SubPath:   plansSubPath,
+						},
+						{
 							Name:      "tarball",
 							MountPath: filepath.Join("/tarball", run.ConfigMapKey),
 							SubPath:   run.ConfigMapKey,

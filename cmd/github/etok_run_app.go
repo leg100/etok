@@ -93,11 +93,11 @@ func (o *etokRunApp) createEtokRuns(refresher tokenRefresher, event interface{})
 			// what to re-run (or apply)
 
 			repo, err := o.repoManager.clone(
-				*ev.CheckRun.CheckSuite.Repository.CloneURL,
+				*ev.Repo.CloneURL,
 				*ev.CheckRun.CheckSuite.HeadBranch,
-				*ev.CheckRun.CheckSuite.HeadCommit.SHA,
-				*ev.CheckRun.CheckSuite.Repository.Owner.Login,
-				*ev.CheckRun.CheckSuite.Repository.Name, refresher)
+				*ev.CheckRun.CheckSuite.HeadSHA,
+				*ev.Repo.Owner.Login,
+				*ev.Repo.Name, refresher)
 			if err != nil {
 				return nil, err
 			}
@@ -106,6 +106,8 @@ func (o *etokRunApp) createEtokRuns(refresher tokenRefresher, event interface{})
 			if ev.RequestedAction != nil && ev.RequestedAction.Identifier == "apply" {
 				command = "apply"
 			}
+
+			klog.InfoS("check run event", "id", ev.CheckRun.GetID(), "command", command)
 
 			run, err := o.rerun(refresher, repo, *ev.CheckRun.ExternalID, command)
 			if err != nil {
@@ -149,6 +151,8 @@ func (a *etokRunApp) rerun(refresher tokenRefresher, repo *repo, previous, comma
 		klog.Errorf("unable to create etok run: %s", err.Error())
 		return nil, err
 	}
+
+	klog.InfoS("re-running run")
 
 	return etokRun, nil
 }

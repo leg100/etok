@@ -196,11 +196,10 @@ func clusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
 	}
 }
 
-func clusterRole(namespace string) *rbacv1.ClusterRole {
+func clusterRole() *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      "webhook",
+			Name: "webhook",
 		},
 		Rules: []rbacv1.PolicyRule{
 			// Webhook needs to be able to create and monitor runs

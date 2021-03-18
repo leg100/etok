@@ -54,6 +54,11 @@ deploy: image push deploy-operator-secret
 	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
 		--backup-provider=gcs --gcs-bucket=$(BACKUP_BUCKET)
 
+# Deploy github webhook server
+.PHONY: deploy-github
+deploy-github: image push
+	$(BUILD_BIN) github deploy --context $(KUBECTX) --image $(IMG):$(TAG) --url foo.bar
+
 # Tail operator logs
 .PHONY: logs
 logs:

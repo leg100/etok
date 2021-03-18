@@ -57,18 +57,16 @@ func TestEtokRunApp(t *testing.T) {
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
 							HeadBranch: github.String("changes"),
-							HeadCommit: &github.Commit{
-								SHA: &sha,
-							},
-							Repository: &github.Repository{
-								CloneURL: github.String("file://" + url),
-								Name:     github.String("myrepo"),
-								Owner: &github.User{
-									Login: github.String("bob"),
-								},
-							},
+							HeadSHA:    &sha,
 						},
 						ExternalID: github.String("default/run-12345"),
+					},
+					Repo: &github.Repository{
+						CloneURL: github.String("file://" + url),
+						Name:     github.String("myrepo"),
+						Owner: &github.User{
+							Login: github.String("bob"),
+						},
 					},
 				}
 			},
@@ -88,18 +86,16 @@ func TestEtokRunApp(t *testing.T) {
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
 							HeadBranch: github.String("changes"),
-							HeadCommit: &github.Commit{
-								SHA: &sha,
-							},
-							Repository: &github.Repository{
-								CloneURL: github.String("file://" + url),
-								Name:     github.String("myrepo"),
-								Owner: &github.User{
-									Login: github.String("bob"),
-								},
-							},
+							HeadSHA:    &sha,
 						},
 						ExternalID: github.String("default/run-12345"),
+					},
+					Repo: &github.Repository{
+						CloneURL: github.String("file://" + url),
+						Name:     github.String("myrepo"),
+						Owner: &github.User{
+							Login: github.String("bob"),
+						},
 					},
 					RequestedAction: &github.RequestedAction{
 						Identifier: "plan",
@@ -122,18 +118,16 @@ func TestEtokRunApp(t *testing.T) {
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
 							HeadBranch: github.String("changes"),
-							HeadCommit: &github.Commit{
-								SHA: &sha,
-							},
-							Repository: &github.Repository{
-								CloneURL: github.String("file://" + url),
-								Name:     github.String("myrepo"),
-								Owner: &github.User{
-									Login: github.String("bob"),
-								},
-							},
+							HeadSHA:    &sha,
 						},
 						ExternalID: github.String("default/run-12345"),
+					},
+					Repo: &github.Repository{
+						CloneURL: github.String("file://" + url),
+						Name:     github.String("myrepo"),
+						Owner: &github.User{
+							Login: github.String("bob"),
+						},
 					},
 					RequestedAction: &github.RequestedAction{
 						Identifier: "apply",

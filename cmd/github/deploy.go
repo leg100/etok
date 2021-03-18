@@ -98,16 +98,15 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			if err != nil {
 				return fmt.Errorf("unable to check if credentials exist: %w", err)
 			}
-			if exists {
-				fmt.Println("Github app already created")
-				return nil
-			}
 
-			if err := createApp(cmd.Context(), o.appName, webhookUrl.String(), o.githubHostname, &creds, o.appCreatorOptions); err != nil {
-				return fmt.Errorf("unable to complete app creation: %w", err)
+			if !exists {
+				if err := createApp(cmd.Context(), o.appName, webhookUrl.String(), o.githubHostname, &creds, o.appCreatorOptions); err != nil {
+					return fmt.Errorf("unable to complete app creation: %w", err)
+				}
+				fmt.Println("Github app created successfully")
+			} else {
+				fmt.Println("Skipping creation of Github app; app credentials found")
 			}
-
-			fmt.Println("Github app created successfully")
 
 			// Deploy webhook k8s resources
 			if err := o.deploy(cmd.Context()); err != nil {
@@ -157,17 +156,18 @@ func (o *deployOptions) deploy(ctx context.Context) error {
 	resources = append(resources, service(o.namespace, o.port))
 	resources = append(resources, deploymentResource)
 	resources = append(resources, clusterRoleBinding(o.namespace))
-	resources = append(resources, clusterRole(o.namespace))
+	resources = append(resources, clusterRole())
 	resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
 
 	for _, r := range resources {
 		labels.SetCommonLabels(r)
 		labels.SetLabel(r, labels.WebhookComponent)
 
-		_, err := controllerutil.CreateOrUpdate(ctx, o.RuntimeClient, r, func() error { return nil })
+		result, err := controllerutil.CreateOrUpdate(ctx, o.RuntimeClient, r, func() error { return nil })
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to create or update resource: %s: %w", klog.KObj(r), err)
 		}
+		fmt.Fprintf(o.Out, "%T %s has been %s\n", r, klog.KObj(r), result)
 	}
 
 	if o.wait {
