@@ -7,42 +7,57 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Rather convoluted unit test for the process monitor.
+
 type fakeTaskQueue struct{}
 
+// Mock the task queue perform github client operations by calling proc's invoke
+// method.
 func (q *fakeTaskQueue) send(op githubOperation) {
 	op.invoke(nil)
 }
 
 type fakeProcess struct {
+	sync    chan struct{}
+	updates chan int
 	counter int
-	queue   chan int
 }
 
-// Run process for at least 10ms to simulate it doing something
+// Fake a process doing something by sending 5 things on an unbuffered channel
+// and only once they're taken off the queue, exit, triggering the monitor to
+// exit too.
 func (p *fakeProcess) run() error {
-	time.Sleep(time.Millisecond * 10)
+	for i := 0; i < 5; i++ {
+		p.sync <- struct{}{}
+	}
+	// Close sync so that last invoke wont block on receive
+	close(p.sync)
 	return nil
 }
 
-// Check invoke is being called by sending a counter to a queue, which the test
-// func can receive.
+// Take one thing off the unbuffered channel on each invocation, and send
+// incremented counter to updates channel so that the test can assert monitor
+// behaviour
 func (p *fakeProcess) invoke(client *GithubClient) error {
-	p.queue <- p.counter
+	<-p.sync
+	p.updates <- p.counter
 	p.counter++
 	return nil
 }
 
-// Test monitor can run a process obj and send it to a task queue on a regular
-// interval.
+// Test monitor can run a process obj and send it to task queue once a
+// millisecond, and then return when the process obj exits
 func TestMonitor(t *testing.T) {
 	proc := &fakeProcess{
-		queue: make(chan int, 100),
+		sync:    make(chan struct{}),
+		updates: make(chan int),
 	}
-	monitor(&fakeTaskQueue{}, proc, time.Millisecond)
-
-	// Receive expected counters demonstrating monitor is sending updates
-	assert.Equal(t, 0, <-proc.queue)
-	assert.Equal(t, 1, <-proc.queue)
-	assert.Equal(t, 2, <-proc.queue)
-	assert.Equal(t, 3, <-proc.queue)
+	go monitor(&fakeTaskQueue{}, proc, time.Millisecond)
+	assert.Equal(t, 0, <-proc.updates)
+	assert.Equal(t, 1, <-proc.updates)
+	assert.Equal(t, 2, <-proc.updates)
+	assert.Equal(t, 3, <-proc.updates)
+	assert.Equal(t, 4, <-proc.updates)
+	// This message will only be sent once process exits
+	assert.Equal(t, 5, <-proc.updates)
 }

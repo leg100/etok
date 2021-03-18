@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/logstreamer"
 	"k8s.io/klog/v2"
 )
 
@@ -29,6 +30,9 @@ type etokAppOptions struct {
 	stripRefreshing bool
 	// Override run state - for testing purposes
 	runStatus v1alpha1.RunStatus
+	// Set func to use for streaming logs from pod - exposed here for testing
+	// purposes
+	getLogsFunc logstreamer.GetLogsFunc
 }
 
 func newEtokRunApp(kClient *client.Client, opts etokAppOptions) *etokRunApp {

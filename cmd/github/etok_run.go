@@ -75,8 +75,9 @@ func newEtokRun(kClient *client.Client, command, previous string, workspace *v1a
 		IOStreams: &cmdutil.IOStreams{
 			Out: &run,
 		},
-		RunName: id,
-		Status:  &opts.runStatus,
+		RunName:     id,
+		Status:      &opts.runStatus,
+		GetLogsFunc: opts.getLogsFunc,
 	}
 
 	return &run, nil

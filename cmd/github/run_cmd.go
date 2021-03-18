@@ -5,6 +5,7 @@ import (
 	// or "gopkg.in/unrolled/render.v1"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +32,9 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			if err != nil {
 				return err
 			}
+
+			// Set func to use for streaming logs from a run's pod
+			o.etokAppOptions.getLogsFunc = logstreamer.GetLogs
 
 			app := newEtokRunApp(client, o.etokAppOptions)
 

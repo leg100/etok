@@ -346,6 +346,29 @@ func GithubServerRouter(hostname string) (http.Handler, chan interface{}) {
 		w.Write(buf.Bytes())
 	}).Methods("POST")
 
+	r.HandleFunc("/api/v3/repos/bob/myrepo/check-runs/123456789", func(w http.ResponseWriter, r *http.Request) {
+		opts := github.UpdateCheckRunOptions{}
+		if err := json.NewDecoder(r.Body).Decode(&opts); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Unable to decode JSON into a update check runs options object"))
+			return
+		}
+		checkRunObjs <- opts
+
+		// Client expects check run obj in response, with check run ID
+		checkRun := github.CheckRun{
+			ID: github.Int64(123456789),
+		}
+		buf := new(bytes.Buffer)
+		if err := json.NewEncoder(buf).Encode(&checkRun); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Unable to encode JSON into a update check run object"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(buf.Bytes())
+	}).Methods("PATCH")
+
 	return r, checkRunObjs
 }
 
