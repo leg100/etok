@@ -85,7 +85,16 @@ func newEtokRun(kClient *client.Client, command, previous string, workspace *v1a
 
 // Run the etok run
 func (r *etokRun) run() error {
-	err := launcher.NewLauncher(r.launcherOpts).Launch(context.Background())
+	l := launcher.NewLauncher(r.launcherOpts)
+
+	run, err := l.Launch(context.Background())
+	if err != nil {
+		r.err = err
+		r.completed = true
+		return err
+	}
+
+	err = l.Monitor(run, context.Background())
 	r.err = err
 	r.completed = true
 
