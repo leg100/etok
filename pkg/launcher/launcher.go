@@ -151,8 +151,19 @@ func NewLauncher(opts *LauncherOptions) *Launcher {
 	return l
 }
 
-func (l *Launcher) Launch(ctx context.Context) error {
-	if err := l.doLaunch(ctx); err != nil {
+func (l *Launcher) Launch(ctx context.Context) (*v1alpha1.Run, error) {
+	run, err := l.deploy(ctx)
+	if err != nil {
+		if !l.DisableResourceCleanup {
+			l.Cleanup()
+		}
+		return nil, err
+	}
+	return run, nil
+}
+
+func (l *Launcher) Monitor(run *v1alpha1.Run, ctx context.Context) error {
+	if err := l.doMonitor(run, ctx); err != nil {
 		// Cleanup resources upon error. An exit code error means the runner ran
 		// successfully but the program it executed failed with a non-zero exit
 		// code. In this case, resources are not cleaned up.
@@ -168,13 +179,7 @@ func (l *Launcher) Launch(ctx context.Context) error {
 	return nil
 }
 
-func (l *Launcher) doLaunch(ctx context.Context) error {
-	// Tar up local config and deploy k8s resources
-	run, err := l.deploy(ctx)
-	if err != nil {
-		return err
-	}
-
+func (l *Launcher) doMonitor(run *v1alpha1.Run, ctx context.Context) error {
 	if IsQueueable(l.Command) {
 		// Watch and log queue updates
 		l.watchQueue(ctx, run)

@@ -26,7 +26,116 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestLauncher(t *testing.T) {
+func TestLauncherDeploy(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		objs []runtime.Object
+		// Override default command "plan"
+		cmd string
+		// Size of content to be archived
+		size       int
+		setOpts    func(*LauncherOptions)
+		assertions func(*testutil.T, *Launcher)
+	}{
+		{
+			name: "default",
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "default", o.Namespace)
+				assert.Equal(t, "default", o.Workspace)
+			},
+		},
+		{
+			name: "specific namespace and workspace",
+			setOpts: func(o *LauncherOptions) {
+				o.Namespace = "foo"
+				o.Workspace = "bar"
+			},
+			assertions: func(t *testutil.T, o *Launcher) {
+				assert.Equal(t, "foo", o.Namespace)
+				assert.Equal(t, "bar", o.Workspace)
+			},
+		},
+		{
+			name: "arbitrary terraform flag",
+			setOpts: func(o *LauncherOptions) {
+				o.Args = []string{"-input", "false"}
+			},
+			assertions: func(t *testutil.T, o *Launcher) {
+				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+				assert.Equal(t, []string{"-input", "false"}, run.Args)
+			},
+		},
+		{
+			name: "config too big",
+			size: 1024*1024 + 1,
+			err:  archive.MaxSizeError(archive.MaxConfigSize),
+		},
+		{
+			name: "increased verbosity",
+			setOpts: func(o *LauncherOptions) {
+				o.Verbosity = 3
+			},
+			assertions: func(t *testutil.T, l *Launcher) {
+				// Get run
+				run, err := l.RunsClient(l.Namespace).Get(context.Background(), l.RunName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, 3, run.Verbosity)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size)
+
+			out := new(bytes.Buffer)
+
+			// Default to plan command
+			command := "plan"
+			if tt.cmd != "" {
+				// Override plan command
+				command = tt.cmd
+			}
+
+			// Create k8s clients
+			cc := etokclient.NewFakeClientCreator(tt.objs...)
+			client, err := cc.Create("")
+			require.NoError(t, err)
+
+			opts := &LauncherOptions{
+				AttachFunc:  attacher.FakeAttach,
+				Client:      client,
+				Command:     command,
+				GetLogsFunc: logstreamer.FakeGetLogs,
+				RunName:     "run-12345",
+				IOStreams: &cmdutil.IOStreams{
+					Out: out,
+				},
+			}
+
+			// Permit individual tests to override options
+			if tt.setOpts != nil {
+				tt.setOpts(opts)
+			}
+
+			l := NewLauncher(opts)
+
+			_, err = l.Launch(context.Background())
+			if !assert.True(t, errors.Is(err, tt.err)) {
+				t.Errorf("unexpected error: %w", err)
+			}
+
+			if tt.assertions != nil {
+				tt.assertions(t, l)
+			}
+		})
+	}
+}
+
+func TestLauncherMonitor(t *testing.T) {
 	var fakeError = errors.New("fake error")
 
 	tests := []struct {
@@ -45,44 +154,12 @@ func TestLauncher(t *testing.T) {
 		assertions     func(*testutil.T, *Launcher)
 	}{
 		{
-			name: "plan",
-			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(t *testutil.T, o *Launcher) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
-			},
-		},
-		{
 			name: "queueable commands",
 			cmd:  "apply",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			assertions: func(t *testutil.T, o *Launcher) {
 				assert.Equal(t, "default", o.Namespace)
 				assert.Equal(t, "default", o.Workspace)
-			},
-		},
-		{
-			name: "specific namespace and workspace",
-			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithCombinedQueue("run-12345"))},
-			setOpts: func(o *LauncherOptions) {
-				o.Namespace = "foo"
-				o.Workspace = "bar"
-			},
-			assertions: func(t *testutil.T, o *Launcher) {
-				assert.Equal(t, "foo", o.Namespace)
-				assert.Equal(t, "bar", o.Workspace)
-			},
-		},
-		{
-			name: "arbitrary terraform flag",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			setOpts: func(o *LauncherOptions) {
-				o.Args = []string{"-input", "false"}
-			},
-			assertions: func(t *testutil.T, o *Launcher) {
-				run, err := o.RunsClient(o.Namespace).Get(context.Background(), o.RunName, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, []string{"-input", "false"}, run.Args)
 			},
 		},
 		{
@@ -97,14 +174,6 @@ func TestLauncher(t *testing.T) {
 				require.NoError(t, err)
 				// Check run's approval annotation is set on workspace
 				assert.Equal(t, true, ws.IsRunApproved(run))
-			},
-		},
-		{
-			name: "defaults",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(t *testutil.T, o *Launcher) {
-				assert.Equal(t, "default", o.Namespace)
-				assert.Equal(t, "default", o.Workspace)
 			},
 		},
 		{
@@ -207,10 +276,6 @@ func TestLauncher(t *testing.T) {
 			},
 		},
 		{
-			name: "pod completed with no tty",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-		},
-		{
 			name: "pod completed with tty",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			setOpts: func(o *LauncherOptions) {
@@ -219,7 +284,7 @@ func TestLauncher(t *testing.T) {
 				require.NoError(t, err)
 			},
 			overrideStatus: func(status *v1alpha1.RunStatus) {
-				// Mock run having cmpleted
+				// Mock run having completed
 				status.Conditions = []metav1.Condition{
 					{
 						Type:   v1alpha1.RunCompleteCondition,
@@ -229,12 +294,6 @@ func TestLauncher(t *testing.T) {
 				}
 			},
 			err: handlers.PrematurelySucceededPodError,
-		},
-		{
-			name: "config too big",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			size: 1024*1024 + 1,
-			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},
 		{
 			name: "reconcile timeout exceeded",
@@ -262,20 +321,6 @@ func TestLauncher(t *testing.T) {
 				}
 			},
 			err: handlers.ErrRunFailed,
-		},
-		{
-			name: "increased verbosity",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
-			setOpts: func(o *LauncherOptions) {
-				o.Verbosity = 3
-			},
-			assertions: func(t *testutil.T, l *Launcher) {
-				// Get run
-				run, err := l.RunsClient(l.Namespace).Get(context.Background(), l.RunName, metav1.GetOptions{})
-				require.NoError(t, err)
-
-				assert.Equal(t, 3, run.Verbosity)
-			},
 		},
 	}
 
@@ -334,7 +379,10 @@ func TestLauncher(t *testing.T) {
 			}
 			l.Status = &status
 
-			err = l.Launch(context.Background())
+			run, err := l.Launch(context.Background())
+			require.NoError(t, err)
+
+			err = l.Monitor(run, context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
 				t.Errorf("unexpected error: %w", err)
 			}
