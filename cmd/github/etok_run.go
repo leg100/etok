@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -93,23 +94,39 @@ func (r *etokRun) run() error {
 }
 
 // Provide name for check run. Indicates the etok workspace for which the check
-// run is running and summarises its current state.
+// run is running and summarises its current state. Github only shows the first
+// 33 chars (and then an ellipsis) on the check runs page, so it's important to
+// use those chars effectively.
 func (r *etokRun) name() string {
-	name := fmt.Sprintf("%s | %s", klog.KObj(r.workspace), r.command)
+	// Check run name always begins with full workspace name
+	name := r.workspace.Namespace + "/" + r.workspace.Name
 
+	// Next part of name is the command name
+	command := r.command
 	if r.command == "plan" && r.completed {
-		// Add additional info about a completed plan
+		// Upon completion of a plan, instead of showing 'plan', show summary of
+		// changes
 		plan, err := parsePlanOutput(string(r.out))
 		if err != nil {
-			klog.Errorf(err.Error())
-			name += " (plan error)"
-			return name
+			// Just fallback to showing 'plan' and log error
+			klog.Errorf("error parsing plan output for %s: %s", r.id, err.Error())
+		} else {
+			command = plan.summary()
 		}
-		if plan.hasNoChanges() {
-			name += " (no changes)"
-		}
-		// TODO: add summary of adds/changes/deletions
 	}
+	name += fmt.Sprintf("[%s]", command)
+
+	// Next part is the run id (run-123yx). GH is likely to cut this short with
+	// a '...' so snip off the redundant prefix 'run-' and just show the ID.
+	// That way the ID - the important bit - is more likely to be visible to the
+	// user.
+	var id string
+	idparts := strings.Split(r.id, "-")
+	if len(idparts) == 2 {
+		id = idparts[1]
+	}
+	name += " " + id
+
 	return name
 }
 
@@ -124,6 +141,11 @@ func (u *etokRun) status() *string {
 // Provide the 'title' of a check run
 func (u *etokRun) title() string {
 	return u.id
+}
+
+// Provide the external ID of a check run
+func (u *etokRun) externalID() *string {
+	return github.String(u.workspace.Namespace + "/" + u.id)
 }
 
 // Populate the 'summary' text field of a check run
