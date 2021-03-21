@@ -36,6 +36,8 @@ func (c *etokRunOperation) create(ctx context.Context, client *GithubClient) (in
 		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
+		// Retain reference to etok run id in case user wants to re-run it
+		ExternalID: c.externalID(),
 	}
 
 	checkRun, _, err := client.Checks.CreateCheckRun(ctx, c.repo.owner, c.repo.name, opts)
@@ -54,6 +56,8 @@ func (c *etokRunOperation) update(ctx context.Context, client *GithubClient, id 
 		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
+		// Retain reference to etok run id in case user wants to re-run it
+		ExternalID: c.externalID(),
 	}
 	_, _, err := client.Checks.UpdateCheckRun(ctx, c.repo.owner, c.repo.name, id, opts)
 	return err

@@ -26,6 +26,17 @@ func ContainsString(slice []string, str string) bool {
 	return false
 }
 
+// Delete string from slice of strings and return new slice
+func DeleteString(slice []string, str string) []string {
+	for i, item := range slice {
+		if item == str {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	// Return slice unchanged if string not found
+	return slice
+}
+
 // Return index of matching string in slice; otherwise return -1
 func StringIndex(slice []string, str string) int {
 	for idx := range slice {

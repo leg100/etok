@@ -1,18 +1,22 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/controllers"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/util"
 	"k8s.io/klog/v2"
 )
 
@@ -44,13 +48,20 @@ func newEtokRunApp(kClient *client.Client, opts etokAppOptions) *etokRunApp {
 }
 
 func (o *etokRunApp) handleEvent(client *GithubClient, event interface{}) error {
-	runs, err := o.createEtokRuns(client, event)
+	launcherOptsList, err := o.createLauncherOptsList(client, event)
 	if err != nil {
 		return err
 	}
 
-	for _, r := range runs {
-		go monitor(client, r, time.Second)
+	// Actually create each Run resource
+	for _, opts := range launcherOptsList {
+		if err := launcher.NewLauncher(opts).Launch(context.Background()); err != nil {
+			// Failed to create resource. Ensure github check run is created
+			// with error. (If it had the resource had been created, the run
+			// monitor would have picked it up, and then had been responsible
+			// for creating and updating its check run).
+			client.send(r)
+		}
 	}
 
 	return nil
@@ -58,7 +69,7 @@ func (o *etokRunApp) handleEvent(client *GithubClient, event interface{}) error 
 
 // For a github event create a list of etok runs. The token refresher is
 // required to clone repo from github.
-func (o *etokRunApp) createEtokRuns(refresher tokenRefresher, event interface{}) ([]*etokRun, error) {
+func (o *etokRunApp) createLauncherOptsList(refresher tokenRefresher, event interface{}) ([]*launcher.LauncherOptions, error) {
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
 		klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
@@ -146,19 +157,17 @@ func (a *etokRunApp) rerun(refresher tokenRefresher, repo *repo, previous, comma
 		return nil, err
 	}
 
-	etokRun, err := newEtokRun(a.kClient, command, "", ws, repo, a.etokAppOptions)
+	etokRun, err := newEtokRun(a.kClient, command, originalRun, ws, repo, a.etokAppOptions)
 	if err != nil {
 		klog.Errorf("unable to create etok run: %s", err.Error())
 		return nil, err
 	}
 
-	klog.InfoS("re-running run")
-
 	return etokRun, nil
 }
 
 // Create etok runs for each workspace 'connected' to the repo.
-func (a *etokRunApp) createRuns(refresher tokenRefresher, repo *repo) ([]*etokRun, error) {
+func (a *etokRunApp) createRuns(refresher tokenRefresher, repo *repo) ([]*launcher.LauncherOptions, error) {
 	connected, err := getConnectedWorkspaces(a.kClient, repo.url)
 	if err != nil {
 		return nil, err
@@ -169,7 +178,7 @@ func (a *etokRunApp) createRuns(refresher tokenRefresher, repo *repo) ([]*etokRu
 	}
 
 	// Create check-run for each connected workspace
-	etokRuns := []*etokRun{}
+	launcherOptsList := []*launcher.LauncherOptions{}
 	for _, ws := range connected.Items {
 		// Get full path to workspace's working directory
 		path := repo.workspacePath(&ws)
@@ -180,16 +189,60 @@ func (a *etokRunApp) createRuns(refresher tokenRefresher, repo *repo) ([]*etokRu
 			continue
 		}
 
-		run, err := newEtokRun(a.kClient, "plan", "", &ws, repo, a.etokAppOptions)
+		opts, err := newLauncherOpts(a.kClient, "plan", "", &ws, repo, a.etokAppOptions)
 		if err != nil {
 			klog.Errorf("unable to create an etok run: %s", err.Error())
 			continue
 		}
 
-		etokRuns = append(etokRuns, run)
+		launcherOptsList = append(launcherOptsList, opts)
 	}
 
-	return etokRuns, nil
+	return launcherOptsList, nil
+}
+
+// Constructor for an etok run obj
+func newLauncherOpts(kClient *client.Client, command, previous string, workspace *v1alpha1.Workspace, repo *repo, appOpts etokAppOptions) (*launcher.LauncherOptions, error) {
+	id := fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+
+	args, err := launcherArgs(id, command, previous)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := &launcher.LauncherOptions{
+		Client:      kClient,
+		Workspace:   workspace.Name,
+		Namespace:   workspace.Namespace,
+		DisableTTY:  true,
+		Command:     "sh",
+		Args:        args,
+		Path:        repo.workspacePath(workspace),
+		RunName:     id,
+		Status:      &appOpts.runStatus,
+		GetLogsFunc: appOpts.getLogsFunc,
+	}
+
+	return opts, nil
+}
+
+func launcherArgs(id, command, previous string) ([]string, error) {
+	script := new(bytes.Buffer)
+
+	// Default is to create a new plan file with a filename the same as the etok
+	// run ID
+	planPath := filepath.Join(controllers.PlansMountPath, id)
+	if command == "apply" {
+		// Apply uses the plan file from the previous run
+		planPath = filepath.Join(controllers.PlansMountPath, previous)
+	}
+
+	if err := generateEtokRunScript(script, planPath, command); err != nil {
+		klog.Errorf("unable to generate check run script: %s", err.Error())
+		return nil, err
+	}
+
+	return []string{script.String()}, nil
 }
 
 // Get workspaces connected to the repo url

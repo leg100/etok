@@ -64,7 +64,6 @@ func TestEtokRunName(t *testing.T) {
 		name      string
 		id        string
 		command   string
-		previous  string
 		workspace *v1alpha1.Workspace
 		completed bool
 		want      string
@@ -75,29 +74,33 @@ func TestEtokRunName(t *testing.T) {
 			name:      "incomplete plan",
 			id:        "run-12345",
 			command:   "plan",
-			previous:  "",
 			workspace: testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
-			want:      "default/default | plan",
+			want:      "default/default[plan] 12345",
 		},
 		{
 			name:      "completed plan",
 			id:        "run-12345",
 			command:   "plan",
 			completed: true,
-			previous:  "",
 			workspace: testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			out:       "fixtures/plan.txt",
-			want:      "default/default | plan",
+			want:      "default/default[+2~0-0] 12345",
 		},
 		{
 			name:      "completed plan, no changes",
 			id:        "run-12345",
 			command:   "plan",
 			completed: true,
-			previous:  "",
 			workspace: testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			out:       "fixtures/plan_no_changes.txt",
-			want:      "default/default | plan (no changes)",
+			want:      "default/default[+0~0-0] 12345",
+		},
+		{
+			name:      "apply",
+			id:        "run-12345",
+			command:   "apply",
+			workspace: testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+			want:      "default/default[apply] 12345",
 		},
 	}
 

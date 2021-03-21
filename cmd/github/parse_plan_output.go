@@ -19,6 +19,11 @@ func (p *plan) hasNoChanges() bool {
 	return p.adds == 0 && p.changes == 0 && p.deletions == 0
 }
 
+// Print summary in the format '+a~c-d'
+func (p *plan) summary() string {
+	return fmt.Sprintf("+%d~%d-%d", p.adds, p.changes, p.deletions)
+}
+
 func parsePlanOutput(output string) (*plan, error) {
 	if planNoChangesRegex.MatchString(output) {
 		return &plan{}, nil
