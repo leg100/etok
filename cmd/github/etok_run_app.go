@@ -55,11 +55,13 @@ func (o *etokRunApp) handleEvent(client *GithubClient, event interface{}) error 
 
 	// Actually create each Run resource
 	for _, opts := range launcherOptsList {
-		if err := launcher.NewLauncher(opts).Launch(context.Background()); err != nil {
+		_, err := launcher.NewLauncher(opts).Launch(context.Background())
+		if err != nil {
 			// Failed to create resource. Ensure github check run is created
 			// with error. (If it had the resource had been created, the run
 			// monitor would have picked it up, and then had been responsible
 			// for creating and updating its check run).
+			run, err := newRun(opts, event.
 			client.send(r)
 		}
 	}

@@ -41,9 +41,9 @@ type run struct {
 	checkRunId *int64
 }
 
-func newRun(opts *launcher.LauncherOptions) (*run, error) {
+func newRun(opts *launcher.LauncherOptions, sha string) (*run, error) {
 	return &run{
-		id:        opts.Name,
+		id:        opts.RunName,
 		namespace: opts.Namespace,
 		sha:       sha,
 	}, nil
