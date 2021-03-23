@@ -22,6 +22,7 @@ import (
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
 	"github.com/leg100/etok/pkg/util"
@@ -43,7 +44,8 @@ const (
 	defaultReconcileTimeout = 10 * time.Second
 
 	// default namespace runs are created in
-	defaultNamespace = "default"
+	defaultNamespace  = "default"
+	defaultPodTimeout = time.Hour
 )
 
 var (
@@ -99,6 +101,10 @@ type launcherOptions struct {
 
 	// For testing purposes set run status
 	status *v1alpha1.RunStatus
+
+	// attach toggles whether pod will be attached to (true), or streamed from
+	// (false)
+	attach bool
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -115,6 +121,9 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 			if o.runName == "" {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
+
+			// Toggle whether to attach to pod's TTY
+			o.attach = !o.disableTTY && term.IsTerminal(o.In)
 
 			o.Client, err = f.Create(o.kubeContext)
 			if err != nil {
@@ -149,7 +158,7 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
 	cmd.Flags().BoolVar(&o.disableTTY, "no-tty", false, "disable tty")
-	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
@@ -176,15 +185,13 @@ func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
 }
 
 func (o *launcherOptions) run(ctx context.Context) error {
-	isTTY := !o.disableTTY && term.IsTerminal(o.In)
-
 	// Tar up local config and deploy k8s resources
-	run, err := o.deploy(ctx, isTTY)
+	run, err := o.deploy(ctx)
 	if err != nil {
 		return err
 	}
 
-	if IsQueueable(o.command) {
+	if launcher.IsQueueable(o.command) {
 		// Watch and log queue updates
 		o.watchQueue(ctx, run)
 	}
@@ -201,7 +208,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 
 	// Wait for run to indicate pod is running
 	g.Go(func() error {
-		return o.watchRun(gctx, run, isTTY)
+		return o.watchRun(gctx, run)
 	})
 
 	// Check workspace exists and is healthy
@@ -218,7 +225,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	exit := monitors.RunExitMonitor(ctx, o.EtokClient, o.namespace, o.runName)
 
 	// Connect to pod
-	if isTTY {
+	if o.attach {
 		if err := o.AttachFunc(o.Out, *o.Config, o.namespace, o.runName, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
@@ -238,7 +245,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		}
 	}
 
-	if UpdatesLockFile(o.command) {
+	if launcher.UpdatesLockFile(o.command) {
 		// Some commands (e.g. terraform init) update the lock file,
 		// .terraform.lock.hcl, and it's recommended that this be committed to
 		// version control. So the runner copies it to a config map, and it is
@@ -260,9 +267,9 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	return nil
 }
 
-func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run, isTTY bool) error {
+func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) error {
 	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
-	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunConnectable(run.Name, isTTY))
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunConnectable(run.Name, o.attach))
 	return err
 }
 
@@ -305,7 +312,7 @@ func (o *launcherOptions) checkWorkspace(ctx context.Context, run *v1alpha1.Run)
 }
 
 // Deploy configmap and run resources in parallel
-func (o *launcherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1.Run, err error) {
+func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Construct new archive
@@ -341,7 +348,7 @@ func (o *launcherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.runName, o.runName, isTTY, root)
+		run, err = o.createRun(ctx, o.runName, o.runName, root)
 		return err
 	})
 
@@ -379,7 +386,7 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 	return nil
 }
 
-func (o *launcherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
+func (o *launcherOptions) createRun(ctx context.Context, name, configMapName string, relPathToRoot string) (*v1alpha1.Run, error) {
 	run := &v1alpha1.Run{}
 	run.SetNamespace(o.namespace)
 	run.SetName(name)
@@ -408,7 +415,7 @@ func (o *launcherOptions) createRun(ctx context.Context, name, configMapName str
 		run.RunStatus = *o.status
 	}
 
-	if isTTY {
+	if o.attach {
 		run.AttachSpec.Handshake = true
 		run.AttachSpec.HandshakeTimeout = o.handshakeTimeout.String()
 	}

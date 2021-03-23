@@ -6,9 +6,9 @@ import (
 	"time"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/k8s"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"

@@ -42,13 +42,13 @@ func TestLauncher(t *testing.T) {
 		// Override run status
 		overrideStatus   func(*v1alpha1.RunStatus)
 		factoryOverrides func(*cmdutil.Factory)
-		assertions       func(*launcherOptions)
+		assertions       func(*testutil.T, *launcherOptions)
 	}{
 		{
-			name: "plan",
+			name: "default",
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default")},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
 			},
@@ -58,7 +58,7 @@ func TestLauncher(t *testing.T) {
 			cmd:  "apply",
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
 			},
@@ -67,7 +67,7 @@ func TestLauncher(t *testing.T) {
 			name: "specific namespace and workspace",
 			env:  &env.Env{Namespace: "foo", Workspace: "bar"},
 			objs: []runtime.Object{testobj.Workspace("foo", "bar", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
 				assert.Equal(t, "bar", o.workspace)
 			},
@@ -77,7 +77,7 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--namespace", "foo"},
 			objs: []runtime.Object{testobj.Workspace("foo", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "foo", o.namespace)
 				assert.Equal(t, "default", o.workspace)
 			},
@@ -87,7 +87,7 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--workspace", "bar"},
 			objs: []runtime.Object{testobj.Workspace("default", "bar", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "bar", o.workspace)
 			},
@@ -97,7 +97,7 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--", "-input", "false"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, []string{"-input", "false"}, o.args)
 			},
 		},
@@ -106,14 +106,14 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--context", "oz-cluster"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "oz-cluster", o.kubeContext)
 			},
 		},
 		{
 			name: "approved",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"), testobj.WithPrivilegedCommands("plan"))},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				// Get run
 				run, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestLauncher(t *testing.T) {
 		{
 			name: "without env file",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Equal(t, "default", o.namespace)
 				assert.Equal(t, "default", o.workspace)
 			},
@@ -145,7 +145,7 @@ func TestLauncher(t *testing.T) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.True(t, kerrors.IsNotFound(err))
 
@@ -163,7 +163,7 @@ func TestLauncher(t *testing.T) {
 					return nil, fakeError
 				}
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
@@ -182,7 +182,7 @@ func TestLauncher(t *testing.T) {
 			},
 			// Expect exit error with exit code 5
 			err: etokerrors.NewExitError(5),
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				_, err := o.RunsClient(o.namespace).Get(context.Background(), o.runName, metav1.GetOptions{})
 				assert.NoError(t, err)
 
@@ -198,7 +198,7 @@ func TestLauncher(t *testing.T) {
 				opts.In, _, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				// With a tty, launcher should attach not stream logs
 				assert.Equal(t, "fake attach", o.Out.(*bytes.Buffer).String())
 
@@ -219,7 +219,7 @@ func TestLauncher(t *testing.T) {
 				_, f.In, err = pty.Open()
 				require.NoError(t, err)
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				// With tty disabled, launcher should stream logs not attach
 				assert.Equal(t, "fake logs", o.Out.(*bytes.Buffer).String())
 
@@ -256,7 +256,6 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "config too big",
-			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			size: 1024*1024 + 1,
 			err:  archive.MaxSizeError(archive.MaxConfigSize),
 		},
@@ -283,7 +282,7 @@ func TestLauncher(t *testing.T) {
 					},
 				}
 			},
-			assertions: func(o *launcherOptions) {
+			assertions: func(t *testutil.T, o *launcherOptions) {
 				assert.Contains(t, o.Out.(*bytes.Buffer).String(), "Error: run failed: mock failure message")
 			},
 			err: handlers.ErrRunFailed,
@@ -346,7 +345,7 @@ func TestLauncher(t *testing.T) {
 			}
 
 			if tt.assertions != nil {
-				tt.assertions(opts)
+				tt.assertions(t, opts)
 			}
 		})
 	}

@@ -2,7 +2,7 @@ package controllers
 
 import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/cmd/launcher"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/util/slice"
 )
 
