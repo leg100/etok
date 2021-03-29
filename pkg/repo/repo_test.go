@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -36,6 +37,17 @@ func TestRepo(t *testing.T) {
 		"https://github.com/leg100/etok.git",
 		"https://github.com/forker/etok.git",
 	}, repo.urls())
+}
+
+// Test opening repo with a path in a *subdir* of a repo
+func TestRepoOpenInSubDir(t *testing.T) {
+	root := testutil.NewTempDir(t).Mkdir("subdir").Root()
+	_, err := git.PlainInit(root, false)
+	require.NoError(t, err)
+
+	repo, err := Open(filepath.Join(root, "subdir"))
+	require.NoError(t, err)
+	assert.NotNil(t, repo)
 }
 
 func TestRepoError(t *testing.T) {
