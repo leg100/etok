@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
@@ -20,6 +21,14 @@ func listCmd(f *cmdutil.Factory) *cobra.Command {
 		Use:   "list",
 		Short: "List all workspaces",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			_, err = openRepo(path)
+			if err != nil {
+				if err == git.ErrRepositoryNotExists {
+					return errRepositoryNotFound
+				}
+				return err
+			}
+
 			client, err := f.Create(kubeContext)
 			if err != nil {
 				return err

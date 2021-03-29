@@ -7,6 +7,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
@@ -33,7 +34,10 @@ func TestNewWorkspace(t *testing.T) {
 		overrideStatus   func(*v1alpha1.WorkspaceStatus)
 		objs             []runtime.Object
 		factoryOverrides func(*cmdutil.Factory)
-		assertions       func(*testutil.T, *newOptions)
+		// Skip creating a mock git repo for the test (to deliberately trigger
+		// an error)
+		skipGitRepo bool
+		assertions  func(*testutil.T, *newOptions)
 	}{
 		{
 			name: "missing workspace name",
@@ -246,6 +250,12 @@ func TestNewWorkspace(t *testing.T) {
 			},
 			err: errReadyTimeout,
 		},
+		{
+			name:        "path not within git repo",
+			args:        []string{"foo"},
+			skipGitRepo: true,
+			err:         errRepositoryNotFound,
+		},
 	}
 
 	for _, tt := range tests {
@@ -264,6 +274,12 @@ func TestNewWorkspace(t *testing.T) {
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
 			opts.path = path
+
+			// Make the path a git repo unless test specifies otherwise
+			if !tt.skipGitRepo {
+				_, err := git.PlainInit(path, false)
+				require.NoError(t, err)
+			}
 
 			// Mock the workspace controller by setting status up front
 			status := v1alpha1.WorkspaceStatus{

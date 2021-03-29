@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -35,10 +36,11 @@ const (
 )
 
 var (
-	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
-	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
-	errReadyTimeout     = errors.New("timed out waiting for workspace to be ready")
-	errWorkspaceNameArg = errors.New("expected single argument providing the workspace name")
+	errPodTimeout         = errors.New("timed out waiting for pod to be ready")
+	errReconcileTimeout   = errors.New("timed out waiting for workspace to be reconciled")
+	errReadyTimeout       = errors.New("timed out waiting for workspace to be ready")
+	errWorkspaceNameArg   = errors.New("expected single argument providing the workspace name")
+	errRepositoryNotFound = errors.New("repository not found: workspace path must be within a git repository")
 )
 
 type newOptions struct {
@@ -93,6 +95,15 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 			}
 
 			o.workspace = args[0]
+
+			// Ensure path is within a git repository
+			_, err = openRepo(o.path)
+			if err != nil {
+				if err == git.ErrRepositoryNotExists {
+					return errRepositoryNotFound
+				}
+				return err
+			}
 
 			o.etokenv, err = env.New(o.namespace, o.workspace)
 			if err != nil {

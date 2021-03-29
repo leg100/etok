@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/testutil"
@@ -37,6 +38,10 @@ func TestWorkspaceSelect(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			path := t.NewTempDir().Chdir().Root()
+
+			// Make the path a git repo
+			_, err := git.PlainInit(path, false)
+			require.NoError(t, err)
 
 			out := new(bytes.Buffer)
 
