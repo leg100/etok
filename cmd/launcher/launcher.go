@@ -1,7 +1,6 @@
 package launcher
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,13 +10,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leg100/etok/pkg/builders"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	watchtools "k8s.io/client-go/tools/watch"
+
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
-	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
@@ -30,11 +37,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
-	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 )
@@ -130,8 +132,18 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 				return err
 			}
 
-			if err := o.lookupEnvFile(cmd); err != nil {
+			// Override namespace and workspace from env file values
+			envFile, err := lookupEnvFile(o.path)
+			if err != nil {
 				return err
+			}
+			if envFile != nil {
+				if !flags.IsFlagPassed(cmd.Flags(), "namespace") {
+					o.namespace = envFile.Namespace
+				}
+				if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
+					o.workspace = envFile.Workspace
+				}
 			}
 
 			err = o.run(cmd.Context())
@@ -166,22 +178,16 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	return cmd
 }
 
-func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
-	etokenv, err := env.Read(o.path)
+func lookupEnvFile(path string) (*env.Env, error) {
+	etokenv, err := env.Read(path)
 	if err != nil {
-		// It's ok for envfile to not exist
-		if !os.IsNotExist(err) {
-			return err
+		if os.IsNotExist(err) {
+			// A missing env file is OK
+			return nil, nil
 		}
-	} else {
-		if !flags.IsFlagPassed(cmd.Flags(), "namespace") {
-			o.namespace = etokenv.Namespace
-		}
-		if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
-			o.workspace = etokenv.Workspace
-		}
+		return nil, err
 	}
-	return nil
+	return etokenv, nil
 }
 
 func (o *launcherOptions) run(ctx context.Context) error {
@@ -311,44 +317,32 @@ func (o *launcherOptions) checkWorkspace(ctx context.Context, run *v1alpha1.Run)
 	return nil
 }
 
-// Deploy configmap and run resources in parallel
+// Deploy ConfigMap and Run resources in parallel
 func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Construct new archive
-	arc, err := archive.NewArchive(o.path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add local module references to archive
-	if err := arc.Walk(); err != nil {
-		return nil, err
-	}
-
-	// Get relative path to root module within archive
-	root, err := arc.RootPath()
-	if err != nil {
-		return nil, err
-	}
-
-	// Compile tarball of local terraform modules, embed in configmap and deploy
+	// Construct ConfigMap containing tarball of local terraform modules, and
+	// deploy
 	g.Go(func() error {
-		w := new(bytes.Buffer)
-		meta, err := arc.Pack(w)
+		configMap, err := archive.ConfigMap(o.namespace, o.runName, o.path)
 		if err != nil {
 			return err
 		}
 
-		klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+		_, err = o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
 
-		// Construct and deploy ConfigMap resource
-		return o.createConfigMap(ctx, w.Bytes(), o.runName, v1alpha1.RunDefaultConfigMapKey)
+		o.createdArchive = true
+		klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
+
+		return nil
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.runName, o.runName, root)
+		run, err = o.createRun(ctx, o.runName)
 		return err
 	})
 
@@ -386,41 +380,22 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 	return nil
 }
 
-func (o *launcherOptions) createRun(ctx context.Context, name, configMapName string, relPathToRoot string) (*v1alpha1.Run, error) {
-	run := &v1alpha1.Run{}
-	run.SetNamespace(o.namespace)
-	run.SetName(name)
+// Construct and deploy command resource
+func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1.Run, error) {
+	bldr := builders.Run(o.namespace, name, o.workspace, o.command, o.args...)
 
-	// Set etok's common labels
-	labels.SetCommonLabels(run)
-	// Permit filtering runs by command
-	labels.SetLabel(run, labels.Command(o.command))
-	// Permit filtering runs by workspace
-	labels.SetLabel(run, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(run, labels.RunComponent)
-
-	run.Workspace = o.workspace
-
-	run.Command = o.command
-	run.Args = o.args
-	run.ConfigMap = configMapName
-	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
-	run.ConfigMapPath = relPathToRoot
-
-	run.Verbosity = o.Verbosity
+	bldr.SetVerbosity(o.Verbosity)
 
 	if o.status != nil {
 		// For testing purposes seed status
-		run.RunStatus = *o.status
+		bldr.SetStatus(*o.status)
 	}
 
 	if o.attach {
-		run.AttachSpec.Handshake = true
-		run.AttachSpec.HandshakeTimeout = o.handshakeTimeout.String()
+		bldr.Attach()
 	}
 
-	run, err := o.RunsClient(o.namespace).Create(ctx, run, metav1.CreateOptions{})
+	run, err := o.RunsClient(o.namespace).Create(ctx, bldr.Build(), metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}

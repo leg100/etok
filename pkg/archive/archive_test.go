@@ -75,7 +75,7 @@ func TestArchive(t *testing.T) {
 }
 
 func TestMaxSize(t *testing.T) {
-	tmpdir := testutil.NewTempDir(t).Chdir().WriteRandomFile("toobig", MaxConfigSize+1)
+	tmpdir := testutil.NewTempDir(t).Chdir().Mkdir(".git").WriteRandomFile("toobig", MaxConfigSize+1)
 
 	arc, err := NewArchive(tmpdir.Root(), MaxSize(MaxConfigSize))
 	require.NoError(t, err)

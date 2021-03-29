@@ -56,11 +56,10 @@ type RunSpec struct {
 	// ConfigMap containing the tarball to extract on the pod
 	ConfigMap string `json:"configMap"`
 
+	// +kubebuilder:default="config.tar.gz"
+
 	// The config map key identifying the tarball to extract
 	ConfigMapKey string `json:"configMapKey"`
-
-	// The path within the archive to the root module
-	ConfigMapPath string `json:"configMapPath"`
 
 	// The workspace of the run.
 	Workspace string `json:"workspace"`

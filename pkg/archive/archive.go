@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -9,16 +10,24 @@ import (
 	"path/filepath"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/util/path"
 	"k8s.io/klog/v2"
 )
 
+// Archive represents the bundle of terraform configuration to be uploaded.
 type archive struct {
 	// Absolute path to root module on client
 	root string
 	// Absolute paths to local modules on client, including root module
 	mods []string
-	// Common prefix shared by all modules
+	// Base is the path of the root of the git repository containing the root
+	// module
 	base string
 	// Maximum permitted size of compressed archive
 	maxSize int64
@@ -29,10 +38,22 @@ func NewArchive(root string, opts ...func(*archive)) (*archive, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Find root of git repo containing current root module
+	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return nil, err
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return nil, err
+	}
+
 	arc := &archive{
 		root:    root,
 		mods:    []string{root},
-		base:    root,
+		base:    wt.Filesystem.Root(),
 		maxSize: MaxConfigSize,
 	}
 
@@ -58,13 +79,6 @@ func (a *archive) Walk() error {
 	}
 	// Add modules to archive's modules
 	a.mods = append(a.mods, mods...)
-
-	// Now that we've walked all modules their common prefix can be determined
-	a.base, err = path.CommonPrefix(a.mods)
-	if err != nil {
-		return err
-	}
-	klog.V(2).Infof("base directory determined for archive: %s", a.base)
 
 	return nil
 }
@@ -362,6 +376,46 @@ func Unpack(r io.Reader, dst string) error {
 		}
 	}
 	return nil
+}
+
+// Construct a config map resource containing an archive. The archive is built
+// from the configuration found in path.
+func ConfigMap(namespace, name, path string) (*corev1.ConfigMap, error) {
+	// Construct new archive
+	arc, err := NewArchive(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add local module references to archive
+	if err := arc.Walk(); err != nil {
+		return nil, err
+	}
+
+	w := new(bytes.Buffer)
+	meta, err := arc.Pack(w)
+	if err != nil {
+		return nil, err
+	}
+
+	klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+
+	configMap := corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		BinaryData: map[string][]byte{
+			v1alpha1.RunDefaultConfigMapKey: w.Bytes(),
+		},
+	}
+
+	// Set etok's common labels
+	labels.SetCommonLabels(&configMap)
+	// Permit filtering etok resources by component
+	labels.SetLabel(&configMap, labels.RunComponent)
+
+	return &configMap, nil
 }
 
 // checkFileMode is used to examine an os.FileMode and determine if it should

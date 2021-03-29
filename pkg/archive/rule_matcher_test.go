@@ -18,7 +18,7 @@ func TestRuleMatcher(t *testing.T) {
 	})
 
 	testutil.Run(t, "with terraformignore", func(t *testutil.T) {
-		matcher := newRuleMatcher("testdata/config-dir/m0")
+		matcher := newRuleMatcher("testdata/config-dir/")
 		if !assert.Equal(t, 11, len(matcher.rules)) {
 			t.Fatal("Expected to find rules from .terraformignore file")
 		}

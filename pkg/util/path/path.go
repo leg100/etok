@@ -8,57 +8,6 @@ import (
 
 // Utility functions for working with filesystem paths
 
-// Find a common prefix amongst paths
-func CommonPrefix(paths []string) (string, error) {
-	switch len(paths) {
-	case 0:
-		return "", nil
-	case 1:
-		return paths[0], nil
-	}
-
-	// Clean up first path and ensure it is absolute
-	c, err := EnsureAbs(filepath.Clean(paths[0]))
-	if err != nil {
-		return "", err
-	}
-
-	// Add trailing sep to path
-	c += string(os.PathSeparator)
-
-	for _, v := range paths[1:] {
-		// Clean up path and ensure it is absolute
-		var err error
-		v, err = EnsureAbs(filepath.Clean(v))
-		if err != nil {
-			return "", err
-		}
-		// Add trailing sep to path
-		v += string(os.PathSeparator)
-
-		// Find first non-common byte and truncate c
-		if len(v) < len(c) {
-			c = c[:len(v)]
-		}
-		for i := 0; i < len(c); i++ {
-			if v[i] != c[i] {
-				c = c[:i]
-				break
-			}
-		}
-	}
-
-	// Remove trailing non-separator characters and the separator
-	for i := len(c) - 1; i >= 0; i-- {
-		if c[i] == os.PathSeparator {
-			c = c[:i]
-			break
-		}
-	}
-
-	return c, nil
-}
-
 // EnsureAllAbs ensures all paths are absolute paths
 func EnsureAllAbs(paths []string) (updated []string, err error) {
 	for _, p := range paths {

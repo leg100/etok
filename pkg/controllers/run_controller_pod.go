@@ -105,7 +105,7 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 						{
 							Name: "cache",
 							// <WorkingDir>/.terraform
-							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, ".terraform"),
+							MountPath: filepath.Join(workspaceDir, ws.Spec.VCS.WorkingDir, ".terraform"),
 							SubPath:   dotTerraformSubPath,
 						},
 						{
@@ -116,17 +116,17 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 						{
 							Name: "builtins",
 							// <WorkingDir>/_etok_variables.tf
-							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, variablesPath),
+							MountPath: filepath.Join(workspaceDir, ws.Spec.VCS.WorkingDir, variablesPath),
 							SubPath:   variablesPath,
 						},
 						{
 							Name: "builtins",
 							// <WorkingDir>/_etok_backend.tf
-							MountPath: filepath.Join(workspaceDir, run.ConfigMapPath, backendPath),
+							MountPath: filepath.Join(workspaceDir, ws.Spec.VCS.WorkingDir, backendPath),
 							SubPath:   backendPath,
 						},
 					},
-					WorkingDir: filepath.Join(workspaceDir, run.ConfigMapPath),
+					WorkingDir: filepath.Join(workspaceDir, ws.Spec.VCS.WorkingDir),
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyNever,

@@ -292,7 +292,9 @@ func TestLauncher(t *testing.T) {
 	// Run tests for each command
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
+			// Etok requires git repo. Some tests want a specifically sized file
+			// too.
+			path := t.NewTempDir().Mkdir(".git").Chdir().WriteRandomFile("test.bin", tt.size).Root()
 
 			// Write .terraform/environment
 			if tt.env != nil {

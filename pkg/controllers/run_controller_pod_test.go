@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -20,8 +21,8 @@ func TestRunPod(t *testing.T) {
 	}{
 		{
 			name:      "Non-default working dir",
-			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
-			workspace: testobj.Workspace("default", "foo"),
+			run:       builders.Run("default", "run-12345", "foo", "plan").Build(),
+			workspace: testobj.Workspace("default", "foo", testobj.WithWorkingDir("subdir")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Equal(t, "/workspace/subdir", pod.Spec.Containers[0].WorkingDir)
 			},
@@ -63,8 +64,8 @@ func TestRunPod(t *testing.T) {
 		},
 		{
 			name:      ".terraform volume mount",
-			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
-			workspace: testobj.Workspace("default", "foo"),
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("default", "foo", testobj.WithWorkingDir("subdir")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 					Name:      "cache",
@@ -75,8 +76,8 @@ func TestRunPod(t *testing.T) {
 		},
 		{
 			name:      "builtin variables volume mount",
-			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
-			workspace: testobj.Workspace("default", "foo"),
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("default", "foo", testobj.WithWorkingDir("subdir")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 					Name:      "builtins",
@@ -87,8 +88,8 @@ func TestRunPod(t *testing.T) {
 		},
 		{
 			name:      "builtin backend config volume mount",
-			run:       testobj.Run("default", "run-12345", "plan", testobj.WithConfigMapPath("subdir")),
-			workspace: testobj.Workspace("default", "foo"),
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("default", "foo", testobj.WithWorkingDir("subdir")),
 			assertions: func(pod *corev1.Pod) {
 				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 					Name:      "builtins",
