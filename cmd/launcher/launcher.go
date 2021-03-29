@@ -15,6 +15,7 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
@@ -341,7 +342,7 @@ func (o *launcherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.runName, o.runName, isTTY, root)
+		run, err = o.createRun(ctx, o.runName, isTTY, root)
 		return err
 	})
 
@@ -379,41 +380,22 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 	return nil
 }
 
-func (o *launcherOptions) createRun(ctx context.Context, name, configMapName string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
-	run := &v1alpha1.Run{}
-	run.SetNamespace(o.namespace)
-	run.SetName(name)
+// Construct and deploy command resource
+func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
+	bldr := builders.Run(o.namespace, name, o.workspace, o.command, relPathToRoot, o.args...)
 
-	// Set etok's common labels
-	labels.SetCommonLabels(run)
-	// Permit filtering runs by command
-	labels.SetLabel(run, labels.Command(o.command))
-	// Permit filtering runs by workspace
-	labels.SetLabel(run, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(run, labels.RunComponent)
-
-	run.Workspace = o.workspace
-
-	run.Command = o.command
-	run.Args = o.args
-	run.ConfigMap = configMapName
-	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
-	run.ConfigMapPath = relPathToRoot
-
-	run.Verbosity = o.Verbosity
+	bldr.SetVerbosity(o.Verbosity)
 
 	if o.status != nil {
 		// For testing purposes seed status
-		run.RunStatus = *o.status
+		bldr.SetStatus(*o.status)
 	}
 
 	if isTTY {
-		run.AttachSpec.Handshake = true
-		run.AttachSpec.HandshakeTimeout = o.handshakeTimeout.String()
+		bldr.Attach()
 	}
 
-	run, err := o.RunsClient(o.namespace).Create(ctx, run, metav1.CreateOptions{})
+	run, err := o.RunsClient(o.namespace).Create(ctx, bldr.Build(), metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
