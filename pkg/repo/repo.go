@@ -1,9 +1,14 @@
-package workspace
+package repo
 
 import (
+	"errors"
 	"regexp"
 
 	"github.com/go-git/go-git/v5"
+)
+
+var (
+	ErrRepositoryNotFound = errors.New("repository not found: path must be within a git repository")
 )
 
 // Repo represents the user's git repository (etok requires that CLI commands
@@ -14,9 +19,12 @@ type repo struct {
 
 // Construct repo obj from a path that exists within a git repo. If path does
 // not exist within a git repo, then an error is returned.
-func openRepo(path string) (*repo, error) {
+func Open(path string) (*repo, error) {
 	gitRepo, err := git.PlainOpenWithOptions(path, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
+		if err == git.ErrRepositoryNotExists {
+			return nil, ErrRepositoryNotFound
+		}
 		return nil, err
 	}
 

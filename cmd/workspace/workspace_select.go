@@ -3,10 +3,10 @@ package workspace
 import (
 	"fmt"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +20,8 @@ func selectCmd(f *cmdutil.Factory) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Ensure path is within a git repository
-			_, err := openRepo(path)
+			_, err := repo.Open(path)
 			if err != nil {
-				if err == git.ErrRepositoryNotExists {
-					return errRepositoryNotFound
-				}
 				return err
 			}
 

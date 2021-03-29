@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -16,6 +15,7 @@ import (
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -97,11 +97,8 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 			o.workspace = args[0]
 
 			// Ensure path is within a git repository
-			_, err = openRepo(o.path)
+			_, err = repo.Open(o.path)
 			if err != nil {
-				if err == git.ErrRepositoryNotExists {
-					return errRepositoryNotFound
-				}
 				return err
 			}
 

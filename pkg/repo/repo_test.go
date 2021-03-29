@@ -1,4 +1,4 @@
-package workspace
+package repo
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ func TestRepo(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	repo, err := openRepo(tmp.Root())
+	repo, err := Open(tmp.Root())
 	require.NoError(t, err)
 	assert.NotNil(t, repo)
 
@@ -36,6 +36,11 @@ func TestRepo(t *testing.T) {
 		"https://github.com/leg100/etok.git",
 		"https://github.com/forker/etok.git",
 	}, repo.urls())
+}
+
+func TestRepoError(t *testing.T) {
+	_, err := Open(testutil.NewTempDir(t).Root())
+	assert.Equal(t, ErrRepositoryNotFound, err)
 }
 
 func TestNormalizeUrl(t *testing.T) {

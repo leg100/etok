@@ -11,6 +11,7 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
+	"github.com/leg100/etok/pkg/repo"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
@@ -254,7 +255,7 @@ func TestNewWorkspace(t *testing.T) {
 			name:        "path not within git repo",
 			args:        []string{"foo"},
 			skipGitRepo: true,
-			err:         errRepositoryNotFound,
+			err:         repo.ErrRepositoryNotFound,
 		},
 	}
 

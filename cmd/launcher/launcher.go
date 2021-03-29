@@ -25,6 +25,7 @@ import (
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/leg100/etok/pkg/util"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -115,6 +116,12 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 			// Tests override run name
 			if o.runName == "" {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			}
+
+			// Ensure path is within a git repository
+			_, err = repo.Open(o.path)
+			if err != nil {
+				return err
 			}
 
 			o.Client, err = f.Create(o.kubeContext)
