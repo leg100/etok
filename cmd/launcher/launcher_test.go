@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/creack/pty"
+	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
@@ -292,9 +293,11 @@ func TestLauncher(t *testing.T) {
 	// Run tests for each command
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Etok requires git repo. Some tests want a specifically sized file
-			// too.
-			path := t.NewTempDir().Mkdir(".git").Chdir().WriteRandomFile("test.bin", tt.size).Root()
+			path := t.NewTempDir().Chdir().WriteRandomFile("test.bin", tt.size).Root()
+
+			// Make the path a git repo unless test specifies otherwise
+			_, err := git.PlainInit(path, false)
+			require.NoError(t, err)
 
 			// Write .terraform/environment
 			if tt.env != nil {
@@ -341,7 +344,7 @@ func TestLauncher(t *testing.T) {
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
 
-			err := cmd.ExecuteContext(context.Background())
+			err = cmd.ExecuteContext(context.Background())
 			if !assert.True(t, errors.Is(err, tt.err)) {
 				t.Errorf("unexpected error: %w", err)
 			}
