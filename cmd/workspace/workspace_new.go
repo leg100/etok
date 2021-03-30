@@ -15,6 +15,7 @@ import (
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -35,10 +36,11 @@ const (
 )
 
 var (
-	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
-	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
-	errReadyTimeout     = errors.New("timed out waiting for workspace to be ready")
-	errWorkspaceNameArg = errors.New("expected single argument providing the workspace name")
+	errPodTimeout         = errors.New("timed out waiting for pod to be ready")
+	errReconcileTimeout   = errors.New("timed out waiting for workspace to be reconciled")
+	errReadyTimeout       = errors.New("timed out waiting for workspace to be ready")
+	errWorkspaceNameArg   = errors.New("expected single argument providing the workspace name")
+	errRepositoryNotFound = errors.New("repository not found: workspace path must be within a git repository")
 )
 
 type newOptions struct {
@@ -93,6 +95,12 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 			}
 
 			o.workspace = args[0]
+
+			// Ensure path is within a git repository
+			_, err = repo.Open(o.path)
+			if err != nil {
+				return err
+			}
 
 			o.etokenv, err = env.New(o.namespace, o.workspace)
 			if err != nil {

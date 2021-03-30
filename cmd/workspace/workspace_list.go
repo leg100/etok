@@ -7,6 +7,7 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,6 +21,12 @@ func listCmd(f *cmdutil.Factory) *cobra.Command {
 		Use:   "list",
 		Short: "List all workspaces",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			// Ensure path is within a git repository
+			_, err = repo.Open(path)
+			if err != nil {
+				return err
+			}
+
 			client, err := f.Create(kubeContext)
 			if err != nil {
 				return err
