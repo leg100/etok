@@ -126,16 +126,14 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
 
-<<<<<<< HEAD
 			// Toggle whether to attach to pod's TTY
 			o.attach = !o.disableTTY && term.IsTerminal(o.In)
-=======
+
 			// Ensure path is within a git repository
 			_, err = repo.Open(o.path)
 			if err != nil {
 				return err
 			}
->>>>>>> master
 
 			o.Client, err = f.Create(o.kubeContext)
 			if err != nil {
@@ -352,11 +350,7 @@ func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err er
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-<<<<<<< HEAD
 		run, err = o.createRun(ctx, o.runName)
-=======
-		run, err = o.createRun(ctx, o.runName, isTTY, root)
->>>>>>> master
 		return err
 	})
 
@@ -395,13 +389,8 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 }
 
 // Construct and deploy command resource
-<<<<<<< HEAD
 func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1.Run, error) {
 	bldr := builders.Run(o.namespace, name, o.workspace, o.command, o.args...)
-=======
-func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
-	bldr := builders.Run(o.namespace, name, o.workspace, o.command, relPathToRoot, o.args...)
->>>>>>> master
 
 	bldr.SetVerbosity(o.Verbosity)
 
@@ -410,11 +399,7 @@ func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool
 		bldr.SetStatus(*o.status)
 	}
 
-<<<<<<< HEAD
 	if o.attach {
-=======
-	if isTTY {
->>>>>>> master
 		bldr.Attach()
 	}
 
