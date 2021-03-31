@@ -23,6 +23,7 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/globals"
@@ -32,6 +33,7 @@ import (
 	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/leg100/etok/pkg/util"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -124,8 +126,16 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
 
+<<<<<<< HEAD
 			// Toggle whether to attach to pod's TTY
 			o.attach = !o.disableTTY && term.IsTerminal(o.In)
+=======
+			// Ensure path is within a git repository
+			_, err = repo.Open(o.path)
+			if err != nil {
+				return err
+			}
+>>>>>>> master
 
 			o.Client, err = f.Create(o.kubeContext)
 			if err != nil {
@@ -342,7 +352,11 @@ func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err er
 
 	// Construct and deploy command resource
 	g.Go(func() error {
+<<<<<<< HEAD
 		run, err = o.createRun(ctx, o.runName)
+=======
+		run, err = o.createRun(ctx, o.runName, isTTY, root)
+>>>>>>> master
 		return err
 	})
 
@@ -381,8 +395,13 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 }
 
 // Construct and deploy command resource
+<<<<<<< HEAD
 func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1.Run, error) {
 	bldr := builders.Run(o.namespace, name, o.workspace, o.command, o.args...)
+=======
+func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
+	bldr := builders.Run(o.namespace, name, o.workspace, o.command, relPathToRoot, o.args...)
+>>>>>>> master
 
 	bldr.SetVerbosity(o.Verbosity)
 
@@ -391,7 +410,11 @@ func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1
 		bldr.SetStatus(*o.status)
 	}
 
+<<<<<<< HEAD
 	if o.attach {
+=======
+	if isTTY {
+>>>>>>> master
 		bldr.Attach()
 	}
 
