@@ -23,6 +23,7 @@ import (
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
+	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
 	"github.com/leg100/etok/pkg/repo"
@@ -192,7 +193,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return err
 	}
 
-	if IsQueueable(o.command) {
+	if launcher.IsQueueable(o.command) {
 		// Watch and log queue updates
 		o.watchQueue(ctx, run)
 	}
@@ -246,7 +247,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		}
 	}
 
-	if UpdatesLockFile(o.command) {
+	if launcher.UpdatesLockFile(o.command) {
 		// Some commands (e.g. terraform init) update the lock file,
 		// .terraform.lock.hcl, and it's recommended that this be committed to
 		// version control. So the runner copies it to a config map, and it is
