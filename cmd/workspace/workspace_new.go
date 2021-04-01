@@ -15,6 +15,7 @@ import (
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/monitors"
+	"github.com/leg100/etok/pkg/repo"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -35,10 +36,11 @@ const (
 )
 
 var (
-	errPodTimeout       = errors.New("timed out waiting for pod to be ready")
-	errReconcileTimeout = errors.New("timed out waiting for workspace to be reconciled")
-	errReadyTimeout     = errors.New("timed out waiting for workspace to be ready")
-	errWorkspaceNameArg = errors.New("expected single argument providing the workspace name")
+	errPodTimeout         = errors.New("timed out waiting for pod to be ready")
+	errReconcileTimeout   = errors.New("timed out waiting for workspace to be reconciled")
+	errReadyTimeout       = errors.New("timed out waiting for workspace to be ready")
+	errWorkspaceNameArg   = errors.New("expected single argument providing the workspace name")
+	errRepositoryNotFound = errors.New("repository not found: workspace path must be within a git repository")
 )
 
 type newOptions struct {
@@ -77,6 +79,9 @@ type newOptions struct {
 	environmentVariables map[string]string
 
 	etokenv *env.Env
+
+	// Git repo from which run is being launched
+	repo *repo.Repo
 }
 
 func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
@@ -93,6 +98,12 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 			}
 
 			o.workspace = args[0]
+
+			// Ensure path is within a git repository
+			o.repo, err = repo.Open(o.path)
+			if err != nil {
+				return err
+			}
 
 			o.etokenv, err = env.New(o.namespace, o.workspace)
 			if err != nil {
@@ -224,6 +235,15 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 
 	ws.Spec.Verbosity = o.Verbosity
 
+	// Get relative path of root module relative to git repo
+	workingDir, err := o.repo.RootModuleRelativePath()
+	if err != nil {
+		return nil, err
+	}
+
+	ws.Spec.VCS.WorkingDir = workingDir
+	ws.Spec.VCS.Repository = o.repo.Url()
+
 	if o.status != nil {
 		// For testing purposes seed workspace status
 		ws.Status = *o.status
@@ -237,7 +257,7 @@ func (o *newOptions) createWorkspace(ctx context.Context) (*v1alpha1.Workspace, 
 		ws.Spec.Variables = append(ws.Spec.Variables, &v1alpha1.Variable{Key: k, Value: v, EnvironmentVariable: true})
 	}
 
-	ws, err := o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
+	ws, err = o.WorkspacesClient(o.namespace).Create(ctx, ws, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}

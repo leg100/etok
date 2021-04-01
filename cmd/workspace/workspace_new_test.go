@@ -7,9 +7,12 @@ import (
 	"io"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
+	"github.com/leg100/etok/pkg/repo"
 
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
@@ -33,7 +36,10 @@ func TestNewWorkspace(t *testing.T) {
 		overrideStatus   func(*v1alpha1.WorkspaceStatus)
 		objs             []runtime.Object
 		factoryOverrides func(*cmdutil.Factory)
-		assertions       func(*testutil.T, *newOptions)
+		// Skip creating a mock git repo for the test (to deliberately trigger
+		// an error)
+		skipGitRepo bool
+		assertions  func(*testutil.T, *newOptions)
 	}{
 		{
 			name: "missing workspace name",
@@ -246,6 +252,25 @@ func TestNewWorkspace(t *testing.T) {
 			},
 			err: errReadyTimeout,
 		},
+		{
+			name:        "path not within git repo",
+			args:        []string{"foo"},
+			skipGitRepo: true,
+			err:         repo.ErrRepositoryNotFound,
+		},
+		{
+			name: "workspace vcs settings",
+			args: []string{"foo"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(t *testutil.T, o *newOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, ".", ws.Spec.VCS.WorkingDir)
+				assert.Equal(t, "https://github.com/leg100/etok.git", ws.Spec.VCS.Repository)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -264,6 +289,19 @@ func TestNewWorkspace(t *testing.T) {
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
 			opts.path = path
+
+			// Make the path a git repo unless test specifies otherwise
+			if !tt.skipGitRepo {
+				repo, err := git.PlainInit(path, false)
+				require.NoError(t, err)
+
+				// Set a remote so that we can check that the code successfully
+				// sets the remote URL in the workspace spec
+				_, err = repo.CreateRemote(&config.RemoteConfig{
+					Name: "origin",
+					URLs: []string{"git@github.com:leg100/etok.git"},
+				})
+			}
 
 			// Mock the workspace controller by setting status up front
 			status := v1alpha1.WorkspaceStatus{
