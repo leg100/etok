@@ -80,14 +80,14 @@ type WorkspaceSpec struct {
 
 // Details of the VCS repository we want to connect to the workspace
 type VCS struct {
-	// +kubebuilder:validation:Pattern=`^[0-9a-zA-Z_\-]+/[0-9a-zA-Z_\-]+$`
-
-	// VCS Repository to connect to workspace, in the format 'owner/repo'
+	// VCS Repository to connect to workspace.
 	Repository string `json:"repository,omitempty"`
 
 	// VCS Repository branch to connect to workspace. Leave blank to use the VCS
 	// provider's default branch.
 	Branch string `json:"branch,omitempty"`
+
+	// +kubebuilder:default="."
 
 	// Sub-directory within VCS repository to connect to the workspace
 	WorkingDir string `json:"workingDir,omitempty"`
