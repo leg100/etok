@@ -1,24 +1,23 @@
 package path
 
 import (
+	"path/filepath"
 	"testing"
 
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCommonPrefix(t *testing.T) {
-	paths := []string{
-		"/home/user1/tmp/coverage/test",
-		"/home/user1/tmp/covert/operator",
-		"/home/user1/tmp/coven/members",
-		"/home//user1/tmp/coventry",
-		"/home/user1/././tmp/covertly/foo",
-		"/home/bob/../user1/tmp/coved/bar",
-	}
+func TestCopy(t *testing.T) {
+	dst := testutil.NewTempDir(t).Root()
+	require.NoError(t, Copy("fixtures/src", dst))
 
-	prefix, err := CommonPrefix(paths)
-	require.NoError(t, err)
+	assert.DirExists(t, filepath.Join(dst, "a"))
+	assert.DirExists(t, filepath.Join(dst, "b"))
+	assert.DirExists(t, filepath.Join(dst, "c"))
 
-	assert.Equal(t, "/home/user1/tmp", prefix)
+	assert.FileExists(t, filepath.Join(dst, "a", "file"))
+	assert.FileExists(t, filepath.Join(dst, "b", "file"))
+	assert.FileExists(t, filepath.Join(dst, "c", "file"))
 }
