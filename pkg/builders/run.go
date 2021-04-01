@@ -28,11 +28,12 @@ type RunBuilder struct {
 
 func Run(namespace, name, workspace, command string, args ...string) *RunBuilder {
 	return &RunBuilder{
-		name:      name,
-		namespace: namespace,
-		workspace: workspace,
-		command:   command,
-		args:      args,
+		name:             name,
+		namespace:        namespace,
+		workspace:        workspace,
+		command:          command,
+		args:             args,
+		handshakeTimeout: v1alpha1.DefaultHandshakeTimeout,
 	}
 }
 
