@@ -22,7 +22,14 @@ func listCmd(f *cmdutil.Factory) *cobra.Command {
 		Short: "List all workspaces",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			// Ensure path is within a git repository
-			_, err = repo.Open(path)
+			repo, err := repo.Open(path)
+			if err != nil {
+				return err
+			}
+
+			// Get relative path of root module relative to git repo, so we can
+			// compare it to the workspace working dir
+			workingDir, err := repo.RootModuleRelativePath()
 			if err != nil {
 				return err
 			}
@@ -51,6 +58,16 @@ func listCmd(f *cmdutil.Factory) *cobra.Command {
 
 			var prefix string
 			for _, ws := range workspaces.Items {
+				// Eliminate workspaces belonging to (a) other repos, and (b)
+				// different working directories
+				if ws.Spec.VCS.Repository != repo.Url() {
+					continue
+				}
+
+				if ws.Spec.VCS.WorkingDir != workingDir {
+					continue
+				}
+
 				if ws.Namespace == namespace && ws.Name == workspace {
 					prefix = "*"
 				} else {

@@ -1,6 +1,7 @@
 package path
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,4 +85,23 @@ func updateUnnested(c string, paths []string) (updated []string) {
 	// Candidate was not found to be nested within paths,
 	// so add it to updated list of unnested paths.
 	return append(updated, c)
+}
+
+// Copy directory recursively
+func Copy(src, dst string) error {
+	src = filepath.Clean(src)
+
+	// Always ensure dest dir is created
+	os.MkdirAll(dst, 0755)
+
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		path = strings.Replace(path, src, "", 1)
+
+		if info.IsDir() {
+			return os.MkdirAll(filepath.Join(dst, path), 0755)
+		}
+
+		data, _ := ioutil.ReadFile(filepath.Join(src, path))
+		return ioutil.WriteFile(filepath.Join(dst, path), data, 0644)
+	})
 }

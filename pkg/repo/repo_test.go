@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRepo(t *testing.T) {
-	tmp := testutil.NewTempDir(t)
-	gitRepo, err := git.PlainInit(tmp.Root(), false)
+func TestRepoUrls(t *testing.T) {
+	path := testutil.NewTempDir(t).Root()
+	gitRepo, err := git.PlainInit(path, false)
 	require.NoError(t, err)
 
 	_, err = gitRepo.CreateRemote(&config.RemoteConfig{
@@ -26,17 +26,15 @@ func TestRepo(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	repo, err := Open(tmp.Root())
+	repo, err := Open(path)
 	require.NoError(t, err)
 	assert.NotNil(t, repo)
 
 	// Assert that url for remote named origin is returned
-	assert.Equal(t, "https://github.com/leg100/etok.git", repo.url())
+	assert.Equal(t, "https://github.com/leg100/etok.git", repo.Url())
 
-	assert.Equal(t, []string{
-		"https://github.com/leg100/etok.git",
-		"https://github.com/forker/etok.git",
-	}, repo.urls())
+	assert.Contains(t, repo.Urls(), "https://github.com/leg100/etok.git")
+	assert.Contains(t, repo.Urls(), "https://github.com/forker/etok.git")
 }
 
 // Test opening repo with a path in a *subdir* of a repo

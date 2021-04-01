@@ -49,6 +49,12 @@ func WithWorkingDir(path string) func(*v1alpha1.Workspace) {
 	}
 }
 
+func WithRepository(url string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.Repository = url
+	}
+}
+
 func WithPrivilegedCommands(cmds ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.PrivilegedCommands = cmds

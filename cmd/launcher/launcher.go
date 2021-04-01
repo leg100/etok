@@ -23,13 +23,11 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
-	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
@@ -38,7 +36,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 )
@@ -109,6 +106,9 @@ type launcherOptions struct {
 	// attach toggles whether pod will be attached to (true), or streamed from
 	// (false)
 	attach bool
+
+	// Git repo from which run is being launched
+	repo *repo.Repo
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -130,7 +130,7 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 			o.attach = !o.disableTTY && term.IsTerminal(o.In)
 
 			// Ensure path is within a git repository
-			_, err = repo.Open(o.path)
+			o.repo, err = repo.Open(o.path)
 			if err != nil {
 				return err
 			}
@@ -332,7 +332,7 @@ func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err er
 	// Construct ConfigMap containing tarball of local terraform modules, and
 	// deploy
 	g.Go(func() error {
-		configMap, err := archive.ConfigMap(o.namespace, o.runName, o.path)
+		configMap, err := archive.ConfigMap(o.namespace, o.runName, o.path, o.repo.Root())
 		if err != nil {
 			return err
 		}
@@ -412,37 +412,6 @@ func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1
 	klog.V(1).Infof("created run %s\n", klog.KObj(run))
 
 	return run, nil
-}
-
-func (o *launcherOptions) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: o.namespace,
-		},
-		BinaryData: map[string][]byte{
-			keyName: tarball,
-		},
-	}
-
-	// Set etok's common labels
-	labels.SetCommonLabels(configMap)
-	// Permit filtering archives by command
-	labels.SetLabel(configMap, labels.Command(o.command))
-	// Permit filtering archives by workspace
-	labels.SetLabel(configMap, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(configMap, labels.RunComponent)
-
-	_, err := o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-
-	o.createdArchive = true
-	klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
-
-	return nil
 }
 
 // waitForReconcile waits for the run resource to be reconciled.

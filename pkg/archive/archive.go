@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/util/path"
@@ -33,19 +32,15 @@ type archive struct {
 	maxSize int64
 }
 
-func NewArchive(root string, opts ...func(*archive)) (*archive, error) {
+// Create a new archive, with the root module 'root', based on the root of the
+// git repo, 'base'.
+func NewArchive(root, base string, opts ...func(*archive)) (*archive, error) {
 	root, err := path.EnsureAbs(root)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find root of git repo containing current root module
-	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{DetectDotGit: true})
-	if err != nil {
-		return nil, err
-	}
-
-	wt, err := repo.Worktree()
+	base, err = path.EnsureAbs(base)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +48,7 @@ func NewArchive(root string, opts ...func(*archive)) (*archive, error) {
 	arc := &archive{
 		root:    root,
 		mods:    []string{root},
-		base:    wt.Filesystem.Root(),
+		base:    base,
 		maxSize: MaxConfigSize,
 	}
 
@@ -81,16 +76,6 @@ func (a *archive) Walk() error {
 	a.mods = append(a.mods, mods...)
 
 	return nil
-}
-
-func (a *archive) RootPath() (string, error) {
-	// Get relative path to root module from the base directory
-	rootPath, err := filepath.Rel(a.base, a.root)
-	if err != nil {
-		return "", err
-	}
-
-	return rootPath, nil
 }
 
 // Archive creates a compressed tarball containing not only the root module but
@@ -379,10 +364,10 @@ func Unpack(r io.Reader, dst string) error {
 }
 
 // Construct a config map resource containing an archive. The archive is built
-// from the configuration found in path.
-func ConfigMap(namespace, name, path string) (*corev1.ConfigMap, error) {
+// from the root module at path, within the git repo base.
+func ConfigMap(namespace, name, path, base string) (*corev1.ConfigMap, error) {
 	// Construct new archive
-	arc, err := NewArchive(path)
+	arc, err := NewArchive(path, base)
 	if err != nil {
 		return nil, err
 	}

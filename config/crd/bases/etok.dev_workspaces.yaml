@@ -186,6 +186,24 @@ spec:
                   - value
                   type: object
                 type: array
+              vcs:
+                description: Details of the VCS repository we want to connect to the
+                  workspace
+                properties:
+                  branch:
+                    description: VCS Repository branch to connect to workspace. Leave
+                      blank to use the VCS provider's default branch.
+                    type: string
+                  repository:
+                    description: VCS Repository to connect to workspace, in the format
+                      'owner/repo'
+                    pattern: ^[0-9a-zA-Z_\-]+/[0-9a-zA-Z_\-]+$
+                    type: string
+                  workingDir:
+                    description: Sub-directory within VCS repository to connect to
+                      the workspace
+                    type: string
+                type: object
               verbosity:
                 description: Logging verbosity.
                 minimum: 0
