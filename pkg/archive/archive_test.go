@@ -19,7 +19,7 @@ import (
 
 func TestArchive(t *testing.T) {
 	// Create archive with path to the root module (m0)
-	arc, err := NewArchive("testdata/config-dir/m0")
+	arc, err := NewArchive("testdata/config-dir/m0", "testdata/config-dir")
 	require.NoError(t, err)
 
 	// Add module references to archive
@@ -75,9 +75,9 @@ func TestArchive(t *testing.T) {
 }
 
 func TestMaxSize(t *testing.T) {
-	tmpdir := testutil.NewTempDir(t).Chdir().WriteRandomFile("toobig", MaxConfigSize+1)
+	path := testutil.NewTempDir(t).Chdir().WriteRandomFile("toobig", MaxConfigSize+1).Root()
 
-	arc, err := NewArchive(tmpdir.Root(), MaxSize(MaxConfigSize))
+	arc, err := NewArchive(path, path, MaxSize(MaxConfigSize))
 	require.NoError(t, err)
 
 	_, err = arc.Pack(new(bytes.Buffer))
@@ -87,7 +87,7 @@ func TestMaxSize(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	arc, err := NewArchive("testdata/config-dir/m0")
+	arc, err := NewArchive("testdata/config-dir/m0", "testdata/config-dir")
 	require.NoError(t, err)
 
 	require.NoError(t, arc.Walk())
@@ -110,7 +110,7 @@ func TestWalk(t *testing.T) {
 
 func TestUnpack(t *testing.T) {
 	// Create archive with path to the root module (m0)
-	arc, err := NewArchive("testdata/config-dir/m0")
+	arc, err := NewArchive("testdata/config-dir/m0", "testdata/config-dir")
 	require.NoError(t, err)
 
 	// Add module references to archive
