@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"os/exec"
 	"testing"
 
 	"github.com/leg100/etok/pkg/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 // Terraform configs for e2e tests
@@ -43,11 +45,21 @@ output "random_string" {
 }`
 )
 
-// Create terraform configs, and return path to root module
+// Create terraform configs, git repo, and return path to root module
 func createTerraformConfigs(t *testing.T) string {
 	configs := testutil.NewTempDir(t)
 	configs.Write("root/main.tf", []byte(rootModuleConfig))
 	configs.Write("modules/random/main.tf", []byte(randomModuleConfig))
+
+	// Create git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = configs.Root()
+	require.NoError(t, cmd.Run())
+
+	// Add remote
+	cmd = exec.Command("git", "remote", "add", "origin", "git@github.com/leg100/e2e.git")
+	cmd.Dir = configs.Root()
+	require.NoError(t, cmd.Run())
 
 	path := configs.Path("root")
 	// Log pwd for debugging broken e2e tests

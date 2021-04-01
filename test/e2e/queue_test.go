@@ -10,7 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	expect "github.com/google/goexpect"
-	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,8 +21,8 @@ func TestQueue(t *testing.T) {
 
 	t.Parallel()
 	t.Run(name, func(t *testing.T) {
-		// Change into temp dir
-		path := testutil.NewTempDir(t).Root()
+		// Create temp dir of terraform configs and set pwd to root module
+		path := createTerraformConfigs(t)
 
 		t.Run("create namespace", func(t *testing.T) {
 			// (Re-)create dedicated namespace for e2e test
