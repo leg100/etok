@@ -80,7 +80,10 @@ func TestWorkspace(t *testing.T) {
 
 		t.Run("select workspace foo", func(t *testing.T) {
 			require.NoError(t, step(t, name,
-				[]string{buildPath, "workspace", "select", "foo", "--namespace", namespace},
+				[]string{buildPath, "workspace", "select", "foo",
+					"--path", path,
+					"--namespace", namespace,
+					"--context", *kubectx},
 				[]expect.Batcher{
 					&expect.BExp{R: fmt.Sprintf("Current workspace now: %s/%s", namespace, "foo")},
 				}))

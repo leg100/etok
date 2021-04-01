@@ -43,6 +43,18 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 	return ws
 }
 
+func WithWorkingDir(path string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.WorkingDir = path
+	}
+}
+
+func WithRepository(url string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.Repository = url
+	}
+}
+
 func WithPrivilegedCommands(cmds ...string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
 		ws.Spec.PrivilegedCommands = cmds
@@ -275,12 +287,6 @@ func WithNotCompleteConditionForTimeout(reason string, ago time.Duration) func(*
 func WithArgs(args ...string) func(*v1alpha1.Run) {
 	return func(run *v1alpha1.Run) {
 		run.Args = args
-	}
-}
-
-func WithConfigMapPath(path string) func(*v1alpha1.Run) {
-	return func(run *v1alpha1.Run) {
-		run.ConfigMapPath = path
 	}
 }
 

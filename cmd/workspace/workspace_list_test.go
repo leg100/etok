@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/testobj"
@@ -27,8 +28,8 @@ func TestListWorkspaces(t *testing.T) {
 		{
 			name: "WithEnvironmentFile",
 			objs: []runtime.Object{
-				testobj.Workspace("default", "workspace-1"),
-				testobj.Workspace("dev", "workspace-2"),
+				testobj.Workspace("default", "workspace-1", testobj.WithRepository("https://github.com/leg100/etok.git"), testobj.WithWorkingDir(".")),
+				testobj.Workspace("dev", "workspace-2", testobj.WithRepository("https://github.com/leg100/etok.git"), testobj.WithWorkingDir(".")),
 			},
 			args: []string{},
 			env:  &env.Env{Namespace: "default", Workspace: "workspace-1"},
@@ -37,8 +38,8 @@ func TestListWorkspaces(t *testing.T) {
 		{
 			name: "WithoutEnvironmentFile",
 			objs: []runtime.Object{
-				testobj.Workspace("default", "workspace-1"),
-				testobj.Workspace("dev", "workspace-2"),
+				testobj.Workspace("default", "workspace-1", testobj.WithRepository("https://github.com/leg100/etok.git"), testobj.WithWorkingDir(".")),
+				testobj.Workspace("dev", "workspace-2", testobj.WithRepository("https://github.com/leg100/etok.git"), testobj.WithWorkingDir(".")),
 			},
 			args: []string{},
 			out:  "\tdefault/workspace-1\n\tdev/workspace-2\n",
@@ -49,8 +50,15 @@ func TestListWorkspaces(t *testing.T) {
 			path := t.NewTempDir().Chdir().Root()
 
 			// Make the path a git repo
-			_, err := git.PlainInit(path, false)
+			repo, err := git.PlainInit(path, false)
 			require.NoError(t, err)
+
+			// Set a remote so that we can check that the code successfully sets
+			// the remote URL in the workspace spec
+			_, err = repo.CreateRemote(&config.RemoteConfig{
+				Name: "origin",
+				URLs: []string{"git@github.com:leg100/etok.git"},
+			})
 
 			// Write .terraform/environment
 			if tt.env != nil {

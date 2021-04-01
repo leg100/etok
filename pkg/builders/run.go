@@ -26,14 +26,14 @@ type RunBuilder struct {
 	workspace string
 }
 
-func Run(namespace, name, workspace, command, configMapPath string, args ...string) *RunBuilder {
+func Run(namespace, name, workspace, command string, args ...string) *RunBuilder {
 	return &RunBuilder{
-		name:          name,
-		namespace:     namespace,
-		workspace:     workspace,
-		command:       command,
-		configMapPath: configMapPath,
-		args:          args,
+		name:             name,
+		namespace:        namespace,
+		workspace:        workspace,
+		command:          command,
+		args:             args,
+		handshakeTimeout: v1alpha1.DefaultHandshakeTimeout,
 	}
 }
 
@@ -88,9 +88,6 @@ func (b *RunBuilder) Build() *v1alpha1.Run {
 
 	// And always set config map key to the default
 	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
-
-	// Set path to root module within config map archive
-	run.ConfigMapPath = b.configMapPath
 
 	if b.attach {
 		run.AttachSpec.Handshake = true

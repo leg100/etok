@@ -86,10 +86,8 @@ spec:
                 description: ConfigMap containing the tarball to extract on the pod
                 type: string
               configMapKey:
+                default: config.tar.gz
                 description: The config map key identifying the tarball to extract
-                type: string
-              configMapPath:
-                description: The path within the archive to the root module
                 type: string
               handshake:
                 description: Enable TTY on pod and await handshake string from client
@@ -109,7 +107,6 @@ spec:
             - command
             - configMap
             - configMapKey
-            - configMapPath
             - workspace
             type: object
           status:

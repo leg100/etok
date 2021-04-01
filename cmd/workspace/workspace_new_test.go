@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
@@ -257,6 +258,19 @@ func TestNewWorkspace(t *testing.T) {
 			skipGitRepo: true,
 			err:         repo.ErrRepositoryNotFound,
 		},
+		{
+			name: "workspace vcs settings",
+			args: []string{"foo"},
+			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(t *testutil.T, o *newOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				assert.Equal(t, ".", ws.Spec.VCS.WorkingDir)
+				assert.Equal(t, "https://github.com/leg100/etok.git", ws.Spec.VCS.Repository)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -278,8 +292,15 @@ func TestNewWorkspace(t *testing.T) {
 
 			// Make the path a git repo unless test specifies otherwise
 			if !tt.skipGitRepo {
-				_, err := git.PlainInit(path, false)
+				repo, err := git.PlainInit(path, false)
 				require.NoError(t, err)
+
+				// Set a remote so that we can check that the code successfully
+				// sets the remote URL in the workspace spec
+				_, err = repo.CreateRemote(&config.RemoteConfig{
+					Name: "origin",
+					URLs: []string{"git@github.com:leg100/etok.git"},
+				})
 			}
 
 			// Mock the workspace controller by setting status up front

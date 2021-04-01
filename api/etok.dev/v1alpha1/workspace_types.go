@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -72,6 +73,24 @@ type WorkspaceSpec struct {
 	// Ephemeral turns off state backup (and restore) - intended for short-lived
 	// workspaces.
 	Ephemeral bool `json:"ephemeral,omitempty"`
+
+	// Details of the VCS repository we want to connect to the workspace
+	VCS VCS `json:"vcs,omitempty"`
+}
+
+// Details of the VCS repository we want to connect to the workspace
+type VCS struct {
+	// VCS Repository to connect to workspace.
+	Repository string `json:"repository,omitempty"`
+
+	// VCS Repository branch to connect to workspace. Leave blank to use the VCS
+	// provider's default branch.
+	Branch string `json:"branch,omitempty"`
+
+	// +kubebuilder:default="."
+
+	// Sub-directory within VCS repository to connect to the workspace
+	WorkingDir string `json:"workingDir,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace's cache storage
@@ -166,6 +185,12 @@ func (ws *Workspace) BackupObjectName() string {
 
 func (ws *Workspace) BuiltinsConfigMapName() string {
 	return WorkspaceBuiltinsConfigMapName(ws.Name)
+}
+
+// IsConnected returns true if the workspace is connected to the given url. The
+// format of the url is expected to be ".*/owner/repo.git".
+func (ws *Workspace) IsConnected(url string) bool {
+	return strings.HasSuffix(url, ws.Spec.VCS.Repository+".git")
 }
 
 func WorkspaceBuiltinsConfigMapName(name string) string {

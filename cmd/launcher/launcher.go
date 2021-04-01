@@ -1,7 +1,6 @@
 package launcher
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,18 +10,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leg100/etok/pkg/builders"
+	etokerrors "github.com/leg100/etok/pkg/errors"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	watchtools "k8s.io/client-go/tools/watch"
+
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
-	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/env"
-	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
-	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
@@ -31,12 +36,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
-	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/util/term"
 )
@@ -46,7 +45,8 @@ const (
 	defaultReconcileTimeout = 10 * time.Second
 
 	// default namespace runs are created in
-	defaultNamespace = "default"
+	defaultNamespace  = "default"
+	defaultPodTimeout = time.Hour
 )
 
 var (
@@ -102,6 +102,13 @@ type launcherOptions struct {
 
 	// For testing purposes set run status
 	status *v1alpha1.RunStatus
+
+	// attach toggles whether pod will be attached to (true), or streamed from
+	// (false)
+	attach bool
+
+	// Git repo from which run is being launched
+	repo *repo.Repo
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -119,8 +126,11 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 			}
 
+			// Toggle whether to attach to pod's TTY
+			o.attach = !o.disableTTY && term.IsTerminal(o.In)
+
 			// Ensure path is within a git repository
-			_, err = repo.Open(o.path)
+			o.repo, err = repo.Open(o.path)
 			if err != nil {
 				return err
 			}
@@ -130,8 +140,18 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 				return err
 			}
 
-			if err := o.lookupEnvFile(cmd); err != nil {
+			// Override namespace and workspace from env file values
+			envFile, err := lookupEnvFile(o.path)
+			if err != nil {
 				return err
+			}
+			if envFile != nil {
+				if !flags.IsFlagPassed(cmd.Flags(), "namespace") {
+					o.namespace = envFile.Namespace
+				}
+				if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
+					o.workspace = envFile.Workspace
+				}
 			}
 
 			err = o.run(cmd.Context())
@@ -158,7 +178,7 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	flags.AddDisableResourceCleanupFlag(cmd, &o.disableResourceCleanup)
 
 	cmd.Flags().BoolVar(&o.disableTTY, "no-tty", false, "disable tty")
-	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", time.Hour, "timeout for pod to be ready and running")
+	cmd.Flags().DurationVar(&o.podTimeout, "pod-timeout", defaultPodTimeout, "timeout for pod to be ready and running")
 	cmd.Flags().DurationVar(&o.handshakeTimeout, "handshake-timeout", v1alpha1.DefaultHandshakeTimeout, "timeout waiting for handshake")
 
 	cmd.Flags().DurationVar(&o.reconcileTimeout, "reconcile-timeout", defaultReconcileTimeout, "timeout for resource to be reconciled")
@@ -166,29 +186,21 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	return cmd
 }
 
-func (o *launcherOptions) lookupEnvFile(cmd *cobra.Command) error {
-	etokenv, err := env.Read(o.path)
+func lookupEnvFile(path string) (*env.Env, error) {
+	etokenv, err := env.Read(path)
 	if err != nil {
-		// It's ok for envfile to not exist
-		if !os.IsNotExist(err) {
-			return err
+		if os.IsNotExist(err) {
+			// A missing env file is OK
+			return nil, nil
 		}
-	} else {
-		if !flags.IsFlagPassed(cmd.Flags(), "namespace") {
-			o.namespace = etokenv.Namespace
-		}
-		if !flags.IsFlagPassed(cmd.Flags(), "workspace") {
-			o.workspace = etokenv.Workspace
-		}
+		return nil, err
 	}
-	return nil
+	return etokenv, nil
 }
 
 func (o *launcherOptions) run(ctx context.Context) error {
-	isTTY := !o.disableTTY && term.IsTerminal(o.In)
-
 	// Tar up local config and deploy k8s resources
-	run, err := o.deploy(ctx, isTTY)
+	run, err := o.deploy(ctx)
 	if err != nil {
 		return err
 	}
@@ -210,7 +222,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 
 	// Wait for run to indicate pod is running
 	g.Go(func() error {
-		return o.watchRun(gctx, run, isTTY)
+		return o.watchRun(gctx, run)
 	})
 
 	// Check workspace exists and is healthy
@@ -227,7 +239,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	exit := monitors.RunExitMonitor(ctx, o.EtokClient, o.namespace, o.runName)
 
 	// Connect to pod
-	if isTTY {
+	if o.attach {
 		if err := o.AttachFunc(o.Out, *o.Config, o.namespace, o.runName, o.In.(*os.File), cmdutil.HandshakeString, globals.RunnerContainerName); err != nil {
 			return err
 		}
@@ -269,9 +281,9 @@ func (o *launcherOptions) run(ctx context.Context) error {
 	return nil
 }
 
-func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run, isTTY bool) error {
+func (o *launcherOptions) watchRun(ctx context.Context, run *v1alpha1.Run) error {
 	lw := &k8s.RunListWatcher{Client: o.EtokClient, Name: run.Name, Namespace: run.Namespace}
-	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunConnectable(run.Name, isTTY))
+	_, err := watchtools.UntilWithSync(ctx, lw, &v1alpha1.Run{}, nil, handlers.RunConnectable(run.Name, o.attach))
 	return err
 }
 
@@ -313,44 +325,32 @@ func (o *launcherOptions) checkWorkspace(ctx context.Context, run *v1alpha1.Run)
 	return nil
 }
 
-// Deploy configmap and run resources in parallel
-func (o *launcherOptions) deploy(ctx context.Context, isTTY bool) (run *v1alpha1.Run, err error) {
+// Deploy ConfigMap and Run resources in parallel
+func (o *launcherOptions) deploy(ctx context.Context) (run *v1alpha1.Run, err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
-	// Construct new archive
-	arc, err := archive.NewArchive(o.path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add local module references to archive
-	if err := arc.Walk(); err != nil {
-		return nil, err
-	}
-
-	// Get relative path to root module within archive
-	root, err := arc.RootPath()
-	if err != nil {
-		return nil, err
-	}
-
-	// Compile tarball of local terraform modules, embed in configmap and deploy
+	// Construct ConfigMap containing tarball of local terraform modules, and
+	// deploy
 	g.Go(func() error {
-		w := new(bytes.Buffer)
-		meta, err := arc.Pack(w)
+		configMap, err := archive.ConfigMap(o.namespace, o.runName, o.path, o.repo.Root())
 		if err != nil {
 			return err
 		}
 
-		klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+		_, err = o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
 
-		// Construct and deploy ConfigMap resource
-		return o.createConfigMap(ctx, w.Bytes(), o.runName, v1alpha1.RunDefaultConfigMapKey)
+		o.createdArchive = true
+		klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
+
+		return nil
 	})
 
 	// Construct and deploy command resource
 	g.Go(func() error {
-		run, err = o.createRun(ctx, o.runName, isTTY, root)
+		run, err = o.createRun(ctx, o.runName)
 		return err
 	})
 
@@ -389,8 +389,8 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 }
 
 // Construct and deploy command resource
-func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool, relPathToRoot string) (*v1alpha1.Run, error) {
-	bldr := builders.Run(o.namespace, name, o.workspace, o.command, relPathToRoot, o.args...)
+func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1.Run, error) {
+	bldr := builders.Run(o.namespace, name, o.workspace, o.command, o.args...)
 
 	bldr.SetVerbosity(o.Verbosity)
 
@@ -399,7 +399,7 @@ func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool
 		bldr.SetStatus(*o.status)
 	}
 
-	if isTTY {
+	if o.attach {
 		bldr.Attach()
 	}
 
@@ -412,37 +412,6 @@ func (o *launcherOptions) createRun(ctx context.Context, name string, isTTY bool
 	klog.V(1).Infof("created run %s\n", klog.KObj(run))
 
 	return run, nil
-}
-
-func (o *launcherOptions) createConfigMap(ctx context.Context, tarball []byte, name, keyName string) error {
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: o.namespace,
-		},
-		BinaryData: map[string][]byte{
-			keyName: tarball,
-		},
-	}
-
-	// Set etok's common labels
-	labels.SetCommonLabels(configMap)
-	// Permit filtering archives by command
-	labels.SetLabel(configMap, labels.Command(o.command))
-	// Permit filtering archives by workspace
-	labels.SetLabel(configMap, labels.Workspace(o.workspace))
-	// Permit filtering etok resources by component
-	labels.SetLabel(configMap, labels.RunComponent)
-
-	_, err := o.ConfigMapsClient(o.namespace).Create(ctx, configMap, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-
-	o.createdArchive = true
-	klog.V(1).Infof("created config map %s\n", klog.KObj(configMap))
-
-	return nil
 }
 
 // waitForReconcile waits for the run resource to be reconciled.
