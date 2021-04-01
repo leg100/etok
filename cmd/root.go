@@ -6,7 +6,7 @@ import (
 
 	"github.com/leg100/etok/cmd/github"
 	"github.com/leg100/etok/cmd/install"
-	"github.com/leg100/etok/cmd/launchers"
+	"github.com/leg100/etok/cmd/launcher"
 	"github.com/leg100/etok/cmd/manager"
 	"github.com/leg100/etok/cmd/runner"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -47,9 +47,9 @@ func RootCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(github.GithubCmd(f))
 
 	// Terraform commands (and shell command)
-	launchers.AddToRoot(cmd, f)
+	launcher.AddToRoot(cmd, f)
 	// terraform fmt
-	cmd.AddCommand(launchers.FmtCmd(&executor.Exec{IOStreams: f.IOStreams}))
+	cmd.AddCommand(launcher.FmtCmd(&executor.Exec{IOStreams: f.IOStreams}))
 
 	return cmd
 }

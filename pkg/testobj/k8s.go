@@ -296,12 +296,6 @@ func WithArgs(args ...string) func(*v1alpha1.Run) {
 	}
 }
 
-func WithConfigMapPath(path string) func(*v1alpha1.Run) {
-	return func(run *v1alpha1.Run) {
-		run.ConfigMapPath = path
-	}
-}
-
 func Secret(namespace, name string, opts ...func(*corev1.Secret)) *corev1.Secret {
 	var secret = &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
