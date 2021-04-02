@@ -15,14 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestEtokRunApp(t *testing.T) {
+func TestConstructRunArchives(t *testing.T) {
 	tests := []struct {
 		name  string
 		err   error
 		objs  []runtime.Object
 		event func(*testutil.T, string, string) interface{}
-		// wanted number of etok runs
-		wantRuns func(*testutil.T, []*etokRun)
+		want  func(*testutil.T, []*runArchive)
 	}{
 		{
 			name: "checksuite requested event",
@@ -45,7 +44,7 @@ func TestEtokRunApp(t *testing.T) {
 			objs: []runtime.Object{
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			wantRuns: func(t *testutil.T, runs []*etokRun) {
+			want: func(t *testutil.T, runs []*runArchive) {
 				assert.Equal(t, 1, len(runs))
 			},
 		},
@@ -74,7 +73,7 @@ func TestEtokRunApp(t *testing.T) {
 				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			wantRuns: func(t *testutil.T, runs []*etokRun) {
+			want: func(t *testutil.T, runs []*runArchive) {
 				assert.Equal(t, 1, len(runs))
 			},
 		},
@@ -106,7 +105,7 @@ func TestEtokRunApp(t *testing.T) {
 				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			wantRuns: func(t *testutil.T, runs []*etokRun) {
+			want: func(t *testutil.T, runs []*runArchive) {
 				assert.Equal(t, 1, len(runs))
 			},
 		},
@@ -138,9 +137,8 @@ func TestEtokRunApp(t *testing.T) {
 				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			wantRuns: func(t *testutil.T, runs []*etokRun) {
+			want: func(t *testutil.T, runs []*runArchive) {
 				assert.Equal(t, 1, len(runs))
-				assert.Equal(t, "apply", runs[0].command)
 			},
 		},
 	}
@@ -161,10 +159,10 @@ func TestEtokRunApp(t *testing.T) {
 				cloneDir: t.NewTempDir().Root(),
 			})
 
-			runs, err := app.createEtokRuns(&fakeTokenRefresher{}, event)
+			runs, err := app.constructRunArchives(&fakeTokenRefresher{}, event)
 			require.NoError(t, err)
 
-			tt.wantRuns(t, runs)
+			tt.want(t, runs)
 		})
 	}
 }

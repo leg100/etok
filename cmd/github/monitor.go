@@ -4,7 +4,7 @@ import "time"
 
 // A process is runnable and invokes github operations
 type process interface {
-	run() error
+	start() error
 	githubOperation
 }
 
@@ -21,7 +21,7 @@ func monitor(queue taskQueue, proc process, interval time.Duration) {
 
 	errch := make(chan error)
 	go func() {
-		errch <- proc.run()
+		errch <- proc.start()
 	}()
 
 	for {

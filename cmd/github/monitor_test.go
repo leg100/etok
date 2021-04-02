@@ -26,7 +26,7 @@ type fakeProcess struct {
 // Fake a process doing something by sending 5 things on an unbuffered channel
 // and only once they're taken off the queue, exit, triggering the monitor to
 // exit too.
-func (p *fakeProcess) run() error {
+func (p *fakeProcess) start() error {
 	for i := 0; i < 5; i++ {
 		p.sync <- struct{}{}
 	}
@@ -45,7 +45,7 @@ func (p *fakeProcess) invoke(client *GithubClient) error {
 	return nil
 }
 
-// Test monitor can run a process obj and send it to task queue once a
+// Test monitor can start a process obj and send it to task queue once a
 // millisecond, and then return when the process obj exits
 func TestMonitor(t *testing.T) {
 	proc := &fakeProcess{

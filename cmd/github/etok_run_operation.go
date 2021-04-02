@@ -12,7 +12,7 @@ type etokRunOperation struct {
 	actions    []*github.CheckRunAction
 	conclusion *string
 
-	*etokRun
+	*run
 }
 
 func (c *etokRunOperation) setAction(label, desc, id string) {
@@ -31,7 +31,7 @@ func (c *etokRunOperation) output() *github.CheckRunOutput {
 func (c *etokRunOperation) create(ctx context.Context, client *GithubClient) (int64, error) {
 	opts := github.CreateCheckRunOptions{
 		Name:       c.name(),
-		HeadSHA:    c.repo.sha,
+		HeadSHA:    c.sha,
 		Status:     c.status(),
 		Conclusion: c.conclusion,
 		Output:     c.output(),
@@ -40,7 +40,7 @@ func (c *etokRunOperation) create(ctx context.Context, client *GithubClient) (in
 		ExternalID: c.externalID(),
 	}
 
-	checkRun, _, err := client.Checks.CreateCheckRun(ctx, c.repo.owner, c.repo.name, opts)
+	checkRun, _, err := client.Checks.CreateCheckRun(ctx, c.owner, c.repo, opts)
 	if err != nil {
 		return 0, err
 	}
@@ -51,7 +51,7 @@ func (c *etokRunOperation) create(ctx context.Context, client *GithubClient) (in
 func (c *etokRunOperation) update(ctx context.Context, client *GithubClient, id int64) error {
 	opts := github.UpdateCheckRunOptions{
 		Name:       c.name(),
-		HeadSHA:    github.String(c.repo.sha),
+		HeadSHA:    github.String(c.sha),
 		Status:     c.status(),
 		Conclusion: c.conclusion,
 		Output:     c.output(),
@@ -59,6 +59,6 @@ func (c *etokRunOperation) update(ctx context.Context, client *GithubClient, id 
 		// Retain reference to etok run id in case user wants to re-run it
 		ExternalID: c.externalID(),
 	}
-	_, _, err := client.Checks.UpdateCheckRun(ctx, c.repo.owner, c.repo.name, id, opts)
+	_, _, err := client.Checks.UpdateCheckRun(ctx, c.owner, c.repo, id, opts)
 	return err
 }

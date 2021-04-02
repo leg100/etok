@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/pkg/launcher"
 	"k8s.io/klog/v2"
 )
 
@@ -19,14 +18,24 @@ const (
 	defaultMaxFieldSize = 65535
 )
 
+// Represents an etok run / github checkrun
 type run struct {
 	id, namespace   string
 	stripRefreshing bool
 	completed       bool
 	err             error
 
+	// The workspace of the run
+	workspace string
+
 	// The sha of the git commit that triggered this run
 	sha string
+
+	// The owner of the repo for the checkrun
+	owner string
+
+	// The repo name for the checkrun
+	repo string
 
 	// Logs are streamed into this byte array
 	out []byte
@@ -41,14 +50,6 @@ type run struct {
 	checkRunId *int64
 }
 
-func newRun(opts *launcher.LauncherOptions, sha string) (*run, error) {
-	return &run{
-		id:        opts.RunName,
-		namespace: opts.Namespace,
-		sha:       sha,
-	}, nil
-}
-
 func newRunFromResource(res *v1alpha1.Run) (*run, error) {
 	lbls := res.GetLabels()
 	if lbls == nil {
@@ -58,11 +59,22 @@ func newRunFromResource(res *v1alpha1.Run) (*run, error) {
 	if !ok {
 		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunSHALabelName)
 	}
+	owner, ok := lbls[checkRunOwnerLabelName]
+	if !ok {
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunOwnerLabelName)
+	}
+	repo, ok := lbls[checkRunRepoLabelName]
+	if !ok {
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunRepoLabelName)
+	}
 
 	return &run{
 		id:        res.Name,
 		namespace: res.Namespace,
 		sha:       sha,
+		owner:     owner,
+		repo:      repo,
+		workspace: res.Workspace,
 	}, nil
 }
 
@@ -71,7 +83,7 @@ func newRunFromResource(res *v1alpha1.Run) (*run, error) {
 // it'll be updated.
 func (r *run) invoke(client *GithubClient) error {
 	op := etokRunOperation{
-		etokRun: r,
+		run: r,
 	}
 
 	if r.completed {
@@ -114,7 +126,7 @@ func (r *run) invoke(client *GithubClient) error {
 // use those chars effectively.
 func (r *run) name() string {
 	// Check run name always begins with full workspace name
-	name := r.namespace + "/" + r.id
+	name := r.namespace + "/" + r.workspace
 
 	// Next part of name is the command name
 	command := r.command

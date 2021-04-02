@@ -84,7 +84,7 @@ func TestE2E(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 200, res.StatusCode)
 
-	// Ensure github checkrun are successfully created
+	// Ensure github checkruns are successfully created
 	cr := <-checkRunObjs
 	createCheckRunOpts, ok := cr.(github.CreateCheckRunOptions)
 	require.True(t, ok)
