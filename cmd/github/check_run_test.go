@@ -14,7 +14,7 @@ func TestRunOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("within maximum size", func(t *testing.T) {
-		o := run{maxFieldSize: defaultMaxFieldSize}
+		o := checkRun{maxFieldSize: defaultMaxFieldSize}
 
 		_, err = o.Write(got)
 		require.NoError(t, err)
@@ -26,7 +26,7 @@ func TestRunOutput(t *testing.T) {
 	})
 
 	t.Run("exceeds maximum size", func(t *testing.T) {
-		o := run{
+		o := checkRun{
 			// Default is 64k but we'll set to an artificially low number so
 			// that we can easily test this maximum being breached
 			maxFieldSize: 1000,
@@ -42,7 +42,7 @@ func TestRunOutput(t *testing.T) {
 	})
 
 	t.Run("strip off refreshing lines", func(t *testing.T) {
-		o := run{
+		o := checkRun{
 			stripRefreshing: true,
 			maxFieldSize:    defaultMaxFieldSize,
 		}
@@ -64,7 +64,7 @@ func TestRunName(t *testing.T) {
 		command   string
 		namespace string
 		workspace string
-		completed bool
+		status    string
 		want      string
 		// Path to fixture from which to populate output buffer
 		out string
@@ -81,7 +81,7 @@ func TestRunName(t *testing.T) {
 			name:      "completed plan",
 			id:        "run-12345",
 			command:   "plan",
-			completed: true,
+			status:    "completed",
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan.txt",
@@ -91,7 +91,7 @@ func TestRunName(t *testing.T) {
 			name:      "completed plan, no changes",
 			id:        "run-12345",
 			command:   "plan",
-			completed: true,
+			status:    "completed",
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan_no_changes.txt",
@@ -109,9 +109,11 @@ func TestRunName(t *testing.T) {
 
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			r := run{
+			r := checkRun{
 				command:   tt.command,
-				completed: tt.completed,
+				namespace: tt.namespace,
+				workspace: tt.workspace,
+				status:    tt.status,
 				id:        tt.id,
 			}
 

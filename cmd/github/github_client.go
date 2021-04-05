@@ -13,6 +13,13 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
+type githubClientInterface interface {
+	tokenRefresher
+
+	send(githubOperation)
+	getInstallID() int64
+}
+
 type githubOperation interface {
 	invoke(*GithubClient) error
 }
@@ -80,6 +87,10 @@ func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, err
 	}
 
 	return client, nil
+}
+
+func (c *GithubClient) getInstallID() int64 {
+	return c.installID
 }
 
 func (c *GithubClient) send(op githubOperation) {

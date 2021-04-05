@@ -4,8 +4,13 @@ import (
 
 	// or "gopkg.in/unrolled/render.v1"
 
+	"fmt"
+
+	"golang.org/x/sync/errgroup"
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	cmdutil "github.com/leg100/etok/cmd/util"
-	"github.com/leg100/etok/pkg/logstreamer"
+	"github.com/leg100/etok/pkg/scheme"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +22,16 @@ const (
 type runOptions struct {
 	*webhookServer
 
-	etokAppOptions
+	appOptions
+
+	// Github app ID
+	appID int64
+
+	// Github hostname
+	githubHostname string
+
+	// Path to github app private key
+	keyPath string
 }
 
 // runCmd creates a cobra command for running github app
@@ -35,14 +49,31 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return err
 			}
 
-			// Set func to use for streaming logs from a run's pod
-			o.etokAppOptions.getLogsFunc = logstreamer.GetLogs
+			// The github client mgr maintains one client per github app
+			// installation
+			clientmgr, err := newGithubClientManager(o.githubHostname, o.keyPath, o.appID)
+			if err != nil {
+				return err
+			}
+
+			// Manager for Run reconciler
+			mgr, err := ctrl.NewManager(client.Config, ctrl.Options{
+				Scheme: scheme.Scheme,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to create run controller manager: %w", err)
+			}
+
+			if err := (&runReconciler{
+				Client:  mgr.GetClient(),
+				kclient: client.KubeClient,
+				mgr:     clientmgr,
+			}).SetupWithManager(mgr); err != nil {
+				return fmt.Errorf("unable to create run controller: %w", err)
+			}
 
 			// Configure webhook server to forward events to our 'github app'
-			o.webhookServer.app = newEtokRunApp(client, o.etokAppOptions)
-
-			// Initialise github client manager
-			o.webhookServer.ghClientMgr = newGithubClientManager()
+			o.webhookServer.app = newApp(client, o.appOptions)
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor
@@ -50,11 +81,19 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return err
 			}
 
-			if err := o.webhookServer.run(cmd.Context()); err != nil {
-				return err
-			}
+			// Start controller mgr and webhook server concurrently. If either
+			// returns an error, both are cancelled.
+			g, gctx := errgroup.WithContext(cmd.Context())
 
-			return nil
+			g.Go(func() error {
+				return mgr.Start(gctx)
+			})
+
+			g.Go(func() error {
+				return o.webhookServer.run(gctx)
+			})
+
+			return g.Wait()
 		},
 	}
 

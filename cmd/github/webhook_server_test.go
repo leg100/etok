@@ -13,21 +13,21 @@ import (
 
 type fakeApp struct{}
 
-func (a *fakeApp) handleEvent(client *GithubClient, ev interface{}) error {
+func (a *fakeApp) handleEvent(ev interface{}, client githubClientInterface) error {
 	return nil
 }
 
+type fakeGithubClientManager struct{}
+
+func (m *fakeGithubClientManager) getOrCreate(installID int64) (*GithubClient, error) {
+	return &GithubClient{}, nil
+}
+
 func TestWebhookServer(t *testing.T) {
-	disableSSLVerification(t)
-
-	// Start a mock github API
-	githubHostname, _ := fixtures.GithubServer(t)
-
-	server := newWebhookServer(&fakeApp{})
-
-	server.appID = 1
-	server.keyPath = testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
-	server.githubHostname = githubHostname
+	server := webhookServer{
+		app: &fakeApp{},
+		mgr: &fakeGithubClientManager{},
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errch := make(chan error)

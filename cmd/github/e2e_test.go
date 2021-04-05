@@ -27,7 +27,7 @@ func TestE2E(t *testing.T) {
 
 	// Start a mock github API, which sends any checkrun updates it receives via
 	// the checkRunObjs channel
-	githubHostname, checkRunObjs := fixtures.GithubServer(t)
+	_, checkRunObjs := fixtures.GithubServer(t)
 
 	ws1 := testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir"))
 
@@ -36,12 +36,8 @@ func TestE2E(t *testing.T) {
 	client, err := cc.Create("")
 	require.NoError(t, err)
 
-	// Create our special log streamer
-	logStreamer := make(getLogsFunc)
-
-	app := newEtokRunApp(client, etokAppOptions{
-		cloneDir:    testutil.NewTempDir(t).Root(),
-		getLogsFunc: logStreamer.getLogs,
+	app := newApp(client, appOptions{
+		cloneDir: testutil.NewTempDir(t).Root(),
 		// Simulate run as having successfully completed
 		runStatus: v1alpha1.RunStatus{
 			ExitCode: github.Int(0),
@@ -56,11 +52,12 @@ func TestE2E(t *testing.T) {
 		},
 	})
 
-	server := newWebhookServer(app)
+	server := &webhookServer{
+		app: app,
+	}
 
-	server.appID = 1
-	server.keyPath = testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
-	server.githubHostname = githubHostname
+	//server.appID = 1 server.keyPath = testutil.TempFile(t, "key",
+	//[]byte(fixtures.GithubPrivateKey)) server.githubHostname = githubHostname
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errch := make(chan error)
@@ -89,10 +86,6 @@ func TestE2E(t *testing.T) {
 	createCheckRunOpts, ok := cr.(github.CreateCheckRunOptions)
 	require.True(t, ok)
 	assert.Equal(t, "in_progress", *createCheckRunOpts.Status)
-
-	// Now send message to log streamer, giving the go-ahead for it to print
-	// logs
-	logStreamer <- struct{}{}
 
 	// Check run should now be updated. There may be more than one update, but
 	// the last one should have a completed status.

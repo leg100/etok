@@ -1,27 +1,33 @@
 package github
 
 import (
+	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-github/v31/github"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	etokclient "github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func TestConstructRunArchives(t *testing.T) {
+func TestHandleEvent(t *testing.T) {
 	tests := []struct {
-		name  string
-		err   error
-		objs  []runtime.Object
-		event func(*testutil.T, string, string) interface{}
-		want  func(*testutil.T, []*runArchive)
+		name           string
+		err            error
+		objs           []runtime.Object
+		event          func(*testutil.T, string, string) interface{}
+		wantCheckRuns  func(*testutil.T, []*checkRun)
+		wantRunArchive func(*testutil.T, *v1alpha1.Run, *corev1.ConfigMap)
 	}{
 		{
 			name: "checksuite requested event",
@@ -42,14 +48,15 @@ func TestConstructRunArchives(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "foo", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "bar", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir2")),
 			},
-			want: func(t *testutil.T, runs []*runArchive) {
-				assert.Equal(t, 1, len(runs))
+			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
+				assert.Equal(t, 2, len(checkRuns))
 			},
 		},
 		{
-			name: "checkrun rerequested event",
+			name: "checkrun rerequested plan",
 			event: func(t *testutil.T, url, sha string) interface{} {
 				return &github.CheckRunEvent{
 					Action: github.String("rerequested"),
@@ -58,7 +65,12 @@ func TestConstructRunArchives(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: github.String("default/run-12345"),
+						ExternalID: (&CheckRunMetadata{
+							Current:   "run-12345",
+							Namespace: "default",
+							Command:   "plan",
+							Workspace: "default",
+						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
 						CloneURL: github.String("file://" + url),
@@ -70,11 +82,13 @@ func TestConstructRunArchives(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			want: func(t *testutil.T, runs []*runArchive) {
-				assert.Equal(t, 1, len(runs))
+			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
+				if assert.Equal(t, 1, len(checkRuns)) {
+					assert.Equal(t, "plan", checkRuns[0].command)
+					assert.Equal(t, "run-12345", checkRuns[0].previous)
+				}
 			},
 		},
 		{
@@ -87,7 +101,12 @@ func TestConstructRunArchives(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: github.String("default/run-12345"),
+						ExternalID: (&CheckRunMetadata{
+							Current:   "run-12345",
+							Namespace: "default",
+							Command:   "plan",
+							Workspace: "default",
+						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
 						CloneURL: github.String("file://" + url),
@@ -102,11 +121,13 @@ func TestConstructRunArchives(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			want: func(t *testutil.T, runs []*runArchive) {
-				assert.Equal(t, 1, len(runs))
+			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
+				if assert.Equal(t, 1, len(checkRuns)) {
+					assert.Equal(t, "plan", checkRuns[0].command)
+					assert.Equal(t, "run-12345", checkRuns[0].previous)
+				}
 			},
 		},
 		{
@@ -119,7 +140,12 @@ func TestConstructRunArchives(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: github.String("default/run-12345"),
+						ExternalID: (&CheckRunMetadata{
+							Current:   "run-12345",
+							Namespace: "default",
+							Command:   "plan",
+							Workspace: "default",
+						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
 						CloneURL: github.String("file://" + url),
@@ -134,11 +160,48 @@ func TestConstructRunArchives(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default")),
 				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			want: func(t *testutil.T, runs []*runArchive) {
-				assert.Equal(t, 1, len(runs))
+			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
+				if assert.Equal(t, 1, len(checkRuns)) {
+					assert.Equal(t, "apply", checkRuns[0].command)
+					assert.Equal(t, "run-12345", checkRuns[0].previous)
+				}
+			},
+		},
+		{
+			name: "checkrun created event",
+			event: func(t *testutil.T, url, sha string) interface{} {
+				var checkRunId int64 = 123456
+
+				return &github.CheckRunEvent{
+					Action: github.String("created"),
+					CheckRun: &github.CheckRun{
+						ID: &checkRunId,
+						CheckSuite: &github.CheckSuite{
+							HeadBranch: github.String("changes"),
+							HeadSHA:    &sha,
+						},
+						ExternalID: (&CheckRunMetadata{
+							Current:   "run-12345",
+							Namespace: "default",
+							Command:   "plan",
+							Workspace: "default",
+						}).ToStringPtr(),
+					},
+					Repo: &github.Repository{
+						CloneURL: github.String("file://" + url),
+						Name:     github.String("myrepo"),
+						Owner: &github.User{
+							Login: github.String("bob"),
+						},
+					},
+				}
+			},
+			objs: []runtime.Object{
+				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+			},
+			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
 			},
 		},
 	}
@@ -155,16 +218,78 @@ func TestConstructRunArchives(t *testing.T) {
 			// Construct event with mock repo details
 			event := tt.event(t, repo, sha)
 
-			app := newEtokRunApp(client, etokAppOptions{
+			app := newApp(client, appOptions{
 				cloneDir: t.NewTempDir().Root(),
 			})
 
-			runs, err := app.constructRunArchives(&fakeTokenRefresher{}, event)
-			require.NoError(t, err)
+			gclient := &fakeGithubClient{}
+			require.NoError(t, app.handleEvent(event, gclient))
 
-			tt.want(t, runs)
+			if tt.wantCheckRuns != nil {
+				tt.wantCheckRuns(t, gclient.checkRuns)
+			}
+
+			if tt.wantRunArchive != nil {
+				selector := fmt.Sprintf("%s=true", githubTriggeredLabelName)
+				runs, err := client.RunsClient("default").List(context.Background(), metav1.ListOptions{LabelSelector: selector})
+				require.NoError(t, err)
+				require.Equal(t, 1, len(runs.Items))
+
+				archives, err := client.ConfigMapsClient("default").List(context.Background(), metav1.ListOptions{})
+				require.NoError(t, err)
+				require.Equal(t, 1, len(archives.Items))
+
+				tt.wantRunArchive(t, &runs.Items[0], &archives.Items[0])
+			}
 		})
 	}
+}
+
+func TestRunScript(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		command  string
+		previous string
+		want     string
+	}{
+		{
+			name:     "default",
+			id:       "run-12345",
+			command:  "plan",
+			previous: "",
+			want:     "set -e\n\nterraform init -no-color -input=false\n\n\nterraform plan -no-color -input=false -out=/plans/run-12345\n\n",
+		},
+		{
+			name:     "default",
+			id:       "run-12345",
+			command:  "apply",
+			previous: "run-12345",
+			want:     "set -e\n\nterraform init -no-color -input=false\n\n\n\nterraform apply -no-color -input=false /plans/run-12345\n",
+		},
+	}
+
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			assert.Equal(t, tt.want, runScript(tt.id, tt.command, tt.previous))
+		})
+	}
+}
+
+type fakeGithubClient struct {
+	checkRuns []*checkRun
+}
+
+func (c *fakeGithubClient) getInstallID() int64 {
+	return 0
+}
+
+func (c *fakeGithubClient) refreshToken() (string, error) {
+	return "token123", nil
+}
+
+func (c *fakeGithubClient) send(op githubOperation) {
+	c.checkRuns = append(c.checkRuns, op.(*checkRun))
 }
 
 func initializeRepo(t *testutil.T, seed string) (string, string) {

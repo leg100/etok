@@ -2,9 +2,7 @@ package github
 
 import (
 	"context"
-	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
@@ -16,7 +14,7 @@ import (
 )
 
 type githubApp interface {
-	handleEvent(*GithubClient, interface{}) error
+	handleEvent(interface{}, githubClientInterface) error
 }
 
 const githubHeader = "X-Github-Event"
@@ -29,9 +27,6 @@ type InstallationEvent interface {
 // Credentials for the app are required, which are used to create a github
 // client. The client is provided to the app along with the event.
 type webhookServer struct {
-	// Github's hostname
-	githubHostname string
-
 	// Port on which to listen for github events
 	port int
 
@@ -39,46 +34,18 @@ type webhookServer struct {
 	// validation
 	webhookSecret string
 
-	appID   int64
-	keyPath string
-
-	// Maintain a github client per installation
-	ghClientMgr GithubClientManager
-
 	// Server context. Req handlers use the context to cancel background tasks.
 	ctx context.Context
 
 	// The github app to which to dispatch received events
 	app githubApp
-}
 
-func newWebhookServer(app githubApp) *webhookServer {
-	return &webhookServer{
-		app:         app,
-		ghClientMgr: newGithubClientManager(),
-	}
+	mgr githubClientManagerInterface
 }
 
 func (o *webhookServer) validate() error {
 	if o.webhookSecret == "" {
 		return fmt.Errorf("webhook secret cannot be an empty string")
-	}
-
-	if o.appID == 0 {
-		return fmt.Errorf("app-id cannot be zero")
-	}
-	klog.Infof("Github app ID: %d\n", o.appID)
-
-	if o.keyPath == "" {
-		return fmt.Errorf("key-path cannot be an empty string")
-	}
-	key, err := ioutil.ReadFile(o.keyPath)
-	if err != nil {
-		return fmt.Errorf("unable to read %s: %w", o.keyPath, err)
-	}
-	block, _ := pem.Decode(key)
-	if block == nil || block.Type != "RSA PRIVATE KEY" {
-		return fmt.Errorf("unable to decode private key in %s", o.keyPath)
 	}
 
 	return nil
@@ -146,13 +113,13 @@ func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Now we have an install ID we can fetch an install specific client
-	client, err := o.ghClientMgr.getOrCreate(o.githubHostname, o.keyPath, o.appID, *install.GetInstallation().ID)
+	// Retrieve github client for the given installation
+	client, err := o.mgr.getOrCreate(*install.GetInstallation().ID)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	if err := o.app.handleEvent(client, event); err != nil {
+	if err := o.app.handleEvent(event, client); err != nil {
 		panic(err.Error())
 	}
 

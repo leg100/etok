@@ -10,23 +10,23 @@ import (
 )
 
 func TestGithubClientManager(t *testing.T) {
-	clientManager := newGithubClientManager()
-
 	keyPath := testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
 
-	client, err := clientManager.getOrCreate("app.net", keyPath, 123, 123)
+	mgr, err := newGithubClientManager("app.net", keyPath, 123)
+
+	client, err := mgr.getOrCreate(123)
 	require.NoError(t, err)
 	assert.NotNil(t, client)
-	assert.Equal(t, 1, len(clientManager))
+	assert.Equal(t, 1, len(mgr.clients))
 
-	client, err = clientManager.getOrCreate("app.net", keyPath, 123, 456)
+	client, err = mgr.getOrCreate(456)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(clientManager))
+	assert.Equal(t, 2, len(mgr.clients))
 
 	// Test that it retrieves previously created client for install 456 and
 	// doesn't create another client
-	client2, err := clientManager.getOrCreate("app.net", keyPath, 123, 456)
+	client2, err := mgr.getOrCreate(456)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(clientManager))
+	assert.Equal(t, 2, len(mgr.clients))
 	assert.Equal(t, client, client2)
 }
