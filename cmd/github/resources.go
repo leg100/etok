@@ -139,18 +139,19 @@ func isAvailable(c appsv1.DeploymentCondition) bool {
 
 func service(namespace string, port int32) *corev1.Service {
 	return &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: corev1.SchemeGroupVersion.String(),
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "webhook",
 			Namespace: namespace,
 		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Port: port,
+					Port:     port,
+					Protocol: "TCP",
 				},
 			},
 			Selector: selector,

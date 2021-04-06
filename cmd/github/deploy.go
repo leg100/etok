@@ -1,38 +1,25 @@
 package github
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	// or "gopkg.in/unrolled/render.v1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/k8s"
-	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 )
 
 var (
 	defaultTimeout = 10 * time.Minute
-
-	// Interval between polling deployment status
-	deploymentInterval = time.Second
-
-	// Timeout for deployment readiness
-	deploymentTimeout = 10 * time.Second
 )
 
 type deployOptions struct {
@@ -42,25 +29,17 @@ type deployOptions struct {
 
 	namespace   string
 	kubeContext string
-	image       string
 
 	appName           string
 	appCreatorOptions createAppOptions
 
-	// Annotations to add to the service account resource
-	serviceAccountAnnotations map[string]string
-
 	// Type of service for webhook
 	serviceType string
 
-	// Toggle waiting for deployment to be ready
-	wait bool
-
-	// Webhook listening port
-	port int32
-
 	// Github's hostname
 	githubHostname string
+
+	deployer
 }
 
 func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
@@ -109,7 +88,9 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			}
 
 			// Deploy webhook k8s resources
-			if err := o.deploy(cmd.Context()); err != nil {
+			o.deployer.namespace = o.namespace
+			o.deployer.port = defaultWebhookPort
+			if err := o.deployer.deploy(cmd.Context(), o.RuntimeClient); err != nil {
 				return err
 			}
 
@@ -143,66 +124,5 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 
 	cmd.Flags().BoolVar(&o.wait, "wait", true, "Toggle waiting for deployment to be ready")
 
-	// Listening port of deployment? Service? Ingress?
-	cmd.Flags().Int32Var(&o.port, "port", defaultWebhookPort, "Webhook server listening port")
 	return cmd, o
-}
-
-func (o *deployOptions) deploy(ctx context.Context) error {
-	var resources []runtimeclient.Object
-
-	deploymentResource := deployment(o.namespace, o.image, o.port)
-
-	resources = append(resources, service(o.namespace, o.port))
-	resources = append(resources, deploymentResource)
-	resources = append(resources, clusterRoleBinding(o.namespace))
-	resources = append(resources, clusterRole())
-	resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
-
-	for _, r := range resources {
-		labels.SetCommonLabels(r)
-		labels.SetLabel(r, labels.WebhookComponent)
-
-		result, err := controllerutil.CreateOrUpdate(ctx, o.RuntimeClient, r, func() error { return nil })
-		if err != nil {
-			return fmt.Errorf("unable to create or update resource: %s: %w", klog.KObj(r), err)
-		}
-		fmt.Fprintf(o.Out, "%T %s has been %s\n", r, klog.KObj(r), result)
-	}
-
-	if o.wait {
-		fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
-		if err := k8s.DeploymentIsReady(ctx, o.RuntimeClient, deploymentResource, deploymentInterval, deploymentTimeout); err != nil {
-			return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// createOrUpdate idempotently installs resources, creating the resource if it
-// doesn't already exist, otherwise updating it.
-func (o *deployOptions) createOrUpdate(ctx context.Context, res runtimeclient.Object) (err error) {
-	existing := res.DeepCopyObject().(runtimeclient.Object)
-
-	kind := res.GetObjectKind().GroupVersionKind().Kind
-
-	err = o.RuntimeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(res), existing)
-	if kerrors.IsNotFound(err) {
-		fmt.Fprintf(o.Out, "Creating resource %s %s\n", kind, klog.KObj(res))
-		if err := o.RuntimeClient.Create(ctx, res); err != nil {
-			return fmt.Errorf("unable to create resource: %w", err)
-		}
-	} else if err != nil {
-		return err
-	}
-
-	res.SetResourceVersion(existing.GetResourceVersion())
-
-	fmt.Fprintf(o.Out, "Updating resource %s %s\n", kind, klog.KObj(res))
-	if err := o.RuntimeClient.Update(ctx, res); err != nil {
-		return fmt.Errorf("unable to update existing resource: %w", err)
-	}
-
-	return nil
 }
