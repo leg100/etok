@@ -74,6 +74,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			// Configure webhook server to forward events to our 'github app'
 			o.webhookServer.app = newApp(client, o.appOptions)
+			o.webhookServer.mgr = clientmgr
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor
