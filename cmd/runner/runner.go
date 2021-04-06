@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -171,7 +170,7 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 // If the lock file does not exist then it exits early without error.
 func (o *RunnerOptions) persistLockFile(ctx context.Context) error {
 	// Check if file exists
-	lockFileContents, err := ioutil.ReadFile(globals.LockFile)
+	lockFileContents, err := os.ReadFile(globals.LockFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			klog.V(1).Infof("%s not found", globals.LockFile)

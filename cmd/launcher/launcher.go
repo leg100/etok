@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -271,7 +270,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 
 		// Write lock file to user's disk
 		lockFilePath := filepath.Join(o.path, globals.LockFile)
-		if err := ioutil.WriteFile(lockFilePath, lock.BinaryData[globals.LockFile], 0644); err != nil {
+		if err := os.WriteFile(lockFilePath, lock.BinaryData[globals.LockFile], 0644); err != nil {
 			return err
 		}
 

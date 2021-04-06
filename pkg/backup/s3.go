@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -82,7 +82,7 @@ func (p *s3Provider) Restore(ctx context.Context, key client.ObjectKey) (*corev1
 	}
 	defer resp.Body.Close()
 
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

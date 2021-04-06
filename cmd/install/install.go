@@ -3,9 +3,10 @@ package install
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -332,7 +333,7 @@ func (o *installOptions) clusterRole(path string) (*rbacv1.ClusterRole, error) {
 
 func getLocalOrRemoteDoc(local bool, path, repo string) (data []byte, err error) {
 	if local {
-		data, err = ioutil.ReadFile(path)
+		data, err = os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -350,7 +351,7 @@ func getLocalOrRemoteDoc(local bool, path, repo string) (data []byte, err error)
 			return nil, fmt.Errorf("failed to retrieve %s: status code: %d", u, resp.StatusCode)
 		}
 
-		data, err = ioutil.ReadAll(resp.Body)
+		data, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}

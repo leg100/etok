@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -69,7 +69,7 @@ func TestCreate(t *testing.T) {
 			resp, err := http.Get(fmt.Sprintf("http://localhost:%d/exchange-code?code=good-code", opts.flow.port))
 			require.NoError(t, err)
 			assert.Equal(t, 200, resp.StatusCode)
-			content, err := ioutil.ReadAll(resp.Body)
+			content, err := io.ReadAll(resp.Body)
 			assert.Equal(t, "github app installation page", string(content))
 
 			// Check that credentials secret was created
