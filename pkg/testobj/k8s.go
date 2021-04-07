@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -318,7 +317,7 @@ func WithDataFromFile(k, path string) func(*corev1.Secret) {
 		if secret.Data == nil {
 			secret.Data = make(map[string][]byte)
 		}
-		data, _ := ioutil.ReadFile(path)
+		data, _ := os.ReadFile(path)
 		secret.Data[k] = data
 	}
 }

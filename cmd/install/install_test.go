@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -293,6 +293,6 @@ func mockWebServer(t *testutil.T) {
 }
 
 func respondWithFile(w io.Writer, path string) {
-	body, _ := ioutil.ReadFile(path)
+	body, _ := os.ReadFile(path)
 	fmt.Fprintln(w, string(body))
 }

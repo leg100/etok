@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"io/ioutil"
+	"os"
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,7 +18,7 @@ func requestFromObject(obj client.Object) reconcile.Request {
 }
 
 func readFile(path string) []byte {
-	data, _ := ioutil.ReadFile(path)
+	data, _ := os.ReadFile(path)
 	return data
 }
 

@@ -3,7 +3,6 @@ package manager
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 
@@ -86,7 +85,7 @@ func ManagerCmd(f *cmdutil.Factory) *cobra.Command {
 			// Convert GOOGLE_CREDENTIALS=<key> to
 			// GOOGLE_APPLICATION_CREDENTIALS=<file-path-containing-key>
 			if gcreds := os.Getenv("GOOGLE_CREDENTIALS"); gcreds != "" {
-				if err := ioutil.WriteFile("/google_application_credentials.json", []byte(gcreds), 0400); err != nil {
+				if err := os.WriteFile("/google_application_credentials.json", []byte(gcreds), 0400); err != nil {
 					return fmt.Errorf("unable to write google credentials to disk: %w", err)
 				}
 				if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/google_application_credentials.json"); err != nil {
