@@ -30,5 +30,9 @@ func GetOperatorResources() ([][]byte, error) {
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	return resources, err
 }
