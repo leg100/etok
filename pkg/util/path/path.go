@@ -1,7 +1,6 @@
 package path
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +100,7 @@ func Copy(src, dst string) error {
 			return os.MkdirAll(filepath.Join(dst, path), 0755)
 		}
 
-		data, _ := ioutil.ReadFile(filepath.Join(src, path))
-		return ioutil.WriteFile(filepath.Join(dst, path), data, 0644)
+		data, _ := os.ReadFile(filepath.Join(src, path))
+		return os.WriteFile(filepath.Join(dst, path), data, 0644)
 	})
 }

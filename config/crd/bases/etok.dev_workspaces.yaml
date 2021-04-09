@@ -195,11 +195,10 @@ spec:
                       blank to use the VCS provider's default branch.
                     type: string
                   repository:
-                    description: VCS Repository to connect to workspace, in the format
-                      'owner/repo'
-                    pattern: ^[0-9a-zA-Z_\-]+/[0-9a-zA-Z_\-]+$
+                    description: VCS Repository to connect to workspace.
                     type: string
                   workingDir:
+                    default: .
                     description: Sub-directory within VCS repository to connect to
                       the workspace
                     type: string

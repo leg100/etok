@@ -3,7 +3,6 @@ package env
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,7 +39,7 @@ func (e *Env) String() string {
 func Read(path string) (env *Env, err error) {
 	path = filepath.Join(path, environmentFile)
 
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -60,5 +59,5 @@ func (e *Env) Write(path string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(path, []byte(e.String()), 0644)
+	return os.WriteFile(path, []byte(e.String()), 0644)
 }

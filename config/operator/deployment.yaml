@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etok
+spec:
+  selector:
+    matchLabels:
+      app: etok
+      component: operator
+  template:
+    metadata:
+      labels:
+        app: etok
+        component: operator
+    spec:
+      containers:
+      - args:
+        - operator
+        command:
+        - etok
+        env:
+        - name: WATCH_NAMESPACE
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: etok
+        image: leg100/etok:latest
+        imagePullPolicy: IfNotPresent
+        name: operator
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+      restartPolicy: Always
+      serviceAccountName: etok

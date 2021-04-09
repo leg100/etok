@@ -8,16 +8,16 @@
 package static
 
 import (
-	"github.com/elazarl/go-bindata-assetfs"
 	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 )
 
 func bindataRead(data []byte, name string) ([]byte, error) {
@@ -311,7 +311,7 @@ func RestoreAsset(dir, name string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(_filePath(dir, name), data, info.Mode())
+	err = os.WriteFile(_filePath(dir, name), data, info.Mode())
 	if err != nil {
 		return err
 	}
