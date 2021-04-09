@@ -323,6 +323,15 @@ func newUnstructuredObj(gvk schema.GroupVersionKind, name string, namespace ...s
 	return u
 }
 
+func deploy() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "etok",
+			Namespace: "etok",
+		},
+	}
+}
+
 func successfulDeploy() *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
