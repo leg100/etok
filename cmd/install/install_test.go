@@ -4,34 +4,28 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	kfake "k8s.io/client-go/kubernetes/fake"
 
 	appsv1 "k8s.io/api/apps/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
-	etokclient "github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/scheme"
+	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestInstall(t *testing.T) {
@@ -52,31 +46,58 @@ func TestInstall(t *testing.T) {
 			args: []string{"install", "--wait=false", "--crds-only"},
 		},
 		{
-			name: "upgrade",
-			args: []string{"install", "--wait=false"},
-			objs: append(wantedResources(), wantedCRDs()...),
-		},
-		{
-			name: "fresh local install",
-			args: []string{"install", "--local", "--wait=false"},
-		},
-		{
 			name: "fresh install with service account annotations",
 			args: []string{"install", "--wait=false", "--sa-annotations", "foo=bar,baz=haj"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var sa corev1.ServiceAccount
-				client.Get(context.Background(), types.NamespacedName{Namespace: "etok", Name: "etok"}, &sa)
-				assert.Equal(t, map[string]string{"foo": "bar", "baz": "haj"}, sa.GetAnnotations())
+				sa := &unstructured.Unstructured{}
+				sa.SetGroupVersionKind(schema.GroupVersionKind{Version: "v1", Kind: "ServiceAccount"})
+				err := client.Get(context.Background(), runtimeclient.ObjectKey{Namespace: "etok", Name: "etok"}, sa)
+				if assert.NoError(t, err) {
+					assert.Equal(t, map[string]string{"foo": "bar", "baz": "haj"}, sa.GetAnnotations())
+				}
 			},
 		},
 		{
 			name: "fresh install with custom image",
 			args: []string{"install", "--wait=false", "--image", "bugsbunny:v123"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d appsv1.Deployment
-				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+				// Get deployment
+				deployment := &unstructured.Unstructured{}
+				deployment.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
+				err := client.Get(context.Background(), runtimeclient.ObjectKey{Namespace: "etok", Name: "etok"}, deployment)
+				if assert.NoError(t, err) {
 
-				assert.Equal(t, "bugsbunny:v123", d.Spec.Template.Spec.Containers[0].Image)
+					// Get container
+					containers, found, err := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
+					if assert.True(t, found) && assert.NoError(t, err) && assert.Equal(t, 1, len(containers)) {
+
+						// Get image
+						image, found, err := unstructured.NestedString(containers[0].(map[string]interface{}), "image")
+						if assert.True(t, found) && assert.NoError(t, err) {
+							assert.Equal(t, "bugsbunny:v123", image)
+						}
+
+						// Get envs - check that ETOK_IMAGE is set too
+						env, found, err := unstructured.NestedSlice(containers[0].(map[string]interface{}), "env")
+						if assert.True(t, found) && assert.NoError(t, err) {
+
+							var foundEnvVar bool
+							for i := range env {
+								name, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "name")
+								require.NoError(t, err)
+								if found && name == "ETOK_IMAGE" {
+
+									value, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "value")
+									require.NoError(t, err)
+									if found && value == "bugsbunny:v123" {
+										foundEnvVar = true
+									}
+								}
+							}
+							assert.True(t, foundEnvVar)
+						}
+					}
+				}
 			},
 		},
 		{
@@ -84,27 +105,85 @@ func TestInstall(t *testing.T) {
 			args: []string{"install", "--wait=false"},
 			objs: []runtimeclient.Object{testobj.Secret("etok", "etok")},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d appsv1.Deployment
-				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+				// Get deployment
+				deployment := &unstructured.Unstructured{}
+				deployment.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
+				err := client.Get(context.Background(), runtimeclient.ObjectKey{Namespace: "etok", Name: "etok"}, deployment)
 
-				assert.Contains(t, d.Spec.Template.Spec.Containers[0].EnvFrom, corev1.EnvFromSource{
-					SecretRef: &corev1.SecretEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "etok",
-						},
-					},
-				})
+				if assert.NoError(t, err) {
+
+					// Get container
+					containers, found, err := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
+					if assert.True(t, found) && assert.NoError(t, err) && assert.Equal(t, 1, len(containers)) {
+
+						// Get envFrom
+						envfrom, found, err := unstructured.NestedSlice(containers[0].(map[string]interface{}), "envFrom")
+						if assert.True(t, found) && assert.NoError(t, err) && assert.Equal(t, 1, len(envfrom)) {
+
+							// Get secretRef
+							secretRef, found, err := unstructured.NestedStringMap(envfrom[0].(map[string]interface{}), "secretRef")
+							if assert.True(t, found) && assert.NoError(t, err) {
+								assert.Equal(t, map[string]string{"name": "etok"}, secretRef)
+							}
+						}
+
+					}
+				}
 			},
 		},
 		{
 			name: "fresh install with backups enabled",
 			args: []string{"install", "--wait=false", "--backup-provider=gcs", "--gcs-bucket=backups-bucket"},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var d appsv1.Deployment
-				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "etok"}, &d)
+				// Get deployment
+				deployment := &unstructured.Unstructured{}
+				deployment.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
+				err := client.Get(context.Background(), runtimeclient.ObjectKey{Namespace: "etok", Name: "etok"}, deployment)
 
-				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_BACKUP_PROVIDER", Value: "gcs"})
-				assert.Contains(t, d.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ETOK_GCS_BUCKET", Value: "backups-bucket"})
+				if assert.NoError(t, err) {
+
+					// Get container
+					containers, found, err := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
+					if assert.True(t, found) && assert.NoError(t, err) && assert.Equal(t, 1, len(containers)) {
+
+						// Get envs
+						env, found, err := unstructured.NestedSlice(containers[0].(map[string]interface{}), "env")
+						if assert.True(t, found) && assert.NoError(t, err) {
+
+							// Get provider env var
+							var foundProvider bool
+							for i := range env {
+								name, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "name")
+								require.NoError(t, err)
+								if found && name == "ETOK_BACKUP_PROVIDER" {
+
+									value, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "value")
+									require.NoError(t, err)
+									if found && value == "gcs" {
+										foundProvider = true
+									}
+								}
+							}
+							assert.True(t, foundProvider)
+
+							// Get bucket env var
+							var foundBucket bool
+							for i := range env {
+								name, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "name")
+								require.NoError(t, err)
+								if found && name == "ETOK_GCS_BUCKET" {
+
+									value, found, err := unstructured.NestedFieldNoCopy(env[i].(map[string]interface{}), "value")
+									require.NoError(t, err)
+									if found && value == "backups-bucket" {
+										foundBucket = true
+									}
+								}
+							}
+							assert.True(t, foundBucket)
+						}
+					}
+				}
 			},
 		},
 		{
@@ -119,35 +198,27 @@ func TestInstall(t *testing.T) {
 		},
 		{
 			name: "dry run",
-			args: []string{"install", "--dry-run", "--local"},
+			args: []string{"install", "--dry-run"},
 			dryRunAssertions: func(t *testutil.T, out *bytes.Buffer) {
 				// Assert correct number of k8s objs are serialized to yaml
 				docs := strings.Split(out.String(), "---\n")
-				assert.Equal(t, 11, len(docs))
+				assert.Equal(t, 8, len(docs))
 			},
 		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// When retrieve local paths to YAML files, it's assumed the user's
-			// pwd is the repo root
-			t.Chdir("../../")
-
 			buf := new(bytes.Buffer)
+
 			f := &cmdutil.Factory{
 				IOStreams:            cmdutil.IOStreams{Out: buf},
+				ClientCreator:        client.NewFakeClientCreator(),
 				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
 			}
 
 			cmd, opts := InstallCmd(f)
 			cmd.SetOut(buf)
 			cmd.SetArgs(tt.args)
-
-			// Mock a remote web server from which YAML files will be retrieved
-			mockWebServer(t)
-
-			// Override wait interval to ensure fast tests
-			t.Override(&interval, 10*time.Millisecond)
 
 			// Run command and assert returned error is either nil or wraps
 			// expected error
@@ -167,23 +238,34 @@ func TestInstall(t *testing.T) {
 				return
 			}
 
-			// get runtime client now that it's been created
-			client := opts.RuntimeClient
-
-			// assert CRDs are present
-			for _, res := range wantedCRDs() {
-				assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
+			wantResources := []*unstructured.Unstructured{
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRole", Version: "v1", Group: "rbac.authorization.k8s.io"}, "etok"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRole", Version: "v1", Group: "rbac.authorization.k8s.io"}, "etok-admin"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRole", Version: "v1", Group: "rbac.authorization.k8s.io"}, "etok-user"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRoleBinding", Version: "v1", Group: "rbac.authorization.k8s.io"}, "etok"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ServiceAccount", Version: "v1"}, "etok", "etok"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "Deployment", Version: "v1", Group: "apps"}, "etok", "etok"),
 			}
 
 			// assert non-CRD resources are present
 			if !opts.crdsOnly {
-				for _, res := range wantedResources() {
-					assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
+				for _, res := range wantResources {
+					assert.NoError(t, opts.RuntimeClient.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
 				}
 			}
 
+			// assert CRDs are present
+			crdGVK := schema.GroupVersionKind{Kind: "CustomResourceDefinition", Group: "apiextensions.k8s.io", Version: "v1"}
+			wantCRDs := []*unstructured.Unstructured{
+				newUnstructuredObj(crdGVK, "workspaces.etok.dev"),
+				newUnstructuredObj(crdGVK, "runs.etok.dev"),
+			}
+			for _, crd := range wantCRDs {
+				assert.NoError(t, opts.RuntimeClient.Get(context.Background(), runtimeclient.ObjectKeyFromObject(crd), crd))
+			}
+
 			if tt.assertions != nil {
-				tt.assertions(t, client)
+				tt.assertions(t, opts.RuntimeClient)
 			}
 		})
 	}
@@ -192,37 +274,27 @@ func TestInstall(t *testing.T) {
 func TestInstallWait(t *testing.T) {
 	tests := []struct {
 		name string
-		objs []runtimeclient.Object
+		objs []runtime.Object
 		err  error
 	}{
 		{
 			name: "successful",
 			// Seed fake client with already successful deploy
-			objs: []runtimeclient.Object{successfulDeploy()},
+			objs: []runtime.Object{successfulDeploy()},
 		},
 		{
 			name: "failure",
-			objs: []runtimeclient.Object{deploy()},
+			objs: []runtime.Object{deploy()},
 			err:  wait.ErrWaitTimeout,
 		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Override wait interval to ensure fast tests
-			t.Override(&interval, 10*time.Millisecond)
-
 			// Create fake client and seed with any objs
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, convertObjs(tt.objs...)...)
-			opts := &installOptions{
-				Client: &etokclient.Client{
-					RuntimeClient: client,
-				},
-				Factory: &cmdutil.Factory{
-					IOStreams: cmdutil.IOStreams{Out: new(bytes.Buffer)},
-				},
-				timeout: 100 * time.Millisecond,
-			}
-			assert.Equal(t, tt.err, opts.deploymentIsReady(context.Background(), deploy()))
+			client := kfake.NewSimpleClientset(tt.objs...)
+
+			err := deploymentIsReady(context.Background(), "etok", "etok", client, 100*time.Millisecond, 10*time.Millisecond)
+			assert.Equal(t, tt.err, err)
 		})
 	}
 }
@@ -233,26 +305,22 @@ func convertObjs(objs ...runtimeclient.Object) (converted []runtime.Object) {
 	for _, o := range objs {
 		converted = append(converted, o.(runtime.Object))
 	}
-	return
+	return converted
 }
 
-func wantedCRDs() (resources []runtimeclient.Object) {
-	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "workspaces.etok.dev"}})
-	resources = append(resources, &apiextv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "runs.etok.dev"}})
-	return
-}
+func newUnstructuredObj(gvk schema.GroupVersionKind, name string, namespace ...string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	u.SetName(name)
 
-func wantedResources() (resources []runtimeclient.Object) {
-	resources = append(resources, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
-	resources = append(resources, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
-	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
-	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
-	resources = append(resources, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
-	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok"}})
-	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok-user"}})
-	resources = append(resources, &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "etok-admin"}})
-	resources = append(resources, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "etok", Name: "etok"}})
-	return
+	if len(namespace) > 1 {
+		panic("only want one namespace")
+	}
+	if len(namespace) == 1 {
+		u.SetNamespace(namespace[0])
+	}
+
+	return u
 }
 
 func deploy() *appsv1.Deployment {
@@ -280,19 +348,4 @@ func successfulDeploy() *appsv1.Deployment {
 			},
 		},
 	}
-}
-
-func mockWebServer(t *testutil.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Respond by reading the request path from local FS (the path is made
-		// relative by stripping off the first '/')
-		respondWithFile(w, r.URL.Path[1:])
-	}))
-	t.Override(&repoURL, ts.URL)
-	t.Cleanup(ts.Close)
-}
-
-func respondWithFile(w io.Writer, path string) {
-	body, _ := os.ReadFile(path)
-	fmt.Fprintln(w, string(body))
 }
