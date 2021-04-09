@@ -9,8 +9,8 @@ import (
 	"github.com/leg100/etok/pkg/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -18,29 +18,37 @@ import (
 func TestDeployer(t *testing.T) {
 	tests := []struct {
 		name       string
-		objs       []runtimeclient.Object
 		err        error
 		deployer   deployer
 		assertions func(*testutil.T, runtimeclient.Client)
 	}{
 		{
-			name: "install: deployment image",
-			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var deploy appsv1.Deployment
-				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "webhook"}, &deploy)
-				assert.Equal(t, version.Image, deploy.Spec.Template.Spec.Containers[0].Image)
-			},
+			name:     "default",
+			deployer: deployer{},
 		},
 		{
-			name: "update: deployment image",
+			name: "image setting",
 			deployer: deployer{
 				image: "bugsbunny:v123",
 			},
-			objs: []runtimeclient.Object{deployment(defaultNamespace, version.Image, defaultWebhookPort)},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
-				var deploy appsv1.Deployment
-				client.Get(context.Background(), types.NamespacedName{Namespace: defaultNamespace, Name: "webhook"}, &deploy)
-				assert.Equal(t, "bugsbunny:v123", deploy.Spec.Template.Spec.Containers[0].Image)
+				// Get deployment
+				deployment := &unstructured.Unstructured{}
+				deployment.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
+				err := client.Get(context.Background(), runtimeclient.ObjectKey{Namespace: "github", Name: "webhook"}, deployment)
+				if assert.NoError(t, err) {
+
+					// Get container
+					containers, found, err := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
+					if assert.True(t, found) && assert.NoError(t, err) && assert.Equal(t, 1, len(containers)) {
+
+						// Get image
+						image, found, err := unstructured.NestedString(containers[0].(map[string]interface{}), "image")
+						if assert.True(t, found) && assert.NoError(t, err) {
+							assert.Equal(t, "bugsbunny:v123", image)
+						}
+					}
+				}
 			},
 		},
 	}
@@ -58,13 +66,39 @@ func TestDeployer(t *testing.T) {
 				tt.deployer.port = defaultWebhookPort
 			}
 
-			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(tt.objs...).Build()
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 
 			require.NoError(t, tt.deployer.deploy(context.Background(), client))
+
+			// assert resources are present
+			wantResources := []*unstructured.Unstructured{
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRole", Version: "v1", Group: "rbac.authorization.k8s.io"}, "webhook"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRoleBinding", Version: "v1", Group: "rbac.authorization.k8s.io"}, "webhook"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ServiceAccount", Version: "v1"}, "webhook", "github"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "Deployment", Version: "v1", Group: "apps"}, "webhook", "github"),
+			}
+			for _, res := range wantResources {
+				assert.NoError(t, client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(res), res))
+			}
 
 			if tt.assertions != nil {
 				tt.assertions(t, client)
 			}
 		})
 	}
+}
+
+func newUnstructuredObj(gvk schema.GroupVersionKind, name string, namespace ...string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	u.SetName(name)
+
+	if len(namespace) > 1 {
+		panic("only want one namespace")
+	}
+	if len(namespace) == 1 {
+		u.SetNamespace(namespace[0])
+	}
+
+	return u
 }

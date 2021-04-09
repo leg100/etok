@@ -19,6 +19,7 @@ import (
 )
 
 var (
+	// Default timeout for waiting for app to be created
 	defaultTimeout = 10 * time.Minute
 )
 
@@ -39,6 +40,9 @@ type deployOptions struct {
 	// Github's hostname
 	githubHostname string
 
+	// Toggle waiting for deployment to be ready
+	wait bool
+
 	deployer
 }
 
@@ -46,22 +50,27 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 	var webhookUrl flags.Url
 
 	o := &deployOptions{
-		Factory:   f,
 		namespace: defaultNamespace,
 	}
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy github app",
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			// Create (controller-runtime) k8s client
-			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
+			rc, err := f.CreateRuntimeClient(o.kubeContext)
+			if err != nil {
+				return err
+			}
+
+			// Create client-go client
+			kclient, err := f.Create(o.kubeContext)
 			if err != nil {
 				return err
 			}
 
 			// Ensure namespace exists
 			ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: o.namespace}}
-			_, err = controllerutil.CreateOrUpdate(cmd.Context(), o.RuntimeClient, &ns, func() error { return nil })
+			_, err = controllerutil.CreateOrUpdate(cmd.Context(), rc.RuntimeClient, &ns, func() error { return nil })
 			if err != nil {
 				return err
 			}
@@ -92,6 +101,13 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			o.deployer.port = defaultWebhookPort
 			if err := o.deployer.deploy(cmd.Context(), o.RuntimeClient); err != nil {
 				return err
+			}
+
+			// Wait for deployment to be ready
+			if o.wait {
+				if err := o.deployer.wait(cmd.Context(), kclient.KubeClient); err != nil {
+					return err
+				}
 			}
 
 			return nil

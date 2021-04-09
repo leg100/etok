@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/leg100/etok/cmd/github/fixtures"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -52,8 +51,12 @@ func TestDeploy(t *testing.T) {
 				execErr <- cmd.Execute()
 			}()
 
-			err := pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
-			require.NoError(t, err)
+			// Wait for dynamic port to be assigned
+			for {
+				if opts.appCreatorOptions.port != 0 {
+					break
+				}
+			}
 
 			// Skip request to new app endpoint
 

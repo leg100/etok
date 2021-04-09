@@ -5,19 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	yamlserializer "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/leg100/etok/config"
 	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-var (
-	// Interval between polling deployment status
-	deploymentInterval = time.Second
-
-	// Timeout for deployment readiness
-	deploymentTimeout = 10 * time.Second
 )
 
 type deployer struct {
@@ -31,54 +28,93 @@ type deployer struct {
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
-	// Toggle waiting for deployment to be ready
-	wait bool
+	// Timeout for deployment readiness
+	timeout time.Duration
 }
 
 func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) error {
-	var resources []runtimeclient.Object
+	var decUnstructured = yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
-	deploymentResource := deployment(o.namespace, o.image, o.port)
+	resources, err := config.GetWebhookResources()
+	if err != nil {
+		panic(err.Error())
+	}
 
-	resources = append(resources, service(o.namespace, o.port))
-	resources = append(resources, deploymentResource)
-	resources = append(resources, clusterRoleBinding(o.namespace))
-	resources = append(resources, clusterRole())
-	resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
+	for _, res := range resources {
+		// Decode YAML manifest into unstructured.Unstructured
+		obj := &unstructured.Unstructured{}
+		_, _, err := decUnstructured.Decode(res, nil, obj)
+		if err != nil {
+			return err
+		}
 
-	for _, r := range resources {
-		labels.SetCommonLabels(r)
-		labels.SetLabel(r, labels.WebhookComponent)
+		switch obj.GetKind() {
+		case "ClusterRoleBinding", "ClusterRole":
+			// Skip setting namespace for non-namespaced resources
+		default:
+			obj.SetNamespace(o.namespace)
+		}
 
-		existing := r.DeepCopyObject().(runtimeclient.Object)
+		if obj.GetKind() == "Deployment" {
+			// Override container settings
 
-		err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(r), existing)
+			// Get deploy containers
+			containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+			if err != nil || !found || len(containers) != 1 {
+				panic("deployment resource is corrupt")
+			}
+
+			// Set image
+			if err := unstructured.SetNestedField(containers[0].(map[string]interface{}), o.image, "image"); err != nil {
+				panic(err.Error())
+			}
+
+			// Update deployment with updated container
+			if err := unstructured.SetNestedSlice(obj.Object, containers, "spec", "template", "spec", "containers"); err != nil {
+				panic(err.Error())
+			}
+		}
+
+		if obj.GetKind() == "ServiceAccount" {
+			obj.SetAnnotations(o.serviceAccountAnnotations)
+		}
+
+		// Set labels
+		labels.SetCommonLabels(obj)
+		labels.SetLabel(obj, labels.WebhookComponent)
+
+		// Check resource exists and create or patch accordingly
+		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(obj), obj.DeepCopy())
 		switch {
 		case kerrors.IsNotFound(err):
-			fmt.Printf("Creating resource %T %s\n", r, klog.KObj(r))
-			if err := client.Create(ctx, r); err != nil {
-				return fmt.Errorf("unable to create resource: %w", err)
+			fmt.Printf("Creating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
+			err = client.Create(ctx, obj, &runtimeclient.CreateOptions{FieldManager: "etok-cli"})
+			if err != nil {
+				return err
 			}
 		case err != nil:
 			return err
 		default:
-			r.SetResourceVersion(existing.GetResourceVersion())
-
-			kind := r.GetObjectKind().GroupVersionKind().Kind
-
-			fmt.Printf("Updating resource %s %s\n", kind, klog.KObj(r))
-			if err := client.Update(ctx, r); err != nil {
-				return fmt.Errorf("unable to update existing resource: %w", err)
+			// Update the object with SSA
+			fmt.Printf("Updating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
+			force := true
+			err = client.Patch(ctx, obj, runtimeclient.Apply, &runtimeclient.PatchOptions{
+				FieldManager: "etok-cli",
+				Force:        &force,
+			})
+			if err != nil {
+				return err
 			}
-			fmt.Printf("%T %s has been %s\n", r, klog.KObj(r), "updated")
 		}
 	}
 
-	if o.wait {
-		fmt.Printf("Waiting for Deployment to be ready\n")
-		if err := k8s.DeploymentIsReady(ctx, client, deploymentResource, deploymentInterval, deploymentTimeout); err != nil {
-			return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
-		}
+	return nil
+}
+
+func (o *deployer) wait(ctx context.Context, client kubernetes.Interface) error {
+	fmt.Printf("Waiting for Deployment to be ready\n")
+	if err := k8s.DeploymentIsReady(ctx, client, o.namespace, "etok", o.timeout, time.Second); err != nil {
+		return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
 	}
 
 	return nil

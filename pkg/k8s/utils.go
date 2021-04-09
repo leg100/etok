@@ -4,10 +4,12 @@ import (
 	"context"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/client-go/kubernetes"
 )
 
 // ContainerStatusByName returns the ContainerStatus object for a container with
@@ -22,16 +24,17 @@ func ContainerStatusByName(pod *corev1.Pod, name string) *corev1.ContainerStatus
 	return nil
 }
 
-// DeploymentIsReady will poll the kubernetes API server to see if the etok
+// DeploymentIsReady will poll the kubernetes API server to see if the
 // deployment is ready to service user requests.
-func DeploymentIsReady(ctx context.Context, client runtimeclient.Client, deploy *appsv1.Deployment, interval, timeout time.Duration) error {
+func DeploymentIsReady(ctx context.Context, client kubernetes.Interface, namespace, name string, timeout, interval time.Duration) error {
 	var readyObservations int32
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		if err := client.Get(ctx, runtimeclient.ObjectKeyFromObject(deploy), deploy); err != nil {
+		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
 			return false, err
 		}
 
-		for _, cond := range deploy.Status.Conditions {
+		for _, cond := range deployment.Status.Conditions {
 			if deploymentIsAvailable(cond) {
 				readyObservations++
 			}
