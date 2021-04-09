@@ -18,7 +18,7 @@ const (
 
 // Factory pertaining to etok apps
 type Factory struct {
-	// Deferred creation of clients
+	// Deferred creation of clients (k8s and etok clientsets)
 	client.ClientCreator
 
 	// Deferred creation of controller-runtime clients

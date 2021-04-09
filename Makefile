@@ -51,7 +51,7 @@ local: image push
 # Same as above - image still needs to be built and pushed/loaded
 .PHONY: deploy
 deploy: image push deploy-operator-secret
-	$(BUILD_BIN) install --context $(KUBECTX) --local --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
+	$(BUILD_BIN) install --context $(KUBECTX) --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
 		--backup-provider=gcs --gcs-bucket=$(BACKUP_BUCKET)
 
 # Tail operator logs
@@ -62,11 +62,11 @@ logs:
 # Deploy only CRDs
 .PHONY: crds
 crds: build
-	$(BUILD_BIN) install --context $(KUBECTX) --local --crds-only
+	$(BUILD_BIN) install --context $(KUBECTX) --crds-only
 
 .PHONY: undeploy
 undeploy: build delete-operator-secret
-	$(BUILD_BIN) install --local --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true
+	$(BUILD_BIN) install --dry-run | $(KUBECTL) delete -f - --wait --ignore-not-found=true
 
 
 # Deploy a secret containing GCP svc acc key, on kind, for the operator to use
@@ -129,11 +129,11 @@ else
 endif
 
 # Generate manifests e.g. CRD, RBAC etc.
-# add app=etok label to each crd
-# combine crd yamls into one
 .PHONY: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+
 
 .PHONY: dist
 dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
@@ -156,7 +156,7 @@ generate: controller-gen
 
 # find or download controller-gen
 # download controller-gen if necessary
-.PHONY: local
+.PHONY: controller-gen
 controller-gen:
 ifeq (, $(shell which controller-gen))
 	@{ \

@@ -3,61 +3,38 @@ package install
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
 
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
 	"github.com/leg100/etok/cmd/backup"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/config"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	yamlserializer "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 )
 
 const (
 	defaultNamespace = "etok"
-)
-
-var (
-	// The URL of the repo from which certain resources will be retrieved (CRDs,
-	// cluster role).
-	repoURL = "https://raw.githubusercontent.com/leg100/etok/v" + version.Version
-
-	// Relative paths to CRDs to be installed. Paths relative to the root of the
-	// repo.
-	crdPaths = []string{
-		"config/crd/bases/etok.dev_workspaces.yaml",
-		"config/crd/bases/etok.dev_runs.yaml",
-	}
-	// Relative paths to the cluster roles to be installed. Paths relative to
-	// the root of the repo.
-	clusterRolePaths = []string{
-		"config/rbac/role.yaml",
-		"config/rbac/user.yaml",
-		"config/rbac/admin.yaml",
-	}
-
-	// Interval between polling deployment status
-	interval = time.Second
 )
 
 type installOptions struct {
@@ -75,9 +52,6 @@ type installOptions struct {
 
 	// Toggle only installing CRDs
 	crdsOnly bool
-
-	// Toggle reading resources from local files rather than a URL
-	local bool
 
 	// Toggle waiting for deployment to be ready
 	wait bool
@@ -112,12 +86,28 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 
 			o.flags = cmd.Flags()
 
+			kclient, err := o.Create(o.kubeContext)
+			if err != nil {
+				return err
+			}
+
 			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
 			}
 
-			return o.install(cmd.Context())
+			if err := o.install(cmd.Context(), o.Client.RuntimeClient); err != nil {
+				return err
+			}
+
+			if o.wait && !o.crdsOnly && !o.dryRun {
+				fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
+				if err := deploymentIsReady(cmd.Context(), o.namespace, "etok", kclient.KubeClient, o.timeout, time.Second); err != nil {
+					return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
+				}
+			}
+
+			return nil
 		},
 	}
 
@@ -129,7 +119,6 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	cmd.Flags().StringVar(&o.name, "name", "etok-operator", "Name for kubernetes resources")
 	cmd.Flags().StringVar(&o.image, "image", version.Image, "Docker image used for both the operator and the runner")
 
-	cmd.Flags().BoolVar(&o.local, "local", false, "Read resources from local files (default false)")
 	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "Don't install resources just print out them in YAML format")
 	cmd.Flags().BoolVar(&o.wait, "wait", true, "Toggle waiting for deployment to be ready")
 	cmd.Flags().DurationVar(&o.timeout, "timeout", 60*time.Second, "Timeout for waiting for deployment to be ready")
@@ -140,150 +129,181 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 	return cmd, o
 }
 
-//func (o *installOptions) validateBackupOptions() error { if
-//o.backupProviderName != "" { if o.backupProviderName != "gcs" &&
-//o.backupProviderName != "s3" { return fmt.Errorf("%w: %s is invalid value for
-//--backup-provider, valid options are: gcs, s3", errInvalidBackupConfig,
-//o.backupProviderName) } }
-//
-//	if (o.backupProviderName == "" && o.gcsBucket != "") || (o.backupProviderName != "" && o.gcsBucket == "") {
-//		return fmt.Errorf("%w: you must specify both --backup-provider and --gcs-bucket", errInvalidBackupConfig)
-//	}
-//
-//	return nil
-//}
+func (o *installOptions) install(ctx context.Context, client runtimeclient.Client) error {
+	var decUnstructured = yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
-func (o *installOptions) install(ctx context.Context) error {
-	var deploy *appsv1.Deployment
-	var resources []runtimeclient.Object
+	resources, err := config.GetOperatorResources()
+	if err != nil {
+		panic(err.Error())
+	}
 
-	for _, path := range crdPaths {
-		res, err := o.crd(path)
+	// Ensure namespace exists first
+	ns := &corev1.Namespace{}
+	ns.SetName(o.namespace)
+	controllerutil.CreateOrUpdate(ctx, client, ns, func() error { return nil })
+
+	// Determine if secret is present
+	var secretPresent bool
+	secret := &unstructured.Unstructured{}
+	secret.SetGroupVersionKind(schema.GroupVersionKind{Version: "v1", Kind: "Secret"})
+	err = client.Get(ctx, runtimeclient.ObjectKey{Namespace: "etok", Name: "etok"}, secret)
+	if err != nil && !kerrors.IsNotFound(err) {
+		return fmt.Errorf("unable to check for secret: %w", err)
+	}
+	if err == nil {
+		secretPresent = true
+	}
+
+	var docs []string
+
+	for _, res := range resources {
+		// Decode YAML manifest into unstructured.Unstructured
+		obj := &unstructured.Unstructured{}
+		_, _, err := decUnstructured.Decode(res, nil, obj)
 		if err != nil {
 			return err
 		}
-		resources = append(resources, res)
-	}
 
-	if !o.crdsOnly {
-		for _, path := range clusterRolePaths {
-			role, err := o.clusterRole(path)
-			if err != nil {
-				return err
+		if o.crdsOnly && obj.GetKind() != "CustomResourceDefinition" {
+			continue
+		}
+
+		switch obj.GetKind() {
+		case "CustomResourceDefinition", "ClusterRoleBinding", "ClusterRole":
+			// Skip setting namespace for non-namespaced resources
+		default:
+			obj.SetNamespace(o.namespace)
+		}
+
+		if obj.GetKind() == "Deployment" {
+			// Override container settings
+
+			// Get deploy containers
+			containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+			if err != nil || !found || len(containers) != 1 {
+				panic("deployment resource is corrupt")
 			}
-			resources = append(resources, role)
-		}
 
-		resources = append(resources, operatorClusterRoleBinding(o.namespace))
-		resources = append(resources, userClusterRoleBinding())
-		resources = append(resources, adminClusterRoleBinding())
-		resources = append(resources, namespace(o.namespace))
-		resources = append(resources, serviceAccount(o.namespace, o.serviceAccountAnnotations))
+			// Set image
+			if err := unstructured.SetNestedField(containers[0].(map[string]interface{}), o.image, "image"); err != nil {
+				panic(err.Error())
+			}
 
-		// Determine if a secret named 'etok' is present
-		var secretPresent bool
-		err := o.RuntimeClient.Get(ctx, types.NamespacedName{Namespace: "etok", Name: "etok"}, &corev1.Secret{})
-		if err != nil && !kerrors.IsNotFound(err) {
-			return fmt.Errorf("unable to check for secret: %w", err)
-		}
-		if err == nil {
-			secretPresent = true
-		}
-
-		// Deploy options
-		dopts := []podTemplateOption{}
-		dopts = append(dopts, WithBackupConfig(o.backupCfg, o.flags))
-		dopts = append(dopts, WithSecret(secretPresent))
-		dopts = append(dopts, WithImage(o.image))
-
-		deploy = deployment(o.namespace, dopts...)
-		resources = append(resources, deploy)
-	}
-
-	// Set labels
-	for _, r := range resources {
-		labels.SetCommonLabels(r)
-		labels.SetLabel(r, labels.OperatorComponent)
-	}
-
-	if o.dryRun {
-		// Print out YAML representation
-		var docs []string
-		for _, r := range resources {
-			data, err := yaml.Marshal(r)
+			// Get container[0] env
+			env, _, err := unstructured.NestedSlice(containers[0].(map[string]interface{}), "env")
 			if err != nil {
-				return err
+				panic("deployment resource is corrupt")
+			}
+
+			// Set image env var
+			env = append(env, map[string]interface{}{
+				"name":  "ETOK_IMAGE",
+				"value": o.image,
+			})
+
+			// Set backup envs
+			for _, ev := range o.backupCfg.GetEnvVars(o.flags) {
+				env = append(env, map[string]interface{}{
+					"name":  ev.Name,
+					"value": ev.Value,
+				})
+			}
+
+			// Update container[0] envs
+			if err := unstructured.SetNestedSlice(containers[0].(map[string]interface{}), env, "env"); err != nil {
+				panic(err.Error())
+			}
+
+			if secretPresent {
+				// Get container[0] envFroms
+				envfrom, _, err := unstructured.NestedSlice(containers[0].(map[string]interface{}), "envFrom")
+				if err != nil {
+					panic("deployment resource is corrupt")
+				}
+
+				// Set reference to secret, to load env vars from secret resource
+				envfrom = append(envfrom, map[string]interface{}{
+					"secretRef": map[string]interface{}{
+						"name": "etok",
+					},
+				})
+
+				// Update container[0] envFroms
+				if err := unstructured.SetNestedSlice(containers[0].(map[string]interface{}), envfrom, "envFrom"); err != nil {
+					panic(err.Error())
+				}
+			}
+
+			// Update deployment with updated container
+			if err := unstructured.SetNestedSlice(obj.Object, containers, "spec", "template", "spec", "containers"); err != nil {
+				panic(err.Error())
+			}
+		}
+
+		if obj.GetKind() == "ServiceAccount" {
+			obj.SetAnnotations(o.serviceAccountAnnotations)
+		}
+
+		// Set labels
+		labels.SetCommonLabels(obj)
+		labels.SetLabel(obj, labels.OperatorComponent)
+
+		if o.dryRun {
+			// Print out YAML representation
+			data, err := yaml.Marshal(obj)
+			if err != nil {
+				panic(err.Error())
 			}
 			docs = append(docs, string(data))
+
+			// Don't install resource
+			continue
 		}
-		fmt.Fprintf(o.Out, strings.Join(docs, "---\n"))
 
-		// Don't install resources
-		return nil
-	}
-
-	if err := o.createOrUpdate(ctx, resources); err != nil {
-		return err
-	}
-
-	if o.wait && !o.crdsOnly {
-		fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
-		if err := o.deploymentIsReady(ctx, deploy); err != nil {
-			return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// createOrUpdate idempotently installs resources, creating the resource if it
-// doesn't already exist, otherwise updating it.
-func (o *installOptions) createOrUpdate(ctx context.Context, resources []runtimeclient.Object) (err error) {
-	for _, res := range resources {
-		existing := res.DeepCopyObject().(runtimeclient.Object)
-
-		kind := res.GetObjectKind().GroupVersionKind().Kind
-
-		err := o.RuntimeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(res), existing)
+		// Check resource exists and create or patch accordingly
+		err = client.Get(ctx, runtimeclient.ObjectKeyFromObject(obj), obj.DeepCopy())
 		switch {
 		case kerrors.IsNotFound(err):
-			fmt.Fprintf(o.Out, "Creating resource %s %s\n", kind, klog.KObj(res))
-			if err := o.RuntimeClient.Create(ctx, res); err != nil {
-				return fmt.Errorf("unable to create resource: %w", err)
+			fmt.Fprintf(o.Out, "Creating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
+			err = client.Create(ctx, obj, &runtimeclient.CreateOptions{FieldManager: "etok-cli"})
+			if err != nil {
+				return err
 			}
 		case err != nil:
 			return err
 		default:
-			if kind == "ClusterRoleBinding" && (res.GetName() == "etok-users" || res.GetName() == "etok-admins") {
-				// Preserve any out-of-band changes to subjects
-				existingBinding := existing.(*rbacv1.ClusterRoleBinding)
-				updatedBinding := res.(*rbacv1.ClusterRoleBinding)
-				updatedBinding.Subjects = existingBinding.Subjects
-			}
-
-			res.SetResourceVersion(existing.GetResourceVersion())
-
-			fmt.Fprintf(o.Out, "Updating resource %s %s\n", kind, klog.KObj(res))
-			if err := o.RuntimeClient.Update(ctx, res); err != nil {
-				return fmt.Errorf("unable to update existing resource: %w", err)
+			// Update the object with SSA
+			fmt.Fprintf(o.Out, "Updating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
+			force := true
+			err = client.Patch(context.Background(), obj, runtimeclient.Apply, &runtimeclient.PatchOptions{
+				FieldManager: "etok-cli",
+				Force:        &force,
+			})
+			if err != nil {
+				return err
 			}
 		}
+	}
 
+	if o.dryRun {
+		// Print out YAML representation
+		fmt.Fprint(o.Out, strings.Join(docs, "\n---\n"))
 	}
 
 	return nil
 }
 
-// DeploymentIsReady will poll the kubernetes API server to see if the velero
+// DeploymentIsReady will poll the kubernetes API server to see if the etok
 // deployment is ready to service user requests.
-func (o *installOptions) deploymentIsReady(ctx context.Context, deploy *appsv1.Deployment) error {
+func deploymentIsReady(ctx context.Context, namespace, name string, client kubernetes.Interface, timeout, interval time.Duration) error {
 	var readyObservations int32
-	return wait.PollImmediate(interval, o.timeout, func() (bool, error) {
-		if err := o.RuntimeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(deploy), deploy); err != nil {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
+		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
 			return false, err
 		}
 
-		for _, cond := range deploy.Status.Conditions {
+		for _, cond := range deployment.Status.Conditions {
 			if isAvailable(cond) {
 				readyObservations++
 			}
@@ -295,67 +315,4 @@ func (o *installOptions) deploymentIsReady(ctx context.Context, deploy *appsv1.D
 			return false, nil
 		}
 	})
-}
-
-// CRDs. Unlike most other resources this is read from a YAML file from the
-// repo, which in turn is installed with `make manifests`. Can also be read from
-// a URL.
-func (o *installOptions) crd(path string) (*apiextv1.CustomResourceDefinition, error) {
-	data, err := getLocalOrRemoteDoc(o.local, path, repoURL)
-	if err != nil {
-		return nil, err
-	}
-
-	var obj apiextv1.CustomResourceDefinition
-	if err := yaml.Unmarshal(data, &obj); err != nil {
-		return nil, err
-	}
-	obj.Status = apiextv1.CustomResourceDefinitionStatus{}
-	return &obj, nil
-}
-
-// Unmarshal cluster role. Unlike most other resources this is read from a YAML
-// file from the repo, which in turn is installed with `make manifests`.  Can
-// also be read from a URL.
-func (o *installOptions) clusterRole(path string) (*rbacv1.ClusterRole, error) {
-	data, err := getLocalOrRemoteDoc(o.local, path, repoURL)
-	if err != nil {
-		return nil, err
-	}
-
-	var role rbacv1.ClusterRole
-	if err := yaml.Unmarshal(data, &role); err != nil {
-		return nil, err
-	}
-
-	return &role, nil
-}
-
-func getLocalOrRemoteDoc(local bool, path, repo string) (data []byte, err error) {
-	if local {
-		data, err = os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		u, err := url.Parse(repo)
-		if err != nil {
-			return nil, err
-		}
-		u.Path = filepath.Join(u.Path, path)
-		resp, err := http.Get(u.String())
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("failed to retrieve %s: status code: %d", u, resp.StatusCode)
-		}
-
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return data, nil
 }
