@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leg100/etok/pkg/attacher"
 	"github.com/leg100/etok/pkg/builders"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 
@@ -108,6 +109,12 @@ type launcherOptions struct {
 
 	// Git repo from which run is being launched
 	repo *repo.Repo
+
+	// Function to attach to a pod's TTY
+	attacher.AttachFunc
+
+	// Function to get a pod's logs stream
+	logstreamer.GetLogsFunc
 }
 
 func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
@@ -120,9 +127,15 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.args = args
 
-			// Tests override run name
+			// Set options unless tests have overridden them
 			if o.runName == "" {
 				o.runName = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
+			}
+			if o.GetLogsFunc == nil {
+				o.GetLogsFunc = logstreamer.GetLogs
+			}
+			if o.AttachFunc == nil {
+				o.AttachFunc = attacher.Attach
 			}
 
 			// Toggle whether to attach to pod's TTY

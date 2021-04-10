@@ -12,6 +12,7 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/attacher"
 	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
@@ -43,6 +44,7 @@ func TestLauncher(t *testing.T) {
 		// Override run status
 		overrideStatus   func(*v1alpha1.RunStatus)
 		factoryOverrides func(*cmdutil.Factory)
+		setOpts          func(*launcherOptions)
 		assertions       func(*testutil.T, *launcherOptions)
 	}{
 		{
@@ -141,8 +143,8 @@ func TestLauncher(t *testing.T) {
 			name: "cleanup resources upon error",
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *launcherOptions) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -159,8 +161,8 @@ func TestLauncher(t *testing.T) {
 			args: []string{"--no-cleanup"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *launcherOptions) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -318,7 +320,16 @@ func TestLauncher(t *testing.T) {
 				command = tt.cmd
 			}
 
-			opts := &launcherOptions{command: command, runName: "run-12345"}
+			opts := &launcherOptions{
+				command:     command,
+				runName:     "run-12345",
+				GetLogsFunc: logstreamer.FakeGetLogs,
+				AttachFunc:  attacher.FakeAttach,
+			}
+
+			if tt.setOpts != nil {
+				tt.setOpts(opts)
+			}
 
 			// Mock the workspace controller by setting status up front
 			var code int

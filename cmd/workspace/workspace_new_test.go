@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/attacher"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/repo"
@@ -39,6 +40,7 @@ func TestNewWorkspace(t *testing.T) {
 		// Skip creating a mock git repo for the test (to deliberately trigger
 		// an error)
 		skipGitRepo bool
+		setOpts     func(*newOptions)
 		assertions  func(*testutil.T, *newOptions)
 	}{
 		{
@@ -75,8 +77,8 @@ func TestNewWorkspace(t *testing.T) {
 			args: []string{"foo"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *newOptions) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -90,8 +92,8 @@ func TestNewWorkspace(t *testing.T) {
 			args: []string{"foo", "--no-cleanup"},
 			objs: []runtime.Object{testobj.WorkspacePod("default", "foo")},
 			err:  fakeError,
-			factoryOverrides: func(f *cmdutil.Factory) {
-				f.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
+			setOpts: func(o *newOptions) {
+				o.GetLogsFunc = func(ctx context.Context, opts logstreamer.Options) (io.ReadCloser, error) {
 					return nil, fakeError
 				}
 			},
@@ -285,6 +287,13 @@ func TestNewWorkspace(t *testing.T) {
 			cmd, opts := newCmd(f)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
+
+			opts.GetLogsFunc = logstreamer.FakeGetLogs
+			opts.AttachFunc = attacher.FakeAttach
+
+			if tt.setOpts != nil {
+				tt.setOpts(opts)
+			}
 
 			// Override path
 			path := t.NewTempDir().Chdir().Root()

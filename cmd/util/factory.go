@@ -3,9 +3,7 @@ package util
 import (
 	"io"
 
-	"github.com/leg100/etok/pkg/attacher"
 	"github.com/leg100/etok/pkg/client"
-	"github.com/leg100/etok/pkg/logstreamer"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
@@ -23,12 +21,6 @@ type Factory struct {
 
 	// Deferred creation of controller-runtime clients
 	client.RuntimeClientCreator
-
-	// Function to attach to a pod's TTY
-	attacher.AttachFunc
-
-	// Function to get a pod's logs stream
-	logstreamer.GetLogsFunc
 
 	IOStreams
 
@@ -48,8 +40,6 @@ type IOStreams struct {
 
 func NewFactory(out, errout io.Writer, in io.Reader) *Factory {
 	f := &Factory{
-		GetLogsFunc:          logstreamer.GetLogs,
-		AttachFunc:           attacher.Attach,
 		ClientCreator:        client.NewClientCreator(),
 		RuntimeClientCreator: client.NewRuntimeClientCreator(),
 		IOStreams: IOStreams{
@@ -65,8 +55,6 @@ func NewFactory(out, errout io.Writer, in io.Reader) *Factory {
 
 func NewFakeFactory(out io.Writer, objs ...runtime.Object) *Factory {
 	return &Factory{
-		GetLogsFunc:   logstreamer.FakeGetLogs,
-		AttachFunc:    attacher.FakeAttach,
 		ClientCreator: client.NewFakeClientCreator(objs...),
 		IOStreams: IOStreams{
 			Out: out,

@@ -9,6 +9,7 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
+	"github.com/leg100/etok/pkg/attacher"
 	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/controllers"
 	"github.com/leg100/etok/pkg/handlers"
@@ -82,6 +83,12 @@ type newOptions struct {
 
 	// Git repo from which run is being launched
 	repo *repo.Repo
+
+	// Function to attach to a pod's TTY
+	attacher.AttachFunc
+
+	// Function to get a pod's logs stream
+	logstreamer.GetLogsFunc
 }
 
 func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
@@ -103,6 +110,13 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 			o.repo, err = repo.Open(o.path)
 			if err != nil {
 				return err
+			}
+
+			if o.GetLogsFunc == nil {
+				o.GetLogsFunc = logstreamer.GetLogs
+			}
+			if o.AttachFunc == nil {
+				o.AttachFunc = attacher.Attach
 			}
 
 			o.etokenv, err = env.New(o.namespace, o.workspace)
