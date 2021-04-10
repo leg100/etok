@@ -84,11 +84,6 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 
 			o.flags = cmd.Flags()
 
-			kclient, err := o.Create(o.kubeContext)
-			if err != nil {
-				return err
-			}
-
 			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
@@ -100,7 +95,7 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 
 			if o.wait && !o.crdsOnly && !o.dryRun {
 				fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
-				if err := k8s.DeploymentIsReady(cmd.Context(), kclient.KubeClient, o.namespace, "etok", o.timeout, time.Second); err != nil {
+				if err := k8s.DeploymentIsReady(cmd.Context(), o.RuntimeClient, o.namespace, "etok", o.timeout, time.Second); err != nil {
 					return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
 				}
 			}

@@ -7,7 +7,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	yamlserializer "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/leg100/etok/config"
 	"github.com/leg100/etok/pkg/k8s"
@@ -113,7 +112,7 @@ func (d *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 	return nil
 }
 
-func (d *deployer) wait(ctx context.Context, client kubernetes.Interface) error {
+func (d *deployer) wait(ctx context.Context, client runtimeclient.Client) error {
 	fmt.Printf("Waiting for Deployment to be ready\n")
 	if err := k8s.DeploymentIsReady(ctx, client, d.namespace, "webhook", d.timeout, d.interval); err != nil {
 		return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)

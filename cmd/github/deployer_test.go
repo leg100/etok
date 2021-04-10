@@ -9,8 +9,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	kfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testutil"
@@ -114,14 +112,14 @@ func TestDeployer(t *testing.T) {
 func TestDeployerWait(t *testing.T) {
 	tests := []struct {
 		name     string
-		objs     []runtime.Object
+		objs     []runtimeclient.Object
 		deployer deployer
 		err      error
 	}{
 		{
 			name: "successful",
 			// Seed fake client with already successful deploy
-			objs: []runtime.Object{successfulDeploy()},
+			objs: []runtimeclient.Object{successfulDeploy()},
 			deployer: deployer{
 				namespace: "github",
 				timeout:   100 * time.Millisecond,
@@ -130,7 +128,7 @@ func TestDeployerWait(t *testing.T) {
 		},
 		{
 			name: "failure",
-			objs: []runtime.Object{deploy()},
+			objs: []runtimeclient.Object{deploy()},
 			deployer: deployer{
 				namespace: "github",
 				timeout:   100 * time.Millisecond,
@@ -142,7 +140,7 @@ func TestDeployerWait(t *testing.T) {
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			// Create fake client and seed with any objs
-			client := kfake.NewSimpleClientset(tt.objs...)
+			client := fake.NewClientBuilder().WithObjects(tt.objs...).Build()
 
 			err := tt.deployer.wait(context.Background(), client)
 			if !assert.True(t, errors.Is(err, tt.err)) {

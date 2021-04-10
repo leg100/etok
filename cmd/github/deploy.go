@@ -63,12 +63,6 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 				return err
 			}
 
-			// Create client-go client
-			kclient, err := f.Create(o.kubeContext)
-			if err != nil {
-				return err
-			}
-
 			// Ensure namespace exists
 			ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: o.namespace}}
 			_, err = controllerutil.CreateOrUpdate(cmd.Context(), o.RuntimeClient, &ns, func() error { return nil })
@@ -109,7 +103,7 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 
 			// Wait for deployment to be ready
 			if o.wait {
-				if err := o.deployer.wait(cmd.Context(), kclient.KubeClient); err != nil {
+				if err := o.deployer.wait(cmd.Context(), o.RuntimeClient); err != nil {
 					return err
 				}
 			}
