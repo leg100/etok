@@ -10,7 +10,6 @@ import (
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/attacher"
-	"github.com/leg100/etok/pkg/client"
 	"github.com/leg100/etok/pkg/controllers"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
@@ -45,9 +44,9 @@ var (
 )
 
 type newOptions struct {
-	*cmdutil.Factory
+	*cmdutil.Client
 
-	*client.Client
+	cmdutil.IOStreams
 
 	path        string
 	namespace   string
@@ -93,8 +92,8 @@ type newOptions struct {
 
 func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 	o := &newOptions{
-		Factory:   f,
 		namespace: defaultNamespace,
+		IOStreams: f.IOStreams,
 	}
 	cmd := &cobra.Command{
 		Use:   "new <workspace>",
@@ -130,7 +129,12 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 				o.workspaceSpec.Cache.StorageClass = nil
 			}
 
-			o.Client, err = f.Create(o.kubeContext)
+			o.KubeClient, err = f.NewKubeClient(o.kubeContext)
+			if err != nil {
+				return err
+			}
+
+			o.EtokClient, err = f.NewEtokClient(o.kubeContext)
 			if err != nil {
 				return err
 			}
@@ -192,7 +196,7 @@ func (o *newOptions) run(ctx context.Context) error {
 	})
 
 	// Monitor exit code; non-blocking
-	exit := monitors.ExitMonitor(ctx, o.KubeClient, ws.PodName(), ws.Namespace, controllers.InstallerContainerName)
+	exit := monitors.ExitMonitor(ctx, o.Client, ws.PodName(), ws.Namespace, controllers.InstallerContainerName)
 
 	// Wait for pod to be ready and start streaming logs from its installer
 	// container

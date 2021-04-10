@@ -1,11 +1,16 @@
 package util
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/k8s/etokclient"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // TODO: move constants somewhere more appropriate
@@ -21,6 +26,8 @@ type Factory struct {
 
 	// Deferred creation of controller-runtime clients
 	client.RuntimeClientCreator
+
+	*ClientBuilder
 
 	IOStreams
 
@@ -60,4 +67,58 @@ func NewFakeFactory(out io.Writer, objs ...runtime.Object) *Factory {
 			Out: out,
 		},
 	}
+}
+
+// ClientBuilderInterface is capable of constructing both the built-in client
+// and the generated etok client
+type ClientBuilderInterface interface {
+	NewKubeClient(string) (kubernetes.Interface, error)
+	NewEtokClient(string) (etokclient.Interface, error)
+}
+
+// ClientBuilder makes real clients
+type ClientBuilder struct {
+	cfg *rest.Config
+}
+
+func (cb *ClientBuilder) NewKubeClient(kubeCtx string) (kubernetes.Interface, error) {
+	cfg, err := cb.getConfig(kubeCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeclient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating built-in kubernetes client: %w", err)
+	}
+
+	return kubeclient, nil
+}
+
+func (cb *ClientBuilder) NewEtokClient(kubeCtx string) (etokclient.Interface, error) {
+	cfg, err := cb.getConfig(kubeCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	etokclient, err := etokclient.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating etok kubernetes client: %w", err)
+	}
+
+	return etokclient, nil
+}
+
+// getConfig creates a k8s config from a kube context. It'll cache the config
+// the first time it is created; further calls retrieve the cached config.
+func (cb *ClientBuilder) getConfig(kubeCtx string) (*rest.Config, error) {
+	cfg, err := config.GetConfigWithContext(kubeCtx)
+	if err != nil {
+		return nil, fmt.Errorf("getting kubernetes client config: %w", err)
+	}
+
+	// Cache it
+	cb.cfg = cfg
+
+	return cfg, nil
 }
