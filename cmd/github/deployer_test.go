@@ -28,12 +28,26 @@ func TestDeployer(t *testing.T) {
 	tests := []struct {
 		name       string
 		err        error
+		objs       []runtimeclient.Object
 		deployer   deployer
 		assertions func(*testutil.T, runtimeclient.Client)
 	}{
 		{
 			name:     "default",
 			deployer: deployer{},
+		},
+		{
+			name: "update",
+			deployer: deployer{
+				// Apply is not supported in fake client
+				patch: runtimeclient.Merge,
+			},
+			objs: []runtimeclient.Object{
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRole", Version: "v1", Group: "rbac.authorization.k8s.io"}, "webhook"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ClusterRoleBinding", Version: "v1", Group: "rbac.authorization.k8s.io"}, "webhook"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "ServiceAccount", Version: "v1"}, "webhook", "github"),
+				newUnstructuredObj(schema.GroupVersionKind{Kind: "Deployment", Version: "v1", Group: "apps"}, "webhook", "github"),
+			},
 		},
 		{
 			name: "image setting",
@@ -75,7 +89,7 @@ func TestDeployer(t *testing.T) {
 				tt.deployer.port = defaultWebhookPort
 			}
 
-			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(tt.objs...).Build()
 
 			require.NoError(t, tt.deployer.deploy(context.Background(), client))
 
@@ -112,8 +126,6 @@ func TestDeployerWait(t *testing.T) {
 				namespace: "github",
 				timeout:   100 * time.Millisecond,
 				interval:  10 * time.Millisecond,
-				// Apply is not supported in fake client
-				patch: runtimeclient.Merge,
 			},
 		},
 		{
@@ -123,8 +135,6 @@ func TestDeployerWait(t *testing.T) {
 				namespace: "github",
 				timeout:   100 * time.Millisecond,
 				interval:  10 * time.Millisecond,
-				// Apply is not supported in fake client
-				patch: runtimeclient.Merge,
 			},
 			err: wait.ErrWaitTimeout,
 		},
