@@ -10,6 +10,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/leg100/etok/cmd/flags"
 	cmdutil "github.com/leg100/etok/cmd/util"
@@ -55,9 +56,9 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy github app",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			// Create (controller-runtime) k8s client
-			rc, err := f.CreateRuntimeClient(o.kubeContext)
+			o.Client, err = f.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
 			}
@@ -70,7 +71,7 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 
 			// Ensure namespace exists
 			ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: o.namespace}}
-			_, err = controllerutil.CreateOrUpdate(cmd.Context(), rc.RuntimeClient, &ns, func() error { return nil })
+			_, err = controllerutil.CreateOrUpdate(cmd.Context(), o.RuntimeClient, &ns, func() error { return nil })
 			if err != nil {
 				return err
 			}
@@ -99,6 +100,9 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			// Deploy webhook k8s resources
 			o.deployer.namespace = o.namespace
 			o.deployer.port = defaultWebhookPort
+			o.deployer.timeout = 10 * time.Second
+			o.deployer.interval = 1 * time.Second
+			o.deployer.patch = runtimeclient.Apply
 			if err := o.deployer.deploy(cmd.Context(), o.RuntimeClient); err != nil {
 				return err
 			}

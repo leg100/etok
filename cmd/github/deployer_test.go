@@ -2,7 +2,15 @@ package github
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	kfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testutil"
@@ -11,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -85,6 +94,78 @@ func TestDeployer(t *testing.T) {
 				tt.assertions(t, client)
 			}
 		})
+	}
+}
+
+func TestDeployerWait(t *testing.T) {
+	tests := []struct {
+		name     string
+		objs     []runtime.Object
+		deployer deployer
+		err      error
+	}{
+		{
+			name: "successful",
+			// Seed fake client with already successful deploy
+			objs: []runtime.Object{successfulDeploy()},
+			deployer: deployer{
+				namespace: "github",
+				timeout:   100 * time.Millisecond,
+				interval:  10 * time.Millisecond,
+				// Apply is not supported in fake client
+				patch: runtimeclient.Merge,
+			},
+		},
+		{
+			name: "failure",
+			objs: []runtime.Object{deploy()},
+			deployer: deployer{
+				namespace: "github",
+				timeout:   100 * time.Millisecond,
+				interval:  10 * time.Millisecond,
+				// Apply is not supported in fake client
+				patch: runtimeclient.Merge,
+			},
+			err: wait.ErrWaitTimeout,
+		},
+	}
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			// Create fake client and seed with any objs
+			client := kfake.NewSimpleClientset(tt.objs...)
+
+			err := tt.deployer.wait(context.Background(), client)
+			if !assert.True(t, errors.Is(err, tt.err)) {
+				t.Errorf("no error in %v's chain matches %v", err, tt.err)
+			}
+		})
+	}
+}
+
+func deploy() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "webhook",
+			Namespace: "github",
+		},
+	}
+}
+
+func successfulDeploy() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "webhook",
+			Namespace: "github",
+		},
+		Status: appsv1.DeploymentStatus{
+			Conditions: []appsv1.DeploymentCondition{
+				{
+					Type:               appsv1.DeploymentAvailable,
+					Status:             corev1.ConditionTrue,
+					LastTransitionTime: metav1.Time{Time: time.Now().Add(-11 * time.Second)},
+				},
+			},
+		},
 	}
 }
 

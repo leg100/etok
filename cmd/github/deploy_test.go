@@ -41,6 +41,7 @@ func TestDeploy(t *testing.T) {
 			f := &cmdutil.Factory{
 				IOStreams:            cmdutil.IOStreams{Out: out},
 				RuntimeClientCreator: client.NewFakeRuntimeClientCreator(),
+				ClientCreator:        client.NewFakeClientCreator(),
 			}
 
 			cmd, opts := deployCmd(f)

@@ -28,11 +28,13 @@ type deployer struct {
 	// Annotations to add to the service account resource
 	serviceAccountAnnotations map[string]string
 
-	// Timeout for deployment readiness
-	timeout time.Duration
+	// Timeout and interval for deployment readiness
+	timeout, interval time.Duration
+
+	patch runtimeclient.Patch
 }
 
-func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) error {
+func (d *deployer) deploy(ctx context.Context, client runtimeclient.Client) error {
 	var decUnstructured = yamlserializer.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
 	resources, err := config.GetWebhookResources()
@@ -52,7 +54,7 @@ func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 		case "ClusterRoleBinding", "ClusterRole":
 			// Skip setting namespace for non-namespaced resources
 		default:
-			obj.SetNamespace(o.namespace)
+			obj.SetNamespace(d.namespace)
 		}
 
 		if obj.GetKind() == "Deployment" {
@@ -65,7 +67,7 @@ func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 			}
 
 			// Set image
-			if err := unstructured.SetNestedField(containers[0].(map[string]interface{}), o.image, "image"); err != nil {
+			if err := unstructured.SetNestedField(containers[0].(map[string]interface{}), d.image, "image"); err != nil {
 				panic(err.Error())
 			}
 
@@ -76,7 +78,7 @@ func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 		}
 
 		if obj.GetKind() == "ServiceAccount" {
-			obj.SetAnnotations(o.serviceAccountAnnotations)
+			obj.SetAnnotations(d.serviceAccountAnnotations)
 		}
 
 		// Set labels
@@ -98,7 +100,7 @@ func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 			// Update the object with SSA
 			fmt.Printf("Updating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
 			force := true
-			err = client.Patch(ctx, obj, runtimeclient.Apply, &runtimeclient.PatchOptions{
+			err = client.Patch(ctx, obj, d.patch, &runtimeclient.PatchOptions{
 				FieldManager: "etok-cli",
 				Force:        &force,
 			})
@@ -111,9 +113,9 @@ func (o *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 	return nil
 }
 
-func (o *deployer) wait(ctx context.Context, client kubernetes.Interface) error {
+func (d *deployer) wait(ctx context.Context, client kubernetes.Interface) error {
 	fmt.Printf("Waiting for Deployment to be ready\n")
-	if err := k8s.DeploymentIsReady(ctx, client, o.namespace, "etok", o.timeout, time.Second); err != nil {
+	if err := k8s.DeploymentIsReady(ctx, client, d.namespace, "webhook", d.timeout, d.interval); err != nil {
 		return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
 	}
 

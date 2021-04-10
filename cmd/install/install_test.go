@@ -19,6 +19,7 @@ import (
 	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
@@ -293,7 +294,7 @@ func TestInstallWait(t *testing.T) {
 			// Create fake client and seed with any objs
 			client := kfake.NewSimpleClientset(tt.objs...)
 
-			err := deploymentIsReady(context.Background(), "etok", "etok", client, 100*time.Millisecond, 10*time.Millisecond)
+			err := k8s.DeploymentIsReady(context.Background(), client, "etok", "etok", 100*time.Millisecond, 10*time.Millisecond)
 			assert.Equal(t, tt.err, err)
 		})
 	}
