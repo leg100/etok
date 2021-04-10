@@ -30,8 +30,8 @@ func ContainerStatusByName(pod *corev1.Pod, name string) *corev1.ContainerStatus
 func DeploymentIsReady(ctx context.Context, client runtimeclient.Client, namespace, name string, timeout, interval time.Duration) error {
 	var readyObservations int32
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		deployment := &appsv1.Deployment{}
-		err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, deployment)
+		deployment := appsv1.Deployment{}
+		err := client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &deployment)
 		if err != nil {
 			return false, err
 		}

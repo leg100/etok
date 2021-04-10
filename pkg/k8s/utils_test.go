@@ -7,7 +7,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testutil"
 	"gotest.tools/assert"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,9 +34,9 @@ func TestDeploymentIsReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(runtimeclient.Object(tt.deploy)).Build()
+			client := fake.NewClientBuilder().WithObjects(runtimeclient.Object(tt.deploy)).Build()
 
-			assert.Equal(t, tt.err, DeploymentIsReady(context.Background(), client, deploy(), 10*time.Millisecond, 100*time.Millisecond))
+			assert.Equal(t, tt.err, DeploymentIsReady(context.Background(), client, "etok", "etok", 100*time.Millisecond, 10*time.Millisecond))
 		})
 	}
 }
