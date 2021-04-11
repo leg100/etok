@@ -9,15 +9,13 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/globals"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -36,6 +34,7 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// over again
 	log := log.FromContext(ctx)
 	log.V(0).Info("Reconciling")
+	klog.Info("Reconciling")
 
 	// Get run obj
 	var run v1alpha1.Run
@@ -100,13 +99,8 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 }
 
 func (r *runReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	pred, err := predicate.LabelSelectorPredicate(metav1.LabelSelector{MatchLabels: map[string]string{"github-event": "true"}})
-	if err != nil {
-		return err
-	}
-
 	// Watch changes to run resources triggered by github
-	blder := ctrl.NewControllerManagedBy(mgr).For(&v1alpha1.Run{}, builder.WithPredicates(pred))
+	blder := ctrl.NewControllerManagedBy(mgr).For(&v1alpha1.Run{})
 
 	return blder.Complete(r)
 }

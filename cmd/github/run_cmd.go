@@ -105,7 +105,8 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 	cmd.Flags().IntVar(&o.port, "port", defaultWebhookPort, "Webhook port")
 	cmd.Flags().StringVar(&o.webhookSecret, "webhook-secret", "", "Github app webhook secret")
 
-	cmd.Flags().StringVar(&o.cloneDir, "clone-path", "", "Path to a directory in which to clone repos")
+	// Default to /repos, the mountpoint of a dedicated k8s volume
+	cmd.Flags().StringVar(&o.cloneDir, "clone-path", "/repos", "Path to a directory in which to clone repos")
 	cmd.Flags().BoolVar(&o.stripRefreshing, "strip-refreshing", false, "Strip refreshing log lines from terraform plan output")
 
 	return cmd, o

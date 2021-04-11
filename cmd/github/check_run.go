@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -67,6 +68,10 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 	if lbls == nil {
 		return nil, fmt.Errorf("no labels found on run resource")
 	}
+	idStr, ok := lbls[checkRunIDLabelName]
+	if !ok {
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunIDLabelName)
+	}
 	sha, ok := lbls[checkRunSHALabelName]
 	if !ok {
 		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunSHALabelName)
@@ -79,21 +84,34 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 	if !ok {
 		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunRepoLabelName)
 	}
+	cmd, ok := lbls[checkRunCommandLabelName]
+	if !ok {
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunCommandLabelName)
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if !ok {
+		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRunRepoLabelName, idStr, err)
+	}
 
 	r := checkRun{
-		id:        res.Name,
-		namespace: res.Namespace,
-		sha:       sha,
-		owner:     owner,
-		repo:      repo,
-		workspace: res.Workspace,
-		err:       createErr,
+		id:           res.Name,
+		checkRunId:   &id,
+		namespace:    res.Namespace,
+		sha:          sha,
+		owner:        owner,
+		repo:         repo,
+		command:      cmd,
+		workspace:    res.Workspace,
+		maxFieldSize: defaultMaxFieldSize,
+		err:          createErr,
 	}
 
 	if createErr != nil {
 		// Failed to create k8s resources
 		r.status = "completed"
 		r.conclusion = "failure"
+		return &r, nil
 	}
 
 	if meta.IsStatusConditionTrue(res.Conditions, v1alpha1.RunFailedCondition) {
@@ -104,7 +122,7 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		case v1alpha1.RunEnqueueTimeoutReason, v1alpha1.QueueTimeoutReason:
 			r.conclusion = "timed_out"
 		default:
-			r.conclusion = "failed"
+			r.conclusion = "failure"
 		}
 
 	} else if meta.IsStatusConditionTrue(res.Conditions, v1alpha1.RunCompleteCondition) {
@@ -113,7 +131,7 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		cond := meta.FindStatusCondition(res.Conditions, v1alpha1.RunCompleteCondition)
 		switch cond.Reason {
 		case v1alpha1.PodFailedReason:
-			r.conclusion = "failed"
+			r.conclusion = "failure"
 		default:
 			r.conclusion = "success"
 		}
@@ -180,7 +198,7 @@ func (r *checkRun) name() string {
 
 	// Next part of name is the command name
 	command := r.command
-	if r.command == "plan" && r.status == "completed" {
+	if r.command == "plan" && r.err != nil && r.status == "completed" {
 		// Upon completion of a plan, instead of showing 'plan', show summary of
 		// changes
 		plan, err := parsePlanOutput(string(r.out))
@@ -192,6 +210,12 @@ func (r *checkRun) name() string {
 		}
 	}
 	name += fmt.Sprintf("[%s]", command)
+
+	if r.err != nil {
+		// There was an error creating resources, there's no need to add further
+		// info
+		return name
+	}
 
 	// Next part is the run id (run-123yx). GH is likely to cut this short with
 	// a '...' so snip off the redundant prefix 'run-' and just show the ID.

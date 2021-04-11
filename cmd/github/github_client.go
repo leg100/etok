@@ -64,9 +64,10 @@ func NewGithubAppClient(hostname string, appID int64, keyPath string, installID 
 	}
 
 	client := &GithubClient{
-		Client: ghClient,
-		itr:    itr,
-		queue:  make(chan githubOperation, 100),
+		Client:    ghClient,
+		itr:       itr,
+		queue:     make(chan githubOperation, 100),
+		installID: installID,
 	}
 
 	go client.processQueue(context.Background())

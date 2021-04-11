@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -185,12 +184,6 @@ func (ws *Workspace) BackupObjectName() string {
 
 func (ws *Workspace) BuiltinsConfigMapName() string {
 	return WorkspaceBuiltinsConfigMapName(ws.Name)
-}
-
-// IsConnected returns true if the workspace is connected to the given url. The
-// format of the url is expected to be ".*/owner/repo.git".
-func (ws *Workspace) IsConnected(url string) bool {
-	return strings.HasSuffix(url, ws.Spec.VCS.Repository+".git")
 }
 
 func WorkspaceBuiltinsConfigMapName(name string) string {

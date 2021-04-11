@@ -2,6 +2,7 @@ package github
 
 const (
 	checkSuiteLabelName      = "etok.dev/github-checksuite-id"
+	checkRunIDLabelName      = "etok.dev/github-checkrun-id"
 	checkRunStatusLabelName  = "etok.dev/github-checkrun-status"
 	checkRunCommandLabelName = "etok.dev/github-checkrun-command"
 	checkRunSHALabelName     = "etok.dev/github-checkrun-sha"

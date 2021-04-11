@@ -11,8 +11,9 @@ ENV PATH=${TF_BIN_PATH}:${PATH}
 # (in /api/etok.dev/v1alpha1/workspace_types.go)
 ARG TERRAFORM_VERSION=0.14.3
 
-# install terraform
-RUN apk add curl jq && \
+# Install terraform, as well as git for github webhook, and jq is used by `etok
+# workspace new` to parse the terraform version
+RUN apk add curl jq git && \
     curl -LOs https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     curl -LOs https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS && \
     sed -n "/terraform_${TERRAFORM_VERSION}_linux_amd64.zip/p" terraform_${TERRAFORM_VERSION}_SHA256SUMS | sha256sum -c && \
@@ -20,7 +21,7 @@ RUN apk add curl jq && \
     rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     rm terraform_${TERRAFORM_VERSION}_SHA256SUMS
 
-# etok binary is expected to be copied from the PWD because that is where goreleaser builds it and
+# Etok binary is expected to be copied from the PWD because that is where goreleaser builds it and
 # there does not appear to be a way to customise a different location
 COPY etok ${ETOK_BIN}
 

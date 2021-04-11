@@ -15,9 +15,9 @@ import (
 
 // E2E test of github webhook
 func TestGithub(t *testing.T) {
-	// Don't run on kind because it isn't exposed to the internet (and we need
-	// to expose the webhook server)
-	if *kubectx == "kind-kind" {
+	// Only run github tests on clusters exposed to internet, or when explicitly
+	// asked to.
+	if *kubectx == "kind-kind" && os.Getenv("GITHUB_E2E_TEST") != "true" {
 		t.SkipNow()
 	}
 

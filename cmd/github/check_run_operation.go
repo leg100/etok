@@ -9,8 +9,7 @@ import (
 // checkRunOperation handles creating and updating a github check run for an etok
 // run
 type checkRunOperation struct {
-	actions    []*github.CheckRunAction
-	conclusion *string
+	actions []*github.CheckRunAction
 
 	*checkRun
 }
@@ -33,7 +32,7 @@ func (c *checkRunOperation) create(ctx context.Context, client *GithubClient) (i
 		Name:       c.name(),
 		HeadSHA:    c.sha,
 		Status:     github.String(c.status),
-		Conclusion: c.conclusion,
+		Conclusion: github.String(c.conclusion),
 		Output:     c.output(),
 		Actions:    c.actions,
 		ExternalID: c.externalID(),
@@ -52,11 +51,12 @@ func (c *checkRunOperation) update(ctx context.Context, client *GithubClient, id
 		Name:       c.name(),
 		HeadSHA:    github.String(c.sha),
 		Status:     github.String(c.status),
-		Conclusion: c.conclusion,
+		Conclusion: github.String(c.conclusion),
 		Output:     c.output(),
 		Actions:    c.actions,
 		ExternalID: c.externalID(),
 	}
+
 	_, _, err := client.Checks.UpdateCheckRun(ctx, c.owner, c.repo, id, opts)
 	return err
 }

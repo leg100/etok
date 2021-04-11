@@ -48,6 +48,8 @@ func newGithubClientManager(hostname, keyPath string, appID int64) (*GithubClien
 	}, nil
 }
 
+// Get a github client for the install ID from the cache, or if not found,
+// create new client.
 func (m *GithubClientManager) getOrCreate(installID int64) (*GithubClient, error) {
 	// See if we have a cached client
 	ghClient, ok := m.clients[installID]

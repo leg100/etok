@@ -51,10 +51,16 @@ func newApp(kclient *client.Client, opts appOptions) *app {
 func (a *app) handleEvent(event interface{}, client githubClientInterface) error {
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
-		klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
-
 		switch *ev.Action {
 		case "requested", "rerequested":
+			// Number of runs created
+			var created int
+
+			klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
+			defer func() {
+				klog.InfoS("finished handling check suite event", "id", ev.CheckSuite.GetID(), "check_runs_created", created)
+			}()
+
 			repo, err := a.repoManager.clone(
 				*ev.Repo.CloneURL,
 				*ev.CheckSuite.HeadBranch,
@@ -75,7 +81,6 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 			}
 
 			// Create check run for each connected workspace
-			var created int
 			for _, ws := range connected.Items {
 				// Skip workspaces with a non-existent working dir
 				if _, err := os.Stat(filepath.Join(repo.path, ws.Spec.VCS.WorkingDir)); os.IsNotExist(err) {
@@ -84,24 +89,33 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				}
 
 				client.send(&checkRun{
-					id:        fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
-					namespace: ws.Namespace,
-					sha:       *ev.CheckSuite.HeadSHA,
-					owner:     *ev.Repo.Owner.Login,
-					repo:      *ev.Repo.Name,
-					command:   "plan",
+					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
+					namespace:    ws.Namespace,
+					workspace:    ws.Name,
+					sha:          *ev.CheckSuite.HeadSHA,
+					owner:        *ev.Repo.Owner.Login,
+					repo:         *ev.Repo.Name,
+					command:      "plan",
+					maxFieldSize: defaultMaxFieldSize,
+					status:       "queued",
 				})
+
+				created++
 			}
 
-			klog.InfoS("finished handling check suite event", "id", ev.CheckSuite.GetID(), "check_runs_created", created)
-
 			return nil
+		default:
+			klog.InfoS("ignoring check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
 		}
 	case *github.CheckRunEvent:
-		klog.InfoS("received check run event", "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "id", ev.CheckRun.GetID(), "action", *ev.Action)
-
 		switch *ev.Action {
 		case "created", "rerequested", "requested_action":
+
+			klog.InfoS("received check run event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "action", *ev.Action)
+			defer func() {
+				klog.InfoS("finished handling check event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID())
+			}()
+
 			// User has requested that a check-run be re-run. We need to lookup
 			// the original connected etok run and workspace, so that we know
 			// what to re-run (or apply)
@@ -112,8 +126,6 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 			if ev.RequestedAction != nil && ev.RequestedAction.Identifier == "apply" {
 				command = "apply"
 			}
-
-			klog.InfoS("check run event", "id", ev.CheckRun.GetID(), "command", command)
 
 			repo, err := a.repoManager.clone(
 				*ev.Repo.CloneURL,
@@ -138,6 +150,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				client.send(&checkRun{
 					id:        fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
 					namespace: ws.Namespace,
+					workspace: ws.Name,
 					sha:       *ev.CheckRun.CheckSuite.HeadSHA,
 					owner:     *ev.Repo.Owner.Login,
 					repo:      *ev.Repo.Name,
@@ -150,7 +163,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 
 				script := runScript(metadata.Current, command, metadata.Previous)
 
-				bldr := builders.Run(ws.Namespace, metadata.Current, ws.Name, "sh", "-c", script)
+				bldr := builders.Run(ws.Namespace, metadata.Current, ws.Name, "sh", script)
 
 				// For testing purposes seed status
 				bldr.SetStatus(a.runStatus)
@@ -175,18 +188,24 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 
 				// Create Run/ConfigMap resources in k8s
 				if err := createRunAndArchive(a.kclient, r, configMap); err != nil {
-					// Failed to create resources. Create a checkrun reporting failure
-					// to user.
+					// Failed to create resources. Update checkrun reporting
+					// failure to user.
 					run, err := newRunFromResource(r, err)
 					if err != nil {
 						return err
 					}
+
+					// Must provide check run ID otherwise the client will
+					// create a brand new check run
+					run.checkRunId = ev.CheckRun.ID
 
 					client.send(run)
 				}
 			}
 
 			return nil
+		default:
+			klog.InfoS("ignoring check run event", "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "id", ev.CheckRun.GetID(), "action", *ev.Action)
 		}
 	default:
 		klog.Infof("ignoring event: %T", event)
@@ -206,7 +225,7 @@ func getConnectedWorkspaces(client *client.Client, url string) (*v1alpha1.Worksp
 
 	for _, ws := range workspaces.Items {
 		// Ignore workspaces connected to a different repo
-		if !ws.IsConnected(url) {
+		if ws.Spec.VCS.Repository != url {
 			klog.V(2).Infof("Skipping unconnected workspace %s", klog.KObj(&ws))
 			continue
 		}
