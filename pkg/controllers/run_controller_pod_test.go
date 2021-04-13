@@ -63,6 +63,18 @@ func TestRunPod(t *testing.T) {
 			},
 		},
 		{
+			name:      "Terraform plans volume mount",
+			run:       testobj.Run("default", "run-12345", "plan"),
+			workspace: testobj.Workspace("foo", "bar"),
+			assertions: func(pod *corev1.Pod) {
+				assert.Contains(t, pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+					Name:      "cache",
+					MountPath: "/plans",
+					SubPath:   "plans/",
+				})
+			},
+		},
+		{
 			name:      ".terraform volume mount",
 			run:       testobj.Run("default", "run-12345", "plan"),
 			workspace: testobj.Workspace("default", "foo", testobj.WithWorkingDir("subdir")),

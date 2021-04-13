@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,7 +33,6 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// over again
 	log := log.FromContext(ctx)
 	log.V(0).Info("Reconciling")
-	klog.Info("Reconciling")
 
 	// Get run obj
 	var run v1alpha1.Run

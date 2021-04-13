@@ -12,6 +12,7 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2/klogr"
 )
 
 const (
@@ -55,6 +56,8 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			if err != nil {
 				return err
 			}
+
+			ctrl.SetLogger(klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)))
 
 			// Manager for Run reconciler
 			mgr, err := ctrl.NewManager(client.Config, ctrl.Options{

@@ -31,8 +31,8 @@ func (c *checkRunOperation) create(ctx context.Context, client *GithubClient) (i
 	opts := github.CreateCheckRunOptions{
 		Name:       c.name(),
 		HeadSHA:    c.sha,
-		Status:     github.String(c.status),
-		Conclusion: github.String(c.conclusion),
+		Status:     c.status,
+		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
 		ExternalID: c.externalID(),
@@ -50,8 +50,8 @@ func (c *checkRunOperation) update(ctx context.Context, client *GithubClient, id
 	opts := github.UpdateCheckRunOptions{
 		Name:       c.name(),
 		HeadSHA:    github.String(c.sha),
-		Status:     github.String(c.status),
-		Conclusion: github.String(c.conclusion),
+		Status:     c.status,
+		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
 		ExternalID: c.externalID(),

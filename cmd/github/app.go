@@ -97,7 +97,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					repo:         *ev.Repo.Name,
 					command:      "plan",
 					maxFieldSize: defaultMaxFieldSize,
-					status:       "queued",
+					iteration:    1,
 				})
 
 				created++
@@ -116,15 +116,12 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				klog.InfoS("finished handling check event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID())
 			}()
 
-			// User has requested that a check-run be re-run. We need to lookup
-			// the original connected etok run and workspace, so that we know
-			// what to re-run (or apply)
+			// Extract metadata from the external ID field
+			metadata := newCheckRunMetadata(ev.CheckRun.ExternalID)
 
-			// Default command is plan, unless user has clicked the 'apply'
-			// button
-			command := "plan"
-			if ev.RequestedAction != nil && ev.RequestedAction.Identifier == "apply" {
-				command = "apply"
+			if ev.RequestedAction != nil {
+				// Override command with whatever the user has requested
+				metadata.Command = ev.RequestedAction.Identifier
 			}
 
 			repo, err := a.repoManager.clone(
@@ -137,9 +134,6 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				return err
 			}
 
-			// Extract metadata from the external ID field
-			metadata := newCheckRunMetadata(ev.CheckRun.ExternalID)
-
 			ws, err := a.kclient.WorkspacesClient(metadata.Namespace).Get(context.Background(), metadata.Workspace, metav1.GetOptions{})
 			if err != nil {
 				return err
@@ -148,36 +142,33 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 			switch *ev.Action {
 			case "rerequested", "requested_action":
 				client.send(&checkRun{
-					id:        fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
-					namespace: ws.Namespace,
-					workspace: ws.Name,
-					sha:       *ev.CheckRun.CheckSuite.HeadSHA,
-					owner:     *ev.Repo.Owner.Login,
-					repo:      *ev.Repo.Name,
-					command:   command,
-					previous:  metadata.Current,
+					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
+					namespace:    ws.Namespace,
+					workspace:    ws.Name,
+					sha:          *ev.CheckRun.CheckSuite.HeadSHA,
+					owner:        *ev.Repo.Owner.Login,
+					repo:         *ev.Repo.Name,
+					command:      metadata.Command,
+					previous:     metadata.Current,
+					maxFieldSize: defaultMaxFieldSize,
 				})
 			case "created":
 				// Check run has been created. Only now can we create a Run
 				// resource because we need to label it with the check run ID.
 
-				script := runScript(metadata.Current, command, metadata.Previous)
+				script := runScript(metadata.Current, metadata.Command, metadata.Previous)
 
 				bldr := builders.Run(ws.Namespace, metadata.Current, ws.Name, "sh", script)
 
 				// For testing purposes seed status
 				bldr.SetStatus(a.runStatus)
 
-				// Add install id to run so that the run reconciler knows which
-				// github client to use for a given run
 				bldr.SetLabel(githubAppInstallIDLabelName, strconv.Itoa(int(client.getInstallID())))
-
-				bldr.SetLabel(githubTriggeredLabelName, "true")
-
+				bldr.SetLabel(checkRunIDLabelName, strconv.Itoa(int(ev.CheckRun.GetID())))
 				bldr.SetLabel(checkRunOwnerLabelName, *ev.Repo.Owner.Login)
 				bldr.SetLabel(checkRunRepoLabelName, *ev.Repo.Name)
 				bldr.SetLabel(checkRunSHALabelName, *ev.CheckRun.CheckSuite.HeadSHA)
-				bldr.SetLabel(checkRunCommandLabelName, command)
+				bldr.SetLabel(checkRunCommandLabelName, metadata.Command)
 
 				configMap, err := archive.ConfigMap(ws.Namespace, metadata.Current, filepath.Join(repo.path, ws.Spec.VCS.WorkingDir), repo.path)
 				if err != nil {

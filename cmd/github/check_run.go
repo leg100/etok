@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/klog/v2"
@@ -22,6 +23,12 @@ const (
 // Represents a github checkrun
 type checkRun struct {
 	id, namespace string
+
+	// Iteration is a count of times a plan has been run for this workspace, in
+	// this checksuite.
+
+	// Iteration is the ordinal number of
+	iteration int
 
 	// Previous etok run ID - populated if check run is a re-run or apply of a
 	// previous run
@@ -48,11 +55,11 @@ type checkRun struct {
 	// The github checkrun command
 	command string
 
-	// Github checkrun status
-	status string
+	// Github checkrun status - nil equates to 'queued'
+	status *string
 
 	// Github checkrun conclusion
-	conclusion string
+	conclusion *string
 
 	// Max num of bytes github imposes on check run fields (summary, details)
 	maxFieldSize int
@@ -109,31 +116,31 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 
 	if createErr != nil {
 		// Failed to create k8s resources
-		r.status = "completed"
-		r.conclusion = "failure"
+		r.status = github.String("completed")
+		r.conclusion = github.String("failure")
 		return &r, nil
 	}
 
 	if meta.IsStatusConditionTrue(res.Conditions, v1alpha1.RunFailedCondition) {
-		r.status = "completed"
+		r.status = github.String("completed")
 
 		cond := meta.FindStatusCondition(res.Conditions, v1alpha1.RunFailedCondition)
 		switch cond.Reason {
 		case v1alpha1.RunEnqueueTimeoutReason, v1alpha1.QueueTimeoutReason:
-			r.conclusion = "timed_out"
+			r.conclusion = github.String("timed_out")
 		default:
-			r.conclusion = "failure"
+			r.conclusion = github.String("failure")
 		}
 
 	} else if meta.IsStatusConditionTrue(res.Conditions, v1alpha1.RunCompleteCondition) {
-		r.status = "completed"
+		r.status = github.String("completed")
 
 		cond := meta.FindStatusCondition(res.Conditions, v1alpha1.RunCompleteCondition)
 		switch cond.Reason {
 		case v1alpha1.PodFailedReason:
-			r.conclusion = "failure"
+			r.conclusion = github.String("failure")
 		default:
-			r.conclusion = "success"
+			r.conclusion = github.String("success")
 		}
 
 	} else if meta.IsStatusConditionFalse(res.Conditions, v1alpha1.RunCompleteCondition) {
@@ -141,12 +148,10 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		cond := meta.FindStatusCondition(res.Conditions, v1alpha1.RunCompleteCondition)
 		switch cond.Reason {
 		case v1alpha1.RunQueuedReason, v1alpha1.RunUnqueuedReason:
-			r.status = "queued"
+			r.status = github.String("queued")
 		case v1alpha1.PodRunningReason, v1alpha1.PodPendingReason:
-			r.status = "in_progress"
+			r.status = github.String("in_progress")
 		}
-	} else {
-		r.status = "queued"
 	}
 
 	return &r, nil
@@ -160,7 +165,13 @@ func (r *checkRun) invoke(client *GithubClient) error {
 		checkRun: r,
 	}
 
-	if r.status == "completed" {
+	if r.status != nil && *r.status == "completed" {
+		klog.InfoS("invoke()", "status", r.status, "conclusion", *r.conclusion)
+	} else {
+		klog.InfoS("invoke()", "status", r.status)
+	}
+
+	if r.status != nil && *r.status == "completed" {
 		op.setAction("Plan", "Re-run plan", "plan")
 
 		if r.command == "plan" {
@@ -198,7 +209,7 @@ func (r *checkRun) name() string {
 
 	// Next part of name is the command name
 	command := r.command
-	if r.command == "plan" && r.err != nil && r.status == "completed" {
+	if r.command == "plan" && r.err == nil && r.status != nil && *r.status == "completed" {
 		// Upon completion of a plan, instead of showing 'plan', show summary of
 		// changes
 		plan, err := parsePlanOutput(string(r.out))
