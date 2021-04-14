@@ -276,6 +276,21 @@ func WithCondition(condition string) func(*v1alpha1.Run) {
 	}
 }
 
+func WithLabels(labelKVs ...string) func(*v1alpha1.Run) {
+	if len(labelKVs)%2 != 0 {
+		panic("unexpectedly received an odd number of args")
+	}
+
+	lbls := make(map[string]string)
+	for i := 0; i < len(labelKVs); i += 2 {
+		lbls[labelKVs[i]] = labelKVs[i+1]
+	}
+
+	return func(run *v1alpha1.Run) {
+		run.SetLabels(lbls)
+	}
+}
+
 // Produces a ready condition that is false, with the given reason, and a last
 // transition time set to now minus time. Intended for use with faking timeouts.
 func WithNotCompleteConditionForTimeout(reason string, ago time.Duration) func(*v1alpha1.Run) {

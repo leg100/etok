@@ -139,6 +139,18 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				return err
 			}
 
+			// Bump the iteration for re-runs
+			if (*ev.Action == "rerequested" && metadata.Command == "plan") ||
+				(*ev.Action == "requested_action" && ev.RequestedAction.Identifier == "plan") {
+
+				iteration, err := getLastIteration(a.kclient, *ev.CheckRun.CheckSuite.ID, ws)
+				if err != nil {
+					return fmt.Errorf("failed to lookup last iteration of check run: %w", err)
+				}
+
+				metadata.Iteration = iteration + 1
+			}
+
 			switch *ev.Action {
 			case "rerequested", "requested_action":
 				client.send(&checkRun{
@@ -151,6 +163,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					command:      metadata.Command,
 					previous:     metadata.Current,
 					maxFieldSize: defaultMaxFieldSize,
+					iteration:    metadata.Iteration,
 				})
 			case "created":
 				// Check run has been created. Only now can we create a Run
@@ -163,12 +176,17 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				// For testing purposes seed status
 				bldr.SetStatus(a.runStatus)
 
+				bldr.SetLabel(githubTriggeredLabelName, "true")
 				bldr.SetLabel(githubAppInstallIDLabelName, strconv.Itoa(int(client.getInstallID())))
+
+				bldr.SetLabel(checkSuiteIDLabelName, strconv.Itoa(int(ev.CheckRun.CheckSuite.GetID())))
+
 				bldr.SetLabel(checkRunIDLabelName, strconv.Itoa(int(ev.CheckRun.GetID())))
 				bldr.SetLabel(checkRunOwnerLabelName, *ev.Repo.Owner.Login)
 				bldr.SetLabel(checkRunRepoLabelName, *ev.Repo.Name)
 				bldr.SetLabel(checkRunSHALabelName, *ev.CheckRun.CheckSuite.HeadSHA)
 				bldr.SetLabel(checkRunCommandLabelName, metadata.Command)
+				bldr.SetLabel(checkRunIterationLabelName, strconv.Itoa(metadata.Iteration))
 
 				configMap, err := archive.ConfigMap(ws.Namespace, metadata.Current, filepath.Join(repo.path, ws.Spec.VCS.WorkingDir), repo.path)
 				if err != nil {
@@ -247,6 +265,41 @@ func createRunAndArchive(client *client.Client, run *v1alpha1.Run, archive *core
 	}
 
 	return nil
+}
+
+// Get last iteration of a check run (for a given check suite and workspace).
+// This is done by looking up all runs labelled with the check suite, and
+// belonging to the workspace, and taking the run with the highest iteration.
+// (We could get this info via the Github API but seeing as this is running on
+// k8s, k8s API calls are invariably cheaper).
+func getLastIteration(client *client.Client, checkSuiteID int64, ws *v1alpha1.Workspace) (int, error) {
+	selector := fmt.Sprintf("%s=%d", checkSuiteIDLabelName, checkSuiteID)
+	results, err := client.RunsClient(ws.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return 0, err
+	}
+
+	var last int
+	for _, run := range results.Items {
+		if run.Workspace != ws.Name {
+			// Skip runs belonging to other workspaces
+			continue
+		}
+
+		iterationStr, ok := run.GetLabels()[checkRunIterationLabelName]
+		if !ok {
+			panic(fmt.Sprintf("%s has not defined label %s", klog.KObj(&run), checkRunIterationLabelName))
+		}
+		iteration, err := strconv.ParseInt(iterationStr, 10, 0)
+		if err != nil {
+			panic(fmt.Sprintf("unable to parse label value: %s: %s=%s: %s", klog.KObj(&run), checkRunIterationLabelName, iterationStr, err.Error()))
+		}
+		if int(iteration) > last {
+			last = int(iteration)
+		}
+	}
+
+	return last, nil
 }
 
 func runScript(id, command, previous string) string {

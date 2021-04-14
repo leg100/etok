@@ -19,9 +19,11 @@ func (p *plan) hasNoChanges() bool {
 	return p.adds == 0 && p.changes == 0 && p.deletions == 0
 }
 
-// Print summary in the format '+a~c-d'
+// Print summary in the format '+a/~c/−d'
 func (p *plan) summary() string {
-	return fmt.Sprintf("+%d~%d-%d", p.adds, p.changes, p.deletions)
+	// \u2212 is a proper minus sign; an ascii hyphen is too narrow and looks
+	// incongruous alongside the wider '+' and '~' characters.
+	return fmt.Sprintf("+%d/~%d/\u2212%d", p.adds, p.changes, p.deletions)
 }
 
 func parsePlanOutput(output string) (*plan, error) {

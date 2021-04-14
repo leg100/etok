@@ -29,6 +29,7 @@ require (
 	github.com/urfave/negroni v1.0.0
 	github.com/zclconf/go-cty v1.5.1 // indirect
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
+	golang.org/x/oauth2 v0.0.0-20210413134643-5e61552d6c78
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	google.golang.org/api v0.36.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect

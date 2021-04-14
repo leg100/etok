@@ -18,6 +18,8 @@ type CheckRunMetadata struct {
 	Command string
 	// Etok workspace name
 	Workspace string
+	// Ordinal number of run
+	Iteration int
 }
 
 // ToStringPtr serializes the metadata into a JSON string pointer, for

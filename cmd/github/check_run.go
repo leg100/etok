@@ -1,13 +1,11 @@
 package github
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -18,16 +16,25 @@ import (
 const (
 	// https://github.community/t/undocumented-65535-character-limit-on-requests/117564
 	defaultMaxFieldSize = 65535
+	// Markdown markers for start and end of the text block containing terraform
+	// output
+	textStart = "```text\n"
+	textEnd   = "\n```\n"
+)
+
+var (
+	refreshingStateRegex = regexp.MustCompile("(?m)[\n\r]+^.*: Refreshing state... .*$")
 )
 
 // Represents a github checkrun
 type checkRun struct {
 	id, namespace string
 
-	// Iteration is a count of times a plan has been run for this workspace, in
-	// this checksuite.
-
-	// Iteration is the ordinal number of
+	// Iteration is the ordinal number of times a plan/apply has been run, for
+	// this workspace, for this checksuite. Its only purpose is to ensure check
+	// runs are presented in a logical order on the github checks UI, which
+	// orders them alphanumerically, with the iteration being appended to the
+	// check run name.
 	iteration int
 
 	// Previous etok run ID - populated if check run is a re-run or apply of a
@@ -95,10 +102,19 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 	if !ok {
 		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunCommandLabelName)
 	}
+	iterationStr, ok := lbls[checkRunIterationLabelName]
+	if !ok {
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunIterationLabelName)
+	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if !ok {
 		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRunRepoLabelName, idStr, err)
+	}
+
+	iteration, err := strconv.ParseInt(iterationStr, 10, 0)
+	if !ok {
+		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRunIterationLabelName, iterationStr, err)
 	}
 
 	r := checkRun{
@@ -111,6 +127,7 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		command:      cmd,
 		workspace:    res.Workspace,
 		maxFieldSize: defaultMaxFieldSize,
+		iteration:    int(iteration),
 		err:          createErr,
 	}
 
@@ -166,12 +183,6 @@ func (r *checkRun) invoke(client *GithubClient) error {
 	}
 
 	if r.status != nil && *r.status == "completed" {
-		klog.InfoS("invoke()", "status", r.status, "conclusion", *r.conclusion)
-	} else {
-		klog.InfoS("invoke()", "status", r.status)
-	}
-
-	if r.status != nil && *r.status == "completed" {
 		op.setAction("Plan", "Re-run plan", "plan")
 
 		if r.command == "plan" {
@@ -207,6 +218,9 @@ func (r *checkRun) name() string {
 	// Check run name always begins with full workspace name
 	name := r.namespace + "/" + r.workspace
 
+	// And we append iteration to ensure check run is unique and ordered
+	name += fmt.Sprintf(" #%d ", r.iteration)
+
 	// Next part of name is the command name
 	command := r.command
 	if r.command == "plan" && r.err == nil && r.status != nil && *r.status == "completed" {
@@ -220,24 +234,7 @@ func (r *checkRun) name() string {
 			command = plan.summary()
 		}
 	}
-	name += fmt.Sprintf("[%s]", command)
-
-	if r.err != nil {
-		// There was an error creating resources, there's no need to add further
-		// info
-		return name
-	}
-
-	// Next part is the run id (run-123yx). GH is likely to cut this short with
-	// a '...' so snip off the redundant prefix 'run-' and just show the ID.
-	// That way the ID - the important bit - is more likely to be visible to the
-	// user.
-	var id string
-	idparts := strings.Split(r.id, "-")
-	if len(idparts) == 2 {
-		id = idparts[1]
-	}
-	name += " " + id
+	name += command
 
 	return name
 }
@@ -255,6 +252,7 @@ func (r *checkRun) externalID() *string {
 		Namespace: r.namespace,
 		Previous:  r.previous,
 		Workspace: r.workspace,
+		Iteration: r.iteration,
 	}
 	return metadata.ToStringPtr()
 }
@@ -270,19 +268,23 @@ func (r *checkRun) summary() string {
 
 // Populate the 'details' text field of a check run
 func (r *checkRun) details() string {
-	diffStart := "```diff\n"
-	diffEnd := "\n```\n"
+	out := r.out
 
-	if (len(diffStart) + len(r.out) + len(diffEnd)) <= r.maxFieldSize {
-		return diffStart + string(bytes.TrimSpace(r.out)) + diffEnd
+	if r.stripRefreshing {
+		// Replace 'refreshing...' lines
+		out = refreshingStateRegex.ReplaceAll(r.out, []byte(""))
+	}
+
+	if (len(textStart) + len(out) + len(textEnd)) <= r.maxFieldSize {
+		return textStart + string(bytes.TrimSpace(out)) + textEnd
 	}
 
 	// Max bytes exceeded. Fetch new start position max bytes into output.
-	start := len(r.out) - r.maxFieldSize
+	start := len(out) - r.maxFieldSize
 
 	// Account for diff headers
-	start += len(diffStart)
-	start += len(diffEnd)
+	start += len(textStart)
+	start += len(textEnd)
 
 	// Add message explaining reason. The number of bytes skipped is inaccurate:
 	// it doesn't account for additional bytes skipped in order to accommodate
@@ -294,14 +296,14 @@ func (r *checkRun) details() string {
 
 	// Ensure output does not start half way through a line. Remove bytes
 	// leading up to and including the first new line character.
-	if i := bytes.IndexByte(r.out[start:], '\n'); i > -1 {
+	if i := bytes.IndexByte(out[start:], '\n'); i > -1 {
 		start += i + 1
 	}
 
 	// Trim off any remaining leading or trailing new lines
-	trimmed := bytes.Trim(r.out[start:], "\n")
+	trimmed := bytes.Trim(out[start:], "\n")
 
-	return diffStart + exceeded + string(trimmed) + diffEnd
+	return textStart + exceeded + string(trimmed) + textEnd
 }
 
 // Write implements io.Writer. The launcher calls Write with the logs it streams
@@ -309,31 +311,6 @@ func (r *checkRun) details() string {
 // populating the text fields of the check run, it provides an opportunity to
 // strip out unnecessary content.
 func (cr *checkRun) Write(p []byte) (int, error) {
-	// Total bytes written
-	var written int
-
-	r := bufio.NewReader(bytes.NewBuffer(p))
-	// Read segments of bytes delimited with a new line.
-	for {
-		line, err := r.ReadBytes('\n')
-		written += len(line)
-		if err == io.EOF {
-			return written, nil
-		}
-		if err != nil {
-			return written, err
-		}
-
-		if cr.stripRefreshing && bytes.Contains(line, []byte(": Refreshing state... ")) {
-			continue
-		}
-
-		if bytes.HasPrefix(line, []byte("  +")) || bytes.HasPrefix(line, []byte("  -")) || bytes.HasPrefix(line, []byte("  ~")) {
-			// Trigger diff color highlighting by unindenting lines beginning
-			// with +/-/~
-			line = bytes.TrimLeft(line, " ")
-		}
-
-		cr.out = append(cr.out, line...)
-	}
+	cr.out = p
+	return len(p), nil
 }

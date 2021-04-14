@@ -48,8 +48,8 @@ func TestHandleEvent(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "foo", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
-				testobj.Workspace("default", "bar", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir2")),
+				testobj.Workspace("default", "foo", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "bar", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir2")),
 			},
 			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
 				assert.Equal(t, 2, len(checkRuns))
@@ -62,6 +62,7 @@ func TestHandleEvent(t *testing.T) {
 					Action: github.String("rerequested"),
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
+							ID:         github.Int64(123456),
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
@@ -70,6 +71,7 @@ func TestHandleEvent(t *testing.T) {
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
+							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -82,12 +84,17 @@ func TestHandleEvent(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default"), testobj.WithLabels(
+					checkSuiteIDLabelName, "123456",
+					checkRunIterationLabelName, "1",
+				)),
 			},
 			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
 				if assert.Equal(t, 1, len(checkRuns)) {
 					assert.Equal(t, "plan", checkRuns[0].command)
 					assert.Equal(t, "run-12345", checkRuns[0].previous)
+					assert.Equal(t, 2, checkRuns[0].iteration)
 				}
 			},
 		},
@@ -98,6 +105,7 @@ func TestHandleEvent(t *testing.T) {
 					Action: github.String("requested_action"),
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
+							ID:         github.Int64(123456),
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
@@ -106,6 +114,7 @@ func TestHandleEvent(t *testing.T) {
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
+							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -121,12 +130,13 @@ func TestHandleEvent(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
 			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
 				if assert.Equal(t, 1, len(checkRuns)) {
 					assert.Equal(t, "plan", checkRuns[0].command)
 					assert.Equal(t, "run-12345", checkRuns[0].previous)
+					assert.Equal(t, 2, checkRuns[0].iteration)
 				}
 			},
 		},
@@ -137,6 +147,7 @@ func TestHandleEvent(t *testing.T) {
 					Action: github.String("requested_action"),
 					CheckRun: &github.CheckRun{
 						CheckSuite: &github.CheckSuite{
+							ID:         github.Int64(123456),
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
@@ -145,6 +156,7 @@ func TestHandleEvent(t *testing.T) {
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
+							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -160,12 +172,13 @@ func TestHandleEvent(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
 			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
 				if assert.Equal(t, 1, len(checkRuns)) {
 					assert.Equal(t, "apply", checkRuns[0].command)
 					assert.Equal(t, "run-12345", checkRuns[0].previous)
+					assert.Equal(t, 1, checkRuns[0].iteration)
 				}
 			},
 		},
@@ -179,6 +192,7 @@ func TestHandleEvent(t *testing.T) {
 					CheckRun: &github.CheckRun{
 						ID: &checkRunId,
 						CheckSuite: &github.CheckSuite{
+							ID:         github.Int64(123456),
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
@@ -199,7 +213,7 @@ func TestHandleEvent(t *testing.T) {
 				}
 			},
 			objs: []runtime.Object{
-				testobj.Workspace("default", "default", testobj.WithRepository("bob/myrepo"), testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
 			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
 			},
@@ -207,13 +221,21 @@ func TestHandleEvent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Create k8s clients
+			// Create a local mock of the upstream gh repo
+			repo, sha := initializeRepo(t, "fixtures/repo")
+
+			// Connect up workspaces to mock repo
+			for _, obj := range tt.objs {
+				ws, ok := obj.(*v1alpha1.Workspace)
+				if ok {
+					ws.Spec.VCS.Repository = "file://" + repo
+				}
+			}
+
+			// Create k8s clients and populate with mock objs
 			cc := etokclient.NewFakeClientCreator(tt.objs...)
 			client, err := cc.Create("")
 			require.NoError(t, err)
-
-			// Create a local mock of the upstream gh repo
-			repo, sha := initializeRepo(t, "fixtures/repo")
 
 			// Construct event with mock repo details
 			event := tt.event(t, repo, sha)

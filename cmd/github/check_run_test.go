@@ -4,57 +4,66 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRunOutput(t *testing.T) {
-	got, err := ioutil.ReadFile("fixtures/got.txt")
-	require.NoError(t, err)
+	tests := []struct {
+		name      string
+		id        string
+		command   string
+		namespace string
+		workspace string
+		run       checkRun
+		iteration int
+		// Path to fixture from which to populate output buffer
+		out      string
+		wantFile string
+	}{
+		{
+			name: "within maximum size",
+			out:  "fixtures/got.txt",
+			run: checkRun{
+				maxFieldSize: defaultMaxFieldSize,
+			},
+			wantFile: "fixtures/want.md",
+		},
+		{
+			name: "exceeds maximum size",
+			out:  "fixtures/got.txt",
+			run: checkRun{
+				// Default is 64k but we'll set to an artificially low number so
+				// that we can easily test this maximum being breached
+				maxFieldSize: 1000,
+			},
+			wantFile: "fixtures/want_truncated.md",
+		},
+		{
+			name: "strip off refreshing lines",
+			out:  "fixtures/got.txt",
+			run: checkRun{
+				maxFieldSize:    defaultMaxFieldSize,
+				stripRefreshing: true,
+			},
+			wantFile: "fixtures/want_without_refresh.md",
+		},
+	}
+	for _, tt := range tests {
+		testutil.Run(t, tt.name, func(t *testutil.T) {
+			// Write output to checkrun's output buffer
+			out, err := ioutil.ReadFile(tt.out)
+			require.NoError(t, err)
+			tt.run.out = out
 
-	t.Run("within maximum size", func(t *testing.T) {
-		o := checkRun{maxFieldSize: defaultMaxFieldSize}
+			want, err := ioutil.ReadFile(tt.wantFile)
+			require.NoError(t, err)
 
-		_, err = o.Write(got)
-		require.NoError(t, err)
-
-		want, err := ioutil.ReadFile("fixtures/want.md")
-		require.NoError(t, err)
-
-		assert.Equal(t, string(want), o.details())
-	})
-
-	t.Run("exceeds maximum size", func(t *testing.T) {
-		o := checkRun{
-			// Default is 64k but we'll set to an artificially low number so
-			// that we can easily test this maximum being breached
-			maxFieldSize: 1000,
-		}
-
-		_, err = o.Write(got)
-		require.NoError(t, err)
-
-		want, err := ioutil.ReadFile("fixtures/want_truncated.md")
-		require.NoError(t, err)
-
-		assert.Equal(t, string(want), o.details())
-	})
-
-	t.Run("strip off refreshing lines", func(t *testing.T) {
-		o := checkRun{
-			stripRefreshing: true,
-			maxFieldSize:    defaultMaxFieldSize,
-		}
-
-		_, err = o.Write(got)
-		require.NoError(t, err)
-
-		want, err := ioutil.ReadFile("fixtures/want_without_refresh.md")
-		require.NoError(t, err)
-
-		assert.Equal(t, string(want), o.details())
-	})
+			assert.Equal(t, string(want), tt.run.details())
+		})
+	}
 }
 
 func TestRunName(t *testing.T) {
@@ -64,7 +73,8 @@ func TestRunName(t *testing.T) {
 		command   string
 		namespace string
 		workspace string
-		status    string
+		status    *string
+		iteration int
 		want      string
 		// Path to fixture from which to populate output buffer
 		out string
@@ -75,27 +85,38 @@ func TestRunName(t *testing.T) {
 			command:   "plan",
 			namespace: "default",
 			workspace: "default",
-			want:      "default/default[plan] 12345",
+			want:      "default/default #0 [plan]",
 		},
 		{
 			name:      "completed plan",
 			id:        "run-12345",
 			command:   "plan",
-			status:    "completed",
+			status:    github.String("completed"),
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan.txt",
-			want:      "default/default[+2~0-0] 12345",
+			want:      "default/default #0 [+2~0-0]",
+		},
+		{
+			name:      "second iteration",
+			id:        "run-12345",
+			command:   "plan",
+			status:    github.String("completed"),
+			namespace: "default",
+			workspace: "default",
+			iteration: 1,
+			out:       "fixtures/plan.txt",
+			want:      "default/default #1 [+2~0-0]",
 		},
 		{
 			name:      "completed plan, no changes",
 			id:        "run-12345",
 			command:   "plan",
-			status:    "completed",
+			status:    github.String("completed"),
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan_no_changes.txt",
-			want:      "default/default[+0~0-0] 12345",
+			want:      "default/default #0 [+0~0-0]",
 		},
 		{
 			name:      "apply",
@@ -103,7 +124,7 @@ func TestRunName(t *testing.T) {
 			command:   "apply",
 			namespace: "default",
 			workspace: "default",
-			want:      "default/default[apply] 12345",
+			want:      "default/default #0 [apply]",
 		},
 	}
 
@@ -114,6 +135,7 @@ func TestRunName(t *testing.T) {
 				namespace: tt.namespace,
 				workspace: tt.workspace,
 				status:    tt.status,
+				iteration: tt.iteration,
 				id:        tt.id,
 			}
 
