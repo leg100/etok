@@ -3,11 +3,18 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -39,7 +46,7 @@ func TestGithub(t *testing.T) {
 	)
 	tc := oauth2.NewClient(context.Background(), ts)
 
-	client := github.NewClient(tc)
+	gclient := github.NewClient(tc)
 
 	// Path to cloned repo
 	path := testutil.NewTempDir(t).Root()
@@ -56,34 +63,17 @@ func TestGithub(t *testing.T) {
 
 	// Now we have a cloned repo we can create some workspaces, which'll
 	// automatically 'belong' to the repo
-	t.Run("create workspaces", func(t *testing.T) {
-		t.Run("foo", func(t *testing.T) {
-			t.Parallel()
-			require.NoError(t, step(t, name,
-				[]string{buildPath, "workspace", "new", "foo",
-					"--namespace", namespace,
-					"--path", path,
-					"--context", *kubectx,
-					"--ephemeral",
-				},
-				[]expect.Batcher{
-					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
-				}))
-		})
-
-		t.Run("bar", func(t *testing.T) {
-			t.Parallel()
-			require.NoError(t, step(t, name,
-				[]string{buildPath, "workspace", "new", "bar",
-					"--namespace", namespace,
-					"--path", path,
-					"--context", *kubectx,
-					"--ephemeral",
-				},
-				[]expect.Batcher{
-					&expect.BExp{R: fmt.Sprintf("Created workspace %s/bar", namespace)},
-				}))
-		})
+	t.Run("create workspace", func(t *testing.T) {
+		require.NoError(t, step(t, name,
+			[]string{buildPath, "workspace", "new", "foo",
+				"--namespace", namespace,
+				"--path", path,
+				"--context", *kubectx,
+				"--ephemeral",
+			},
+			[]expect.Batcher{
+				&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
+			}))
 	})
 
 	t.Run("create new branch", func(t *testing.T) {
@@ -107,31 +97,106 @@ func TestGithub(t *testing.T) {
 		runWithPath(t, path, "git", "push", "-f", "origin", "e2e")
 	})
 
+	var checkRun *github.CheckRun
 	t.Run("await completion of check runs", func(t *testing.T) {
-		var checkRuns []*github.CheckRun
-		var completed int
 		err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
-			results, _, err := client.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", nil)
+			results, _, err := gclient.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", nil)
 			if err != nil {
 				return false, err
 			}
 
-			for _, run := range results.CheckRuns {
-				if run.GetStatus() == "completed" {
-					t.Logf("check run completed: id=%d, conclusion=%s", run.GetID(), run.GetConclusion())
-					completed++
-				} else {
-					t.Logf("check run update: id=%d, status=%s", run.GetID(), run.GetStatus())
-				}
+			if len(results.CheckRuns) == 0 {
+				return false, nil
 			}
-			if completed == 2 {
-				checkRuns = results.CheckRuns
+
+			checkRun = results.CheckRuns[0]
+
+			checkRun.CheckSuite, _, err = gclient.Checks.GetCheckSuite(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), checkRun.CheckSuite.GetID())
+			require.NoError(t, err)
+
+			if checkRun.GetStatus() == "completed" {
+				require.Equal(t, "success", checkRun.GetConclusion())
 				return true, nil
 			}
+
+			t.Logf("check run update: id=%d, status=%s", checkRun.GetID(), checkRun.GetStatus())
 			return false, nil
 		})
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(checkRuns))
+	})
+
+	// The only way to trigger an apply is to construct an event and send it to
+	// our webhook server.
+	t.Run("trigger apply", func(t *testing.T) {
+		installID, err := strconv.ParseInt(os.Getenv("GITHUB_E2E_INSTALL_ID"), 10, 64)
+		require.NoError(t, err)
+
+		event := github.CheckRunEvent{
+			Action:   github.String("requested_action"),
+			CheckRun: checkRun,
+			Installation: &github.Installation{
+				ID: &installID,
+			},
+			Repo: &github.Repository{
+				CloneURL: github.String(fmt.Sprintf("https://github.com/%s/%s.git", os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"))),
+				Owner: &github.User{
+					Login: github.String(os.Getenv("GITHUB_E2E_REPO_OWNER")),
+				},
+				Name: github.String(os.Getenv("GITHUB_E2E_REPO_NAME")),
+			},
+			RequestedAction: &github.RequestedAction{
+				Identifier: "apply",
+			},
+		}
+
+		// Encode event to a json payload
+		buf := new(bytes.Buffer)
+		require.NoError(t, json.NewEncoder(buf).Encode(event))
+
+		// Generate HMAC of payload using webhook secret
+		hash := hmac.New(sha1.New, []byte(os.Getenv("GITHUB_E2E_WEBHOOK_SECRET")))
+		hash.Write(buf.Bytes())
+
+		// Construct HTTP request
+		req, err := http.NewRequest("POST", os.Getenv("GITHUB_E2E_URL")+"/events", buf)
+		require.NoError(t, err)
+		req.Header.Set("X-GitHub-Event", "check_run")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Hub-Signature", "sha1="+hex.EncodeToString(hash.Sum(nil)))
+
+		// Send event
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		if !assert.Equal(t, 200, resp.StatusCode) {
+			errmsg, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.NoError(t, err)
+			t.Logf("received response: %s", string(errmsg))
+		}
+	})
+
+	t.Run("await completion of apply", func(t *testing.T) {
+		err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
+			results, _, err := gclient.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", &github.ListCheckRunsOptions{CheckName: github.String(fmt.Sprintf("%s/foo #1 apply", namespace))})
+			if err != nil {
+				return false, err
+			}
+
+			if len(results.CheckRuns) == 0 {
+				return false, nil
+			}
+
+			checkRun = results.CheckRuns[0]
+
+			if checkRun.GetStatus() == "completed" {
+				require.Equal(t, "success", checkRun.GetConclusion())
+				return true, nil
+			}
+
+			t.Logf("check run update: id=%d, status=%s", checkRun.GetID(), checkRun.GetStatus())
+			return false, nil
+		})
+		require.NoError(t, err)
 	})
 }
 
