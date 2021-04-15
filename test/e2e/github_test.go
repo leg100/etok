@@ -51,23 +51,39 @@ func TestGithub(t *testing.T) {
 	})
 
 	t.Run("clone", func(t *testing.T) {
-		require.NoError(t, exec.Command("git", "clone", os.Getenv("REPO_URL"), path).Run())
+		require.NoError(t, exec.Command("git", "clone", os.Getenv("GITHUB_E2E_REPO_URL"), path).Run())
 	})
 
-	// Now we have a cloned repo we can create a workspace, which'll
+	// Now we have a cloned repo we can create some workspaces, which'll
 	// automatically 'belong' to the repo
-	t.Run("create workspace", func(t *testing.T) {
-		require.NoError(t, step(t, name,
-			[]string{buildPath, "workspace", "new", "foo",
-				"--namespace", namespace,
-				"--path", path,
-				"--context", *kubectx,
-				"--ephemeral",
-				"--variables", "suffix=bar",
-			},
-			[]expect.Batcher{
-				&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
-			}))
+	t.Run("create workspaces", func(t *testing.T) {
+		t.Run("foo", func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, step(t, name,
+				[]string{buildPath, "workspace", "new", "foo",
+					"--namespace", namespace,
+					"--path", path,
+					"--context", *kubectx,
+					"--ephemeral",
+				},
+				[]expect.Batcher{
+					&expect.BExp{R: fmt.Sprintf("Created workspace %s/foo", namespace)},
+				}))
+		})
+
+		t.Run("bar", func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, step(t, name,
+				[]string{buildPath, "workspace", "new", "bar",
+					"--namespace", namespace,
+					"--path", path,
+					"--context", *kubectx,
+					"--ephemeral",
+				},
+				[]expect.Batcher{
+					&expect.BExp{R: fmt.Sprintf("Created workspace %s/bar", namespace)},
+				}))
+		})
 	})
 
 	t.Run("create new branch", func(t *testing.T) {
@@ -91,23 +107,32 @@ func TestGithub(t *testing.T) {
 		runWithPath(t, path, "git", "push", "-f", "origin", "e2e")
 	})
 
-	// Ensure check runs have been created - list all runs for HEAD of master
-	var checkRuns []*github.CheckRun
-	err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
-		results, _, err := client.Checks.ListCheckRunsForRef(context.Background(), "leg100", "etok-e2e", "e2e", nil)
-		if err != nil {
-			return false, err
-		}
-		if len(results.CheckRuns) > 0 {
-			checkRuns = results.CheckRuns
-			return true, nil
-		}
-		return false, nil
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, len(checkRuns))
+	t.Run("await completion of check runs", func(t *testing.T) {
+		var checkRuns []*github.CheckRun
+		var completed int
+		err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
+			results, _, err := client.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", nil)
+			if err != nil {
+				return false, err
+			}
 
-	// Ensure run resource has been created
+			for _, run := range results.CheckRuns {
+				if run.GetStatus() == "completed" {
+					t.Logf("check run completed: id=%d, conclusion=%s", run.GetID(), run.GetConclusion())
+					completed++
+				} else {
+					t.Logf("check run update: id=%d, status=%s", run.GetID(), run.GetStatus())
+				}
+			}
+			if completed == 2 {
+				checkRuns = results.CheckRuns
+				return true, nil
+			}
+			return false, nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(checkRuns))
+	})
 }
 
 func runWithPath(t *testing.T, path string, name string, args ...string) {

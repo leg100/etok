@@ -75,10 +75,6 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 			if err != nil {
 				return err
 			}
-			if len(connected.Items) == 0 {
-				// No connected workspaces found
-				return nil
-			}
 
 			// Create check run for each connected workspace
 			for _, ws := range connected.Items {
@@ -162,8 +158,8 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					repo:         *ev.Repo.Name,
 					command:      metadata.Command,
 					previous:     metadata.Current,
-					maxFieldSize: defaultMaxFieldSize,
 					iteration:    metadata.Iteration,
+					maxFieldSize: defaultMaxFieldSize,
 				})
 			case "created":
 				// Check run has been created. Only now can we create a Run
@@ -197,7 +193,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 
 				// Create Run/ConfigMap resources in k8s
 				if err := createRunAndArchive(a.kclient, r, configMap); err != nil {
-					// Failed to create resources. Update checkrun reporting
+					// Failed to create resources. Update checkrun, reporting
 					// failure to user.
 					run, err := newRunFromResource(r, err)
 					if err != nil {
