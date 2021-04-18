@@ -18,8 +18,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type errHttpServerInternalError struct{}
-
 // appCreator handles the creation and setup of a new GitHub app
 type appCreator struct {
 	// Error channel for http handlers to report back a fatal error
