@@ -22,10 +22,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// Streamer for streaming logs from k8s. Abstracted to an interface for testing
+// purposes.
+type streamer interface {
+	Stream(context.Context, client.ObjectKey) (io.ReadCloser, error)
+}
+
+type podStreamer struct {
+	client kubernetes.Interface
+}
+
+func (s *podStreamer) Stream(ctx context.Context, key client.ObjectKey) (io.ReadCloser, error) {
+	opts := corev1.PodLogOptions{Container: globals.RunnerContainerName}
+
+	return s.client.CoreV1().Pods(key.Namespace).GetLogs(key.Name, &opts).Stream(ctx)
+}
+
+// Reconciler for watching updates to runs and updating corresponding github
+// check runs accordingly.
 type runReconciler struct {
 	client.Client
-	mgr     *GithubClientManager
-	kclient kubernetes.Interface
+	sender
+	streamer
+}
+
+// Constructor for run reconciler
+func newRunReconciler(rclient client.Client, kclient kubernetes.Interface, sdr sender) *runReconciler {
+	return &runReconciler{
+		Client:   rclient,
+		sender:   sdr,
+		streamer: &podStreamer{client: kclient},
+	}
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
@@ -52,19 +79,7 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Get github install ID from run
-	installID, err := getInstallID(&run)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Retrieve github client for the given install
-	gclient, err := r.mgr.getOrCreate(installID)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Construct check run obj from run resource
+	// Construct check-run from run resource
 	checkRun, err := newRunFromResource(&run, nil)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -72,22 +87,30 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Stream logs from pod and copy to check run obj
 	if run.IsStreamable() {
-		opts := corev1.PodLogOptions{Container: globals.RunnerContainerName}
-
-		stream, err := r.kclient.CoreV1().Pods(req.Namespace).GetLogs(req.Name, &opts).Stream(ctx)
+		resp, err := r.Stream(ctx, req.NamespacedName)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		_, err = io.Copy(checkRun, stream)
-		defer stream.Close()
+		out, err := io.ReadAll(resp)
+		defer resp.Close()
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		// Copy logs into check-run's buffer
+		checkRun.out = out
 	}
 
-	// Send checkrun obj to github client
-	gclient.send(checkRun)
+	// Get github install ID from run
+	installID, err := getInstallID(&run)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Send checkrun obj to github
+	if err := r.send(installID, checkRun); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	if run.IsDone() {
 		// Add label so that reconciler knows it can be skipped in future

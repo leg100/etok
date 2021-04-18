@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,12 +13,8 @@ import (
 	"runtime"
 	"time"
 
-	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/leg100/etok/pkg/github"
-	"github.com/leg100/etok/pkg/static"
-	"github.com/unrolled/render"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -25,8 +22,6 @@ type errHttpServerInternalError struct{}
 
 // appCreator handles the creation and setup of a new GitHub app
 type appCreator struct {
-	*render.Render
-
 	// Error channel for http handlers to report back a fatal error
 	errch chan error
 
@@ -47,6 +42,9 @@ type appCreator struct {
 	creds *credentials
 
 	manifestJson string
+
+	// HTML template for rendering web pages
+	tmpl *template.Template
 }
 
 type createAppOptions struct {
@@ -71,24 +69,22 @@ func createApp(ctx context.Context, appName, webhookUrl, githubHostname string, 
 		return err
 	}
 
+	tmpl, err := template.ParseFS(static, "static/templates/github-app.tmpl")
+	if err != nil {
+		return err
+	}
+
 	creator := appCreator{
-		creds: creds,
-		errch: make(chan error),
-		port:  listener.Addr().(*net.TCPAddr).Port,
-		Render: render.New(
-			render.Options{
-				Asset:         static.Asset,
-				AssetNames:    static.AssetNames,
-				Directory:     "static/templates",
-				IsDevelopment: opts.devMode,
-			},
-		),
+		creds:          creds,
+		errch:          make(chan error),
+		port:           listener.Addr().(*net.TCPAddr).Port,
 		githubHostname: githubHostname,
 		githubOrg:      opts.githubOrg,
+		tmpl:           tmpl,
 	}
 
 	// Serialize manifest as JSON ready to be POST'd
-	creator.manifestJson, err = manifestJson(appName, webhookUrl, creator.getUrl("/exchange-code"))
+	creator.manifestJson, err = manifestJson(appName, webhookUrl, creator.getUrl("/exchange-code"), creator.getUrl("/github-app/installed"))
 	if err != nil {
 		return fmt.Errorf("unable to serialize manifest to JSON: %w", err)
 	}
@@ -97,14 +93,17 @@ func createApp(ctx context.Context, appName, webhookUrl, githubHostname string, 
 	r := mux.NewRouter()
 	r.HandleFunc("/exchange-code", creator.exchangeCode)
 	r.HandleFunc("/github-app/setup", creator.newApp)
+	r.HandleFunc("/github-app/installed", creator.installed)
 	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write(nil) })
-	r.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
+	r.PathPrefix("/static/").Handler(http.FileServer(http.FS(static)))
 
 	if !opts.disableBrowser {
 		// Send user to browser to kick off app creation
-		if err := open(ctx, creator.getUrl("/github-app/setup")); err != nil {
+		url := creator.getUrl("/github-app/setup")
+		if err := open(ctx, url); err != nil {
 			return err
 		}
+		fmt.Printf("Your browser has been opened to visit: %s\n", url)
 	}
 
 	server := &http.Server{Handler: r}
@@ -114,7 +113,6 @@ func createApp(ctx context.Context, appName, webhookUrl, githubHostname string, 
 		}
 	}()
 	defer func() {
-		fmt.Println("Gracefully shutting down web server...")
 		server.Shutdown(ctx)
 	}()
 
@@ -122,33 +120,12 @@ func createApp(ctx context.Context, appName, webhookUrl, githubHostname string, 
 	case <-ctx.Done():
 		return ctx.Err()
 	case err := <-creator.errch:
+		// Give user's browser an opportunity to download any assets before
+		// shutting down web server.
+		time.Sleep(time.Second)
+
 		return err
 	}
-}
-
-// Wait for web server to be running
-func (c *appCreator) wait() error {
-	if err := pollUrl(c.getUrl("/healthz"), 500*time.Millisecond, 10*time.Second); err != nil {
-		return fmt.Errorf("encountered error while waiting for web server to startup: %w", err)
-	}
-
-	return nil
-}
-
-// pollUrl polls a url every interval until timeout. If an HTTP 200 is received
-// it exits without error.
-func pollUrl(url string, interval, timeout time.Duration) error {
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		resp, err := http.Get(url)
-		if err != nil {
-			klog.V(2).Infof("polling %s: %s", url, err.Error())
-			return false, nil
-		}
-		if resp.StatusCode == 200 {
-			return true, nil
-		}
-		return false, nil
-	})
 }
 
 // Get a manifest server URL with the given path
@@ -172,7 +149,7 @@ func (c *appCreator) githubNewAppUrl() string {
 
 // newApp sends the user to github to create an app
 func (c *appCreator) newApp(w http.ResponseWriter, r *http.Request) {
-	err := c.HTML(w, http.StatusOK, "github-app", struct {
+	err := c.tmpl.Execute(w, struct {
 		Target   string
 		Manifest string
 	}{
@@ -194,7 +171,7 @@ func (c *appCreator) newApp(w http.ResponseWriter, r *http.Request) {
 func (c *appCreator) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		c.Render.Text(w, http.StatusBadRequest, "Missing exchange code query parameter")
+		w.WriteHeader(http.StatusBadRequest)
 		c.errch <- errors.New("Missing exchange code query parameter")
 		return
 	}
@@ -203,7 +180,7 @@ func (c *appCreator) exchangeCode(w http.ResponseWriter, r *http.Request) {
 
 	client, err := NewAnonymousGithubClient(c.githubHostname)
 	if err != nil {
-		c.Render.Text(w, http.StatusInternalServerError, "Failed to instantiate github client")
+		w.WriteHeader(http.StatusInternalServerError)
 		c.errch <- fmt.Errorf("Failed to instantiate github client: %w", err)
 		return
 	}
@@ -211,25 +188,38 @@ func (c *appCreator) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	cfg, _, err := client.Apps.CompleteAppManifest(ctx, code)
 	if err != nil {
-		c.Render.Text(w, http.StatusInternalServerError, "Failed to exchange code for github app")
+		w.WriteHeader(http.StatusInternalServerError)
 		c.errch <- fmt.Errorf("Failed to exchange code for github app: %w", err)
 		return
 	}
 
-	fmt.Printf("Found credentials for GitHub app %q with id %d\n", cfg.GetName(), cfg.GetID())
+	fmt.Printf("Successfully created github app %q. App ID: %d\n", cfg.GetName(), cfg.GetID())
 
 	// Persist credentials to k8s secret
 	if err := c.creds.create(context.Background(), cfg); err != nil {
-		c.Render.Text(w, http.StatusInternalServerError, fmt.Sprintf("Unable to create secret %s: %s", c.creds, err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
 		c.errch <- fmt.Errorf("Unable to create secret %s: %w", c.creds, err)
 		return
 	}
 	fmt.Printf("Persisted credentials to secret %s\n", c.creds)
 
 	http.Redirect(w, r, cfg.GetHTMLURL()+"/installations/new", http.StatusFound)
+}
+
+// installed is a web page providing confirmation to the user that the app has
+// installed successfully
+func (c *appCreator) installed(w http.ResponseWriter, r *http.Request) {
+	err := c.tmpl.Execute(w, nil)
+	if err != nil {
+		c.errch <- fmt.Errorf("unable to render confirmation page: %w", err)
+		return
+	}
+
+	fmt.Printf("Github app successfully installed. Installation ID: %s\n", r.URL.Query().Get("installation_id"))
 
 	// Signal manifest flow completion
 	c.errch <- nil
+	return
 }
 
 func open(ctx context.Context, args ...string) error {
@@ -248,11 +238,14 @@ func getOpener() []string {
 	}
 }
 
-func manifestJson(appName, webhookUrl, redirectUrl string) (string, error) {
+func manifestJson(appName, webhookUrl, redirectUrl, setupUrl string) (string, error) {
+	// appRequest contains the query parameters for
+	// https://developer.github.com/apps/building-github-apps/creating-github-apps-from-a-manifest
 	m := &github.GithubManifest{
 		Name:        appName,
 		Description: "etok",
 		URL:         webhookUrl,
+		SetupURL:    setupUrl,
 		RedirectURL: redirectUrl,
 		Public:      false,
 		Webhook: &github.GithubWebhook{
@@ -261,22 +254,10 @@ func manifestJson(appName, webhookUrl, redirectUrl string) (string, error) {
 		},
 		Events: []string{
 			"check_run",
-			"create",
-			"delete",
-			"issue_comment",
-			"issues",
-			"pull_request_review_comment",
-			"pull_request_review",
-			"pull_request",
-			"push",
 		},
 		Permissions: map[string]string{
-			"checks":           "write",
-			"contents":         "write",
-			"issues":           "write",
-			"pull_requests":    "write",
-			"repository_hooks": "write",
-			"statuses":         "write",
+			"checks":   "write",
+			"contents": "write",
 		},
 	}
 

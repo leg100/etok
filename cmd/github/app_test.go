@@ -131,6 +131,10 @@ func TestHandleEvent(t *testing.T) {
 			},
 			objs: []runtime.Object{
 				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
+				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default"), testobj.WithLabels(
+					checkSuiteIDLabelName, "123456",
+					checkRunIterationLabelName, "1",
+				)),
 			},
 			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
 				if assert.Equal(t, 1, len(checkRuns)) {
@@ -244,11 +248,11 @@ func TestHandleEvent(t *testing.T) {
 				cloneDir: t.NewTempDir().Root(),
 			})
 
-			gclient := &fakeGithubClient{}
-			require.NoError(t, app.handleEvent(event, gclient))
+			mgr := &fakeInstallsMgr{}
+			require.NoError(t, app.handleEvent(event, mgr))
 
 			if tt.wantCheckRuns != nil {
-				tt.wantCheckRuns(t, gclient.checkRuns)
+				tt.wantCheckRuns(t, mgr.checkRuns)
 			}
 
 			if tt.wantRunArchive != nil {
@@ -298,20 +302,24 @@ func TestRunScript(t *testing.T) {
 	}
 }
 
-type fakeGithubClient struct {
+type fakeInstallsMgr struct {
 	checkRuns []*checkRun
 }
 
-func (c *fakeGithubClient) getInstallID() int64 {
-	return 0
+func (m *fakeInstallsMgr) getTokenRefresher(installID int64) (tokenRefresher, error) {
+	return &fakeTokenRefresher{}, nil
 }
 
-func (c *fakeGithubClient) refreshToken() (string, error) {
+func (m *fakeInstallsMgr) send(_ int64, inv invoker) error {
+	m.checkRuns = append(m.checkRuns, inv.(*checkRun))
+
+	return nil
+}
+
+type fakeTokenRefresher struct{}
+
+func (tr *fakeTokenRefresher) refreshToken() (string, error) {
 	return "token123", nil
-}
-
-func (c *fakeGithubClient) send(op githubOperation) {
-	c.checkRuns = append(c.checkRuns, op.(*checkRun))
 }
 
 func initializeRepo(t *testutil.T, seed string) (string, string) {

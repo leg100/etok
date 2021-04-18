@@ -16,12 +16,7 @@ import (
 type githubClientInterface interface {
 	tokenRefresher
 
-	send(githubOperation)
-	getInstallID() int64
-}
-
-type githubOperation interface {
-	invoke(*GithubClient) error
+	send(invoker)
 }
 
 type GithubClient struct {
@@ -31,7 +26,7 @@ type GithubClient struct {
 
 	itr *ghinstallation.Transport
 
-	queue chan githubOperation
+	queue chan invoker
 }
 
 // NewGithubClient returns a wrapped github client using the 'anonymous' user
@@ -66,7 +61,7 @@ func NewGithubAppClient(hostname string, appID int64, keyPath string, installID 
 	client := &GithubClient{
 		Client:    ghClient,
 		itr:       itr,
-		queue:     make(chan githubOperation, 100),
+		queue:     make(chan invoker, 100),
 		installID: installID,
 	}
 
@@ -90,11 +85,7 @@ func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, err
 	return client, nil
 }
 
-func (c *GithubClient) getInstallID() int64 {
-	return c.installID
-}
-
-func (c *GithubClient) send(op githubOperation) {
+func (c *GithubClient) send(op invoker) {
 	c.queue <- op
 }
 

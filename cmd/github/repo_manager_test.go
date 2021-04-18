@@ -10,12 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeTokenRefresher struct{}
-
-func (r *fakeTokenRefresher) refreshToken() (string, error) {
-	return "token123", nil
-}
-
 func TestRepoManager(t *testing.T) {
 	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
 	cloneDir := testutil.NewTempDir(t).Root()

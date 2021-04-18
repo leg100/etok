@@ -14,14 +14,10 @@ import (
 )
 
 type githubApp interface {
-	handleEvent(interface{}, githubClientInterface) error
+	handleEvent(interface{}, installsManager) error
 }
 
 const githubHeader = "X-Github-Event"
-
-type InstallationEvent interface {
-	GetInstallation() *github.Installation
-}
 
 // WebhookServer listens for github events and dispatches them to a github app.
 // Credentials for the app are required, which are used to create a github
@@ -40,19 +36,19 @@ type webhookServer struct {
 	// The github app to which to dispatch received events
 	app githubApp
 
-	mgr githubClientManagerInterface
+	mgr installsManager
 }
 
-func (o *webhookServer) validate() error {
-	if o.webhookSecret == "" {
+func (s *webhookServer) validate() error {
+	if s.webhookSecret == "" {
 		return fmt.Errorf("webhook secret cannot be an empty string")
 	}
 
 	return nil
 }
 
-func (o *webhookServer) run(ctx context.Context) error {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", o.port))
+func (s *webhookServer) run(ctx context.Context) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return err
 	}
@@ -60,13 +56,13 @@ func (o *webhookServer) run(ctx context.Context) error {
 
 	// Record port for testing purposes (a test may want to know which port was
 	// dynamically assigned)
-	o.port = listener.Addr().(*net.TCPAddr).Port
+	s.port = listener.Addr().(*net.TCPAddr).Port
 
 	r := mux.NewRouter()
 	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(nil)
 	})
-	r.HandleFunc("/events", o.eventHandler).Methods("POST")
+	r.HandleFunc("/events", s.eventHandler).Methods("POST")
 
 	// Add middleware
 	n := negroni.New()
@@ -88,13 +84,13 @@ func (o *webhookServer) run(ctx context.Context) error {
 	return server.Shutdown(ctx)
 }
 
-func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
+func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get(githubHeader) == "" {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
-	payload, err := github.ValidatePayload(r, []byte(o.webhookSecret))
+	payload, err := github.ValidatePayload(r, []byte(s.webhookSecret))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -106,20 +102,7 @@ func (o *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	install, ok := event.(InstallationEvent)
-	if !ok || install.GetInstallation() == nil {
-		// Irrelevant event
-		klog.Infof("ignoring event: not associated with an app install")
-		return
-	}
-
-	// Retrieve github client for the given installation
-	client, err := o.mgr.getOrCreate(*install.GetInstallation().ID)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	if err := o.app.handleEvent(event, client); err != nil {
+	if err := s.app.handleEvent(event, s.mgr); err != nil {
 		panic(err.Error())
 	}
 

@@ -73,6 +73,11 @@ func TestDeploy(t *testing.T) {
 			err = opts.RuntimeClient.Get(context.Background(), runtimeclient.ObjectKeyFromObject(&secret), &secret)
 			assert.NoError(t, err)
 
+			// Mimic github redirecting user after successful installation
+			resp, err = http.Get("http://localhost:12345/github-app/installed?installation_id=16338139")
+			content, err = ioutil.ReadAll(resp.Body)
+			assert.Contains(t, string(content), "Github app installed successfully! You may now close this window.")
+
 			// Check command completed without error
 			assert.NoError(t, <-execErr)
 		})

@@ -13,12 +13,6 @@ import (
 	"time"
 )
 
-// A tokenRefresher can provide a fresh token for authenticating git operations
-// with github
-type tokenRefresher interface {
-	refreshToken() (string, error)
-}
-
 // Repo manager gates access to all git operations. In this way, it is able to
 // remove cloned repos after they are no longer needed in a thread-safe manner.
 type repoManager struct {
@@ -42,7 +36,7 @@ func newRepoManager(cloneDir string) *repoManager {
 	}
 }
 
-// Clone clones a git repo to local disk and returns an obj representing it.
+// Clone a git repo to local disk and returns an obj representing it.
 // Thereafter the caller has a limited time before the repo is deleted.
 func (m *repoManager) clone(url, branch, sha, owner, name string, refresher tokenRefresher) (*repo, error) {
 	m.mu.Lock()

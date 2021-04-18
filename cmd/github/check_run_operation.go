@@ -22,7 +22,7 @@ func (c *checkRunOperation) output() *github.CheckRunOutput {
 	return &github.CheckRunOutput{
 		Title:   github.String(c.title()),
 		Summary: github.String(c.summary()),
-		Text:    github.String(c.details()),
+		Text:    c.details(),
 	}
 }
 

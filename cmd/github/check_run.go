@@ -42,7 +42,12 @@ type checkRun struct {
 	previous string
 
 	stripRefreshing bool
-	err             error
+
+	// Error creating k8s resources
+	createErr error
+
+	// Run failure message - its pod didn't even start
+	runFailure *string
 
 	// The workspace of the run
 	workspace string
@@ -128,13 +133,14 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		workspace:    res.Workspace,
 		maxFieldSize: defaultMaxFieldSize,
 		iteration:    int(iteration),
-		err:          createErr,
+		createErr:    createErr,
 	}
 
 	if createErr != nil {
 		// Failed to create k8s resources
 		r.status = github.String("completed")
 		r.conclusion = github.String("failure")
+
 		return &r, nil
 	}
 
@@ -148,6 +154,10 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		default:
 			r.conclusion = github.String("failure")
 		}
+
+		r.out = []byte(fmt.Sprintf("Run failed: %s\n", cond.Message))
+
+		r.runFailure = github.String(cond.Message)
 
 	} else if meta.IsStatusConditionTrue(res.Conditions, v1alpha1.RunCompleteCondition) {
 		r.status = github.String("completed")
@@ -223,7 +233,7 @@ func (r *checkRun) name() string {
 
 	// Next part of name is the command name
 	command := r.command
-	if r.command == "plan" && r.err == nil && r.status != nil && *r.status == "completed" {
+	if r.command == "plan" && r.createErr == nil && r.status != nil && *r.status == "completed" {
 		// Upon completion of a plan, instead of showing 'plan', show summary of
 		// changes
 		plan, err := parsePlanOutput(string(r.out))
@@ -259,27 +269,39 @@ func (r *checkRun) externalID() *string {
 
 // Populate the 'summary' text field of a check run
 func (r *checkRun) summary() string {
-	if r.err != nil {
-		return r.err.Error()
+	if r.createErr != nil {
+		return fmt.Sprintf("Unable to create kubernetes resources: %s\n", r.createErr.Error())
 	}
 
-	return fmt.Sprintf("Run `kubectl logs -f pods/%s`", r.id)
+	if r.runFailure != nil {
+		return fmt.Sprintf("%s failed: %s\n", r.id, *r.runFailure)
+	}
+
+	return fmt.Sprintf("Note: you can also view logs by running: `kubectl logs -f pods/%s`.", r.id)
 }
 
 // Populate the 'details' text field of a check run
-func (r *checkRun) details() string {
+func (r *checkRun) details() *string {
+	if r.createErr != nil || r.runFailure != nil {
+		// Terraform didn't even run so don't provide details
+		return nil
+	}
+
 	out := r.out
+
+	klog.InfoS("out", "size", len(r.out))
 
 	if r.stripRefreshing {
 		// Replace 'refreshing...' lines
-		out = refreshingStateRegex.ReplaceAll(r.out, []byte(""))
+		out = refreshingStateRegex.ReplaceAll(out, []byte(""))
 	}
 
 	if (len(textStart) + len(out) + len(textEnd)) <= r.maxFieldSize {
-		return textStart + string(bytes.TrimSpace(out)) + textEnd
+		return github.String(textStart + string(bytes.TrimSpace(out)) + textEnd)
 	}
 
-	// Max bytes exceeded. Fetch new start position max bytes into output.
+	// Max bytes exceeded. Fetch new start position max bytes from end of
+	// output.
 	start := len(out) - r.maxFieldSize
 
 	// Account for diff headers
@@ -303,14 +325,13 @@ func (r *checkRun) details() string {
 	// Trim off any remaining leading or trailing new lines
 	trimmed := bytes.Trim(out[start:], "\n")
 
-	return textStart + exceeded + string(trimmed) + textEnd
+	return github.String(textStart + exceeded + string(trimmed) + textEnd)
 }
 
-// Write implements io.Writer. The launcher calls Write with the logs it streams
-// from the pod. As well as storing the logs to an internal buffer for
-// populating the text fields of the check run, it provides an opportunity to
-// strip out unnecessary content.
+// Write implements io.Writer. Permits callers to use io funcs to write to
+// checkrun's output buffer.
 func (cr *checkRun) Write(p []byte) (int, error) {
 	cr.out = p
+	klog.InfoS("check run output after write", "length", len(cr.out))
 	return len(p), nil
 }

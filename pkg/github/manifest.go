@@ -9,6 +9,7 @@ type GithubManifest struct {
 	Permissions map[string]string `json:"default_permissions"`
 	Public      bool              `json:"public"`
 	RedirectURL string            `json:"redirect_url"`
+	SetupURL    string            `json:"setup_url"`
 	URL         string            `json:"url"`
 	Webhook     *GithubWebhook    `json:"hook_attributes"`
 }

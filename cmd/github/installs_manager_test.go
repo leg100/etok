@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGithubClientManager(t *testing.T) {
+func TestInstallsManagerGetOrCreate(t *testing.T) {
 	keyPath := testutil.TempFile(t, "key", []byte(fixtures.GithubPrivateKey))
 
-	mgr, err := newGithubClientManager("app.net", keyPath, 123)
+	mgr, err := newInstallsManager("app.net", keyPath, 123)
 
 	client, err := mgr.getOrCreate(123)
 	require.NoError(t, err)

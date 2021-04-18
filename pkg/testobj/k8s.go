@@ -267,11 +267,17 @@ func WithRunPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
 	}
 }
 
-func WithCondition(condition string) func(*v1alpha1.Run) {
+func WithCondition(condition string, reason ...string) func(*v1alpha1.Run) {
+	rson := ""
+	if len(reason) > 0 {
+		rson = reason[0]
+	}
+
 	return func(run *v1alpha1.Run) {
 		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
 			Type:   condition,
 			Status: metav1.ConditionTrue,
+			Reason: rson,
 		})
 	}
 }

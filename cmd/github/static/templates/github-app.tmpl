@@ -53,7 +53,7 @@
 
     <p class="js-discard-success"><strong>
     {{ if not .Target }}
-      Github app created successfully!
+      Github app installed successfully! You may now close this window.
     {{ end }}
     </strong></p>
   </section>
@@ -63,8 +63,6 @@
       <button type="submit">Create github app</button>
       <input type="hidden" name="manifest", value="{{ .Manifest }}"></input>
     </form>
-    {{ else }}
-      <p>Visit <a href="{{ .URL }}/installations/new" target="_blank">{{ .URL }}/installations/new</a> to install the app for your user or organization</p>
     {{ end }}
   </section>
 </div>

@@ -48,7 +48,7 @@ func newApp(kclient *client.Client, opts appOptions) *app {
 
 // Handle incoming github events, creating check runs and etok run resources
 // accordingly.
-func (a *app) handleEvent(event interface{}, client githubClientInterface) error {
+func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
 		switch *ev.Action {
@@ -61,12 +61,17 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				klog.InfoS("finished handling check suite event", "id", ev.CheckSuite.GetID(), "check_runs_created", created)
 			}()
 
+			refresher, err := mgr.getTokenRefresher(ev.GetInstallation().GetID())
+			if err != nil {
+				return err
+			}
+
 			repo, err := a.repoManager.clone(
 				*ev.Repo.CloneURL,
 				*ev.CheckSuite.HeadBranch,
 				*ev.CheckSuite.HeadSHA,
 				*ev.Repo.Owner.Login,
-				*ev.Repo.Name, client)
+				*ev.Repo.Name, refresher)
 			if err != nil {
 				return err
 			}
@@ -84,7 +89,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					continue
 				}
 
-				client.send(&checkRun{
+				err = mgr.send(ev.GetInstallation().GetID(), &checkRun{
 					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
 					namespace:    ws.Namespace,
 					workspace:    ws.Name,
@@ -95,6 +100,9 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					maxFieldSize: defaultMaxFieldSize,
 					iteration:    1,
 				})
+				if err != nil {
+					return err
+				}
 
 				created++
 			}
@@ -120,12 +128,17 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				metadata.Command = ev.RequestedAction.Identifier
 			}
 
+			refresher, err := mgr.getTokenRefresher(ev.GetInstallation().GetID())
+			if err != nil {
+				return err
+			}
+
 			repo, err := a.repoManager.clone(
 				*ev.Repo.CloneURL,
 				*ev.CheckRun.CheckSuite.HeadBranch,
 				*ev.CheckRun.CheckSuite.HeadSHA,
 				*ev.Repo.Owner.Login,
-				*ev.Repo.Name, client)
+				*ev.Repo.Name, refresher)
 			if err != nil {
 				return err
 			}
@@ -149,7 +162,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 
 			switch *ev.Action {
 			case "rerequested", "requested_action":
-				client.send(&checkRun{
+				err = mgr.send(ev.GetInstallation().GetID(), &checkRun{
 					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
 					namespace:    ws.Namespace,
 					workspace:    ws.Name,
@@ -161,6 +174,9 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					iteration:    metadata.Iteration,
 					maxFieldSize: defaultMaxFieldSize,
 				})
+				if err != nil {
+					return err
+				}
 			case "created":
 				// Check run has been created. Only now can we create a Run
 				// resource because we need to label it with the check run ID.
@@ -173,7 +189,7 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 				bldr.SetStatus(a.runStatus)
 
 				bldr.SetLabel(githubTriggeredLabelName, "true")
-				bldr.SetLabel(githubAppInstallIDLabelName, strconv.Itoa(int(client.getInstallID())))
+				bldr.SetLabel(githubAppInstallIDLabelName, strconv.FormatInt(ev.GetInstallation().GetID(), 10))
 
 				bldr.SetLabel(checkSuiteIDLabelName, strconv.Itoa(int(ev.CheckRun.CheckSuite.GetID())))
 
@@ -204,7 +220,9 @@ func (a *app) handleEvent(event interface{}, client githubClientInterface) error
 					// create a brand new check run
 					run.checkRunId = ev.CheckRun.ID
 
-					client.send(run)
+					if err := mgr.send(ev.GetInstallation().GetID(), run); err != nil {
+						return err
+					}
 				}
 			}
 

@@ -52,7 +52,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			// The github client mgr maintains one client per github app
 			// installation
-			clientmgr, err := newGithubClientManager(o.githubHostname, o.keyPath, o.appID)
+			installsMgr, err := newInstallsManager(o.githubHostname, o.keyPath, o.appID)
 			if err != nil {
 				return err
 			}
@@ -67,17 +67,17 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return fmt.Errorf("unable to create run controller manager: %w", err)
 			}
 
-			if err := (&runReconciler{
-				Client:  mgr.GetClient(),
-				kclient: client.KubeClient,
-				mgr:     clientmgr,
-			}).SetupWithManager(mgr); err != nil {
+			if err := newRunReconciler(
+				mgr.GetClient(),
+				client.KubeClient,
+				installsMgr,
+			).SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create run controller: %w", err)
 			}
 
 			// Configure webhook server to forward events to our 'github app'
 			o.webhookServer.app = newApp(client, o.appOptions)
-			o.webhookServer.mgr = clientmgr
+			o.webhookServer.mgr = installsMgr
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor

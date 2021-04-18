@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -26,6 +28,7 @@ func TestAppCreator(t *testing.T) {
 
 	client := fake.NewClientBuilder().Build()
 
+	completed := make(chan error)
 	go func() {
 		creds := &credentials{
 			namespace: "fake",
@@ -33,11 +36,10 @@ func TestAppCreator(t *testing.T) {
 			client:    client,
 		}
 
-		err := createApp(context.Background(), "test-app", "https://webhook.etok.dev", githubHostname, creds, createAppOptions{
+		completed <- createApp(context.Background(), "test-app", "https://webhook.etok.dev", githubHostname, creds, createAppOptions{
 			port:           12345,
 			disableBrowser: true,
 		})
-		require.NoError(t, err)
 	}()
 
 	err := pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
@@ -65,6 +67,14 @@ func TestAppCreator(t *testing.T) {
 	assert.Equal(t, "1", secret.StringData["id"])
 	assert.Equal(t, "e340154128314309424b7c8e90325147d99fdafa", secret.StringData["webhook-secret"])
 	assert.True(t, strings.HasPrefix(secret.StringData["key"], "-----BEGIN RSA PRIVATE KEY-----"))
+
+	// Mimic github redirecting user after successful installation
+	resp, err = http.Get("http://localhost:12345/github-app/installed?installation_id=16338139")
+	content, err = ioutil.ReadAll(resp.Body)
+	assert.Contains(t, string(content), "Github app installed successfully! You may now close this window.")
+
+	// App creator should now automatically shut itself down
+	require.NoError(t, <-completed)
 }
 
 // disableSSLVerification disables ssl verification for the global http client
@@ -76,5 +86,21 @@ func disableSSLVerification(t *testing.T) {
 
 	t.Cleanup(func() {
 		http.DefaultTransport.(*http.Transport).TLSClientConfig = orig
+	})
+}
+
+// pollUrl polls a url every interval until timeout. If an HTTP 200 is received
+// it exits without error.
+func pollUrl(url string, interval, timeout time.Duration) error {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
+		resp, err := http.Get(url)
+		if err != nil {
+			klog.V(2).Infof("polling %s: %s", url, err.Error())
+			return false, nil
+		}
+		if resp.StatusCode == 200 {
+			return true, nil
+		}
+		return false, nil
 	})
 }

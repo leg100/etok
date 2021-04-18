@@ -10,7 +10,6 @@ require (
 	github.com/creack/pty v1.1.11
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.10.0
 	github.com/fsouza/fake-gcs-server v1.22.0
 	github.com/go-git/go-git/v5 v5.3.0
@@ -25,7 +24,6 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	github.com/unrolled/render v1.0.3
 	github.com/urfave/negroni v1.0.0
 	github.com/zclconf/go-cty v1.5.1 // indirect
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
