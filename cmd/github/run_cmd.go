@@ -1,9 +1,6 @@
 package github
 
 import (
-
-	// or "gopkg.in/unrolled/render.v1"
-
 	"fmt"
 
 	"golang.org/x/sync/errgroup"
@@ -41,8 +38,9 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 		webhookServer: &webhookServer{},
 	}
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run github app",
+		Use:    "run",
+		Short:  "Run github app",
+		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			// Create k8s client
 			client, err := f.Create("")

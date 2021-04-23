@@ -86,7 +86,6 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 				if err := createApp(cmd.Context(), o.appName, webhookUrl.String(), o.githubHostname, &creds, o.appCreatorOptions); err != nil {
 					return fmt.Errorf("unable to complete app creation: %w", err)
 				}
-				fmt.Println("Github app created successfully")
 			} else {
 				fmt.Println("Skipping creation of Github app; app credentials found")
 			}
@@ -94,7 +93,7 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			// Deploy webhook k8s resources
 			o.deployer.namespace = o.namespace
 			o.deployer.port = defaultWebhookPort
-			o.deployer.timeout = 10 * time.Second
+			o.deployer.timeout = 60 * time.Second
 			o.deployer.interval = 1 * time.Second
 			o.deployer.patch = runtimeclient.Apply
 			if err := o.deployer.deploy(cmd.Context(), o.RuntimeClient); err != nil {

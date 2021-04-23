@@ -31,6 +31,6 @@ The e2e test of the github app is disabled by default. The following environment
 * `GITHUB_E2E_REPO_OWNER` - The github owner, e.g. `leg100`
 * `GITHUB_E2E_REPO_NAME` - The name of the repo, e.g. `etok-e2e`
 * `GITHUB_E2E_URL` - The URL of the deployed webhook server, e.g. `https://webhook.etok.dev`
-* `GITHUB_E2E_WEBHOOK_SECRET` - The webhook secret for authenticating to the webhok server, e.g. `da39a3ee5e6b4b0d3255bfef95601890afd80709`
+* `GITHUB_E2E_WEBHOOK_SECRET` - The webhook secret for authenticating to the webhook server, e.g. `da39a3ee5e6b4b0d3255bfef95601890afd80709`
 * `GITHUB_E2E_INSTALL_ID` - The github app installation ID, e.g. `10992`
 
