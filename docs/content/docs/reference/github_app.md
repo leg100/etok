@@ -16,17 +16,25 @@ Note: this command also upgrades an existing deployment.
 
 The command also handles creating the app on Github. This is a necessary step prior to the deployment to the cluster, in order to configure the webhook on your Github account and to assign permissions to the app to access your repos.
 
-It'll create a secret named `creds` containing credentials for authenticating to Github. The presence of this secret is used to determine if the app has been createad or not. So if you need to re-create the app, delete the secret and re-run the `github deploy` subcommand.
+It'll create a secret named `creds` containing credentials for authenticating to Github. The presence of the secret determines whether the app has been created or not. So if you need to re-create the app, delete the secret and re-run the `github deploy` subcommand.
 
 The deployment runs in a dedicated namespace, set via the namespace flag `--namespace` flag. The default is `github`.
 
 ## Operation
 
-Each commit pushed to a repository triggers Etok runs. The app looks for workspaces connected to the repository and for each connected workspace it'll run `terraform init` followed by a `terraform plan`.
+Each commit pushed to a repository triggers a terraform plan. The app looks for workspaces connected to the repository and for each connected workspace it'll trigger a plan.
+
+{{< hint info >}}
+For a plan, Etok executes `terraform init` followed by `terraform plan`.
+{{< /hint >}}
 
 If you want to re-run a plan, click the `Plan` button.
 
 Should you want to apply the plan, click the `Apply` button, which will run `terraform apply` using the plan file produced from the plan.
+
+{{< hint info >}}
+For an apply, Etok executes `terraform init` followed by `terraform apply`.
+{{< /hint >}}
 
 ## Notation
 
