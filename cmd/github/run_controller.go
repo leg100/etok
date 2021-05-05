@@ -75,12 +75,12 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Skip completed runs
-	if val, ok := run.GetLabels()[checkRunStatusLabelName]; ok && val == "completed" {
+	if val, ok := run.GetLabels()[checkStatusLabelName]; ok && val == "completed" {
 		return ctrl.Result{}, nil
 	}
 
 	// Construct check-run from run resource
-	checkRun, err := newRunFromResource(&run, nil)
+	checkRun, err := newCheckFromResource(&run, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -114,7 +114,7 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if run.IsDone() {
 		// Add label so that reconciler knows it can be skipped in future
-		run.SetLabels(labels.Merge(run.GetLabels(), map[string]string{checkRunStatusLabelName: "completed"}))
+		run.SetLabels(labels.Merge(run.GetLabels(), map[string]string{checkStatusLabelName: "completed"}))
 		if err := r.Update(ctx, &run); err != nil {
 			return ctrl.Result{}, err
 		}

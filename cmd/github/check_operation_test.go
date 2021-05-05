@@ -3,6 +3,6 @@ package github
 import "testing"
 
 func TestEtokRunOperation(t *testing.T) {
-	_ = checkRunOperation{}
+	_ = checkOperation{}
 	//op.create(context.Background(),
 }

@@ -26,19 +26,17 @@ var (
 	refreshingStateRegex = regexp.MustCompile("(?m)[\n\r]+^.*: Refreshing state... .*$")
 )
 
-// Represents a github checkrun
-type checkRun struct {
-	id, namespace string
+// Represents a github check-run
+type check struct {
+	// Check ID is only populated after the gh client creates the check.  Once
+	// populated, we can use it to update the check.
+	id *int64
 
-	// Iteration is the ordinal number of times a plan/apply has been run, for
-	// this workspace, for this checksuite. Its only purpose is to ensure check
-	// runs are presented in a logical order on the github checks UI, which
-	// orders them alphanumerically, with the iteration being appended to the
-	// check run name.
-	iteration int
+	// Etok run name and namespace. Run name is only populated once a check is
+	// created.
+	run, namespace string
 
-	// Previous etok run ID - populated if check run is a re-run or apply of a
-	// previous run
+	// Previous etok run name - populated if check is re-run or applied
 	previous string
 
 	stripRefreshing bool
@@ -75,56 +73,43 @@ type checkRun struct {
 
 	// Max num of bytes github imposes on check run fields (summary, details)
 	maxFieldSize int
-
-	// Check Run ID is only populated after the gh client creates the check run.
-	// Once populated, we can use it to update the check run.
-	checkRunId *int64
 }
 
-// Construct check run from run resource.
-func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
+// Construct check from run resource.
+func newCheckFromResource(res *v1alpha1.Run, createErr error) (*check, error) {
 	lbls := res.GetLabels()
 	if lbls == nil {
 		return nil, fmt.Errorf("no labels found on run resource")
 	}
-	idStr, ok := lbls[checkRunIDLabelName]
+	idStr, ok := lbls[checkIDLabelName]
 	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunIDLabelName)
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkIDLabelName)
 	}
-	sha, ok := lbls[checkRunSHALabelName]
+	sha, ok := lbls[checkSHALabelName]
 	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunSHALabelName)
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkSHALabelName)
 	}
-	owner, ok := lbls[checkRunOwnerLabelName]
+	owner, ok := lbls[checkOwnerLabelName]
 	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunOwnerLabelName)
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkOwnerLabelName)
 	}
-	repo, ok := lbls[checkRunRepoLabelName]
+	repo, ok := lbls[checkRepoLabelName]
 	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunRepoLabelName)
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRepoLabelName)
 	}
-	cmd, ok := lbls[checkRunCommandLabelName]
+	cmd, ok := lbls[checkCommandLabelName]
 	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunCommandLabelName)
-	}
-	iterationStr, ok := lbls[checkRunIterationLabelName]
-	if !ok {
-		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkRunIterationLabelName)
+		return nil, fmt.Errorf("run %s missing label %s", klog.KObj(res), checkCommandLabelName)
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if !ok {
-		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRunRepoLabelName, idStr, err)
+		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRepoLabelName, idStr, err)
 	}
 
-	iteration, err := strconv.ParseInt(iterationStr, 10, 0)
-	if !ok {
-		return nil, fmt.Errorf("unable to parse label value: %s: %s=%s: %w", klog.KObj(res), checkRunIterationLabelName, iterationStr, err)
-	}
-
-	r := checkRun{
-		id:           res.Name,
-		checkRunId:   &id,
+	r := check{
+		id:           &id,
+		run:          res.Name,
 		namespace:    res.Namespace,
 		sha:          sha,
 		owner:        owner,
@@ -132,7 +117,6 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 		command:      cmd,
 		workspace:    res.Workspace,
 		maxFieldSize: defaultMaxFieldSize,
-		iteration:    int(iteration),
 		createErr:    createErr,
 	}
 
@@ -187,9 +171,9 @@ func newRunFromResource(res *v1alpha1.Run, createErr error) (*checkRun, error) {
 // Update actually updates the check run on GH. It does so idempotently: if the
 // CR is yet to be created it will be created, and if it's already created,
 // it'll be updated.
-func (r *checkRun) invoke(client *GithubClient) error {
-	op := checkRunOperation{
-		checkRun: r,
+func (r *check) invoke(client *GithubClient) error {
+	op := checkOperation{
+		check: r,
 	}
 
 	if r.status != nil && *r.status == "completed" {
@@ -200,20 +184,20 @@ func (r *checkRun) invoke(client *GithubClient) error {
 		}
 	}
 
-	if r.checkRunId != nil {
-		err := op.update(context.Background(), client, *r.checkRunId)
+	if r.id != nil {
+		err := op.update(context.Background(), client, *r.id)
 		if err != nil {
 			klog.Errorf("unable to update check run: %s", err.Error())
 			return err
 		}
-		klog.InfoS("updated check run", "id", *r.checkRunId, "ref", r.sha)
+		klog.InfoS("updated check run", "id", *r.id, "ref", r.sha)
 	} else {
 		id, err := op.create(context.Background(), client)
 		if err != nil {
 			klog.Errorf("unable to create check run: %s", err.Error())
 			return err
 		}
-		r.checkRunId = &id
+		r.id = &id
 		klog.InfoS("created check run", "id", id, "ref", r.sha)
 	}
 
@@ -224,64 +208,75 @@ func (r *checkRun) invoke(client *GithubClient) error {
 // run is running and summarises its current state. Github only shows the first
 // 33 chars (and then an ellipsis) on the check runs page, so it's important to
 // use those chars effectively.
-func (r *checkRun) name() string {
+func (r *check) name() string {
 	// Check run name always begins with full workspace name
-	name := r.namespace + "/" + r.workspace
+	name := r.namespace + "/" + r.workspace + " | "
 
-	// And we append iteration to ensure check run is unique and ordered
-	name += fmt.Sprintf(" #%d ", r.iteration)
-
-	// Next part of name is the command name
-	command := r.command
-	if r.command == "plan" && r.createErr == nil && r.status != nil && *r.status == "completed" {
-		// Upon completion of a plan, instead of showing 'plan', show summary of
-		// changes
-		plan, err := parsePlanOutput(string(r.out))
-		if err != nil {
-			// Just fallback to showing 'plan' and log error
-			klog.Errorf("error parsing plan output for %s: %s", r.id, err.Error())
+	switch {
+	case r.createErr != nil:
+		name += r.command + " failed"
+	case r.command == "plan":
+		if r.status == nil {
+			name += "planning"
+		} else if *r.status == "completed" {
+			// Upon completion of a plan, instead of showing 'planned', show
+			// summary of changes
+			plan, err := parsePlanOutput(string(r.out))
+			if err != nil {
+				// Just fallback to showing 'plan' and log error
+				klog.Errorf("error parsing plan output for %s: %s", r.run, err.Error())
+				name += "plan failed"
+			} else {
+				name += plan.summary()
+			}
 		} else {
-			command = plan.summary()
+			name += "planning"
+		}
+	case r.command == "apply":
+		if r.status == nil {
+			name += "applying"
+		} else if *r.status == "completed" {
+			name += "applied"
+		} else {
+			name += "applying"
 		}
 	}
-	name += command
 
 	return name
 }
 
 // Provide the 'title' of a check run
-func (r *checkRun) title() string {
-	return r.id
+func (r *check) title() string {
+	return r.run
 }
 
 // Provide the external ID of a check run
-func (r *checkRun) externalID() *string {
-	metadata := CheckRunMetadata{
+func (r *check) externalID() *string {
+	metadata := CheckMetadata{
 		Command:   r.command,
-		Current:   r.id,
+		Current:   r.run,
 		Namespace: r.namespace,
 		Previous:  r.previous,
 		Workspace: r.workspace,
-		Iteration: r.iteration,
 	}
 	return metadata.ToStringPtr()
 }
 
 // Populate the 'summary' text field of a check run
-func (r *checkRun) summary() string {
+func (r *check) summary() string {
 	if r.createErr != nil {
 		return fmt.Sprintf("Unable to create kubernetes resources: %s\n", r.createErr.Error())
 	}
 
 	if r.runFailure != nil {
-		return fmt.Sprintf("%s failed: %s\n", r.id, *r.runFailure)
+		return fmt.Sprintf("%s failed: %s\n", r.run, *r.runFailure)
 	}
 
-	return fmt.Sprintf("Note: you can also view logs by running: `kubectl logs -f pods/%s`.", r.id)
+	return fmt.Sprintf("Note: you can also view logs by running: `kubectl logs -n %s -f pods/%s`.", r.namespace, r.run)
 }
 
 // Populate the 'details' text field of a check run
-func (r *checkRun) details() *string {
+func (r *check) details() *string {
 	if r.createErr != nil || r.runFailure != nil {
 		// Terraform didn't even run so don't provide details
 		return nil
@@ -330,7 +325,7 @@ func (r *checkRun) details() *string {
 
 // Write implements io.Writer. Permits callers to use io funcs to write to
 // checkrun's output buffer.
-func (cr *checkRun) Write(p []byte) (int, error) {
+func (cr *check) Write(p []byte) (int, error) {
 	cr.out = p
 	klog.InfoS("check run output after write", "length", len(cr.out))
 	return len(p), nil

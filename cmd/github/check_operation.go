@@ -6,19 +6,19 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
-// checkRunOperation handles creating and updating a github check run for an etok
+// checkOperation handles creating and updating a github check run for an etok
 // run
-type checkRunOperation struct {
+type checkOperation struct {
 	actions []*github.CheckRunAction
 
-	*checkRun
+	*check
 }
 
-func (c *checkRunOperation) setAction(label, desc, id string) {
+func (c *checkOperation) setAction(label, desc, id string) {
 	c.actions = append(c.actions, &github.CheckRunAction{Label: label, Description: desc, Identifier: id})
 }
 
-func (c *checkRunOperation) output() *github.CheckRunOutput {
+func (c *checkOperation) output() *github.CheckRunOutput {
 	return &github.CheckRunOutput{
 		Title:   github.String(c.title()),
 		Summary: github.String(c.summary()),
@@ -27,7 +27,7 @@ func (c *checkRunOperation) output() *github.CheckRunOutput {
 }
 
 // create new check run
-func (c *checkRunOperation) create(ctx context.Context, client *GithubClient) (int64, error) {
+func (c *checkOperation) create(ctx context.Context, client *GithubClient) (int64, error) {
 	opts := github.CreateCheckRunOptions{
 		Name:       c.name(),
 		HeadSHA:    c.sha,
@@ -46,7 +46,7 @@ func (c *checkRunOperation) create(ctx context.Context, client *GithubClient) (i
 }
 
 // update existing check run
-func (c *checkRunOperation) update(ctx context.Context, client *GithubClient, id int64) error {
+func (c *checkOperation) update(ctx context.Context, client *GithubClient, id int64) error {
 	opts := github.UpdateCheckRunOptions{
 		Name:       c.name(),
 		HeadSHA:    github.String(c.sha),

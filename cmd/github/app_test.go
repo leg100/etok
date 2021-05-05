@@ -26,7 +26,7 @@ func TestHandleEvent(t *testing.T) {
 		err            error
 		objs           []runtime.Object
 		event          func(*testutil.T, string, string) interface{}
-		wantCheckRuns  func(*testutil.T, []*checkRun)
+		wantCheckRuns  func(*testutil.T, []*check)
 		wantRunArchive func(*testutil.T, *v1alpha1.Run, *corev1.ConfigMap)
 	}{
 		{
@@ -51,8 +51,8 @@ func TestHandleEvent(t *testing.T) {
 				testobj.Workspace("default", "foo", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 				testobj.Workspace("default", "bar", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir2")),
 			},
-			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
-				assert.Equal(t, 2, len(checkRuns))
+			wantCheckRuns: func(t *testutil.T, checks []*check) {
+				assert.Equal(t, 2, len(checks))
 			},
 		},
 		{
@@ -66,12 +66,11 @@ func TestHandleEvent(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: (&CheckRunMetadata{
+						ExternalID: (&CheckMetadata{
 							Current:   "run-12345",
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
-							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -87,15 +86,11 @@ func TestHandleEvent(t *testing.T) {
 				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default"), testobj.WithLabels(
 					checkSuiteIDLabelName, "123456",
-					checkRunIterationLabelName, "1",
 				)),
 			},
-			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
-				if assert.Equal(t, 1, len(checkRuns)) {
-					assert.Equal(t, "plan", checkRuns[0].command)
-					assert.Equal(t, "run-12345", checkRuns[0].previous)
-					assert.Equal(t, 2, checkRuns[0].iteration)
-				}
+			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
+				assert.NotNil(t, run)
+				assert.NotNil(t, archive)
 			},
 		},
 		{
@@ -109,12 +104,11 @@ func TestHandleEvent(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: (&CheckRunMetadata{
+						ExternalID: (&CheckMetadata{
 							Current:   "run-12345",
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
-							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -133,15 +127,11 @@ func TestHandleEvent(t *testing.T) {
 				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 				testobj.Run("default", "run-12345", "plan", testobj.WithWorkspace("default"), testobj.WithLabels(
 					checkSuiteIDLabelName, "123456",
-					checkRunIterationLabelName, "1",
 				)),
 			},
-			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
-				if assert.Equal(t, 1, len(checkRuns)) {
-					assert.Equal(t, "plan", checkRuns[0].command)
-					assert.Equal(t, "run-12345", checkRuns[0].previous)
-					assert.Equal(t, 2, checkRuns[0].iteration)
-				}
+			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
+				assert.NotNil(t, run)
+				assert.NotNil(t, archive)
 			},
 		},
 		{
@@ -155,12 +145,11 @@ func TestHandleEvent(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: (&CheckRunMetadata{
+						ExternalID: (&CheckMetadata{
 							Current:   "run-12345",
 							Namespace: "default",
 							Command:   "plan",
 							Workspace: "default",
-							Iteration: 1,
 						}).ToStringPtr(),
 					},
 					Repo: &github.Repository{
@@ -178,12 +167,9 @@ func TestHandleEvent(t *testing.T) {
 			objs: []runtime.Object{
 				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
 			},
-			wantCheckRuns: func(t *testutil.T, checkRuns []*checkRun) {
-				if assert.Equal(t, 1, len(checkRuns)) {
-					assert.Equal(t, "apply", checkRuns[0].command)
-					assert.Equal(t, "run-12345", checkRuns[0].previous)
-					assert.Equal(t, 1, checkRuns[0].iteration)
-				}
+			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
+				assert.NotNil(t, run)
+				assert.NotNil(t, archive)
 			},
 		},
 		{
@@ -200,7 +186,7 @@ func TestHandleEvent(t *testing.T) {
 							HeadBranch: github.String("changes"),
 							HeadSHA:    &sha,
 						},
-						ExternalID: (&CheckRunMetadata{
+						ExternalID: (&CheckMetadata{
 							Current:   "run-12345",
 							Namespace: "default",
 							Command:   "plan",
@@ -218,8 +204,6 @@ func TestHandleEvent(t *testing.T) {
 			},
 			objs: []runtime.Object{
 				testobj.Workspace("default", "default", testobj.WithBranch("changes"), testobj.WithWorkingDir("subdir")),
-			},
-			wantRunArchive: func(t *testutil.T, run *v1alpha1.Run, archive *corev1.ConfigMap) {
 			},
 		},
 	}
@@ -252,7 +236,7 @@ func TestHandleEvent(t *testing.T) {
 			require.NoError(t, app.handleEvent(event, mgr))
 
 			if tt.wantCheckRuns != nil {
-				tt.wantCheckRuns(t, mgr.checkRuns)
+				tt.wantCheckRuns(t, mgr.checks)
 			}
 
 			if tt.wantRunArchive != nil {
@@ -303,7 +287,7 @@ func TestRunScript(t *testing.T) {
 }
 
 type fakeInstallsMgr struct {
-	checkRuns []*checkRun
+	checks []*check
 }
 
 func (m *fakeInstallsMgr) getTokenRefresher(installID int64) (tokenRefresher, error) {
@@ -311,7 +295,7 @@ func (m *fakeInstallsMgr) getTokenRefresher(installID int64) (tokenRefresher, er
 }
 
 func (m *fakeInstallsMgr) send(_ int64, inv invoker) error {
-	m.checkRuns = append(m.checkRuns, inv.(*checkRun))
+	m.checks = append(m.checks, inv.(*check))
 
 	return nil
 }

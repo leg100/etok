@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,8 +88,7 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 					continue
 				}
 
-				err = mgr.send(ev.GetInstallation().GetID(), &checkRun{
-					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
+				err = mgr.send(ev.GetInstallation().GetID(), &check{
 					namespace:    ws.Namespace,
 					workspace:    ws.Name,
 					sha:          *ev.CheckSuite.HeadSHA,
@@ -98,7 +96,6 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 					repo:         *ev.Repo.Name,
 					command:      "plan",
 					maxFieldSize: defaultMaxFieldSize,
-					iteration:    1,
 				})
 				if err != nil {
 					return err
@@ -114,6 +111,7 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 	case *github.CheckRunEvent:
 		switch *ev.Action {
 		case "created", "rerequested", "requested_action":
+			// Any of these events trigger the creation of a run resource
 
 			klog.InfoS("received check run event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "action", *ev.Action)
 			defer func() {
@@ -121,7 +119,14 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 			}()
 
 			// Extract metadata from the external ID field
-			metadata := newCheckRunMetadata(ev.CheckRun.ExternalID)
+			metadata := newCheckMetadata(ev.CheckRun.ExternalID)
+
+			// Record previous run name
+			if ev.GetAction() == "rerequested" || ev.GetAction() == "requested_action" {
+				metadata.Previous = metadata.Current
+			}
+			// ...and set new run name
+			metadata.Current = fmt.Sprintf("run-%s", util.GenerateRandomString(5))
 
 			if ev.RequestedAction != nil {
 				// Override command with whatever the user has requested
@@ -148,81 +153,49 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 				return err
 			}
 
-			// Bump the iteration for re-runs
-			if (*ev.Action == "rerequested" && metadata.Command == "plan") ||
-				(*ev.Action == "requested_action" && ev.RequestedAction.Identifier == "plan") {
+			// Check run has been created. Only now can we create a Run resource
+			// because we need to label it with the check run ID.
 
-				iteration, err := getLastIteration(a.kclient, *ev.CheckRun.CheckSuite.ID, ws)
-				if err != nil {
-					return fmt.Errorf("failed to lookup last iteration of check run: %w", err)
-				}
+			script := runScript(metadata.Current, metadata.Command, metadata.Previous)
 
-				metadata.Iteration = iteration + 1
+			bldr := builders.Run(ws.Namespace, metadata.Current, ws.Name, "sh", script)
+
+			// For testing purposes seed status
+			bldr.SetStatus(a.runStatus)
+
+			bldr.SetLabel(githubTriggeredLabelName, "true")
+			bldr.SetLabel(githubAppInstallIDLabelName, strconv.FormatInt(ev.GetInstallation().GetID(), 10))
+
+			bldr.SetLabel(checkSuiteIDLabelName, strconv.Itoa(int(ev.CheckRun.CheckSuite.GetID())))
+
+			bldr.SetLabel(checkIDLabelName, strconv.Itoa(int(ev.CheckRun.GetID())))
+			bldr.SetLabel(checkOwnerLabelName, *ev.Repo.Owner.Login)
+			bldr.SetLabel(checkRepoLabelName, *ev.Repo.Name)
+			bldr.SetLabel(checkSHALabelName, *ev.CheckRun.CheckSuite.HeadSHA)
+			bldr.SetLabel(checkCommandLabelName, metadata.Command)
+
+			configMap, err := archive.ConfigMap(ws.Namespace, metadata.Current, filepath.Join(repo.path, ws.Spec.VCS.WorkingDir), repo.path)
+			if err != nil {
+				return err
 			}
 
-			switch *ev.Action {
-			case "rerequested", "requested_action":
-				err = mgr.send(ev.GetInstallation().GetID(), &checkRun{
-					id:           fmt.Sprintf("run-%s", util.GenerateRandomString(5)),
-					namespace:    ws.Namespace,
-					workspace:    ws.Name,
-					sha:          *ev.CheckRun.CheckSuite.HeadSHA,
-					owner:        *ev.Repo.Owner.Login,
-					repo:         *ev.Repo.Name,
-					command:      metadata.Command,
-					previous:     metadata.Current,
-					iteration:    metadata.Iteration,
-					maxFieldSize: defaultMaxFieldSize,
-				})
-				if err != nil {
-					return err
-				}
-			case "created":
-				// Check run has been created. Only now can we create a Run
-				// resource because we need to label it with the check run ID.
+			r := bldr.Build()
 
-				script := runScript(metadata.Current, metadata.Command, metadata.Previous)
-
-				bldr := builders.Run(ws.Namespace, metadata.Current, ws.Name, "sh", script)
-
-				// For testing purposes seed status
-				bldr.SetStatus(a.runStatus)
-
-				bldr.SetLabel(githubTriggeredLabelName, "true")
-				bldr.SetLabel(githubAppInstallIDLabelName, strconv.FormatInt(ev.GetInstallation().GetID(), 10))
-
-				bldr.SetLabel(checkSuiteIDLabelName, strconv.Itoa(int(ev.CheckRun.CheckSuite.GetID())))
-
-				bldr.SetLabel(checkRunIDLabelName, strconv.Itoa(int(ev.CheckRun.GetID())))
-				bldr.SetLabel(checkRunOwnerLabelName, *ev.Repo.Owner.Login)
-				bldr.SetLabel(checkRunRepoLabelName, *ev.Repo.Name)
-				bldr.SetLabel(checkRunSHALabelName, *ev.CheckRun.CheckSuite.HeadSHA)
-				bldr.SetLabel(checkRunCommandLabelName, metadata.Command)
-				bldr.SetLabel(checkRunIterationLabelName, strconv.Itoa(metadata.Iteration))
-
-				configMap, err := archive.ConfigMap(ws.Namespace, metadata.Current, filepath.Join(repo.path, ws.Spec.VCS.WorkingDir), repo.path)
+			// Create Run/ConfigMap resources in k8s
+			if err := createRunAndArchive(a.kclient, r, configMap); err != nil {
+				// Failed to create resources. Update checkrun, reporting
+				// failure to user.
+				run, err := newCheckFromResource(r, err)
 				if err != nil {
 					return err
 				}
 
-				r := bldr.Build()
+				// Must provide check run ID otherwise the client will
+				// create a brand new check run
+				run.id = ev.CheckRun.ID
 
-				// Create Run/ConfigMap resources in k8s
-				if err := createRunAndArchive(a.kclient, r, configMap); err != nil {
-					// Failed to create resources. Update checkrun, reporting
-					// failure to user.
-					run, err := newRunFromResource(r, err)
-					if err != nil {
-						return err
-					}
-
-					// Must provide check run ID otherwise the client will
-					// create a brand new check run
-					run.checkRunId = ev.CheckRun.ID
-
-					if err := mgr.send(ev.GetInstallation().GetID(), run); err != nil {
-						return err
-					}
+				if err := mgr.send(ev.GetInstallation().GetID(), run); err != nil {
+					return err
 				}
 			}
 
@@ -258,14 +231,6 @@ func getConnectedWorkspaces(client *client.Client, url string) (*v1alpha1.Worksp
 	return &connected, nil
 }
 
-func splitObjectRef(orig string) (string, string, error) {
-	parts := strings.Split(orig, "/")
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("malformed object ref: '%s'", orig)
-	}
-	return parts[0], parts[1], nil
-}
-
 // Create Run and ConfigMap resources in k8s
 func createRunAndArchive(client *client.Client, run *v1alpha1.Run, archive *corev1.ConfigMap) error {
 	_, err := client.RunsClient(run.Namespace).Create(context.Background(), run, metav1.CreateOptions{})
@@ -279,41 +244,6 @@ func createRunAndArchive(client *client.Client, run *v1alpha1.Run, archive *core
 	}
 
 	return nil
-}
-
-// Get last iteration of a check run (for a given check suite and workspace).
-// This is done by looking up all runs labelled with the check suite, and
-// belonging to the workspace, and taking the run with the highest iteration.
-// (We could get this info via the Github API but seeing as this is running on
-// k8s, k8s API calls are invariably cheaper).
-func getLastIteration(client *client.Client, checkSuiteID int64, ws *v1alpha1.Workspace) (int, error) {
-	selector := fmt.Sprintf("%s=%d", checkSuiteIDLabelName, checkSuiteID)
-	results, err := client.RunsClient(ws.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: selector})
-	if err != nil {
-		return 0, err
-	}
-
-	var last int
-	for _, run := range results.Items {
-		if run.Workspace != ws.Name {
-			// Skip runs belonging to other workspaces
-			continue
-		}
-
-		iterationStr, ok := run.GetLabels()[checkRunIterationLabelName]
-		if !ok {
-			panic(fmt.Sprintf("%s has not defined label %s", klog.KObj(&run), checkRunIterationLabelName))
-		}
-		iteration, err := strconv.ParseInt(iterationStr, 10, 0)
-		if err != nil {
-			panic(fmt.Sprintf("unable to parse label value: %s: %s=%s: %s", klog.KObj(&run), checkRunIterationLabelName, iterationStr, err.Error()))
-		}
-		if int(iteration) > last {
-			last = int(iteration)
-		}
-	}
-
-	return last, nil
 }
 
 func runScript(id, command, previous string) string {

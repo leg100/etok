@@ -22,7 +22,7 @@ func TestRunController(t *testing.T) {
 		name       string
 		run        *v1alpha1.Run
 		objs       []runtime.Object
-		assertions func(*testutil.T, *v1alpha1.Run, *checkRun)
+		assertions func(*testutil.T, *v1alpha1.Run, *check)
 	}{
 		{
 			name: "Defaults",
@@ -30,16 +30,15 @@ func TestRunController(t *testing.T) {
 				testobj.WithWorkspace("workspace-1"),
 				testobj.WithLabels(
 					githubAppInstallIDLabelName, "123",
-					checkRunIDLabelName, "456",
-					checkRunSHALabelName, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-					checkRunOwnerLabelName, "leg100",
-					checkRunRepoLabelName, "etok",
-					checkRunCommandLabelName, "plan",
-					checkRunIterationLabelName, "1",
+					checkIDLabelName, "456",
+					checkSHALabelName, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+					checkOwnerLabelName, "leg100",
+					checkRepoLabelName, "etok",
+					checkCommandLabelName, "plan",
 				),
 			),
-			assertions: func(t *testutil.T, run *v1alpha1.Run, cr *checkRun) {
-				assert.NotNil(t, cr)
+			assertions: func(t *testutil.T, run *v1alpha1.Run, c *check) {
+				assert.NotNil(t, c)
 			},
 		},
 		{
@@ -48,18 +47,17 @@ func TestRunController(t *testing.T) {
 				testobj.WithWorkspace("workspace-1"),
 				testobj.WithLabels(
 					githubAppInstallIDLabelName, "123",
-					checkRunIDLabelName, "456",
-					checkRunSHALabelName, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-					checkRunOwnerLabelName, "leg100",
-					checkRunRepoLabelName, "etok",
-					checkRunCommandLabelName, "plan",
-					checkRunIterationLabelName, "1",
+					checkIDLabelName, "456",
+					checkSHALabelName, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+					checkOwnerLabelName, "leg100",
+					checkRepoLabelName, "etok",
+					checkCommandLabelName, "plan",
 				),
 				testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodSucceededReason),
 			),
-			assertions: func(t *testutil.T, run *v1alpha1.Run, cr *checkRun) {
-				assert.Contains(t, "completed", run.GetLabels()[checkRunStatusLabelName])
-				assert.Equal(t, "fake logs", string(cr.out))
+			assertions: func(t *testutil.T, run *v1alpha1.Run, c *check) {
+				assert.Contains(t, "completed", run.GetLabels()[checkStatusLabelName])
+				assert.Equal(t, "fake logs", string(c.out))
 			},
 		},
 		{
@@ -67,12 +65,12 @@ func TestRunController(t *testing.T) {
 			run: testobj.Run("default", "default", "plan",
 				testobj.WithWorkspace("workspace-1"),
 				testobj.WithLabels(
-					checkRunStatusLabelName, "completed",
+					checkStatusLabelName, "completed",
 				),
 			),
-			assertions: func(t *testutil.T, run *v1alpha1.Run, cr *checkRun) {
+			assertions: func(t *testutil.T, run *v1alpha1.Run, c *check) {
 				// No check run should have been constructed
-				assert.Nil(t, cr)
+				assert.Nil(t, c)
 			},
 		},
 	}
@@ -97,18 +95,18 @@ func TestRunController(t *testing.T) {
 				var run v1alpha1.Run
 				require.NoError(t, client.Get(context.Background(), req.NamespacedName, &run))
 
-				tt.assertions(t, &run, sender.cr)
+				tt.assertions(t, &run, sender.c)
 			}
 		})
 	}
 }
 
 type fakeSender struct {
-	cr *checkRun
+	c *check
 }
 
 func (s *fakeSender) send(_ int64, inv invoker) error {
-	s.cr = inv.(*checkRun)
+	s.c = inv.(*check)
 
 	return nil
 }

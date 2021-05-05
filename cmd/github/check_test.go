@@ -13,40 +13,29 @@ import (
 
 func TestCheckRunSummary(t *testing.T) {
 	tests := []struct {
-		name      string
-		id        string
-		command   string
-		namespace string
-		workspace string
-		run       checkRun
-		iteration int
-		// Path to fixture from which to populate output buffer
-		out string
-		// Want contents of file
-		wantFile string
-		// Want string
+		name string
+		run  check
 		want string
-		// Want nil
-		wantNil bool
 	}{
 		{
 			name: "default",
-			run: checkRun{
-				id: "run-12345",
+			run: check{
+				run:       "run-12345",
+				namespace: "dev",
 			},
-			want: "Note: you can also view logs by running: `kubectl logs -f pods/run-12345`.",
+			want: "Note: you can also view logs by running: `kubectl logs -n dev -f pods/run-12345`.",
 		},
 		{
 			name: "create error",
-			run: checkRun{
+			run: check{
 				createErr: errors.New("unable to create resources"),
 			},
 			want: "Unable to create kubernetes resources: unable to create resources\n",
 		},
 		{
 			name: "run failure",
-			run: checkRun{
-				id:         "run-12345",
+			run: check{
+				run:        "run-12345",
 				runFailure: github.String("run timeout"),
 			},
 			want: "run-12345 failed: run timeout\n",
@@ -66,8 +55,7 @@ func TestCheckRunDetails(t *testing.T) {
 		command   string
 		namespace string
 		workspace string
-		run       checkRun
-		iteration int
+		run       check
 		// Path to fixture from which to populate output buffer
 		out string
 		// Want contents of file
@@ -80,7 +68,7 @@ func TestCheckRunDetails(t *testing.T) {
 		{
 			name: "within maximum size",
 			out:  "fixtures/got.txt",
-			run: checkRun{
+			run: check{
 				maxFieldSize: defaultMaxFieldSize,
 			},
 			wantFile: "fixtures/want.md",
@@ -88,7 +76,7 @@ func TestCheckRunDetails(t *testing.T) {
 		{
 			name: "exceeds maximum size",
 			out:  "fixtures/got.txt",
-			run: checkRun{
+			run: check{
 				// Default is 64k but we'll set it to an artificially low number
 				// in order to breach the maximum
 				maxFieldSize: 1000,
@@ -98,7 +86,7 @@ func TestCheckRunDetails(t *testing.T) {
 		{
 			name: "exceeds maximum size massively",
 			out:  "fixtures/big-plan.txt",
-			run: checkRun{
+			run: check{
 				// Default is 64k but we'll set it to an artificially low number
 				// in order to breach the maximum
 				maxFieldSize: defaultMaxFieldSize,
@@ -108,7 +96,7 @@ func TestCheckRunDetails(t *testing.T) {
 		{
 			name: "strip off refreshing lines",
 			out:  "fixtures/got.txt",
-			run: checkRun{
+			run: check{
 				maxFieldSize:    defaultMaxFieldSize,
 				stripRefreshing: true,
 			},
@@ -116,14 +104,14 @@ func TestCheckRunDetails(t *testing.T) {
 		},
 		{
 			name: "do not provide details when unable to create resources",
-			run: checkRun{
+			run: check{
 				createErr: errors.New("unable to create resources"),
 			},
 			wantNil: true,
 		},
 		{
 			name: "do not provide details when there is a run failure",
-			run: checkRun{
+			run: check{
 				runFailure: github.String("run timeout"),
 			},
 			wantNil: true,
@@ -164,7 +152,6 @@ func TestCheckRunName(t *testing.T) {
 		namespace string
 		workspace string
 		status    *string
-		iteration int
 		want      string
 		// Path to fixture from which to populate output buffer
 		out string
@@ -175,7 +162,7 @@ func TestCheckRunName(t *testing.T) {
 			command:   "plan",
 			namespace: "default",
 			workspace: "default",
-			want:      "default/default #0 plan",
+			want:      "default/default | planning",
 		},
 		{
 			name:      "completed plan",
@@ -185,18 +172,7 @@ func TestCheckRunName(t *testing.T) {
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan.txt",
-			want:      "default/default #0 +2/~0/−0",
-		},
-		{
-			name:      "second iteration",
-			id:        "run-12345",
-			command:   "plan",
-			status:    github.String("completed"),
-			namespace: "default",
-			workspace: "default",
-			iteration: 1,
-			out:       "fixtures/plan.txt",
-			want:      "default/default #1 +2/~0/−0",
+			want:      "default/default | +2/~0/−0",
 		},
 		{
 			name:      "completed plan, no changes",
@@ -206,7 +182,7 @@ func TestCheckRunName(t *testing.T) {
 			namespace: "default",
 			workspace: "default",
 			out:       "fixtures/plan_no_changes.txt",
-			want:      "default/default #0 +0/~0/−0",
+			want:      "default/default | +0/~0/−0",
 		},
 		{
 			name:      "apply",
@@ -214,26 +190,34 @@ func TestCheckRunName(t *testing.T) {
 			command:   "apply",
 			namespace: "default",
 			workspace: "default",
-			want:      "default/default #0 apply",
+			want:      "default/default | applying",
+		},
+		{
+			name:      "apply",
+			id:        "run-12345",
+			command:   "apply",
+			status:    github.String("completed"),
+			namespace: "default",
+			workspace: "default",
+			want:      "default/default | applied",
 		},
 	}
 
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			r := checkRun{
+			c := check{
 				command:   tt.command,
 				namespace: tt.namespace,
 				workspace: tt.workspace,
 				status:    tt.status,
-				iteration: tt.iteration,
-				id:        tt.id,
+				run:       tt.id,
 			}
 
 			if tt.out != "" {
-				r.out, _ = ioutil.ReadFile(tt.out)
+				c.out, _ = ioutil.ReadFile(tt.out)
 			}
 
-			assert.Equal(t, tt.want, r.name())
+			assert.Equal(t, tt.want, c.name())
 		})
 	}
 }
