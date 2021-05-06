@@ -250,18 +250,6 @@ func (r *check) title() string {
 	return r.run
 }
 
-// Provide the external ID of a check run
-func (r *check) externalID() *string {
-	metadata := CheckMetadata{
-		Command:   r.command,
-		Current:   r.run,
-		Namespace: r.namespace,
-		Previous:  r.previous,
-		Workspace: r.workspace,
-	}
-	return metadata.ToStringPtr()
-}
-
 // Populate the 'summary' text field of a check run
 func (r *check) summary() string {
 	if r.createErr != nil {
@@ -272,7 +260,7 @@ func (r *check) summary() string {
 		return fmt.Sprintf("%s failed: %s\n", r.run, *r.runFailure)
 	}
 
-	return fmt.Sprintf("Note: you can also view logs by running: `kubectl logs -n %s -f pods/%s`.", r.namespace, r.run)
+	return fmt.Sprintf("Note: you can also view logs by running: \n```bash\nkubectl logs -n %s pods/%s\n```", r.namespace, r.run)
 }
 
 // Populate the 'details' text field of a check run
@@ -283,8 +271,6 @@ func (r *check) details() *string {
 	}
 
 	out := r.out
-
-	klog.InfoS("out", "size", len(r.out))
 
 	if r.stripRefreshing {
 		// Replace 'refreshing...' lines
@@ -321,12 +307,4 @@ func (r *check) details() *string {
 	trimmed := bytes.Trim(out[start:], "\n")
 
 	return github.String(textStart + exceeded + string(trimmed) + textEnd)
-}
-
-// Write implements io.Writer. Permits callers to use io funcs to write to
-// checkrun's output buffer.
-func (cr *check) Write(p []byte) (int, error) {
-	cr.out = p
-	klog.InfoS("check run output after write", "length", len(cr.out))
-	return len(p), nil
 }

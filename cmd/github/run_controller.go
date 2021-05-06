@@ -79,10 +79,13 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Construct check-run from run resource
-	checkRun, err := newCheckFromResource(&run, nil)
+	// Construct check from run resource
+	check, err := newCheckFromResource(&run, nil)
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "unable to create check obj from run resource")
+		// Don't retry upon error - there is something wrong with the run
+		// resource itself that cannot be corrected.
+		return ctrl.Result{}, nil
 	}
 
 	// Stream logs from pod and copy to check run obj
@@ -98,7 +101,7 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, err
 		}
 		// Copy logs into check-run's buffer
-		checkRun.out = out
+		check.out = out
 	}
 
 	// Get github install ID from run
@@ -108,7 +111,7 @@ func (r *runReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Send checkrun obj to github
-	if err := r.send(installID, checkRun); err != nil {
+	if err := r.send(installID, check); err != nil {
 		return ctrl.Result{}, err
 	}
 

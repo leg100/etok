@@ -97,7 +97,7 @@ func TestGithub(t *testing.T) {
 		runWithPath(t, path, "git", "push", "-f", "origin", "e2e")
 	})
 
-	var checkRun *github.CheckRun
+	var check *github.CheckRun
 	t.Run("await completion of check runs", func(t *testing.T) {
 		err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
 			results, _, err := gclient.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", nil)
@@ -109,17 +109,17 @@ func TestGithub(t *testing.T) {
 				return false, nil
 			}
 
-			checkRun = results.CheckRuns[0]
+			check = results.CheckRuns[0]
 
-			checkRun.CheckSuite, _, err = gclient.Checks.GetCheckSuite(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), checkRun.CheckSuite.GetID())
+			check.CheckSuite, _, err = gclient.Checks.GetCheckSuite(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), check.CheckSuite.GetID())
 			require.NoError(t, err)
 
-			if checkRun.GetStatus() == "completed" {
-				require.Equal(t, "success", checkRun.GetConclusion())
+			if check.GetStatus() == "completed" {
+				require.Equal(t, "success", check.GetConclusion())
 				return true, nil
 			}
 
-			t.Logf("check run update: id=%d, status=%s", checkRun.GetID(), checkRun.GetStatus())
+			t.Logf("check run update: id=%d, status=%s", check.GetID(), check.GetStatus())
 			return false, nil
 		})
 		require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestGithub(t *testing.T) {
 
 		event := github.CheckRunEvent{
 			Action:   github.String("requested_action"),
-			CheckRun: checkRun,
+			CheckRun: check,
 			Installation: &github.Installation{
 				ID: &installID,
 			},
@@ -186,14 +186,14 @@ func TestGithub(t *testing.T) {
 				return false, nil
 			}
 
-			checkRun = results.CheckRuns[0]
+			check = results.CheckRuns[0]
 
-			if checkRun.GetStatus() == "completed" {
-				require.Equal(t, "success", checkRun.GetConclusion())
+			if check.GetStatus() == "completed" {
+				require.Equal(t, "success", check.GetConclusion())
 				return true, nil
 			}
 
-			t.Logf("check run update: id=%d, status=%s", checkRun.GetID(), checkRun.GetStatus())
+			t.Logf("check run update: id=%d, status=%s", check.GetID(), check.GetStatus())
 			return false, nil
 		})
 		require.NoError(t, err)

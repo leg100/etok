@@ -23,7 +23,7 @@ func TestCheckRunSummary(t *testing.T) {
 				run:       "run-12345",
 				namespace: "dev",
 			},
-			want: "Note: you can also view logs by running: `kubectl logs -n dev -f pods/run-12345`.",
+			want: "Note: you can also view logs by running: \n```bash\nkubectl logs -n dev pods/run-12345\n```",
 		},
 		{
 			name: "create error",

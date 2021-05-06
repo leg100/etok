@@ -22,10 +22,10 @@ The deployment runs in a dedicated namespace, set via the namespace flag `--name
 
 ## Operation
 
-Each commit pushed to a repository triggers a terraform plan. The app looks for workspaces connected to the repository and for each connected workspace it'll trigger a plan.
+Each commit pushed to a repository triggers terraform plans. The app looks for workspaces connected to the repository and for each connected workspace it'll trigger a plan.
 
 {{< hint info >}}
-For a plan, Etok executes `terraform init` followed by `terraform plan`.
+For a plan, Etok executes `terraform init` followed by `terraform plan -out=/plans/<plan>`.
 {{< /hint >}}
 
 If you want to re-run a plan, click the `Plan` button.
@@ -33,22 +33,18 @@ If you want to re-run a plan, click the `Plan` button.
 Should you want to apply the plan, click the `Apply` button, which will run `terraform apply` using the plan file produced from the plan.
 
 {{< hint info >}}
-For an apply, Etok executes `terraform init` followed by `terraform apply`.
+For an apply, Etok executes `terraform init` followed by `terraform apply /plans/<plan>`.
 {{< /hint >}}
 
 ## Notation
 
-Each plan is summarised with the following notation:
+A completed plan is summarised with the following notation:
 
 ```text
-[NAMESPACE]/[WORKSPACE] #[ITERATION] +[ADDITIONS]/~[UPDATES]/−[DELETIONS]
+[NAMESPACE]/[WORKSPACE] +[ADDITIONS]/~[UPDATES]/−[DELETIONS]
 ```
 
-Each re-run of a plan results in a new, incremented, iteration, starting with `#1`.
-
-Once a plan completes, the number of proposed additions, updates and deletions is provided.
-
-An apply uses a similar notation, with its iteration corresponding to its plan.
+`[ADDITIONS]`, `[UPDATES]` and `[DELETIONS]` corresponds to the number of terraform resources the plan proposes to add, update, or delete respectively.
 
 ## Restrictions
 

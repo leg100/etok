@@ -6,15 +6,15 @@ import (
 )
 
 var (
-	markdownFuncs          = make(map[string]interface{})
-	checkRunOutputTemplate *template.Template
+	markdownFuncs       = make(map[string]interface{})
+	checkOutputTemplate *template.Template
 )
 
 func init() {
 	markdownFuncs["quoted"] = func(s string) string { return "`" + s + "`" }
 	markdownFuncs["textBlock"] = func(s string) string { return "```text\n" + s + "```" }
 
-	checkRunOutputTemplate = template.Must(template.New("summary").Funcs(markdownFuncs).Parse(`
+	checkOutputTemplate = template.Must(template.New("summary").Funcs(markdownFuncs).Parse(`
 {{ if ne .RunOutput "" }}
 {{ .RunOutput | textBlock }}
 {{ end }}
@@ -24,8 +24,8 @@ func init() {
 `))
 }
 
-func generateCheckRunOutput(out io.Writer, runOutput, errOutput string) error {
-	return checkRunOutputTemplate.Execute(out, struct {
+func generateCheckOutput(out io.Writer, runOutput, errOutput string) error {
+	return checkOutputTemplate.Execute(out, struct {
 		RunOutput string
 		ErrOutput string
 	}{

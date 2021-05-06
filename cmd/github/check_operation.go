@@ -6,8 +6,7 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
-// checkOperation handles creating and updating a github check run for an etok
-// run
+// checkOperation handles creating and updating a github check for an etok run
 type checkOperation struct {
 	actions []*github.CheckRunAction
 
@@ -35,14 +34,20 @@ func (c *checkOperation) create(ctx context.Context, client *GithubClient) (int6
 		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
-		ExternalID: c.externalID(),
+		ExternalID: (&CheckMetadata{
+			Command:   c.command,
+			Current:   c.run,
+			Namespace: c.namespace,
+			Previous:  c.previous,
+			Workspace: c.workspace,
+		}).ToStringPtr(),
 	}
 
-	checkRun, _, err := client.Checks.CreateCheckRun(ctx, c.owner, c.repo, opts)
+	check, _, err := client.Checks.CreateCheckRun(ctx, c.owner, c.repo, opts)
 	if err != nil {
 		return 0, err
 	}
-	return *checkRun.ID, nil
+	return *check.ID, nil
 }
 
 // update existing check run
@@ -54,7 +59,13 @@ func (c *checkOperation) update(ctx context.Context, client *GithubClient, id in
 		Conclusion: c.conclusion,
 		Output:     c.output(),
 		Actions:    c.actions,
-		ExternalID: c.externalID(),
+		ExternalID: (&CheckMetadata{
+			Command:   c.command,
+			Current:   c.run,
+			Namespace: c.namespace,
+			Previous:  c.previous,
+			Workspace: c.workspace,
+		}).ToStringPtr(),
 	}
 
 	_, _, err := client.Checks.UpdateCheckRun(ctx, c.owner, c.repo, id, opts)
