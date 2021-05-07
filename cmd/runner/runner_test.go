@@ -149,7 +149,7 @@ func TestRunnerCommand(t *testing.T) {
 func TestRunnerLockFile(t *testing.T) {
 	testutil.Run(t, "with lock file", func(t *testutil.T) {
 		out := new(bytes.Buffer)
-		f := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "init"))
+		f := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "sh"))
 		cmd, o := RunnerCmd(f)
 		cmd.SetOut(out)
 		cmd.SetArgs([]string{"--", "true"})
