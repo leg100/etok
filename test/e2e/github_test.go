@@ -177,7 +177,7 @@ func TestGithub(t *testing.T) {
 
 	t.Run("await completion of apply", func(t *testing.T) {
 		err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
-			results, _, err := gclient.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", &github.ListCheckRunsOptions{CheckName: github.String(fmt.Sprintf("%s/foo #1 apply", namespace))})
+			results, _, err := gclient.Checks.ListCheckRunsForRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "e2e", &github.ListCheckRunsOptions{})
 			if err != nil {
 				return false, err
 			}
