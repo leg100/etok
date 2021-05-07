@@ -54,6 +54,11 @@ deploy: image push deploy-operator-secret
 	$(BUILD_BIN) install --context $(KUBECTX) --image $(IMG):$(TAG) $(DEPLOY_FLAGS) \
 		--backup-provider=gcs --gcs-bucket=$(BACKUP_BUCKET)
 
+# Deploy github webhook server
+.PHONY: deploy-github
+deploy-github: image push
+	$(BUILD_BIN) github deploy --context $(KUBECTX) --image $(IMG):$(TAG) --url foo.bar
+
 # Tail operator logs
 .PHONY: logs
 logs:
@@ -133,11 +138,6 @@ endif
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-
-
-.PHONY: dist
-dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
-	rm -f ./pkg/static/bindata.go && go-bindata-assetfs $(BINDATA_FLAGS) -pkg static -prefix pkg pkg/static/... && mv bindata.go ./pkg/static/
 
 # Run go fmt against code
 .PHONY: fmt

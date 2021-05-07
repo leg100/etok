@@ -3,10 +3,12 @@ package client
 import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	sfake "github.com/leg100/etok/pkg/k8s/etokclient/fake"
+	"github.com/leg100/etok/pkg/scheme"
 	"k8s.io/apimachinery/pkg/runtime"
 	kfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/testing"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // Implements ClientCreator
@@ -31,19 +33,15 @@ func (f *FakeClientCreator) Create(kubeCtx string) (*Client, error) {
 		}
 	}
 
-	EtokClient := sfake.NewSimpleClientset(etokObjs...)
+	etokClient := sfake.NewSimpleClientset(etokObjs...)
 	for _, r := range f.reactors {
-		EtokClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
+		etokClient.PrependReactor(r.Verb, r.Resource, r.Reaction)
 	}
 
 	return &Client{
-		Config:     &rest.Config{},
-		EtokClient: EtokClient,
-		KubeClient: kfake.NewSimpleClientset(kubeObjs...),
+		Config:        &rest.Config{},
+		EtokClient:    etokClient,
+		KubeClient:    kfake.NewSimpleClientset(kubeObjs...),
+		RuntimeClient: fake.NewFakeClientWithScheme(scheme.Scheme, f.objs...),
 	}, nil
-}
-
-// Add a reactor to the list of reactors to be prepended.
-func (f *FakeClientCreator) PrependReactor(verb, resource string, reaction testing.ReactionFunc) {
-	f.reactors = append(f.reactors, testing.SimpleReactor{verb, resource, reaction})
 }

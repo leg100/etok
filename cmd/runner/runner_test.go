@@ -154,6 +154,9 @@ func TestRunnerLockFile(t *testing.T) {
 		cmd.SetOut(out)
 		cmd.SetArgs([]string{"--", "true"})
 
+		// Don't actually execute "terraform init"
+		o.exec = &executor.FakeExecutor{}
+
 		t.NewTempDir().Chdir().Write(globals.LockFile, []byte("plugin hashes"))
 
 		// Set flag via env var since that's how runner is invoked on a pod

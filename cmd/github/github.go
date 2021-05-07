@@ -16,8 +16,11 @@ func GithubCmd(f *cmdutil.Factory) *cobra.Command {
 		Short: "Manage github apps",
 	}
 
-	cc, _ := createCmd(f)
-	cmd.AddCommand(cc)
+	deploy, _ := deployCmd(f)
+	cmd.AddCommand(deploy)
+
+	run, _ := runCmd(f)
+	cmd.AddCommand(run)
 
 	return cmd
 }

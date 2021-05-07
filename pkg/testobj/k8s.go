@@ -42,15 +42,21 @@ func Workspace(namespace, name string, opts ...func(*v1alpha1.Workspace)) *v1alp
 	return ws
 }
 
-func WithWorkingDir(path string) func(*v1alpha1.Workspace) {
+func WithWorkingDir(dir string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.VCS.WorkingDir = path
+		ws.Spec.VCS.WorkingDir = dir
 	}
 }
 
-func WithRepository(url string) func(*v1alpha1.Workspace) {
+func WithRepository(repo string) func(*v1alpha1.Workspace) {
 	return func(ws *v1alpha1.Workspace) {
-		ws.Spec.VCS.Repository = url
+		ws.Spec.VCS.Repository = repo
+	}
+}
+
+func WithBranch(branch string) func(*v1alpha1.Workspace) {
+	return func(ws *v1alpha1.Workspace) {
+		ws.Spec.VCS.Branch = branch
 	}
 }
 
@@ -261,12 +267,33 @@ func WithRunPhase(phase v1alpha1.RunPhase) func(*v1alpha1.Run) {
 	}
 }
 
-func WithCondition(condition string) func(*v1alpha1.Run) {
+func WithCondition(condition string, reason ...string) func(*v1alpha1.Run) {
+	rson := ""
+	if len(reason) > 0 {
+		rson = reason[0]
+	}
+
 	return func(run *v1alpha1.Run) {
 		meta.SetStatusCondition(&run.Conditions, metav1.Condition{
 			Type:   condition,
 			Status: metav1.ConditionTrue,
+			Reason: rson,
 		})
+	}
+}
+
+func WithLabels(labelKVs ...string) func(*v1alpha1.Run) {
+	if len(labelKVs)%2 != 0 {
+		panic("unexpectedly received an odd number of args")
+	}
+
+	lbls := make(map[string]string)
+	for i := 0; i < len(labelKVs); i += 2 {
+		lbls[labelKVs[i]] = labelKVs[i+1]
+	}
+
+	return func(run *v1alpha1.Run) {
+		run.SetLabels(lbls)
 	}
 }
 

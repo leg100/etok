@@ -65,9 +65,10 @@ func NewFactory(out, errout io.Writer, in io.Reader) *Factory {
 
 func NewFakeFactory(out io.Writer, objs ...runtime.Object) *Factory {
 	return &Factory{
-		GetLogsFunc:   logstreamer.FakeGetLogs,
-		AttachFunc:    attacher.FakeAttach,
-		ClientCreator: client.NewFakeClientCreator(objs...),
+		GetLogsFunc:          logstreamer.FakeGetLogs,
+		AttachFunc:           attacher.FakeAttach,
+		ClientCreator:        client.NewFakeClientCreator(objs...),
+		RuntimeClientCreator: client.NewRuntimeClientCreator(),
 		IOStreams: IOStreams{
 			Out: out,
 		},

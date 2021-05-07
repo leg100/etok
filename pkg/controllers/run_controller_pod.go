@@ -103,6 +103,11 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 							SubPath:   binSubPath,
 						},
 						{
+							Name:      "cache",
+							MountPath: PlansMountPath,
+							SubPath:   plansSubPath,
+						},
+						{
 							Name: "cache",
 							// <WorkingDir>/.terraform
 							MountPath: filepath.Join(workspaceDir, ws.Spec.VCS.WorkingDir, ".terraform"),

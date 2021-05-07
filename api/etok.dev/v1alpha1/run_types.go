@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -129,13 +128,30 @@ func (r *Run) IsReconciled() bool {
 
 // IsDone checks if a run has either completed or failed
 func (r *Run) IsDone() bool {
-	if r.Conditions == nil {
-		return false
+	for _, cond := range r.Conditions {
+		if cond.Type == RunCompleteCondition && cond.Status == metav1.ConditionTrue {
+			return true
+		}
+		if cond.Type == RunFailedCondition && cond.Status == metav1.ConditionTrue {
+			return true
+		}
 	}
-	completed := meta.IsStatusConditionTrue(r.Conditions, RunCompleteCondition)
-	failed := meta.IsStatusConditionTrue(r.Conditions, RunFailedCondition)
 
-	return completed || failed
+	return false
+}
+
+// IsStreamable determines if a run's pod is ready to have its logs streamed
+func (r *Run) IsStreamable() bool {
+	for _, cond := range r.Conditions {
+		if cond.Type == RunCompleteCondition {
+			switch cond.Reason {
+			case PodRunningReason, PodSucceededReason, PodFailedReason:
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // A RunPhase summarises the current status of the run

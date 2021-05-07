@@ -18,6 +18,7 @@ var (
 	OperatorComponent  = Component("operator")
 	WorkspaceComponent = Component("workspace")
 	RunComponent       = Component("run")
+	WebhookComponent   = Component("webhook")
 )
 
 // A valid label must be an empty string or consist of alphanumeric characters ,

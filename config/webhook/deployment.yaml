@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook
+spec:
+  selector:
+    matchLabels:
+      app: etok
+      component: webhook
+  template:
+    metadata:
+      labels:
+        app: etok
+        component: webhook
+    spec:
+      containers:
+      - args:
+        - github
+        - run
+        command:
+        - etok
+        env:
+        - name: ETOK_APP_ID
+          valueFrom:
+            secretKeyRef:
+              name: creds
+              key: id
+        - name: ETOK_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: creds
+              key: webhook-secret
+        - name: ETOK_KEY_PATH
+          value: /creds/key.pem
+        - name: ETOK_PORT
+          value: "9001"
+        image: leg100/etok:latest
+        imagePullPolicy: IfNotPresent
+        name: webhook
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /creds
+          name: creds
+        - mountPath: /repos
+          name: repos
+      restartPolicy: Always
+      serviceAccountName: webhook
+      volumes:
+      - name: creds
+        secret:
+          defaultMode: 420
+          items:
+          - key: key
+            mode: 400
+            path: key.pem
+          secretName: creds
+      - emptyDir: {}
+        name: repos

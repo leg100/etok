@@ -5,26 +5,32 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/leg100/etok/pkg/vcs"
+	"github.com/google/go-github/v31/github"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	// name of the secret containing the github app credentials
+	secretName = "creds"
 )
 
 type credentials struct {
-	client    kubernetes.Interface
+	client    runtimeclient.Client
 	namespace string
-	name      string
 
 	// Timeout for waiting for credentials secret to be created
 	timeout time.Duration
 }
 
 func (c *credentials) exists(ctx context.Context) (bool, error) {
-	_, err := c.client.CoreV1().Secrets(c.namespace).Get(ctx, c.name, metav1.GetOptions{})
+	secret := corev1.Secret{}
+	err := c.client.Get(ctx, types.NamespacedName{Namespace: c.namespace, Name: secretName}, &secret)
 	if errors.IsNotFound(err) {
 		return false, nil
 	}
@@ -42,26 +48,26 @@ func (c *credentials) poll(ctx context.Context) error {
 	})
 }
 
-func (c *credentials) create(ctx context.Context, s *vcs.GithubAppTemporarySecrets) error {
-	secret := &corev1.Secret{
+func (c *credentials) create(ctx context.Context, cfg *github.AppConfig) error {
+	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: c.name,
+			Namespace: c.namespace,
+			Name:      secretName,
 		},
 		StringData: map[string]string{
-			"id":             strconv.FormatInt(s.ID, 10),
-			"key":            s.Key,
-			"webhook-secret": s.WebhookSecret,
+			"id":             strconv.FormatInt(cfg.GetID(), 10),
+			"key":            cfg.GetPEM(),
+			"webhook-secret": cfg.GetWebhookSecret(),
 		},
 	}
 
-	_, err := c.client.CoreV1().Secrets(c.namespace).Create(ctx, secret, metav1.CreateOptions{})
-	return err
+	return c.client.Create(ctx, &secret)
 }
 
 func (c *credentials) String() string {
-	return c.namespace + "/" + c.name
+	return c.namespace + "/" + secretName
 }

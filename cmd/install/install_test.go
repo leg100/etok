@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	kfake "k8s.io/client-go/kubernetes/fake"
-
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,6 +17,7 @@ import (
 	"github.com/leg100/etok/cmd/backup"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestInstall(t *testing.T) {
@@ -213,7 +213,7 @@ func TestInstall(t *testing.T) {
 			f := &cmdutil.Factory{
 				IOStreams:            cmdutil.IOStreams{Out: buf},
 				ClientCreator:        client.NewFakeClientCreator(),
-				RuntimeClientCreator: NewFakeClientCreator(convertObjs(tt.objs...)...),
+				RuntimeClientCreator: NewFakeClientCreator(tt.objs...),
 			}
 
 			cmd, opts := InstallCmd(f)
@@ -274,26 +274,26 @@ func TestInstall(t *testing.T) {
 func TestInstallWait(t *testing.T) {
 	tests := []struct {
 		name string
-		objs []runtime.Object
+		objs []runtimeclient.Object
 		err  error
 	}{
 		{
 			name: "successful",
 			// Seed fake client with already successful deploy
-			objs: []runtime.Object{successfulDeploy()},
+			objs: []runtimeclient.Object{successfulDeploy()},
 		},
 		{
 			name: "failure",
-			objs: []runtime.Object{deploy()},
+			objs: []runtimeclient.Object{deploy()},
 			err:  wait.ErrWaitTimeout,
 		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			// Create fake client and seed with any objs
-			client := kfake.NewSimpleClientset(tt.objs...)
+			client := fake.NewClientBuilder().WithObjects(tt.objs...).Build()
 
-			err := deploymentIsReady(context.Background(), "etok", "etok", client, 100*time.Millisecond, 10*time.Millisecond)
+			err := k8s.DeploymentIsReady(context.Background(), client, "etok", "etok", 100*time.Millisecond, 10*time.Millisecond)
 			assert.Equal(t, tt.err, err)
 		})
 	}

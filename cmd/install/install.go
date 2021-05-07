@@ -12,10 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/leg100/etok/cmd/backup"
@@ -23,6 +20,7 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/config"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/k8s"
 	"github.com/leg100/etok/pkg/labels"
 	"github.com/leg100/etok/pkg/version"
 	"github.com/spf13/cobra"
@@ -86,11 +84,6 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 
 			o.flags = cmd.Flags()
 
-			kclient, err := o.Create(o.kubeContext)
-			if err != nil {
-				return err
-			}
-
 			o.Client, err = o.CreateRuntimeClient(o.kubeContext)
 			if err != nil {
 				return err
@@ -102,7 +95,7 @@ func InstallCmd(f *cmdutil.Factory) (*cobra.Command, *installOptions) {
 
 			if o.wait && !o.crdsOnly && !o.dryRun {
 				fmt.Fprintf(o.Out, "Waiting for Deployment to be ready\n")
-				if err := deploymentIsReady(cmd.Context(), o.namespace, "etok", kclient.KubeClient, o.timeout, time.Second); err != nil {
+				if err := k8s.DeploymentIsReady(cmd.Context(), o.RuntimeClient, o.namespace, "etok", o.timeout, time.Second); err != nil {
 					return fmt.Errorf("failure while waiting for deployment to be ready: %w", err)
 				}
 			}
@@ -275,7 +268,7 @@ func (o *installOptions) install(ctx context.Context, client runtimeclient.Clien
 			// Update the object with SSA
 			fmt.Fprintf(o.Out, "Updating resource %s %s\n", obj.GetKind(), klog.KObj(obj))
 			force := true
-			err = client.Patch(context.Background(), obj, runtimeclient.Apply, &runtimeclient.PatchOptions{
+			err = client.Patch(ctx, obj, runtimeclient.Apply, &runtimeclient.PatchOptions{
 				FieldManager: "etok-cli",
 				Force:        &force,
 			})
@@ -291,28 +284,4 @@ func (o *installOptions) install(ctx context.Context, client runtimeclient.Clien
 	}
 
 	return nil
-}
-
-// DeploymentIsReady will poll the kubernetes API server to see if the etok
-// deployment is ready to service user requests.
-func deploymentIsReady(ctx context.Context, namespace, name string, client kubernetes.Interface, timeout, interval time.Duration) error {
-	var readyObservations int32
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-
-		for _, cond := range deployment.Status.Conditions {
-			if isAvailable(cond) {
-				readyObservations++
-			}
-		}
-		// Make sure we query the deployment enough times to see the state change, provided there is one.
-		if readyObservations > 4 {
-			return true, nil
-		} else {
-			return false, nil
-		}
-	})
 }

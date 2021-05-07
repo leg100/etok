@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>etok</title>
+  <meta name="description" content="">
+  <meta name="author" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/css/normalize.css">
+  <link rel="stylesheet" href="/static/css/skeleton.css">
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <style>
+
+    form {
+      margin: auto;
+    }
+
+    form button {
+      display: block;
+      margin: 0 auto;
+    }
+
+    textarea {
+      width: 100%;
+      height: 300px;
+      font-family: monospace;
+    }
+
+    .config {
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      border-bottom: 1px solid #eee;
+    }
+
+
+    .config strong {
+      width: 15%;
+    }
+
+    pre {
+      background-color: #eee;
+      padding: .5em;
+      width: 80%;
+    }
+  </style>
+  <script src="/static/js/jquery-3.5.1.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <section class="header">
+    <p class="title-heading">etok</p>
+
+    <p class="js-discard-success"><strong>
+    {{ if not .Target }}
+      Github app installed successfully! You may now close this window.
+    {{ end }}
+    </strong></p>
+  </section>
+  <section>
+    {{ if .Target }}
+    <form action="{{ .Target }}" method="POST">
+      <button type="submit">Create github app</button>
+      <input type="hidden" name="manifest", value="{{ .Manifest }}"></input>
+    </form>
+    {{ end }}
+  </section>
+</div>
+</body>
+</html>
