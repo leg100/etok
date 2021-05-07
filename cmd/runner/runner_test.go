@@ -149,10 +149,13 @@ func TestRunnerCommand(t *testing.T) {
 func TestRunnerLockFile(t *testing.T) {
 	testutil.Run(t, "with lock file", func(t *testutil.T) {
 		out := new(bytes.Buffer)
-		f := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "sh"))
+		f := cmdutil.NewFakeFactory(out, testobj.Run("dev", "run-12345", "init"))
 		cmd, o := RunnerCmd(f)
 		cmd.SetOut(out)
 		cmd.SetArgs([]string{"--", "true"})
+
+		// Don't actually execute "terraform init"
+		o.exec = &executor.FakeExecutor{}
 
 		t.NewTempDir().Chdir().Write(globals.LockFile, []byte("plugin hashes"))
 
