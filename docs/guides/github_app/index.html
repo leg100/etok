@@ -1,0 +1,73 @@
+<!doctype html><html lang=en dir=ltr><head><meta name=generator content="Hugo 0.83.1"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="Github App #  This guide walks you through deploying the Github app.
+  First ensure you have installed the operator.
+  Run the github deploy command, specifying a URL that will receive the webhook events:
+etok github deploy --url [WEBHOOK_URL]   A browser window opens:
+  Click the button to be forwarded to Github:
+  Enter a unique name for the app and click the button to create the app."><meta name=theme-color content="#FFFFFF"><meta property="og:title" content><meta property="og:description" content="Github App #  This guide walks you through deploying the Github app.
+  First ensure you have installed the operator.
+  Run the github deploy command, specifying a URL that will receive the webhook events:
+etok github deploy --url [WEBHOOK_URL]   A browser window opens:
+  Click the button to be forwarded to Github:
+  Enter a unique name for the app and click the button to create the app."><meta property="og:type" content="article"><meta property="og:url" content="https://docs.etok.dev/docs/guides/github_app/"><meta property="article:section" content="docs"><title>Github App | Etok Documentation</title><link rel=manifest href=/manifest.json><link rel=icon href=/favicon.png type=image/x-icon><link rel=stylesheet href=/book.min.d0e7885dc11b523c68be4468e52d512dd00179a348e470ffb6b19d88dd80fa71.css integrity="sha256-0OeIXcEbUjxovkRo5S1RLdABeaNI5HD/trGdiN2A+nE="><script defer src=/en.search.min.b5c610638d564e42abcca2296e040b6c2fb635c766515af7e5a809871583c0eb.js integrity="sha256-tcYQY41WTkKrzKIpbgQLbC+2NcdmUVr35agJhxWDwOs="></script></head><body dir=ltr><input type=checkbox class="hidden toggle" id=menu-control>
+<input type=checkbox class="hidden toggle" id=toc-control><main class="container flex"><aside class=book-menu><div class=book-menu-content><nav><h2 class=book-brand><a href=/><span>Etok Documentation</span></a></h2><div class=book-search><input type=text id=book-search-input placeholder=Search aria-label=Search maxlength=64 data-hotkeys=s/><div class="book-search-spinner hidden"></div><ul id=book-search-results></ul></div><ul><li class=book-section-flat><span>Tutorials</span><ul><li><a href=https://docs.etok.dev/docs/tutorials/getting_started/>Getting Started</a></li></ul></li><li class=book-section-flat><span>Guides</span><ul><li><a href=https://docs.etok.dev/docs/guides/github_app/ class=active>Github App</a></li><li><a href=https://docs.etok.dev/docs/guides/state_backup/>State Backup</a></li><li><a href=https://docs.etok.dev/docs/guides/workload_identity/>Workload Identity</a></li></ul></li><li class=book-section-flat><span>Reference</span><ul><li><a href=https://docs.etok.dev/docs/reference/operator_install/>Operator Install</a></li><li><a href=https://docs.etok.dev/docs/reference/access_control/>Access Control</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/>Commands</a><ul><li><a href=https://docs.etok.dev/docs/reference/commands/terraform/>Terraform</a></li><li><a href=https://docs.etok.dev/docs/reference/commands/additional/>Additional</a></li></ul></li><li><a href=https://docs.etok.dev/docs/reference/credentials/>Credentials</a></li><li><a href=https://docs.etok.dev/docs/reference/github_app/>Github App</a></li><li><a href=https://docs.etok.dev/docs/reference/restrictions/>Restrictions</a></li><li><a href=https://docs.etok.dev/docs/reference/state/>State</a></li><li><a href=https://docs.etok.dev/docs/reference/testing/>Testing</a></li></ul></li><li class=book-section-flat><span>Background</span><ul><li><a href=https://docs.etok.dev/docs/background/configuration_upload/>Configuration Upload</a></li><li><a href=https://docs.etok.dev/docs/background/performance_optimization/>Performance Optimization</a></li><li><a href=https://docs.etok.dev/docs/background/crds/>CRDs</a></li></ul></li></ul><ul><li><a href=https://github.com/leg100/etok target=_blank rel=noopener>Github</a></li><li><a href=https://join.slack.com/t/etokworkspace/shared_invite/zt-lbqgojdj-IS6aDIydMXe2X3EYf8ZRow target=_blank rel=noopener>Slack</a></li></ul></nav><script>(function(){var a=document.querySelector("aside.book-menu nav");addEventListener("beforeunload",function(b){localStorage.setItem("menu.scrollTop",a.scrollTop)}),a.scrollTop=localStorage.getItem("menu.scrollTop")})()</script></div></aside><div class=book-page><header class=book-header><div class="flex align-center justify-between"><label for=menu-control><img src=/svg/menu.svg class=book-icon alt=Menu></label>
+<strong>Github App</strong>
+<label for=toc-control><img src=/svg/toc.svg class=book-icon alt="Table of Contents"></label></div><aside class="hidden clearfix"><nav id=TableOfContents></nav></aside></header><article class=markdown><h1 id=github-app>Github App
+<a class=anchor href=#github-app>#</a></h1><p>This guide walks you through deploying the Github app.</p><ol><li><p>First ensure you have <a href=https://docs.etok.dev/docs/tutorials/getting_started/>installed the operator</a>.</p></li><li><p>Run the <code>github deploy</code> command, specifying a URL that will receive the webhook events:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>etok github deploy --url <span style=color:#f92672>[</span>WEBHOOK_URL<span style=color:#f92672>]</span>
+</code></pre></div></li><li><p>A browser window opens:</p><p><img src=/create-github-app.png alt=create-1></p></li><li><p>Click the button to be forwarded to Github:</p><p><img src=/create-github-app-2.png alt=create-2></p></li><li><p>Enter a unique name for the app and click the button to create the app. You&rsquo;ll then be redirected to install the app on your Github account:</p><p><img src=/create-github-app-3.png alt=create-3></p></li><li><p>Select the repositories you want to give access to your app, and click &lsquo;Install&rsquo;. The app will be installed and you&rsquo;ll be redirected to a page confirming a successful installation if all went well:</p><p><img src=/create-github-app-4.png alt=create-4></p></li><li><p>Return to your terminal and you should find the app has been deployed:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>Your browser has been opened to visit: http://localhost:43963/github-app/setup
+Successfully created github app <span style=color:#e6db74>&#34;my-etok-app&#34;</span>. App ID: <span style=color:#ae81ff>111060</span>
+Persisted credentials to secret github/creds
+Github app successfully installed. Installation ID: <span style=color:#ae81ff>16341142</span>
+Created resource ClusterRole webhook
+Created resource ClusterRoleBinding webhook
+Created resource Deployment github/webhook
+Created resource Service github/webhook
+Created resource ServiceAccount github/webhook
+Waiting <span style=color:#66d9ef>for</span> Deployment to be ready
+</code></pre></div></li><li><p>Before you can receive webhook events you need to install an ingress resource. The contents of the resource will depend upon your setup, which ingress controller you&rsquo;re using, etc. Regardless of your setup, you need to ensure the namespace matches the namespace the webhook is deployed into (default is <code>github</code>), and the service name and port are correct (defaults are <code>webhook</code> and <code>9001</code>). The host should match the URL you specified in the deployment too. For example, here is an ingress resource for the <code>nginx</code> ingress controller:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-yaml data-lang=yaml><span style=color:#f92672>apiVersion</span>: <span style=color:#ae81ff>networking.k8s.io/v1</span>
+<span style=color:#f92672>kind</span>: <span style=color:#ae81ff>Ingress</span>
+  <span style=color:#f92672>name</span>: <span style=color:#ae81ff>webhook</span>
+  <span style=color:#f92672>namespace</span>: <span style=color:#ae81ff>github</span>
+<span style=color:#f92672>spec</span>:
+  <span style=color:#f92672>ingressClassName</span>: <span style=color:#ae81ff>nginx</span>
+  <span style=color:#f92672>rules</span>:
+  - <span style=color:#f92672>host</span>: <span style=color:#ae81ff>webhook.etok.dev</span>
+    <span style=color:#f92672>http</span>:
+      <span style=color:#f92672>paths</span>:
+      - <span style=color:#f92672>backend</span>:
+          <span style=color:#f92672>service</span>:
+            <span style=color:#f92672>name</span>: <span style=color:#ae81ff>webhook</span>
+            <span style=color:#f92672>port</span>:
+              <span style=color:#f92672>number</span>: <span style=color:#ae81ff>9001</span>
+        <span style=color:#f92672>path</span>: <span style=color:#ae81ff>/</span>
+        <span style=color:#f92672>pathType</span>: <span style=color:#ae81ff>Prefix</span>
+  <span style=color:#f92672>tls</span>:
+  - <span style=color:#f92672>hosts</span>:
+    - <span style=color:#ae81ff>webhook.etok.dev</span>
+    <span style=color:#f92672>secretName</span>: <span style=color:#ae81ff>webhook-etok-dev-tls</span>
+</code></pre></div><p>You may also need the ingress resource to reference a secret containing a valid SSL certificate and key. In the example a secret named <code>webhook-etok-dev-tls</code> contains the certificate and key for <code>webhook.etok.dev</code>. You may want to deploy <a href=https://cert-manager.io/>cert-manager</a>, which automatically creates such secrets on your behalf.</p><p>Once you&rsquo;ve crafted your ingress resource, deploy it:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>kubectl apply -f ingress.yaml
+</code></pre></div><p>Once its been assigned an IP address it&rsquo;s been successfully setup:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>&gt; kubectl -n github get ingress
+NAME      CLASS   HOSTS              ADDRESS        PORTS     AGE
+webhook   nginx   webhook.etok.dev   35.214.23.46   80, <span style=color:#ae81ff>443</span>   18s
+</code></pre></div></li><li><p>Now you can test the app. You&rsquo;ll need to have a github repo cloned to your local machine (and make sure you gave the app permission to access the repo).</p><p>Within the directory of the repo, create an etok workspace:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>cd repo
+etok workspace new dev
+</code></pre></div><p>Create a new branch, write some terraform configuration, and commit and push it:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>git checkout -b app-test
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>cat &gt; main.tf <span style=color:#e6db74>&lt;&lt;EOF
+</span><span style=color:#e6db74>resource &#34;null_resource&#34; &#34;hello&#34; {}
+</span><span style=color:#e6db74>EOF</span>
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>git add main.tf
+git commit -m test
+git push -u origin app-test
+</code></pre></div><p>Click on the link to open a new pull request:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>Enumerating objects: 4, <span style=color:#66d9ef>done</span>.
+Counting objects: 100% <span style=color:#f92672>(</span>4/4<span style=color:#f92672>)</span>, <span style=color:#66d9ef>done</span>.
+Writing objects: 100% <span style=color:#f92672>(</span>3/3<span style=color:#f92672>)</span>, <span style=color:#ae81ff>268</span> bytes | 268.00 KiB/s, <span style=color:#66d9ef>done</span>.
+Total <span style=color:#ae81ff>3</span> <span style=color:#f92672>(</span>delta 0<span style=color:#f92672>)</span>, reused <span style=color:#ae81ff>0</span> <span style=color:#f92672>(</span>delta 0<span style=color:#f92672>)</span>
+remote: 
+remote: Create a pull request <span style=color:#66d9ef>for</span> <span style=color:#e6db74>&#39;test&#39;</span> on GitHub by visiting:
+remote:      https://github.com/leg100/etok-e2e/pull/new/test
+remote: 
+To github.com:leg100/etok-e2e.git
+ * <span style=color:#f92672>[</span>new branch<span style=color:#f92672>]</span>      test -&gt; test
+Branch <span style=color:#e6db74>&#39;test&#39;</span> set up to track remote branch <span style=color:#e6db74>&#39;test&#39;</span> from <span style=color:#e6db74>&#39;origin&#39;</span>.
+
+</code></pre></div><p>Click on the <code>Checks</code> tab:</p><p><img src=/create-github-app-5.png alt=create-5></p><p>You can see that a terraform plan has been triggered for the workspace. The symbols <code>+1/~0/−0</code> indicate that the plan adds one new resource, with no changes and no deletions.</p><p>To apply the plan, click <code>Apply</code>, triggering a new run:</p><p><img src=/create-github-app-6.png alt=create-6></p></li><li><p>You&rsquo;ve now confirmed the Github app is deployed and functioning. It&rsquo;ll continue to trigger runs whenever a commit is pushed.</p></li></ol></article><footer class=book-footer><div class="flex flex-wrap justify-between"><div><a class="flex align-center" href=https://github.com/leg100/etok/edit/master/docs/content//docs/guides/github_app.md target=_blank rel=noopener><img src=/svg/edit.svg class=book-icon alt=Edit>
+<span>Edit this page</span></a></div></div></footer><div class=book-comments></div><label for=menu-control class="hidden book-menu-overlay"></label></div><aside class=book-toc><div class=book-toc-content><nav id=TableOfContents></nav></div></aside></main></body></html>
