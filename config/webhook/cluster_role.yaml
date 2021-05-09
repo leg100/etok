@@ -10,6 +10,13 @@ rules:
   - configmaps
   verbs:
   - create
+# Webhook needs to relay pod logs to github
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
 # Webhook needs to be able to create and monitor runs
 - apiGroups:
   - etok.dev
