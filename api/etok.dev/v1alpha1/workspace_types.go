@@ -60,7 +60,7 @@ type WorkspaceSpec struct {
 	// also be made to the dockerfile for the container image
 	// (/build/Dockerfile)
 
-	// +kubebuilder:default="0.14.3"
+	// +kubebuilder:default="0.15.3"
 	// +kubebuilder:validation:Pattern=`^[0-9]+\.[0-9]+\.[0-9]+$`
 
 	// Required version of Terraform on workspace pod
