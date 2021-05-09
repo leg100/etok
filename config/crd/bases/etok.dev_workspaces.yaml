@@ -81,7 +81,7 @@ spec:
                   type: string
                 type: array
               terraformVersion:
-                default: 0.14.3
+                default: 0.15.3
                 description: Required version of Terraform on workspace pod
                 pattern: ^[0-9]+\.[0-9]+\.[0-9]+$
                 type: string
