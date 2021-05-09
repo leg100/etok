@@ -16,8 +16,9 @@ const (
 
 func WorkspaceCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "workspace",
-		Short: "Etok workspace management",
+		Use:     "workspace",
+		Aliases: []string{"ws"},
+		Short:   "Etok workspace management",
 	}
 
 	nc, _ := newCmd(f)
