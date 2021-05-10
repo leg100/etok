@@ -19,7 +19,7 @@ func listCmd(f *cmdutil.Factory) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all workspaces",
+		Short: "List workspaces for current path",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			// Ensure path is within a git repository
 			repo, err := repo.Open(path)
