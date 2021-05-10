@@ -13,10 +13,10 @@ import (
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/commands"
 	"github.com/leg100/etok/pkg/executor"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/labels"
-	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
@@ -109,7 +109,7 @@ func (o *RunnerOptions) validate() error {
 		return errors.New("--command cannot be empty")
 	}
 
-	if launcher.UpdatesLockFile(o.command) {
+	if commands.UpdatesLockFile(o.command) {
 		if o.runName == "" {
 			return fmt.Errorf("%s updates lock file; --run-name cannot be empty", o.command)
 		}
@@ -155,7 +155,7 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 		return err
 	}
 
-	if launcher.UpdatesLockFile(o.command) {
+	if commands.UpdatesLockFile(o.command) {
 		// This is a command that updates the lock file (such as terraform init)
 		// so persist it to a configmap
 		if err := o.persistLockFile(ctx); err != nil {

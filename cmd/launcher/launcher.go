@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/leg100/etok/pkg/builders"
+	"github.com/leg100/etok/pkg/commands"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,7 +27,6 @@ import (
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/k8s"
-	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/logstreamer"
 	"github.com/leg100/etok/pkg/monitors"
 	"github.com/leg100/etok/pkg/repo"
@@ -73,8 +72,8 @@ type launcherOptions struct {
 	kubeContext string
 	runName     string
 
-	// command to be run on pod
-	command string
+	// Etok run command
+	command commands.Command
 	// etok Workspace's workspaceSpec
 	workspaceSpec v1alpha1.WorkspaceSpec
 	// Create a service acccount if it does not exist
@@ -115,8 +114,8 @@ func launcherCommand(f *cmdutil.Factory, o *launcherOptions) *cobra.Command {
 	o.namespace = defaultNamespace
 
 	cmd := &cobra.Command{
-		Use:   fmt.Sprintf("%s [flags] -- [%[1]s args]", strings.Fields(o.command)[len(strings.Fields(o.command))-1]),
-		Short: fmt.Sprintf("Run terraform %s", o.command),
+		Use:   fmt.Sprintf("%s [flags] -- [%[1]s args]", o.command.Child()),
+		Short: o.command.GetShortDesc(),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			o.args = args
 
@@ -204,7 +203,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		return err
 	}
 
-	if launcher.IsQueueable(o.command) {
+	if o.command.Queueable {
 		// Watch and log queue updates
 		o.watchQueue(ctx, run)
 	}
@@ -258,7 +257,7 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		}
 	}
 
-	if launcher.UpdatesLockFile(o.command) {
+	if o.command.UpdatesLockFile {
 		// Some commands (e.g. terraform init) update the lock file,
 		// .terraform.lock.hcl, and it's recommended that this be committed to
 		// version control. So the runner copies it to a config map, and it is
@@ -315,7 +314,7 @@ func (o *launcherOptions) checkWorkspace(ctx context.Context, run *v1alpha1.Run)
 	}
 
 	// ...approve run if command listed as privileged
-	if ws.IsPrivilegedCommand(o.command) {
+	if ws.IsPrivilegedCommand(o.command.Path) {
 		if err := o.approveRun(ctx, ws, run); err != nil {
 			return err
 		}
@@ -366,7 +365,7 @@ func (o *launcherOptions) cleanup() {
 }
 
 func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace, run *v1alpha1.Run) error {
-	klog.V(1).Infof("%s is a privileged command on workspace\n", o.command)
+	klog.V(1).Infof("%v is a privileged command on workspace\n", o.command)
 	annotations := ws.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -377,7 +376,7 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 	_, err := o.WorkspacesClient(o.namespace).Update(ctx, ws, metav1.UpdateOptions{})
 	if err != nil {
 		if kerrors.IsForbidden(err) {
-			return fmt.Errorf("attempted to run privileged command %s: %w", o.command, errNotAuthorised)
+			return fmt.Errorf("attempted to run privileged command %v: %w", o.command, errNotAuthorised)
 		} else {
 			return fmt.Errorf("failed to update workspace to approve privileged command: %w", err)
 		}
@@ -389,7 +388,7 @@ func (o *launcherOptions) approveRun(ctx context.Context, ws *v1alpha1.Workspace
 
 // Construct and deploy command resource
 func (o *launcherOptions) createRun(ctx context.Context, name string) (*v1alpha1.Run, error) {
-	bldr := builders.Run(o.namespace, name, o.workspace, o.command, o.args...)
+	bldr := builders.Run(o.namespace, name, o.workspace, o.command.Path, o.args...)
 
 	bldr.SetVerbosity(o.Verbosity)
 

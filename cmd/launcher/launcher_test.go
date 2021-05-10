@@ -12,6 +12,7 @@ import (
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/archive"
+	"github.com/leg100/etok/pkg/commands"
 	"github.com/leg100/etok/pkg/env"
 	etokerrors "github.com/leg100/etok/pkg/errors"
 	"github.com/leg100/etok/pkg/handlers"
@@ -35,7 +36,7 @@ func TestLauncher(t *testing.T) {
 		err  error
 		objs []runtime.Object
 		// Override default command "plan"
-		cmd string
+		cmd *commands.Command
 		// Size of content to be archived
 		size int
 		// Mock exit code of runner container
@@ -56,7 +57,7 @@ func TestLauncher(t *testing.T) {
 		},
 		{
 			name: "queueable commands",
-			cmd:  "apply",
+			cmd:  &commands.Command{Path: "apply", Queueable: true},
 			env:  &env.Env{Namespace: "default", Workspace: "default"},
 			objs: []runtime.Object{testobj.Workspace("default", "default", testobj.WithCombinedQueue("run-12345"))},
 			assertions: func(t *testutil.T, o *launcherOptions) {
@@ -312,13 +313,13 @@ func TestLauncher(t *testing.T) {
 			}
 
 			// Default to plan command
-			command := "plan"
-			if tt.cmd != "" {
+			command := &commands.Command{Path: "plan"}
+			if tt.cmd != nil {
 				// Override plan command
 				command = tt.cmd
 			}
 
-			opts := &launcherOptions{command: command, runName: "run-12345"}
+			opts := &launcherOptions{command: *command, runName: "run-12345"}
 
 			// Mock the workspace controller by setting status up front
 			var code int

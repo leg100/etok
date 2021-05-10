@@ -6,9 +6,9 @@ import (
 	"time"
 
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/commands"
 	"github.com/leg100/etok/pkg/globals"
 	"github.com/leg100/etok/pkg/k8s"
-	"github.com/leg100/etok/pkg/launcher"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/util/slice"
 	corev1 "k8s.io/api/core/v1"
@@ -178,7 +178,7 @@ func setRunPhase(run *v1alpha1.Run) v1alpha1.RunPhase {
 }
 
 func (r *RunReconciler) manageQueue(ctx context.Context, run *v1alpha1.Run, ws v1alpha1.Workspace) (bool, error) {
-	if !launcher.IsQueueable(run.Command) {
+	if !commands.IsQueueable(run.Command) {
 		// Proceed to creating pod
 		return false, nil
 	}

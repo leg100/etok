@@ -2,7 +2,7 @@ package controllers
 
 import (
 	v1alpha1 "github.com/leg100/etok/api/etok.dev/v1alpha1"
-	"github.com/leg100/etok/pkg/launcher"
+	"github.com/leg100/etok/pkg/commands"
 	"github.com/leg100/etok/pkg/util/slice"
 )
 
@@ -27,7 +27,7 @@ func updateCombinedQueue(ws *v1alpha1.Workspace, runs []v1alpha1.Run) {
 		}
 
 		// Filter out non-queueable runs
-		if !launcher.IsQueueable(run.Command) {
+		if !commands.IsQueueable(run.Command) {
 			continue
 		}
 
