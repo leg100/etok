@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -73,8 +74,11 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return fmt.Errorf("unable to create run controller: %w", err)
 			}
 
-			// Configure webhook server to forward events to our 'github app'
-			o.webhookServer.app = newApp(client, o.appOptions)
+			// The github app
+			app := newApp(client, o.appOptions)
+
+			// Configure webhook server to forward events to the github app
+			o.webhookServer.app = app
 			o.webhookServer.mgr = installsMgr
 
 			// Ensure webhook server is properly constructed since we're not
@@ -82,6 +86,9 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			if err := o.webhookServer.validate(); err != nil {
 				return err
 			}
+
+			// Run repo reaper once a minute
+			go app.repoManager.reaper(cmd.Context(), time.Minute)
 
 			// Start controller mgr and webhook server concurrently. If either
 			// returns an error, both are cancelled.

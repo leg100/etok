@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 // Repo manager gates access to all git operations. In this way, it is able to
@@ -109,6 +111,8 @@ func (m *repoManager) reaper(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	klog.Infof("Running repo reaper every %s", interval)
+
 	for {
 		select {
 		case <-ticker.C:
@@ -118,10 +122,12 @@ func (m *repoManager) reaper(ctx context.Context, interval time.Duration) {
 					// TTL exceeded
 					_ = os.RemoveAll(r.path)
 					delete(m.managed, r.sha)
+					klog.Infof("Repo reaper: deleted %s", r.path)
 				}
 			}
 			m.mu.Unlock()
 		case <-ctx.Done():
+			klog.V(1).Info("Shutting down repo reaper")
 			return
 		}
 	}

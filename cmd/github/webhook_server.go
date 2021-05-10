@@ -79,7 +79,7 @@ func (s *webhookServer) run(ctx context.Context) error {
 
 	<-ctx.Done()
 
-	fmt.Println("Gracefully shutting down webhook server...")
+	klog.V(1).Info("Shutting down webhook server")
 	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second) // nolint: vet
 	return server.Shutdown(ctx)
 }
