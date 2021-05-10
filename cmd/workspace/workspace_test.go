@@ -36,7 +36,7 @@ func TestWorkspace(t *testing.T) {
 		{
 			name: "list",
 			args: []string{"list", "-h"},
-			out:  "^List all workspaces",
+			out:  "^List workspaces",
 		},
 		{
 			name: "delete",
