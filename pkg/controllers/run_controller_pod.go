@@ -19,6 +19,21 @@ func runPod(run *v1alpha1.Run, ws *v1alpha1.Workspace, secretFound, serviceAccou
 			Namespace: run.Namespace,
 		},
 		Spec: corev1.PodSpec{
+			Affinity: &corev1.Affinity{
+				PodAffinity: &corev1.PodAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: labels.MakeLabels(
+									labels.WorkspaceComponent,
+									labels.Workspace(ws.Name),
+								),
+							},
+							TopologyKey: "kubernetes.io/hostname",
+						},
+					},
+				},
+			},
 			Containers: []corev1.Container{
 				{
 					Command: []string{"etok", "runner"},
