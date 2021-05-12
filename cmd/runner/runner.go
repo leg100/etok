@@ -161,6 +161,8 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 		if err := o.persistLockFile(ctx); err != nil {
 			return fmt.Errorf("failed to persist lock file to config map: %w", err)
 		}
+	} else {
+		klog.V(1).Infof("Skipping lock file persistence")
 	}
 
 	return nil
@@ -169,6 +171,10 @@ func (o *RunnerOptions) Run(ctx context.Context) error {
 // persistLockFile persists the lock file .terraform.lock.hcl to a config map.
 // If the lock file does not exist then it exits early without error.
 func (o *RunnerOptions) persistLockFile(ctx context.Context) error {
+	name := v1alpha1.RunLockFileConfigMapName(o.runName)
+
+	klog.V(1).Infof("Persisting %s to %s", globals.LockFile, name)
+
 	// Check if file exists
 	lockFileContents, err := os.ReadFile(globals.LockFile)
 	if err != nil {
@@ -190,7 +196,7 @@ func (o *RunnerOptions) persistLockFile(ctx context.Context) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: o.namespace,
-			Name:      v1alpha1.RunLockFileConfigMapName(o.runName),
+			Name:      name,
 		},
 		BinaryData: map[string][]byte{
 			globals.LockFile: lockFileContents,

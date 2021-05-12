@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/commands"
 	etokerrors "github.com/leg100/etok/pkg/errors"
@@ -263,8 +264,11 @@ func (o *launcherOptions) run(ctx context.Context) error {
 		// version control. So the runner copies it to a config map, and it is
 		// here that that config map is retrieved.
 		lock, err := o.ConfigMapsClient(o.namespace).Get(ctx, v1alpha1.RunLockFileConfigMapName(run.Name), metav1.GetOptions{})
-		if err != nil {
-			return err
+		if kerrors.IsNotFound(err) {
+			fmt.Fprintf(o.Out, "%s %s was not persisted to a config map\n", color.YellowString("Warning:"), globals.LockFile)
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("unable to retrieve %s from configmap %s: %w", globals.LockFile, v1alpha1.RunLockFileConfigMapName(run.Name), err)
 		}
 
 		// Write lock file to user's disk
