@@ -4,7 +4,7 @@
 
 Documentation: [docs.etok.dev](https://docs.etok.dev/)
 
-https://user-images.githubusercontent.com/75728/117342159-cea44200-ae9a-11eb-95dd-aabe45c5c85c.mp4
+https://user-images.githubusercontent.com/75728/118017694-d2c6d880-b34e-11eb-9004-fd03455e7008.mp4
 
 ## Github App Demo
 
