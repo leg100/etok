@@ -89,6 +89,8 @@ func (b *RunBuilder) Build() *v1alpha1.Run {
 	// And always set config map key to the default
 	run.ConfigMapKey = v1alpha1.RunDefaultConfigMapKey
 
+	run.Verbosity = b.verbosity
+
 	if b.attach {
 		run.AttachSpec.Handshake = true
 		run.AttachSpec.HandshakeTimeout = b.handshakeTimeout.String()
