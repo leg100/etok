@@ -4,8 +4,12 @@
 
 Documentation: [docs.etok.dev](https://docs.etok.dev/)
 
-https://user-images.githubusercontent.com/75728/117342159-cea44200-ae9a-11eb-95dd-aabe45c5c85c.mp4
+## Demos
 
-## Github App Demo
+### CLI Introduction
 
-https://user-images.githubusercontent.com/75728/117339095-41abb980-ae97-11eb-8643-9e83c0156485.mp4
+https://user-images.githubusercontent.com/75728/118019200-a449fd00-b350-11eb-9e48-45ec728c0327.mp4
+
+### Github App
+
+https://user-images.githubusercontent.com/75728/118038955-ad929400-b367-11eb-9ec6-509ea17bd39f.mp4
