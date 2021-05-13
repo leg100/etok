@@ -110,8 +110,8 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 		}
 	case *github.CheckRunEvent:
 		switch *ev.Action {
+		// Any of these events trigger the creation of a run resource
 		case "created", "rerequested", "requested_action":
-			// Any of these events trigger the creation of a run resource
 
 			klog.InfoS("received check run event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "action", *ev.Action)
 			defer func() {
@@ -185,16 +185,16 @@ func (a *app) handleEvent(event interface{}, mgr installsManager) error {
 			if err := createRunAndArchive(a.kclient, r, configMap); err != nil {
 				// Failed to create resources. Update checkrun, reporting
 				// failure to user.
-				run, err := newCheckFromResource(r, err)
+				check, err := newCheckFromResource(r, err)
 				if err != nil {
 					return err
 				}
 
 				// Must provide check run ID otherwise the client will
 				// create a brand new check run
-				run.id = ev.CheckRun.ID
+				check.id = ev.CheckRun.ID
 
-				if err := mgr.send(ev.GetInstallation().GetID(), run); err != nil {
+				if err := mgr.send(ev.GetInstallation().GetID(), check); err != nil {
 					return err
 				}
 			}
