@@ -2,7 +2,6 @@ package github
 
 import (
 	"fmt"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -58,7 +57,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			ctrl.SetLogger(klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)))
 
-			// Manager for Run reconciler
+			// Manager for reconcilers
 			mgr, err := ctrl.NewManager(client.Config, ctrl.Options{
 				Scheme: scheme.Scheme,
 			})
@@ -66,16 +65,25 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return fmt.Errorf("unable to create run controller manager: %w", err)
 			}
 
-			if err := newRunReconciler(
+			if err := newCheckSuiteReconciler(
+				mgr.GetClient(),
+				installsMgr,
+				o.cloneDir,
+			).SetupWithManager(mgr); err != nil {
+				return fmt.Errorf("unable to create check suite controller: %w", err)
+			}
+
+			if err := newCheckReconciler(
 				mgr.GetClient(),
 				client.KubeClient,
 				installsMgr,
+				o.stripRefreshing,
 			).SetupWithManager(mgr); err != nil {
-				return fmt.Errorf("unable to create run controller: %w", err)
+				return fmt.Errorf("unable to create check run controller: %w", err)
 			}
 
 			// The github app
-			app := newApp(client, o.appOptions)
+			app := newApp(client.RuntimeClient, o.appOptions)
 
 			// Configure webhook server to forward events to the github app
 			o.webhookServer.app = app
@@ -86,9 +94,6 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			if err := o.webhookServer.validate(); err != nil {
 				return err
 			}
-
-			// Run repo reaper once a minute
-			go app.repoManager.reaper(cmd.Context(), time.Minute)
 
 			// Start controller mgr and webhook server concurrently. If either
 			// returns an error, both are cancelled.
