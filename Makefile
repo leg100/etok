@@ -136,8 +136,23 @@ endif
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=etok webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+	$(CONTROLLER_GEN) crd 										\
+		paths=./api/etok.dev/v1alpha1/run_types.go				\
+		paths=./api/etok.dev/v1alpha1/workspace_types.go		\
+		paths=./api/etok.dev/v1alpha1/groupversion_info.go		\
+		output:artifacts:config=config/operator/
+	$(CONTROLLER_GEN) rbac:roleName=etok						\
+		paths=./pkg/controllers/run_controller.go				\
+		paths=./pkg/controllers/workspace_controller.go			\
+		output:artifacts:config=config/operator/
+	$(CONTROLLER_GEN) crd										\
+		paths=./api/etok.dev/v1alpha1/check_suite_types.go		\
+		paths=./api/etok.dev/v1alpha1/check_run_types.go		\
+		paths=./api/etok.dev/v1alpha1/groupversion_info.go		\
+		output:artifacts:config=config/webhook/
+	$(CONTROLLER_GEN) rbac:roleName=webhook						\
+		paths=./cmd/github/...									\
+		output:artifacts:config=config/webhook/
 
 # Run go fmt against code
 .PHONY: fmt

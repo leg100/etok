@@ -335,3 +335,11 @@ func SetupFakeWatcher(w watch.Interface) func(a fake_testing.Action) (handled bo
 		return true, w, nil
 	}
 }
+
+func (t *T) ReadFile(path string) []byte {
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("unable to get read file: %s", err.Error())
+	}
+	return out
+}

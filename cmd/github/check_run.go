@@ -58,7 +58,7 @@ func (cr *checkRun) currentIteration() (i int) {
 // Determine the current command to run according to the most recently received
 // event: plan is the default unless user has requested an apply
 func (cr *checkRun) command() checkRunCommand {
-	if cr.currentEvent().RequestedAction != nil && cr.currentEvent().RequestedAction.Action == "apply" {
+	if cr.currentEvent() != nil && cr.currentEvent().RequestedAction != nil && cr.currentEvent().RequestedAction.Action == "apply" {
 		return applyCmd
 	}
 	return planCmd

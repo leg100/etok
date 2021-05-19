@@ -24,7 +24,7 @@ type checkRunReconciler struct {
 }
 
 // Constructor for run reconciler
-func newCheckReconciler(rclient client.Client, kclient kubernetes.Interface, sdr sender, stripRefreshing bool) *checkRunReconciler {
+func newCheckRunReconciler(rclient client.Client, kclient kubernetes.Interface, sdr sender, stripRefreshing bool) *checkRunReconciler {
 	return &checkRunReconciler{
 		Client:          rclient,
 		sender:          sdr,
@@ -33,9 +33,12 @@ func newCheckReconciler(rclient client.Client, kclient kubernetes.Interface, sdr
 	}
 }
 
+// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=etok.dev,resources=runs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create
+// +kubebuilder:rbac:groups="",resources=pods/logs,verbs=get
 
 func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// set up a convenient log object so we don't have to type request over and
@@ -43,14 +46,16 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := log.FromContext(ctx)
 	log.V(1).Info("Reconciling")
 
-	// Get check resource
-	cr := &checkRun{}
-	if err := r.Get(ctx, req.NamespacedName, cr); err != nil {
+	// Get check run resource
+	res := &v1alpha1.CheckRun{}
+	if err := r.Get(ctx, req.NamespacedName, res); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an
 		// immediate requeue (we'll need to wait for a new notification), and we
 		// can get them on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	// Wrap resource
+	cr := &checkRun{res}
 
 	if cr.isCompleted() {
 		// Check Run has completed (its current iteration) so nothing more to be

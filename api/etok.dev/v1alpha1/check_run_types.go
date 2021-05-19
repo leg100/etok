@@ -5,41 +5,42 @@ import (
 )
 
 func init() {
-	SchemeBuilder.Register(&CheckRun{}, &CheckList{})
+	SchemeBuilder.Register(&CheckRun{}, &CheckRunList{})
 }
 
 // Check is the Schema for the checks API
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=checkruns,scope=Namespaced,shortName={check}
 
 type CheckRun struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   CheckSpec   `json:"spec,omitempty"`
-	Status CheckStatus `json:"status,omitempty"`
+	Spec   CheckRunSpec   `json:"spec,omitempty"`
+	Status CheckRunStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// CheckList contains a list of Check
-type CheckList struct {
+// CheckRunList contains a list of Check
+type CheckRunList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []CheckRun `json:"items"`
 }
 
-// CheckSpec defines the desired state of Check
-type CheckSpec struct {
+// CheckRunSpec defines the desired state of Check
+type CheckRunSpec struct {
 	CheckSuiteRef string `json:"checkSuite"`
 
 	// The workspace of the check.
 	Workspace string `json:"workspace"`
 }
 
-// CheckStatus defines the observed state of Check
-type CheckStatus struct {
+// CheckRunStatus defines the observed state of Check
+type CheckRunStatus struct {
 	// +kubebuilder:validation:Enum={"plan","apply"}
 	Action string `json:"action"`
 

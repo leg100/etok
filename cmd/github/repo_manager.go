@@ -37,7 +37,8 @@ func newRepoManager(cloneDir string, refresher tokenRefresher) *repoManager {
 		cloneDir: cloneDir,
 		managed:  make(map[string]*repo),
 		// Repos are deleted at least one hour after they were last cloned
-		ttl: time.Hour,
+		ttl:            time.Hour,
+		tokenRefresher: refresher,
 	}
 }
 

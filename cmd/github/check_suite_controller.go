@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/scheme"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,9 +32,9 @@ func newCheckSuiteReconciler(client runtimeclient.Client, refresher tokenRefresh
 	}
 }
 
-// +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=etok.dev,resources=runs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;create
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=list
 
 func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// set up a convenient log object so we don't have to type request over and
@@ -53,7 +53,7 @@ func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Find connected workspaces
 	workspaces := &v1alpha1.WorkspaceList{}
-	connected := workspaces
+	connected := &v1alpha1.WorkspaceList{}
 	if err := r.Client.List(ctx, workspaces); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -67,8 +67,6 @@ func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// No point proceeding if there are no connected workspaces
 		return ctrl.Result{}, nil
 	}
-
-	// Ensure repo is cloned
 	repo, err := r.repoManager.clone(
 		suite.Spec.CloneURL,
 		suite.Spec.Branch,
@@ -82,27 +80,20 @@ func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Ensure there is a CheckRun for each connected workspace
 	for _, ws := range connected.Items {
-		check := &v1alpha1.CheckRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: ws.Namespace,
-				Name:      fmt.Sprintf("%d-%s", suite.Spec.CheckSuiteSuiteID, ws.Name),
-			},
-			Spec: v1alpha1.CheckSpec{
-				CheckSuiteRef: suite.Name,
-			},
-		}
+		key := fmt.Sprintf("%s/%s-%s", ws.Namespace, suite.Name, ws.Name)
+		check := builders.CheckRun(key).Build()
 
 		if err := controllerutil.SetOwnerReference(suite, check, r.Scheme); err != nil {
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
 
 		err := r.Client.Get(ctx, client.ObjectKeyFromObject(check), check)
 		if kerrors.IsNotFound(err) {
 			if err := r.Client.Create(ctx, check); err != nil {
-				return ctrl.Result{}, nil
+				return ctrl.Result{}, err
 			}
 		} else if err != nil {
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
 	}
 

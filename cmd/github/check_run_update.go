@@ -13,6 +13,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type checkRunClient interface {
+	CreateCheckRun(context.Context, string, string, github.CreateCheckRunOptions) (*github.CheckRun, *github.Response, error)
+	UpdateCheckRun(context.Context, string, string, int64, github.UpdateCheckRunOptions) (*github.CheckRun, *github.Response, error)
+}
+
 const (
 	// https://github.community/t/undocumented-65535-character-limit-on-requests/117564
 	defaultMaxFieldSize = 65535
@@ -37,9 +42,6 @@ type checkRunUpdate struct {
 
 	// Logs are streamed into this byte array
 	logs []byte
-
-	// Run failure message - its pod didn't even start
-	runFailure *string
 
 	reconcileErr error
 
@@ -93,9 +95,9 @@ func (u *checkRunUpdate) name() string {
 	return name
 }
 
-// Implements the invoker interface. Creates or updates a check run via the GH
+// Implements the invokable interface. Creates or updates a check run via the GH
 // API depending upon whether a 'created' event has already been received.
-func (u *checkRunUpdate) invoke(client *GithubClient) error {
+func (u *checkRunUpdate) invoke(client checkRunClient) error {
 	if u.id() != nil {
 		if err := u.update(context.Background(), client); err != nil {
 			return err
@@ -111,7 +113,7 @@ func (u *checkRunUpdate) invoke(client *GithubClient) error {
 	return nil
 }
 
-func (u *checkRunUpdate) create(ctx context.Context, client *GithubClient) error {
+func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) error {
 	opts := github.CreateCheckRunOptions{
 		Name:       u.name(),
 		HeadSHA:    u.suite.Spec.SHA,
@@ -122,11 +124,11 @@ func (u *checkRunUpdate) create(ctx context.Context, client *GithubClient) error
 		ExternalID: u.externalID(),
 	}
 
-	_, _, err := client.Checks.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
+	_, _, err := client.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
 	return err
 }
 
-func (u *checkRunUpdate) update(ctx context.Context, client *GithubClient) error {
+func (u *checkRunUpdate) update(ctx context.Context, client checkRunClient) error {
 	opts := github.UpdateCheckRunOptions{
 		Name:       u.name(),
 		HeadSHA:    github.String(u.suite.Spec.SHA),
@@ -137,7 +139,7 @@ func (u *checkRunUpdate) update(ctx context.Context, client *GithubClient) error
 		ExternalID: u.externalID(),
 	}
 
-	_, _, err := client.Checks.UpdateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, *u.id(), opts)
+	_, _, err := client.UpdateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, *u.id(), opts)
 	return err
 }
 
@@ -192,10 +194,6 @@ func (u *checkRunUpdate) conclusion() *string {
 		return nil
 	}
 
-	if u.run == nil {
-		return github.String("failure")
-	}
-
 	cond := u.run.Conditions[0]
 	if cond.Type == v1alpha1.RunFailedCondition && cond.Status == metav1.ConditionTrue {
 		if cond.Reason == v1alpha1.RunEnqueueTimeoutReason || cond.Reason == v1alpha1.QueueTimeoutReason {
@@ -218,23 +216,13 @@ func (u *checkRunUpdate) failureMessage() *string {
 		return nil
 	}
 
-	if u.run == nil {
-		return github.String("failure")
+	if len(u.run.Conditions) == 0 {
+		return nil
 	}
 
 	cond := u.run.Conditions[0]
 	if cond.Type == v1alpha1.RunFailedCondition && cond.Status == metav1.ConditionTrue {
-		if cond.Reason == v1alpha1.RunEnqueueTimeoutReason || cond.Reason == v1alpha1.QueueTimeoutReason {
-			return github.String("timed_out")
-		} else {
-			return github.String("failure")
-		}
-	} else if cond.Type == v1alpha1.RunCompleteCondition && cond.Status == metav1.ConditionTrue {
-		if cond.Reason == v1alpha1.PodFailedReason {
-			return github.String("failure")
-		} else {
-			return github.String("success")
-		}
+		return &cond.Message
 	}
 	return nil
 }
@@ -246,17 +234,25 @@ func (u *checkRunUpdate) title() string {
 
 // Populate the 'summary' text field of a check run
 func (u *checkRunUpdate) summary() string {
-	if u.runFailure != nil {
-		return fmt.Sprintf("%s failed: %s\n", u.run.Name, *u.runFailure)
+	if msg := u.failureMessage(); msg != nil {
+		return fmt.Sprintf("%s failed: %s\n", u.etokRunName(), *msg)
 	}
 
-	return fmt.Sprintf("Note: you can also view logs by running: \n```bash\nkubectl logs -n %s pods/%s\n```", u.Namespace, u.run.Name)
+	if u.reconcileErr != nil {
+		return fmt.Sprintf("%s reconcile error: %s\n", u.Name, u.reconcileErr.Error())
+	}
+
+	return fmt.Sprintf("Note: you can also view logs by running: \n```bash\nkubectl logs -n %s pods/%s\n```", u.Namespace, u.etokRunName())
 }
 
 // Populate the 'details' text field of a check run
 func (u *checkRunUpdate) details() *string {
-	if u.reconcileErr != nil || u.runFailure != nil {
+	if u.reconcileErr != nil || u.failureMessage() != nil {
 		// Terraform didn't even run so don't provide details
+		return nil
+	}
+
+	if len(u.logs) == 0 {
 		return nil
 	}
 

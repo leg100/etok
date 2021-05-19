@@ -5,7 +5,6 @@ import (
 	"io/fs"
 )
 
-//go:embed crd/bases/*.yaml
 //go:embed operator/*.yaml
 var operatorResources embed.FS
 

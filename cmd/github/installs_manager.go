@@ -23,12 +23,12 @@ type tokenRefresher interface {
 
 // Send an invoker to a client whith which it'll be invoked
 type sender interface {
-	send(int64, invoker) error
+	send(int64, invokable) error
 }
 
-// An invoker is capable of performing some action against the github API
-type invoker interface {
-	invoke(*GithubClient) error
+// An invokable is capable of performing an action against the github checks API
+type invokable interface {
+	invoke(checkRunClient) error
 }
 
 // Implementation of installsManager
@@ -67,6 +67,28 @@ func newInstallsManager(hostname, keyPath string, appID int64) (*installsManager
 	}, nil
 }
 
+func (m *installsManagerImpl) refreshToken(installID int64) (string, error) {
+	client, err := m.getOrCreate(installID)
+	if err != nil {
+		return "", err
+	}
+	return client.refreshToken()
+}
+
+func (m *installsManagerImpl) send(installID int64, inv invokable) error {
+	client, err := m.getOrCreate(installID)
+	if err != nil {
+		return err
+	}
+	client.send(inv)
+
+	return nil
+}
+
+//
+// Helpers
+//
+
 // Get a github client for the install ID from the cache, or if not found,
 // create new client.
 func (m *installsManagerImpl) getOrCreate(installID int64) (*GithubClient, error) {
@@ -83,22 +105,4 @@ func (m *installsManagerImpl) getOrCreate(installID int64) (*GithubClient, error
 	}
 
 	return ghClient, nil
-}
-
-func (m *installsManagerImpl) refreshToken(installID int64) (string, error) {
-	client, err := m.getOrCreate(installID)
-	if err != nil {
-		return "", err
-	}
-	return client.refreshToken()
-}
-
-func (m *installsManagerImpl) send(installID int64, inv invoker) error {
-	client, err := m.getOrCreate(installID)
-	if err != nil {
-		return err
-	}
-	client.send(inv)
-
-	return nil
 }

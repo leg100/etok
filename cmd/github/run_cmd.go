@@ -20,7 +20,9 @@ const (
 type runOptions struct {
 	*webhookServer
 
-	appOptions
+	cloneDir string
+
+	stripRefreshing bool
 
 	// Github app ID
 	appID int64
@@ -73,7 +75,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return fmt.Errorf("unable to create check suite controller: %w", err)
 			}
 
-			if err := newCheckReconciler(
+			if err := newCheckRunReconciler(
 				mgr.GetClient(),
 				client.KubeClient,
 				installsMgr,
@@ -83,11 +85,10 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			}
 
 			// The github app
-			app := newApp(client.RuntimeClient, o.appOptions)
+			app := newApp(client.RuntimeClient)
 
 			// Configure webhook server to forward events to the github app
 			o.webhookServer.app = app
-			o.webhookServer.mgr = installsMgr
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor

@@ -8,11 +8,13 @@ func init() {
 	SchemeBuilder.Register(&CheckSuite{}, &CheckSuiteList{})
 }
 
-// CheckSuite is the Schema for the checksuite API
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=checksuites,scope=Cluster,shortName={suite}
 
+// CheckSuite is the Schema for the checksuite API
 type CheckSuite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -32,8 +34,6 @@ type CheckSuiteList struct {
 
 // CheckSuiteSpec defines the desired state of CheckSuite
 type CheckSuiteSpec struct {
-	CheckSuiteSuiteID int64 `json:"checkSuiteID"`
-
 	Branch string `json:"branch"`
 
 	SHA string `json:"sha"`
