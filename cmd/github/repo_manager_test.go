@@ -14,7 +14,7 @@ func TestRepoManager(t *testing.T) {
 	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
 	cloneDir := testutil.NewTempDir(t).Root()
 
-	mgr := newRepoManager(cloneDir)
+	mgr := newRepoManager(cloneDir, &fakeTokenRefresher{})
 
 	// Test cloning
 	_, err := mgr.clone(
@@ -23,7 +23,7 @@ func TestRepoManager(t *testing.T) {
 		sha,
 		"bob",
 		"myrepo",
-		&fakeTokenRefresher{},
+		123,
 	)
 	require.NoError(t, err)
 
@@ -34,7 +34,7 @@ func TestRepoManager(t *testing.T) {
 		"123abc",
 		"bob",
 		"myrepo",
-		&fakeTokenRefresher{},
+		123,
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "file://x-access-token:xxxxx@")

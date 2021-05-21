@@ -1,23 +1,51 @@
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  creationTimestamp: null
   name: webhook
 rules:
-# Webhook needs to create configmaps, in which to store terraform configuration for a run
 - apiGroups:
   - ""
   resources:
   - configmaps
   verbs:
   - create
-# Webhook needs to relay pod logs to github
 - apiGroups:
   - ""
   resources:
-  - pods/log
+  - pods/logs
   verbs:
   - get
-# Webhook needs to be able to create and monitor runs
+- apiGroups:
+  - etok.dev
+  resources:
+  - checkruns
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - etok.dev
+  resources:
+  - checkruns/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - etok.dev
+  resources:
+  - checksuites
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - etok.dev
   resources:
@@ -33,25 +61,7 @@ rules:
 - apiGroups:
   - etok.dev
   resources:
-  - runs/status
-  verbs:
-  - get
-  - patch
-  - update
-# Webhook needs read-access to workspaces
-- apiGroups:
-  - etok.dev
-  resources:
   - workspaces
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - etok.dev
-  resources:
-  - workspaces/status
-  verbs:
-  - get
-  - patch
-  - update

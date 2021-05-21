@@ -13,7 +13,7 @@ import (
 
 type fakeApp struct{}
 
-func (a *fakeApp) handleEvent(ev interface{}, mgr installsManager) error {
+func (a *fakeApp) handleEvent(ev interface{}) error {
 	return nil
 }
 
@@ -26,7 +26,6 @@ func (m *fakeGithubClientManager) getOrCreate(installID int64) (*GithubClient, e
 func TestWebhookServer(t *testing.T) {
 	server := webhookServer{
 		app: &fakeApp{},
-		mgr: &fakeInstallsMgr{},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

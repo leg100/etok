@@ -2,6 +2,7 @@ package github
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ func TestParsePlanOutputChanges(t *testing.T) {
 		deletions: 0,
 	}
 
-	output, err := ioutil.ReadFile("fixtures/plan.txt")
+	output, err := os.ReadFile("fixtures/plan.txt")
 	require.NoError(t, err)
 
 	plan, err := parsePlanOutput(string(output))

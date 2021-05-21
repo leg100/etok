@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/go-github/v31/github"
 	expect "github.com/google/goexpect"
+	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +51,10 @@ func TestGithub(t *testing.T) {
 
 	// Path to cloned repo
 	path := testutil.NewTempDir(t).Root()
+
+	t.Run("remove all checksuites", func(t *testing.T) {
+		require.NoError(t, rclient.DeleteAllOf(context.Background(), &v1alpha1.CheckSuite{}))
+	})
 
 	t.Run("create namespace", func(t *testing.T) {
 		// (Re-)create dedicated namespace for e2e test

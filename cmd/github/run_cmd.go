@@ -2,7 +2,6 @@ package github
 
 import (
 	"fmt"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,7 +20,9 @@ const (
 type runOptions struct {
 	*webhookServer
 
-	appOptions
+	cloneDir string
+
+	stripRefreshing bool
 
 	// Github app ID
 	appID int64
@@ -43,8 +44,14 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 		Short:  "Run github app",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			// Create runtime client
+			client, err := f.CreateRuntimeClient("")
+			if err != nil {
+				return err
+			}
+
 			// Create k8s client
-			client, err := f.Create("")
+			kclient, err := f.Create("")
 			if err != nil {
 				return err
 			}
@@ -58,37 +65,39 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			ctrl.SetLogger(klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)))
 
-			// Manager for Run reconciler
+			// Manager for reconcilers
 			mgr, err := ctrl.NewManager(client.Config, ctrl.Options{
 				Scheme: scheme.Scheme,
 			})
 			if err != nil {
-				return fmt.Errorf("unable to create run controller manager: %w", err)
+				return fmt.Errorf("unable to create controller manager: %w", err)
 			}
 
-			if err := newRunReconciler(
+			if err := newCheckSuiteReconciler(
 				mgr.GetClient(),
-				client.KubeClient,
 				installsMgr,
+				o.cloneDir,
 			).SetupWithManager(mgr); err != nil {
-				return fmt.Errorf("unable to create run controller: %w", err)
+				return fmt.Errorf("unable to create check suite controller: %w", err)
 			}
 
-			// The github app
-			app := newApp(client, o.appOptions)
+			if err := newCheckRunReconciler(
+				mgr.GetClient(),
+				kclient.KubeClient,
+				installsMgr,
+				o.stripRefreshing,
+			).SetupWithManager(mgr); err != nil {
+				return fmt.Errorf("unable to create check run controller: %w", err)
+			}
 
 			// Configure webhook server to forward events to the github app
-			o.webhookServer.app = app
-			o.webhookServer.mgr = installsMgr
+			o.webhookServer.app = newApp(client.RuntimeClient)
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor
 			if err := o.webhookServer.validate(); err != nil {
 				return err
 			}
-
-			// Run repo reaper once a minute
-			go app.repoManager.reaper(cmd.Context(), time.Minute)
 
 			// Start controller mgr and webhook server concurrently. If either
 			// returns an error, both are cancelled.

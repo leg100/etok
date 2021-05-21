@@ -16,7 +16,7 @@ import (
 type githubClientInterface interface {
 	tokenRefresher
 
-	send(invoker)
+	send(invokable)
 }
 
 type GithubClient struct {
@@ -26,7 +26,7 @@ type GithubClient struct {
 
 	itr *ghinstallation.Transport
 
-	queue chan invoker
+	queue chan invokable
 }
 
 // NewGithubClient returns a wrapped github client using the 'anonymous' user
@@ -61,13 +61,13 @@ func NewGithubAppClient(hostname string, appID int64, keyPath string, installID 
 	client := &GithubClient{
 		Client:    ghClient,
 		itr:       itr,
-		queue:     make(chan invoker, 100),
+		queue:     make(chan invokable, 100),
 		installID: installID,
 	}
 
 	go client.processQueue(context.Background())
 
-	return client, err
+	return client, nil
 }
 
 func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, error) {
@@ -85,7 +85,7 @@ func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, err
 	return client, nil
 }
 
-func (c *GithubClient) send(op invoker) {
+func (c *GithubClient) send(op invokable) {
 	c.queue <- op
 }
 
@@ -94,7 +94,7 @@ func (c *GithubClient) processQueue(ctx context.Context) {
 	for {
 		select {
 		case op := <-c.queue:
-			if err := op.invoke(c); err != nil {
+			if err := op.invoke(c.Checks); err != nil {
 				klog.Errorf("failed to invoke github API operation: %s", err.Error())
 			}
 		case <-ctx.Done():

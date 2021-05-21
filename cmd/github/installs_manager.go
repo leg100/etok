@@ -11,25 +11,24 @@ import (
 // Github manager manages access to installs of the github app (on github.com,
 // github enterprise, etc)
 type installsManager interface {
-	// Get an token refresher for an install with the given ID
-	getTokenRefresher(int64) (tokenRefresher, error)
-
+	tokenRefresher
 	sender
 }
 
 // A tokenRefresher can provide a fresh token for authenticating git operations
-// with github
+// with github for a given github app install ID.
 type tokenRefresher interface {
-	refreshToken() (string, error)
+	refreshToken(int64) (string, error)
 }
 
+// Send an invoker to a client whith which it'll be invoked
 type sender interface {
-	send(int64, invoker) error
+	send(int64, invokable) error
 }
 
-// An invoker is capable of performing some action against the github API
-type invoker interface {
-	invoke(*GithubClient) error
+// An invokable is capable of performing an action against the github checks API
+type invokable interface {
+	invoke(checkRunClient) error
 }
 
 // Implementation of installsManager
@@ -68,33 +67,15 @@ func newInstallsManager(hostname, keyPath string, appID int64) (*installsManager
 	}, nil
 }
 
-// Get a github client for the install ID from the cache, or if not found,
-// create new client.
-func (m *installsManagerImpl) getOrCreate(installID int64) (githubClientInterface, error) {
-	// See if we have a cached client
-	ghClient, ok := m.clients[installID]
-	if !ok {
-		// Create new client and cache it
-		var err error
-		ghClient, err = NewGithubAppClient(m.hostname, m.appID, m.keyPath, installID)
-		if err != nil {
-			return nil, err
-		}
-		m.clients[installID] = ghClient
-	}
-
-	return ghClient, nil
-}
-
-func (m *installsManagerImpl) getTokenRefresher(installID int64) (tokenRefresher, error) {
+func (m *installsManagerImpl) refreshToken(installID int64) (string, error) {
 	client, err := m.getOrCreate(installID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return client, nil
+	return client.refreshToken()
 }
 
-func (m *installsManagerImpl) send(installID int64, inv invoker) error {
+func (m *installsManagerImpl) send(installID int64, inv invokable) error {
 	client, err := m.getOrCreate(installID)
 	if err != nil {
 		return err
@@ -102,4 +83,25 @@ func (m *installsManagerImpl) send(installID int64, inv invoker) error {
 	client.send(inv)
 
 	return nil
+}
+
+//
+// Helpers
+//
+
+// Get a github client for the install ID from the cache, or if not found,
+// create new client.
+func (m *installsManagerImpl) getOrCreate(installID int64) (*GithubClient, error) {
+	// See if we have a cached client
+	if ghClient, ok := m.clients[installID]; ok {
+		return ghClient, nil
+	}
+
+	// Create new client and cache it
+	ghClient, err := NewGithubAppClient(m.hostname, m.appID, m.keyPath, installID)
+	if err != nil {
+		return nil, err
+	}
+	m.clients[installID] = ghClient
+	return ghClient, nil
 }

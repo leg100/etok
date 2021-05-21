@@ -37,6 +37,11 @@ func Run(namespace, name, workspace, command string, args ...string) *RunBuilder
 	}
 }
 
+func (b *RunBuilder) Workspace(workspace string) *RunBuilder {
+	b.workspace = workspace
+	return b
+}
+
 func (b *RunBuilder) Attach() *RunBuilder {
 	b.attach = true
 	return b

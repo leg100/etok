@@ -11,7 +11,9 @@ import (
 
 	"cloud.google.com/go/storage"
 	etokclient "github.com/leg100/etok/pkg/client"
+	"github.com/leg100/etok/pkg/scheme"
 	"google.golang.org/api/iterator"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all GCP client auth plugin
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -24,7 +26,8 @@ var (
 	kubectx      = flag.String("context", "kind-kind", "Kubeconfig context to use for tests")
 	backupBucket = flag.String("backup-bucket", "", "GCS bucket for terraform state backups")
 
-	client *etokclient.Client
+	client  *etokclient.Client
+	rclient runtimeclient.Client
 
 	sclient *storage.Client
 )
@@ -42,6 +45,12 @@ func TestMain(m *testing.M) {
 
 	// Instantiate etok client
 	client, err = etokclient.NewClientCreator().Create(*kubectx)
+	if err != nil {
+		errExit(err)
+	}
+
+	// Instantiate runtime client
+	rclient, err = runtimeclient.New(client.Config, runtimeclient.Options{Scheme: scheme.Scheme})
 	if err != nil {
 		errExit(err)
 	}

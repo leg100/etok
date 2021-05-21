@@ -27,20 +27,24 @@ type repoManager struct {
 	ttl time.Duration
 
 	mu sync.Mutex
+
+	// Provides token for authenticating and cloning repo from github
+	tokenRefresher
 }
 
-func newRepoManager(cloneDir string) *repoManager {
+func newRepoManager(cloneDir string, refresher tokenRefresher) *repoManager {
 	return &repoManager{
 		cloneDir: cloneDir,
 		managed:  make(map[string]*repo),
 		// Repos are deleted at least one hour after they were last cloned
-		ttl: time.Hour,
+		ttl:            time.Hour,
+		tokenRefresher: refresher,
 	}
 }
 
 // Clone a git repo to local disk and returns an obj representing it.
 // Thereafter the caller has a limited time before the repo is deleted.
-func (m *repoManager) clone(url, branch, sha, owner, name string, refresher tokenRefresher) (*repo, error) {
+func (m *repoManager) clone(url, branch, sha, owner, name string, installID int64) (*repo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -53,7 +57,7 @@ func (m *repoManager) clone(url, branch, sha, owner, name string, refresher toke
 	}
 
 	// Clone repo and retain record of it
-	repo, err := m.doClone(url, branch, sha, owner, name, refresher)
+	repo, err := m.doClone(url, branch, sha, owner, name, installID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +66,7 @@ func (m *repoManager) clone(url, branch, sha, owner, name string, refresher toke
 	return repo, nil
 }
 
-func (m *repoManager) doClone(url, branch, sha, owner, name string, refresher tokenRefresher) (*repo, error) {
+func (m *repoManager) doClone(url, branch, sha, owner, name string, installID int64) (*repo, error) {
 	// Clone repo to this path
 	path := filepath.Join(m.cloneDir, sha)
 
@@ -76,8 +80,8 @@ func (m *repoManager) doClone(url, branch, sha, owner, name string, refresher to
 		return nil, fmt.Errorf("unable to make directory for repo: %s: %w", path, err)
 	}
 
-	// Get access token for cloning repo
-	token, err := refresher.refreshToken()
+	// Get fresh access token for cloning repo
+	token, err := m.refreshToken(installID)
 	if err != nil {
 		return nil, err
 	}

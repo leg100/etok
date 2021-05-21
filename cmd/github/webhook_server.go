@@ -14,7 +14,7 @@ import (
 )
 
 type githubApp interface {
-	handleEvent(interface{}, installsManager) error
+	handleEvent(interface{}) error
 }
 
 const githubHeader = "X-Github-Event"
@@ -35,8 +35,6 @@ type webhookServer struct {
 
 	// The github app to which to dispatch received events
 	app githubApp
-
-	mgr installsManager
 }
 
 func (s *webhookServer) validate() error {
@@ -102,7 +100,7 @@ func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.app.handleEvent(event, s.mgr); err != nil {
+	if err := s.app.handleEvent(event); err != nil {
 		panic(err.Error())
 	}
 

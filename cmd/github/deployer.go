@@ -21,6 +21,9 @@ type deployer struct {
 
 	image string
 
+	// Toggle only installing CRDs
+	crdsOnly bool
+
 	// Webhook listening port
 	port int32
 
@@ -49,8 +52,12 @@ func (d *deployer) deploy(ctx context.Context, client runtimeclient.Client) erro
 			return err
 		}
 
+		if d.crdsOnly && obj.GetKind() != "CustomResourceDefinition" {
+			continue
+		}
+
 		switch obj.GetKind() {
-		case "ClusterRoleBinding", "ClusterRole":
+		case "ClusterRoleBinding", "ClusterRole", "CustomResourceDefinition":
 			// Skip setting namespace for non-namespaced resources
 		default:
 			obj.SetNamespace(d.namespace)
