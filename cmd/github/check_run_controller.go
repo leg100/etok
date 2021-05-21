@@ -12,7 +12,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+)
+
+var (
+	checkrunControllerLabels = map[string]string{
+		"app.kubernetes.io/created-by": "checkrun-controller",
+	}
 )
 
 // check runs accordingly.
@@ -33,7 +42,8 @@ func newCheckRunReconciler(rclient client.Client, kclient kubernetes.Interface, 
 	}
 }
 
-// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;list;watch
+// +kubebuilder:rbac:groups=etok.dev,resources=checkruns/status,verbs=update;patch
 // +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get
 // +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
@@ -57,9 +67,8 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Wrap resource
 	cr := &checkRun{res}
 
+	// Go no further if current iteration has completed
 	if cr.isCompleted() {
-		// Check Run has completed (its current iteration) so nothing more to be
-		// done
 		return ctrl.Result{}, nil
 	}
 
@@ -75,10 +84,14 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Check if Run resource exists for current iteration.
+	// Construct run obj
 	run := &v1alpha1.Run{}
+	run.SetNamespace(cr.Namespace)
+	run.SetName(cr.etokRunName())
+
+	// Check if Run resource exists for current iteration.
 	var runNotFound bool
-	if err := r.Get(ctx, client.ObjectKey{Namespace: cr.Namespace, Name: cr.etokRunName()}, run); err != nil {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(run), run); err != nil {
 		if kerrors.IsNotFound(err) {
 			runNotFound = true
 		} else {
@@ -93,22 +106,20 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err := r.createRunResources(ctx, suite, cr, ws); err != nil {
 			reconcileErr = err
 		}
-	} else {
-		if run.IsStreamable() {
-			resp, err := r.Stream(ctx, req.NamespacedName)
+	} else if run.IsStreamable() {
+		resp, err := r.Stream(ctx, client.ObjectKeyFromObject(run))
+		if err != nil {
+			reconcileErr = err
+		} else {
+			logs, err = io.ReadAll(resp)
+			defer resp.Close()
 			if err != nil {
 				reconcileErr = err
-			} else {
-				logs, err = io.ReadAll(resp)
-				defer resp.Close()
-				if err != nil {
-					reconcileErr = err
-				}
 			}
 		}
 	}
 
-	// Construct update and send to github
+	// Construct update
 	update := &checkRunUpdate{
 		checkRun:     cr,
 		suite:        suite,
@@ -118,10 +129,34 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		reconcileErr: reconcileErr,
 		maxFieldSize: defaultMaxFieldSize,
 	}
-	if err := r.send(suite.Spec.InstallID, update); err != nil {
+
+	// Ensure multiple check runs are not created in the GH API!
+	send := false
+	if cr.isCreated() {
+		send = true
+	} else if !cr.isCreateRequested() {
+		cr.setCreateRequested()
+		send = true
+	}
+
+	// Update status info
+	cr.setStatus(update.status())
+	cr.setConclusion(update.conclusion())
+	cr.setIterationStatus(update.status() == "completed")
+
+	if err := r.Status().Update(ctx, cr.CheckRun); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Send update to Github API
+	if send {
+		if err := r.send(suite.Spec.InstallID, update); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Complete reconcile. Any error from earlier will be logged and will
+	// trigger another reconcile.
 	return ctrl.Result{}, reconcileErr
 }
 
@@ -131,8 +166,7 @@ func (r *checkRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch for changes to primary resource Check
 	blder = blder.For(&v1alpha1.CheckRun{})
 
-	// Watch owned runs
-	blder = blder.Owns(&v1alpha1.Run{})
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.CheckRun{}, IsController: false})
 
 	return blder.Complete(r)
 }
@@ -144,7 +178,17 @@ func (r *checkRunReconciler) createRunResources(ctx context.Context, suite *v1al
 		return err
 	}
 
-	run := builders.Run(cr.Namespace, cr.etokRunName(), ws.Name, "sh", cr.script()).Build()
+	// Build run resource
+	runBldr := builders.Run(cr.Namespace, cr.etokRunName(), ws.Name, "sh", cr.script())
+	for k, v := range checkrunControllerLabels {
+		runBldr = runBldr.SetLabel(k, v)
+	}
+	run := runBldr.Build()
+
+	if err := controllerutil.SetOwnerReference(cr.CheckRun, run, r.Scheme()); err != nil {
+		return err
+	}
+
 	if err := r.Client.Create(ctx, run); err != nil {
 		return err
 	}

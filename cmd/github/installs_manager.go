@@ -93,16 +93,15 @@ func (m *installsManagerImpl) send(installID int64, inv invokable) error {
 // create new client.
 func (m *installsManagerImpl) getOrCreate(installID int64) (*GithubClient, error) {
 	// See if we have a cached client
-	ghClient, ok := m.clients[installID]
-	if !ok {
-		// Create new client and cache it
-		var err error
-		ghClient, err = NewGithubAppClient(m.hostname, m.appID, m.keyPath, installID)
-		if err != nil {
-			return nil, err
-		}
-		m.clients[installID] = ghClient
+	if ghClient, ok := m.clients[installID]; ok {
+		return ghClient, nil
 	}
 
+	// Create new client and cache it
+	ghClient, err := NewGithubAppClient(m.hostname, m.appID, m.keyPath, installID)
+	if err != nil {
+		return nil, err
+	}
+	m.clients[installID] = ghClient
 	return ghClient, nil
 }

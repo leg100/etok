@@ -67,7 +67,7 @@ func NewGithubAppClient(hostname string, appID int64, keyPath string, installID 
 
 	go client.processQueue(context.Background())
 
-	return client, err
+	return client, nil
 }
 
 func newGithubClient(url *url.URL, httpClient *http.Client) (*github.Client, error) {

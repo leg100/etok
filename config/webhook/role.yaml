@@ -25,6 +25,14 @@ rules:
   verbs:
   - create
   - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - etok.dev
+  resources:
+  - checkruns/status
+  verbs:
   - patch
   - update
 - apiGroups:

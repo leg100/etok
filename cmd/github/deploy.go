@@ -44,6 +44,9 @@ type deployOptions struct {
 	// Toggle waiting for deployment to be ready
 	wait bool
 
+	// Only deploy k8s resources, don't create app
+	deployOnly bool
+
 	deployer
 }
 
@@ -70,24 +73,26 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 				return err
 			}
 
-			creds := credentials{
-				client:    o.RuntimeClient,
-				namespace: o.namespace,
-				timeout:   defaultTimeout,
-			}
-
-			// Skip app creation if credentials already exist
-			exists, err := creds.exists(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("unable to check if credentials exist: %w", err)
-			}
-
-			if !exists {
-				if err := createApp(cmd.Context(), o.appName, webhookUrl.String(), o.githubHostname, &creds, o.appCreatorOptions); err != nil {
-					return fmt.Errorf("unable to complete app creation: %w", err)
+			if !o.deployOnly && !o.crdsOnly {
+				creds := credentials{
+					client:    o.RuntimeClient,
+					namespace: o.namespace,
+					timeout:   defaultTimeout,
 				}
-			} else {
-				fmt.Println("Skipping creation of Github app; app credentials found")
+
+				// Skip app creation if credentials already exist
+				exists, err := creds.exists(cmd.Context())
+				if err != nil {
+					return fmt.Errorf("unable to check if credentials exist: %w", err)
+				}
+
+				if !exists {
+					if err := createApp(cmd.Context(), o.appName, webhookUrl.String(), o.githubHostname, &creds, o.appCreatorOptions); err != nil {
+						return fmt.Errorf("unable to complete app creation: %w", err)
+					}
+				} else {
+					fmt.Println("Skipping creation of Github app; app credentials found")
+				}
 			}
 
 			// Deploy webhook k8s resources
@@ -101,7 +106,7 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 			}
 
 			// Wait for deployment to be ready
-			if o.wait {
+			if !o.crdsOnly && o.wait {
 				if err := o.deployer.wait(cmd.Context(), o.RuntimeClient); err != nil {
 					return err
 				}
@@ -129,13 +134,16 @@ func deployCmd(f *cmdutil.Factory) (*cobra.Command, *deployOptions) {
 	cmd.Flags().StringVar(&o.githubHostname, "hostname", "github.com", "Github hostname")
 
 	cmd.Flags().Var(&webhookUrl, "url", "Webhook URL")
-	cmd.MarkFlagRequired("url")
 
 	cmd.Flags().StringVar(&o.image, "image", version.Image, "Container image for webhook server")
 
 	cmd.Flags().StringToStringVar(&o.serviceAccountAnnotations, "sa-annotations", map[string]string{}, "Annotations to add to the webhook ServiceAccount. Add iam.gke.io/gcp-service-account=[GSA_NAME]@[PROJECT_NAME].iam.gserviceaccount.com for workload identity")
 
 	cmd.Flags().BoolVar(&o.wait, "wait", true, "Toggle waiting for deployment to be ready")
+
+	cmd.Flags().BoolVar(&o.deployOnly, "deploy-only", o.deployOnly, "Only deploy kubernetes resources, do not create github app")
+
+	cmd.Flags().BoolVar(&o.crdsOnly, "crds-only", o.crdsOnly, "Only generate CRD resources. Useful for updating CRDs for an existing Etok install.")
 
 	return cmd, o
 }

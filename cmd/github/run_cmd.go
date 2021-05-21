@@ -44,8 +44,14 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 		Short:  "Run github app",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			// Create runtime client
+			client, err := f.CreateRuntimeClient("")
+			if err != nil {
+				return err
+			}
+
 			// Create k8s client
-			client, err := f.Create("")
+			kclient, err := f.Create("")
 			if err != nil {
 				return err
 			}
@@ -64,7 +70,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				Scheme: scheme.Scheme,
 			})
 			if err != nil {
-				return fmt.Errorf("unable to create run controller manager: %w", err)
+				return fmt.Errorf("unable to create controller manager: %w", err)
 			}
 
 			if err := newCheckSuiteReconciler(
@@ -77,18 +83,15 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			if err := newCheckRunReconciler(
 				mgr.GetClient(),
-				client.KubeClient,
+				kclient.KubeClient,
 				installsMgr,
 				o.stripRefreshing,
 			).SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create check run controller: %w", err)
 			}
 
-			// The github app
-			app := newApp(client.RuntimeClient)
-
 			// Configure webhook server to forward events to the github app
-			o.webhookServer.app = app
+			o.webhookServer.app = newApp(client.RuntimeClient)
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor

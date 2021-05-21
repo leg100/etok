@@ -76,7 +76,13 @@ func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Update suite with repo path - do this before creating check runs so that
+	// they pick up the repo path
 	suite.Status.RepoPath = repo.path
+	if err := r.Status().Update(ctx, suite); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// Ensure there is a CheckRun for each connected workspace
 	for _, ws := range connected.Items {

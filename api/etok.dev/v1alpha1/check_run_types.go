@@ -41,14 +41,9 @@ type CheckRunSpec struct {
 
 // CheckRunStatus defines the observed state of Check
 type CheckRunStatus struct {
-	// +kubebuilder:validation:Enum={"plan","apply"}
-	Action string `json:"action"`
-
-	// Can the check run be applied? Determines whether an 'apply' button is
-	// shown.
-	Appliable bool `json:"appliable"`
-
 	Events []*CheckRunEvent `json:"events,omitempty"`
+
+	Iterations []*CheckRunIteration `json:"iterations,omitempty"`
 
 	// +kubebuilder:validation:Enum={"queued","in_progress","completed"}
 	// +kubebuilder:default="queued"
@@ -60,6 +55,8 @@ type CheckRunStatus struct {
 
 	// Optional. Required if you provide a status of "completed".
 	Conclusion *string `json:"conclusion,omitempty"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type CheckRunEvent struct {
@@ -91,3 +88,11 @@ type CheckRunRequestedActionEvent struct {
 }
 
 type CheckRunCompletedEvent struct{}
+
+type CheckRunIteration struct {
+	// Etok run triggered in this iteration
+	Run string `json:"runName"`
+
+	// Whether this iteration has completed
+	Completed bool `json:"completed,omitempty"`
+}

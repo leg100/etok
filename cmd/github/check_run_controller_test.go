@@ -12,6 +12,7 @@ import (
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,11 +38,37 @@ func TestCheckRunController(t *testing.T) {
 				assert.NotNil(t, u)
 			},
 			clientAssertions: func(t *testutil.T, c client.Client) {
+				cr := builders.CheckRun("dev/12345-networks").Build()
+				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(cr), cr))
+				assert.True(t, meta.IsStatusConditionTrue(cr.Status.Conditions, "CreateRequested"))
+				assert.Equal(t, 1, len(cr.Status.Iterations))
+				assert.False(t, cr.Status.Iterations[0].Completed)
+
 				run := testobj.Run("dev", "12345-networks-0", "sh")
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(run), run))
 
 				configMap := testobj.ConfigMap("dev", "12345-networks-0")
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(configMap), configMap))
+			},
+		},
+		{
+			name: "Ensure update is not sent if create has been requested but not yet created",
+			cr:   builders.CheckRun("dev/12345-networks").CreateRequested().Build(),
+			objs: []runtime.Object{
+				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
+			},
+			assertions: func(t *testutil.T, u *checkRunUpdate) {
+				assert.Nil(t, u)
+			},
+		},
+		{
+			name: "Ensure update is sent if create has been requested and it has been created",
+			cr:   builders.CheckRun("dev/12345-networks").CreateRequested().ID(123).Build(),
+			objs: []runtime.Object{
+				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
+			},
+			assertions: func(t *testutil.T, u *checkRunUpdate) {
+				assert.NotNil(t, u)
 			},
 		},
 		{
@@ -53,6 +80,20 @@ func TestCheckRunController(t *testing.T) {
 			},
 			assertions: func(t *testutil.T, u *checkRunUpdate) {
 				assert.Equal(t, []byte("fake logs"), u.logs)
+			},
+		},
+		{
+			name: "Completed iteration",
+			cr:   builders.CheckRun("dev/12345-networks").Build(),
+			objs: []runtime.Object{
+				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("netwoks")),
+				testobj.Run("dev", "12345-networks-0", "sh", testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodSucceededReason)),
+			},
+			clientAssertions: func(t *testutil.T, c client.Client) {
+				cr := builders.CheckRun("dev/12345-networks").Build()
+				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(cr), cr))
+				assert.Equal(t, 1, len(cr.Status.Iterations))
+				assert.True(t, cr.Status.Iterations[0].Completed)
 			},
 		},
 	}
@@ -81,7 +122,9 @@ func TestCheckRunController(t *testing.T) {
 			_, err := reconciler.Reconcile(context.Background(), req)
 			require.NoError(t, err)
 
-			tt.assertions(t, sender.u)
+			if tt.assertions != nil {
+				tt.assertions(t, sender.u)
+			}
 			if tt.clientAssertions != nil {
 				tt.clientAssertions(t, client)
 			}

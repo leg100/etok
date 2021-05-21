@@ -27,10 +27,9 @@ func TestCheckRun(t *testing.T) {
 	assert.Equal(t, "12345-networks-0", cr.etokRunName())
 	assert.Equal(t, planCmd, cr.command())
 	assert.Equal(t,
-		"terraform init -no-color -input=false && terraform plan -no-color -input=false /plans/12345-networks-0",
+		"terraform init -no-color -input=false && terraform plan -no-color -input=false -out=/plans/12345-networks-0",
 		cr.script())
 	assert.Equal(t, 0, cr.currentIteration())
-	assert.False(t, cr.isCompleted())
 
 	//
 	// Event #1 (always a 'created' event)
@@ -41,10 +40,15 @@ func TestCheckRun(t *testing.T) {
 
 	assert.Equal(t, int64(987), *cr.id())
 	assert.Equal(t, 0, cr.currentIteration())
-	assert.False(t, cr.isCompleted())
+
+	cr.setIterationStatus(false)
+	assert.Equal(t, 1, len(cr.CheckRun.Status.Iterations))
+	assert.Equal(t, "12345-networks-0", cr.CheckRun.Status.Iterations[0].Run)
+	assert.False(t, cr.CheckRun.Status.Iterations[0].Completed)
 
 	//
-	// Event #2: completed
+	// Event #2: completed (a completed redundant event but its added to list of
+	// events...)
 	//
 	cr.Status.Events = append(cr.Status.Events, &v1alpha1.CheckRunEvent{
 		Completed: &v1alpha1.CheckRunCompletedEvent{},
@@ -52,7 +56,12 @@ func TestCheckRun(t *testing.T) {
 
 	assert.Equal(t, int64(987), *cr.id())
 	assert.Equal(t, 0, cr.currentIteration())
-	assert.True(t, cr.isCompleted())
+
+	//
+	// Mimic controller marking current iteration as complete
+	//
+	cr.setIterationStatus(true)
+	assert.True(t, cr.CheckRun.Status.Iterations[0].Completed)
 
 	//
 	// Event #3: requested_action=apply
@@ -66,7 +75,17 @@ func TestCheckRun(t *testing.T) {
 	assert.Equal(t, "12345-networks-1", cr.etokRunName())
 	assert.Equal(t, applyCmd, cr.command())
 	assert.Equal(t,
-		"terraform init -no-color -input=false && terraform apply -no-color -input=false -out=/plans/12345-networks-0",
+		"terraform init -no-color -input=false && terraform apply -no-color -input=false /plans/12345-networks-0",
 		cr.script())
-	assert.False(t, cr.isCompleted())
+
+	cr.setIterationStatus(false)
+	assert.Equal(t, 2, len(cr.CheckRun.Status.Iterations))
+	assert.Equal(t, "12345-networks-1", cr.CheckRun.Status.Iterations[1].Run)
+	assert.False(t, cr.CheckRun.Status.Iterations[1].Completed)
+
+	//
+	// Mimic controller marking current iteration as complete
+	//
+	cr.setIterationStatus(true)
+	assert.True(t, cr.CheckRun.Status.Iterations[1].Completed)
 }

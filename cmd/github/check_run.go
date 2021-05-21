@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // checkRun is a wrapper around v1alpha1.CheckRun
@@ -11,24 +13,49 @@ type checkRun struct {
 	*v1alpha1.CheckRun
 }
 
-// A check run only has an ID upon receiving a 'created' event
+// A check run only has an ID upon receiving a Created event
 func (cr *checkRun) id() *int64 {
-	if len(cr.Status.Events) == 0 {
-		return nil
+	for _, ev := range cr.Status.Events {
+		if ev.Created != nil {
+			return &ev.Created.ID
+		}
 	}
-
-	if cr.Status.Events[0].Created == nil {
-		panic("expected first event to be a 'created' event")
-	}
-
-	return &cr.Status.Events[0].Created.ID
+	return nil
 }
 
+func (cr *checkRun) isCreated() bool {
+	return cr.id() != nil
+}
+
+func (cr *checkRun) isCreateRequested() bool {
+	return meta.FindStatusCondition(cr.Status.Conditions, "CreateRequested") != nil
+}
+
+func (cr *checkRun) setCreateRequested() {
+	meta.SetStatusCondition(&cr.CheckRun.Status.Conditions, metav1.Condition{
+		Type:    "CreateRequested",
+		Status:  metav1.ConditionTrue,
+		Reason:  "CreateRequestSent",
+		Message: "Create request has been sent to the Github API",
+	})
+}
+
+// Has current iteration completed?
 func (cr *checkRun) isCompleted() bool {
-	if cr.currentEvent() != nil && cr.currentEvent().Completed != nil {
-		return true
+	if len(cr.Status.Iterations) != cr.currentIteration()+1 {
+		return false
 	}
-	return false
+	return cr.Status.Iterations[cr.currentIteration()].Completed
+}
+
+// Set status
+func (cr *checkRun) setStatus(status string) {
+	cr.CheckRun.Status.Status = status
+}
+
+// Set conclusion
+func (cr *checkRun) setConclusion(conclusion *string) {
+	cr.CheckRun.Status.Conclusion = conclusion
 }
 
 func (cr *checkRun) currentEvent() *v1alpha1.CheckRunEvent {
@@ -53,6 +80,17 @@ func (cr *checkRun) currentIteration() (i int) {
 		}
 	}
 	return
+}
+
+// Set status of current iteration
+func (cr *checkRun) setIterationStatus(completed bool) {
+	// Ensure iterations status is populated first
+	for i := len(cr.Status.Iterations); i < cr.currentIteration()+1; i++ {
+		cr.Status.Iterations = append(cr.Status.Iterations, &v1alpha1.CheckRunIteration{
+			Run: cr.etokRunNameByIteration(i),
+		})
+	}
+	cr.Status.Iterations[cr.currentIteration()].Completed = completed
 }
 
 // Determine the current command to run according to the most recently received
@@ -83,9 +121,9 @@ func (cr *checkRun) script() string {
 
 	switch c := cr.command(); c {
 	case planCmd:
-		return fmt.Sprintf("%s && terraform plan -no-color -input=false %s", initCmd, cr.targetPlan())
+		return fmt.Sprintf("%s && terraform plan -no-color -input=false -out=%s", initCmd, cr.targetPlan())
 	case applyCmd:
-		return fmt.Sprintf("%s && terraform apply -no-color -input=false -out=%s", initCmd, cr.targetPlan())
+		return fmt.Sprintf("%s && terraform apply -no-color -input=false %s", initCmd, cr.targetPlan())
 	default:
 		panic(fmt.Sprintf("unsupported check run command: %s", c))
 	}

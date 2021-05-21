@@ -42,6 +42,8 @@ func TestHandleEvent(t *testing.T) {
 				suites := &v1alpha1.CheckSuiteList{}
 				require.NoError(t, client.List(context.Background(), suites))
 				require.Equal(t, 1, len(suites.Items))
+
+				assert.NotEmpty(t, suites.Items[0].Spec.CloneURL)
 			},
 		},
 		{

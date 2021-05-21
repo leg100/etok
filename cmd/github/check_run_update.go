@@ -102,18 +102,19 @@ func (u *checkRunUpdate) invoke(client checkRunClient) error {
 		if err := u.update(context.Background(), client); err != nil {
 			return err
 		}
-		klog.InfoS("updated check run", "id", *u.id(), "ref", u.suite.Spec.SHA)
+		klog.InfoS("updated check run", "id", *u.id(), "status", u.status())
 	} else {
-		if err := u.create(context.Background(), client); err != nil {
+		id, err := u.create(context.Background(), client)
+		if err != nil {
 			return err
 		}
-		klog.InfoS("created check run", "id", *u.id(), "ref", u.suite.Spec.SHA)
+		klog.InfoS("created check run", "id", id, "status", u.status())
 	}
 
 	return nil
 }
 
-func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) error {
+func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) (int64, error) {
 	opts := github.CreateCheckRunOptions{
 		Name:       u.name(),
 		HeadSHA:    u.suite.Spec.SHA,
@@ -124,8 +125,8 @@ func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) erro
 		ExternalID: u.externalID(),
 	}
 
-	_, _, err := client.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
-	return err
+	cr, _, err := client.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
+	return cr.GetID(), err
 }
 
 func (u *checkRunUpdate) update(ctx context.Context, client checkRunClient) error {

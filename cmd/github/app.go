@@ -59,10 +59,12 @@ func (a *app) handleCheckSuiteEvent(ev *github.CheckSuiteEvent) error {
 				Name: strconv.FormatInt(ev.CheckSuite.GetID(), 10),
 			},
 			Spec: v1alpha1.CheckSuiteSpec{
+				CloneURL:  ev.Repo.GetCloneURL(),
 				InstallID: ev.GetInstallation().GetID(),
 				SHA:       ev.CheckSuite.GetHeadSHA(),
 				Owner:     ev.Repo.Owner.GetLogin(),
 				Repo:      ev.Repo.GetName(),
+				Branch:    ev.CheckSuite.GetHeadBranch(),
 			},
 		}
 

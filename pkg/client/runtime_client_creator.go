@@ -32,6 +32,7 @@ func (cc *runtimeClientCreator) CreateRuntimeClient(kubeCtx string) (*Client, er
 	}
 
 	return &Client{
+		Config:        cfg,
 		RuntimeClient: rc,
 	}, nil
 }
