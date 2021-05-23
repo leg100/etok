@@ -13,10 +13,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type githubApp interface {
-	handleEvent(interface{}) error
-}
-
 const githubHeader = "X-Github-Event"
 
 // WebhookServer listens for github events and dispatches them to a github app.
@@ -35,6 +31,8 @@ type webhookServer struct {
 
 	// The github app to which to dispatch received events
 	app githubApp
+
+	getter clientGetter
 }
 
 func (s *webhookServer) validate() error {
@@ -100,7 +98,20 @@ func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.app.handleEvent(event); err != nil {
+	ievent, ok := event.(installEvent)
+	if !ok {
+		http.Error(w, "github app installation ID not found in event", http.StatusBadRequest)
+		return
+	}
+
+	// Retrieve github client for install
+	client, err := s.getter.Get(ievent.GetInstallation().GetID(), "github.com")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.app.handleEvent(event, client.Checks); err != nil {
 		panic(err.Error())
 	}
 

@@ -30,6 +30,9 @@ func TestHandleEvent(t *testing.T) {
 				Action: github.String("requested"),
 				CheckSuite: &github.CheckSuite{
 					HeadBranch: github.String("changes"),
+					PullRequests: []*github.PullRequest{
+						{},
+					},
 				},
 				Repo: &github.Repository{
 					Name: github.String("myrepo"),
@@ -190,9 +193,15 @@ func TestHandleEvent(t *testing.T) {
 				WithRuntimeObjects(tt.objs...).
 				Build()
 
-			require.NoError(t, newApp(client).handleEvent(tt.event))
+			require.NoError(t, newApp(client).handleEvent(tt.event, &fakeChecksClient{}))
 
 			tt.assertions(t, client)
 		})
 	}
+}
+
+type fakeChecksClient struct{}
+
+func (c *fakeChecksClient) ListCheckSuitesForRef(ctx context.Context, owner, repo, ref string, opts *github.ListCheckSuiteOptions) (*github.ListCheckSuiteResults, *github.Response, error) {
+	return nil, nil, nil
 }

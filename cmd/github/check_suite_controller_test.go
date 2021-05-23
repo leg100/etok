@@ -57,7 +57,7 @@ func TestCheckSuiteController(t *testing.T) {
 			}
 
 			cloneDir := t.NewTempDir().Root()
-			reconciler := newCheckSuiteReconciler(bldr.Build(), &fakeTokenRefresher{}, cloneDir)
+			reconciler := newCheckSuiteReconciler(bldr.Build(), &fakeTokenProvider{}, cloneDir)
 
 			req := requestFromObject(tt.suite)
 			_, err := reconciler.Reconcile(context.Background(), req)

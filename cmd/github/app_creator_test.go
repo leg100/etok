@@ -2,15 +2,19 @@ package github
 
 import (
 	"context"
-	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/leg100/etok/cmd/github/fixtures"
+	etokgithub "github.com/leg100/etok/pkg/github"
+	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -22,9 +26,41 @@ import (
 )
 
 func TestAppCreator(t *testing.T) {
-	disableSSLVerification(t)
+	testutil.DisableSSLVerification(t)
 
-	githubHostname, _ := fixtures.GithubServer(t)
+	server := httptest.NewTLSServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.RequestURI {
+			case "/settings/apps/new":
+				if err := r.ParseForm(); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Unable to parse POST form"))
+					return
+				}
+
+				manifest := etokgithub.GithubManifest{}
+				manifestReader := strings.NewReader(r.PostFormValue("manifest"))
+				if err := json.NewDecoder(manifestReader).Decode(&manifest); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Unable to decode JSON into a manifest object"))
+					return
+				}
+
+				redirectURL := fmt.Sprintf("%s?code=good-code", manifest.RedirectURL)
+				http.Redirect(w, r, redirectURL, http.StatusFound)
+			case "/api/v3/app-manifests/good-code/conversions":
+				encodedKey := strings.Join(strings.Split(fixtures.GithubPrivateKey, "\n"), "\\n")
+				appInfo := fmt.Sprintf(fixtures.GithubConversionJSON, r.Host, encodedKey)
+				w.Write([]byte(appInfo)) // nolint: errcheck
+			case "/apps/etok/installations/new":
+				w.Write([]byte("github app installation page")) // nolint: errcheck
+			default:
+				t.Errorf("got unexpected request at %q", r.RequestURI)
+				http.Error(w, "not found", http.StatusNotFound)
+			}
+		}))
+	url, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
 	client := fake.NewClientBuilder().Build()
 
@@ -36,13 +72,13 @@ func TestAppCreator(t *testing.T) {
 			client:    client,
 		}
 
-		completed <- createApp(context.Background(), "test-app", "https://webhook.etok.dev", githubHostname, creds, createAppOptions{
+		completed <- createApp(context.Background(), "test-app", "https://webhook.etok.dev", url.Host, creds, createAppOptions{
 			port:           12345,
 			disableBrowser: true,
 		})
 	}()
 
-	err := pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
+	err = pollUrl(fmt.Sprintf("http://localhost:12345/healthz"), 10*time.Millisecond, 1*time.Second)
 	require.NoError(t, err)
 
 	resp, err := http.Get("http://localhost:12345/github-app/setup")
@@ -75,18 +111,6 @@ func TestAppCreator(t *testing.T) {
 
 	// App creator should now automatically shut itself down
 	require.NoError(t, <-completed)
-}
-
-// disableSSLVerification disables ssl verification for the global http client
-// for the duration of the test t
-func disableSSLVerification(t *testing.T) {
-	orig := http.DefaultTransport.(*http.Transport).TLSClientConfig
-	// nolint: gosec
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
-	t.Cleanup(func() {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = orig
-	})
 }
 
 // pollUrl polls a url every interval until timeout. If an HTTP 200 is received

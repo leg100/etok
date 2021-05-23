@@ -1,11 +1,14 @@
 package github
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"path/filepath"
 	"testing"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	githubclient "github.com/leg100/etok/cmd/github/client"
 	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testobj"
@@ -16,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -139,4 +143,20 @@ func requestFromObject(obj client.Object) reconcile.Request {
 			Namespace: obj.GetNamespace(),
 		},
 	}
+}
+
+type fakeStreamer struct{}
+
+func (s *fakeStreamer) Stream(ctx context.Context, key runtimeclient.ObjectKey) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewBufferString("fake logs")), nil
+}
+
+type fakeSender struct {
+	u *checkRunUpdate
+}
+
+func (s *fakeSender) Send(_ int64, _ string, inv githubclient.Invokable) error {
+	s.u = inv.(*checkRunUpdate)
+
+	return nil
 }

@@ -1,31 +1,35 @@
 package github
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
-	"github.com/leg100/etok/cmd/github/fixtures"
-	"github.com/leg100/etok/pkg/testutil"
+	"github.com/google/go-github/v31/github"
+	"github.com/leg100/etok/cmd/github/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeApp struct{}
 
-func (a *fakeApp) handleEvent(ev interface{}) error {
+func (a *fakeApp) handleEvent(ev interface{}, client checksClient) error {
 	return nil
 }
 
-type fakeGithubClientManager struct{}
+type fakeClientGetter struct{}
 
-func (m *fakeGithubClientManager) getOrCreate(installID int64) (*GithubClient, error) {
-	return &GithubClient{}, nil
+func (a *fakeClientGetter) Get(_ int64, _ string) (*github.Client, error) {
+	return client.NewAnonymous("fake-github.com")
 }
 
 func TestWebhookServer(t *testing.T) {
 	server := webhookServer{
-		app: &fakeApp{},
+		app:    &fakeApp{},
+		getter: &fakeClientGetter{},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -41,10 +45,15 @@ func TestWebhookServer(t *testing.T) {
 		}
 	}
 
-	// Setup mock repo
-	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
+	requestJSON, _ := os.ReadFile("fixtures/newCheckSuiteEvent.json")
 
-	req := fixtures.GitHubNewCheckSuiteEvent(t, server.port, sha, path)
+	url := fmt.Sprintf("http://localhost:%d/events", server.port)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestJSON)))
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(githubHeader, "check_suite")
+
 	res, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	assert.Equal(t, 200, res.StatusCode)

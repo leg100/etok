@@ -97,7 +97,7 @@ func (u *checkRunUpdate) name() string {
 
 // Implements the invokable interface. Creates or updates a check run via the GH
 // API depending upon whether a 'created' event has already been received.
-func (u *checkRunUpdate) invoke(client checkRunClient) error {
+func (u *checkRunUpdate) Invoke(client *github.Client) error {
 	if u.id() != nil {
 		if err := u.update(context.Background(), client); err != nil {
 			return err
@@ -114,7 +114,7 @@ func (u *checkRunUpdate) invoke(client checkRunClient) error {
 	return nil
 }
 
-func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) (int64, error) {
+func (u *checkRunUpdate) create(ctx context.Context, client *github.Client) (int64, error) {
 	opts := github.CreateCheckRunOptions{
 		Name:       u.name(),
 		HeadSHA:    u.suite.Spec.SHA,
@@ -125,11 +125,11 @@ func (u *checkRunUpdate) create(ctx context.Context, client checkRunClient) (int
 		ExternalID: u.externalID(),
 	}
 
-	cr, _, err := client.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
+	cr, _, err := client.Checks.CreateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, opts)
 	return cr.GetID(), err
 }
 
-func (u *checkRunUpdate) update(ctx context.Context, client checkRunClient) error {
+func (u *checkRunUpdate) update(ctx context.Context, client *github.Client) error {
 	opts := github.UpdateCheckRunOptions{
 		Name:       u.name(),
 		HeadSHA:    github.String(u.suite.Spec.SHA),
@@ -140,7 +140,7 @@ func (u *checkRunUpdate) update(ctx context.Context, client checkRunClient) erro
 		ExternalID: u.externalID(),
 	}
 
-	_, _, err := client.UpdateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, *u.id(), opts)
+	_, _, err := client.Checks.UpdateCheckRun(ctx, u.suite.Spec.Owner, u.suite.Spec.Repo, *u.id(), opts)
 	return err
 }
 

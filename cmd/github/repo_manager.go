@@ -15,6 +15,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type tokenProvider interface {
+	Token(context.Context, int64, string) (string, error)
+}
+
 // Repo manager gates access to all git operations. In this way, it is able to
 // remove cloned repos after they are no longer needed in a thread-safe manner.
 type repoManager struct {
@@ -29,16 +33,16 @@ type repoManager struct {
 	mu sync.Mutex
 
 	// Provides token for authenticating and cloning repo from github
-	tokenRefresher
+	tokenProvider
 }
 
-func newRepoManager(cloneDir string, refresher tokenRefresher) *repoManager {
+func newRepoManager(cloneDir string, provider tokenProvider) *repoManager {
 	return &repoManager{
 		cloneDir: cloneDir,
 		managed:  make(map[string]*repo),
 		// Repos are deleted at least one hour after they were last cloned
-		ttl:            time.Hour,
-		tokenRefresher: refresher,
+		ttl:           time.Hour,
+		tokenProvider: provider,
 	}
 }
 
@@ -81,7 +85,7 @@ func (m *repoManager) doClone(url, branch, sha, owner, name string, installID in
 	}
 
 	// Get fresh access token for cloning repo
-	token, err := m.refreshToken(installID)
+	token, err := m.Token(context.Background(), installID, "github.com")
 	if err != nil {
 		return nil, err
 	}

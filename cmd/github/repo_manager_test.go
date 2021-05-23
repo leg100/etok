@@ -10,11 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type fakeTokenProvider struct{}
+
+func (tr *fakeTokenProvider) Token(_ context.Context, _ int64, _ string) (string, error) {
+	return "token123", nil
+}
+
 func TestRepoManager(t *testing.T) {
 	path, sha := initializeRepo(&testutil.T{T: t}, "./fixtures/repo")
 	cloneDir := testutil.NewTempDir(t).Root()
 
-	mgr := newRepoManager(cloneDir, &fakeTokenRefresher{})
+	mgr := newRepoManager(cloneDir, &fakeTokenProvider{})
 
 	// Test cloning
 	_, err := mgr.clone(
