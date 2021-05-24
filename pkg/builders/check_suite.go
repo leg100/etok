@@ -44,7 +44,7 @@ func CheckSuiteFromObj(obj *github.CheckSuite) *checkSuiteBuilder {
 		Spec: v1alpha1.CheckSuiteSpec{
 			CloneURL: obj.GetRepository().GetCloneURL(),
 			SHA:      obj.GetHeadSHA(),
-			Owner:    obj.App.Owner.GetLogin(),
+			Owner:    obj.GetRepository().Owner.GetLogin(),
 			Repo:     obj.GetRepository().GetName(),
 			Branch:   obj.GetHeadBranch(),
 		},

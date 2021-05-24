@@ -20,8 +20,6 @@ import (
 type app struct {
 	// K8s controller-runtime client
 	runtimeclient.Client
-	// Github client manager
-	gclient checksClient
 }
 
 func newApp(client runtimeclient.Client) *app {
