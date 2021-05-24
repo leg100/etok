@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/leg100/etok/cmd/github/fixtures"
@@ -20,9 +23,24 @@ import (
 )
 
 func TestDeploy(t *testing.T) {
-	disableSSLVerification(t)
+	testutil.DisableSSLVerification(t)
 
-	githubHostname, _ := fixtures.GithubServer(t)
+	server := httptest.NewTLSServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.RequestURI {
+			case "/api/v3/app-manifests/good-code/conversions":
+				encodedKey := strings.Join(strings.Split(fixtures.GithubPrivateKey, "\n"), "\\n")
+				appInfo := fmt.Sprintf(fixtures.GithubConversionJSON, r.Host, encodedKey)
+				w.Write([]byte(appInfo)) // nolint: errcheck
+			case "/apps/etok/installations/new":
+				w.Write([]byte("github app installation page")) // nolint: errcheck
+			default:
+				t.Errorf("got unexpected request at %q", r.RequestURI)
+				http.Error(w, "not found", http.StatusNotFound)
+			}
+		}))
+	url, err := url.Parse(server.URL)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name string
@@ -30,7 +48,7 @@ func TestDeploy(t *testing.T) {
 	}{
 		{
 			name: "plan",
-			args: []string{"--namespace=fake", "--manifest-port=12345", "--wait=false", "--manifest-disable-browser", fmt.Sprintf("--hostname=%s", githubHostname), "--url=events.etok.dev"},
+			args: []string{"--namespace=fake", "--manifest-port=12345", "--wait=false", "--manifest-disable-browser", fmt.Sprintf("--hostname=%s", url.Host), "--url=events.etok.dev"},
 		},
 	}
 

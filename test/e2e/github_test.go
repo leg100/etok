@@ -56,7 +56,12 @@ func TestGithub(t *testing.T) {
 		require.NoError(t, rclient.DeleteAllOf(context.Background(), &v1alpha1.CheckSuite{}))
 	})
 
-	t.Run("create namespace", func(t *testing.T) {
+	t.Run("delete existing branch", func(t *testing.T) {
+		// This deletes the PR too
+		gclient.Git.DeleteRef(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), "heads/e2e")
+	})
+
+	t.Run("recreate namespace", func(t *testing.T) {
 		// (Re-)create dedicated namespace for e2e test
 		deleteNamespace(t, namespace)
 		createNamespace(t, namespace)
@@ -100,6 +105,15 @@ func TestGithub(t *testing.T) {
 
 	t.Run("push branch", func(t *testing.T) {
 		runWithPath(t, path, "git", "push", "-f", "origin", "e2e")
+	})
+
+	t.Run("create pull request", func(t *testing.T) {
+		_, _, err := gclient.PullRequests.Create(context.Background(), os.Getenv("GITHUB_E2E_REPO_OWNER"), os.Getenv("GITHUB_E2E_REPO_NAME"), &github.NewPullRequest{
+			Title: github.String("e2e"),
+			Head:  github.String("e2e"),
+			Base:  github.String("master"),
+		})
+		require.NoError(t, err)
 	})
 
 	var check *github.CheckRun

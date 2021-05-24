@@ -24,11 +24,11 @@ type checkSuiteReconciler struct {
 }
 
 // Constructor for run reconciler
-func newCheckSuiteReconciler(client runtimeclient.Client, refresher tokenRefresher, cloneDir string) *checkSuiteReconciler {
+func newCheckSuiteReconciler(client runtimeclient.Client, provider tokenProvider, cloneDir string) *checkSuiteReconciler {
 	return &checkSuiteReconciler{
 		Scheme:      scheme.Scheme,
 		Client:      client,
-		repoManager: newRepoManager(cloneDir, refresher),
+		repoManager: newRepoManager(cloneDir, provider),
 	}
 }
 

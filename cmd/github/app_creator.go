@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/leg100/etok/cmd/github/client"
 	"github.com/leg100/etok/pkg/github"
 	"k8s.io/klog/v2"
 )
@@ -110,9 +111,7 @@ func createApp(ctx context.Context, appName, webhookUrl, githubHostname string, 
 			creator.errch <- fmt.Errorf("unable to start web server: %w", err)
 		}
 	}()
-	defer func() {
-		server.Shutdown(ctx)
-	}()
+	defer server.Shutdown(ctx)
 
 	select {
 	case <-ctx.Done():
@@ -176,15 +175,14 @@ func (c *appCreator) exchangeCode(w http.ResponseWriter, r *http.Request) {
 
 	klog.V(1).Info("Exchanging GitHub app code for app credentials")
 
-	client, err := NewAnonymousGithubClient(c.githubHostname)
+	client, err := client.NewAnonymous(c.githubHostname)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		c.errch <- fmt.Errorf("Failed to instantiate github client: %w", err)
 		return
 	}
 
-	ctx := context.Background()
-	cfg, _, err := client.Apps.CompleteAppManifest(ctx, code)
+	cfg, _, err := client.Apps.CompleteAppManifest(context.Background(), code)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		c.errch <- fmt.Errorf("Failed to exchange code for github app: %w", err)
@@ -252,10 +250,15 @@ func manifestJson(appName, webhookUrl, redirectUrl, setupUrl string) (string, er
 		},
 		Events: []string{
 			"check_run",
+			"check_suite",
+			"pull_request_review_comment",
+			"pull_request_review",
+			"pull_request",
 		},
 		Permissions: map[string]string{
-			"checks":   "write",
-			"contents": "write",
+			"checks":        "write",
+			"contents":      "read",
+			"pull_requests": "read",
 		},
 	}
 

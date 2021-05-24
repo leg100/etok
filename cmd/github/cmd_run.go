@@ -6,6 +6,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	githubclient "github.com/leg100/etok/cmd/github/client"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/spf13/cobra"
@@ -56,9 +57,8 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 				return err
 			}
 
-			// The github client mgr maintains one client per github app
-			// installation
-			installsMgr, err := newInstallsManager(o.githubHostname, o.keyPath, o.appID)
+			// Manager for github clients
+			gmgr, err := githubclient.NewManager(o.keyPath, o.appID)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			if err := newCheckSuiteReconciler(
 				mgr.GetClient(),
-				installsMgr,
+				gmgr,
 				o.cloneDir,
 			).SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create check suite controller: %w", err)
@@ -84,7 +84,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 			if err := newCheckRunReconciler(
 				mgr.GetClient(),
 				kclient.KubeClient,
-				installsMgr,
+				gmgr,
 				o.stripRefreshing,
 			).SetupWithManager(mgr); err != nil {
 				return fmt.Errorf("unable to create check run controller: %w", err)
@@ -92,6 +92,7 @@ func runCmd(f *cmdutil.Factory) (*cobra.Command, *runOptions) {
 
 			// Configure webhook server to forward events to the github app
 			o.webhookServer.app = newApp(client.RuntimeClient)
+			o.webhookServer.getter = gmgr
 
 			// Ensure webhook server is properly constructed since we're not
 			// using a constructor

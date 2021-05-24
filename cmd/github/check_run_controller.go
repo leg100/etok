@@ -6,12 +6,13 @@ import (
 	"path/filepath"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/github/client"
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/builders"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -24,16 +25,20 @@ var (
 	}
 )
 
+type sender interface {
+	Send(int64, string, client.Invokable) error
+}
+
 // check runs accordingly.
 type checkRunReconciler struct {
-	client.Client
+	runtimeclient.Client
 	sender
 	streamer
 	stripRefreshing bool
 }
 
 // Constructor for run reconciler
-func newCheckRunReconciler(rclient client.Client, kclient kubernetes.Interface, sdr sender, stripRefreshing bool) *checkRunReconciler {
+func newCheckRunReconciler(rclient runtimeclient.Client, kclient kubernetes.Interface, sdr sender, stripRefreshing bool) *checkRunReconciler {
 	return &checkRunReconciler{
 		Client:          rclient,
 		sender:          sdr,
@@ -62,7 +67,7 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// we'll ignore not-found errors, since they can't be fixed by an
 		// immediate requeue (we'll need to wait for a new notification), and we
 		// can get them on deleted requests.
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, runtimeclient.IgnoreNotFound(err)
 	}
 	// Wrap resource
 	cr := &checkRun{res}
@@ -74,13 +79,13 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Get its check suite resource
 	suite := &v1alpha1.CheckSuite{}
-	if err := r.Get(ctx, client.ObjectKey{Name: cr.Spec.CheckSuiteRef}, suite); err != nil {
+	if err := r.Get(ctx, runtimeclient.ObjectKey{Name: cr.Spec.CheckSuiteRef}, suite); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Get its check suite's workspace resource
 	ws := &v1alpha1.Workspace{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: cr.Spec.Workspace}, ws); err != nil {
+	if err := r.Get(ctx, runtimeclient.ObjectKey{Namespace: req.Namespace, Name: cr.Spec.Workspace}, ws); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -91,7 +96,7 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Check if Run resource exists for current iteration.
 	var runNotFound bool
-	if err := r.Get(ctx, client.ObjectKeyFromObject(run), run); err != nil {
+	if err := r.Get(ctx, runtimeclient.ObjectKeyFromObject(run), run); err != nil {
 		if kerrors.IsNotFound(err) {
 			runNotFound = true
 		} else {
@@ -107,7 +112,7 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			reconcileErr = err
 		}
 	} else if run.IsStreamable() {
-		resp, err := r.Stream(ctx, client.ObjectKeyFromObject(run))
+		resp, err := r.Stream(ctx, runtimeclient.ObjectKeyFromObject(run))
 		if err != nil {
 			reconcileErr = err
 		} else {
@@ -150,7 +155,7 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Send update to Github API
 	if send {
-		if err := r.send(suite.Spec.InstallID, update); err != nil {
+		if err := r.Send(suite.Spec.InstallID, "github.com", update); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
