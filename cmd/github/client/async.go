@@ -35,11 +35,16 @@ func newAsync(hostname string, appID, installID int64, key []byte) (*async, erro
 		return nil, err
 	}
 
-	return &async{
+	async := &async{
 		Client:    client,
 		transport: transport,
 		queue:     make(chan Invokable),
-	}, nil
+	}
+
+	// TODO: hand down a proper context
+	go async.process(context.Background())
+
+	return async, nil
 }
 
 // Send a task to the asynchronous client to process at a later date

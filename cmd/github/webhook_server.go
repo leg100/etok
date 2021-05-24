@@ -32,6 +32,8 @@ type webhookServer struct {
 	// The github app to which to dispatch received events
 	app githubApp
 
+	// getter permits the webhook server to retrieve github clients for
+	// different installations
 	getter clientGetter
 }
 
