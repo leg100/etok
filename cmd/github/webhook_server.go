@@ -83,7 +83,8 @@ func (s *webhookServer) run(ctx context.Context) error {
 }
 
 func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get(githubHeader) == "" {
+	name := r.Header.Get(githubHeader)
+	if name == "" {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
@@ -100,22 +101,35 @@ func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ievent, ok := event.(installEvent)
-	if !ok {
-		http.Error(w, "github app installation ID not found in event", http.StatusBadRequest)
-		return
-	}
+	// Extract installationID. Every event should have this.
+	install := event.(installEvent).GetInstallation().GetID()
 
 	// Retrieve github client for install
-	client, err := s.getter.Get(ievent.GetInstallation().GetID(), "github.com")
+	client, err := s.getter.Get(install, "github.com")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := s.app.handleEvent(event, client.Checks); err != nil {
+	// Extract action. Every event should have this.
+	action := event.(actionEvent).GetAction()
+
+	result, id, err := s.app.handleEvent(event, action, client.Checks)
+
+	// Produce structured logline for each event
+	logFields := []interface{}{
+		"name", name,
+		"id", id,
+		"action", action,
+	}
+	if err != nil {
+		klog.ErrorS(err, "handled event", logFields...)
+		// Punt stacktrace back to github for debugging
 		panic(err.Error())
 	}
+
+	logFields = append(logFields, []interface{}{"result", result}...)
+	klog.InfoS("handled event", logFields...)
 
 	w.Write(nil)
 	return

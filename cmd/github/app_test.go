@@ -234,6 +234,9 @@ func TestHandleEvent(t *testing.T) {
 			case *github.CheckRunEvent:
 				ev.CheckRun.CheckSuite.HeadSHA = &sha
 				ev.Repo.CloneURL = github.String("file://" + repo)
+			case *github.PullRequestEvent:
+				ev.PullRequest.Head.SHA = &sha
+				ev.Repo.CloneURL = github.String("file://" + repo)
 			}
 
 			// Connect up workspaces to mock repo
@@ -250,11 +253,11 @@ func TestHandleEvent(t *testing.T) {
 				Build()
 
 			checksClient := &fakeChecksClient{
-				cloneURL: "file://" + repo,
-				sha:      sha,
+				sha: sha,
 			}
 
-			require.NoError(t, newApp(client).handleEvent(tt.event, checksClient))
+			_, _, err := newApp(client).handleEvent(tt.event, tt.event.(actionEvent).GetAction(), checksClient)
+			require.NoError(t, err)
 
 			tt.assertions(t, client)
 		})
@@ -262,8 +265,7 @@ func TestHandleEvent(t *testing.T) {
 }
 
 type fakeChecksClient struct {
-	cloneURL string
-	sha      string
+	sha string
 }
 
 func (c *fakeChecksClient) ListCheckSuitesForRef(ctx context.Context, owner, repo, ref string, opts *github.ListCheckSuiteOptions) (*github.ListCheckSuiteResults, *github.Response, error) {
@@ -273,8 +275,7 @@ func (c *fakeChecksClient) ListCheckSuitesForRef(ctx context.Context, owner, rep
 			{
 				ID: github.Int64(123),
 				Repository: &github.Repository{
-					CloneURL: &c.cloneURL,
-					Name:     &repo,
+					Name: &repo,
 					Owner: &github.User{
 						Login: &owner,
 					},

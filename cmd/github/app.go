@@ -29,80 +29,74 @@ func newApp(client runtimeclient.Client) *app {
 }
 
 // Handle incoming github events
-func (a *app) handleEvent(event interface{}, client checksClient) error {
+func (a *app) handleEvent(event interface{}, action string, client checksClient) (result string, id int64, err error) {
 	switch ev := event.(type) {
 	case *github.CheckSuiteEvent:
-		return a.handleCheckSuiteEvent(ev)
+		id = ev.GetCheckSuite().GetID()
+		result, err = a.handleCheckSuiteEvent(ev, action)
 	case *github.CheckRunEvent:
-		return a.handleCheckRunEvent(ev)
+		id = ev.GetCheckRun().GetID()
+		result, err = a.handleCheckRunEvent(ev, action)
 	case *github.PullRequestEvent:
-		return a.handlePullRequestEvent(ev, client)
+		id = ev.GetPullRequest().GetID()
+		result, err = a.handlePullRequestEvent(ev, action, client)
 	default:
-		klog.Infof("ignoring event: %T", event)
+		result = "ignored"
 	}
-
-	return nil
+	return result, id, err
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=create
 
 // Handle incoming check suite events, and create corresponding k8s resources
-func (a *app) handleCheckSuiteEvent(ev *github.CheckSuiteEvent) error {
-	switch *ev.Action {
-	case "requested", "rerequested":
-		klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
-		defer func() {
-			klog.InfoS("finished handling check suite event", "id", ev.CheckSuite.GetID())
-		}()
-
-		if len(ev.CheckSuite.PullRequests) == 0 {
-			// Ignore check suites unrelated to a pull
-			return nil
-		}
-
-		ctx := context.Background()
-
-		suite := builders.CheckSuiteFromEvent(ev).Build()
-
-		if ev.GetAction() == "requested" {
-			// Create CheckSuite resource
-			if err := a.Create(ctx, suite); err != nil {
-				return err
-			}
-		}
-
-		if ev.GetAction() == "rerequested" {
-			// Increment rerequested counter
-			if err := a.Get(ctx, runtimeclient.ObjectKeyFromObject(suite), suite); err != nil {
-				return err
-			}
-			suite.Spec.Rerequests++
-			return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-				return a.Client.Update(ctx, suite)
-			})
-		}
-
-		return nil
-	default:
-		klog.InfoS("ignoring check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
+func (a *app) handleCheckSuiteEvent(ev *github.CheckSuiteEvent, action string) (string, error) {
+	if action != "requested" && action != "rerequested" {
+		return "ignored", nil
 	}
 
-	return nil
+	if len(ev.CheckSuite.PullRequests) == 0 {
+		return "no pulls found", nil
+	}
+
+	ctx := context.Background()
+
+	suite := builders.CheckSuiteFromEvent(ev).Build()
+
+	if action == "requested" {
+		// Create CheckSuite resource
+		if err := a.Create(ctx, suite); err != nil {
+			return "", fmt.Errorf("unable to create kubernetes resource: %w", err)
+		}
+		return fmt.Sprintf("created check suite kubernetes resource: %s", klog.KObj(suite)), nil
+	}
+
+	if action == "rerequested" {
+		// Increment rerequested counter
+		if err := a.Get(ctx, runtimeclient.ObjectKeyFromObject(suite), suite); err != nil {
+			return "", fmt.Errorf("unable to get check suite kubernetes resource: %w", err)
+		}
+		suite.Spec.Rerequests++
+		err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			return a.Client.Update(ctx, suite)
+		})
+		if err != nil {
+			return "", fmt.Errorf("unable to update check suite kubernetes resource: %w", err)
+		}
+		return fmt.Sprintf("updated check suite kubernetes resource: %s", klog.KObj(suite)), nil
+	}
+
+	// Should never reach here
+	return "ignored", nil
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;update
 
 // Handle incoming check run events, updating k8s resources accordingly
-func (a *app) handleCheckRunEvent(ev *github.CheckRunEvent) error {
-	klog.InfoS("received check run event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID(), "action", *ev.Action)
-	defer func() {
-		klog.InfoS("finished handling check event", "id", ev.CheckRun.GetID(), "check_suite_id", ev.CheckRun.CheckSuite.GetID())
-	}()
-
+func (a *app) handleCheckRunEvent(ev *github.CheckRunEvent, action string) (string, error) {
 	// Extract namespace/name of Check from the external ID field
 	parts := strings.Split(ev.CheckRun.GetExternalID(), "/")
 	if len(parts) != 2 {
-		return fmt.Errorf("malformed external ID: %s", ev.CheckRun.GetExternalID())
+		return "", fmt.Errorf("malformed external ID: %s", ev.CheckRun.GetExternalID())
 	}
 
 	// Update CheckRun resource with new event
@@ -110,11 +104,11 @@ func (a *app) handleCheckRunEvent(ev *github.CheckRunEvent) error {
 	check := &v1alpha1.CheckRun{}
 	checkKey := types.NamespacedName{Namespace: parts[0], Name: parts[1]}
 	if err := a.Client.Get(context.Background(), checkKey, check); err != nil {
-		return err
+		return "", fmt.Errorf("unable to retrieve check run kubernetes resource: %w", err)
 	}
 
 	checkEvent := &v1alpha1.CheckRunEvent{Received: metav1.Now()}
-	switch ev.GetAction() {
+	switch action {
 	case "created":
 		checkEvent.Created = &v1alpha1.CheckRunCreatedEvent{ID: ev.CheckRun.GetID()}
 	case "rerequested":
@@ -124,63 +118,65 @@ func (a *app) handleCheckRunEvent(ev *github.CheckRunEvent) error {
 	case "completed":
 		checkEvent.Completed = &v1alpha1.CheckRunCompletedEvent{}
 	default:
-		return fmt.Errorf("unexpected check run action received: %s", ev.GetAction())
+		return "ignored", nil
 	}
 
 	check.Status.Events = append(check.Status.Events, checkEvent)
 
-	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		return a.Client.Status().Update(context.Background(), check)
 	})
+	if err != nil {
+		return "", fmt.Errorf("unable to add event to check run kubernetes resource: %w", err)
+	}
+
+	return fmt.Sprintf("added %s event to check run resource: %s", action, klog.KObj(check)), nil
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=create
 
 // Handle incoming pull request events, and create/update corresponding k8s
 // resources
-func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, gclient checksClient) error {
-	switch *ev.Action {
-	case "opened":
-		klog.InfoS("received pull request event", "id", ev.PullRequest.GetID(), "action", ev.GetAction())
-
-		// Lookup corresponding Check Suite ID in GH API
-		results, _, err := gclient.ListCheckSuitesForRef(context.Background(), ev.Repo.Owner.GetLogin(), ev.Repo.GetName(), ev.PullRequest.Head.GetRef(), nil)
-		if err != nil {
-			return err
-		}
-
-		// No check suites associated with ref - isn't this impossible?
-		if results.GetTotal() == 0 {
-			return nil
-		}
-
-		// Impossible to have more than one check suite for a ref, no?
-		suite := results.CheckSuites[0]
-
-		// Check if k8s resource already exists
-		resource := builders.CheckSuite(suite.GetID()).Build()
-		if err := a.Get(context.Background(), runtimeclient.ObjectKeyFromObject(resource), resource); err != nil {
-			if errors.IsNotFound(err) {
-				// Create k8s resource
-				bldr := builders.CheckSuiteFromObj(suite)
-				bldr = bldr.InstallID(ev.GetInstallation().GetID())
-				if err := a.Create(context.Background(), bldr.Build()); err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		// TODO: Set PR info on k8s resource such as mergeable state. (How to
-		// get # of approvers?)
-
-		return nil
-	default:
-		klog.InfoS("ignoring pull request event", "id", ev.PullRequest.GetID(), "action", *ev.Action)
+func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, action string, gclient checksClient) (string, error) {
+	if action != "opened" {
+		return "ignored", nil
 	}
 
-	return nil
+	results, _, err := gclient.ListCheckSuitesForRef(context.Background(), ev.Repo.Owner.GetLogin(), ev.Repo.GetName(), ev.PullRequest.Head.GetRef(), nil)
+	if err != nil {
+		return "", fmt.Errorf("unable to find check suite for pull: %w", err)
+	}
+
+	if results.GetTotal() == 0 {
+		return "", fmt.Errorf("no check suites associated with pull")
+	}
+
+	// Impossible to have more than one check suite for a ref, no?
+	suite := results.CheckSuites[0]
+
+	// Check if k8s resource already exists
+	resource := builders.CheckSuite(suite.GetID()).Build()
+	if err := a.Get(context.Background(), runtimeclient.ObjectKeyFromObject(resource), resource); err != nil {
+		if errors.IsNotFound(err) {
+			// Create k8s resource
+			bldr := builders.CheckSuiteFromObj(suite)
+			bldr = bldr.InstallID(ev.GetInstallation().GetID())
+			// CloneURL is missing in the suite obj, so retrieve from pull event
+			// instead
+			bldr = bldr.CloneURL(ev.GetRepo().GetCloneURL())
+			resource = bldr.Build()
+			if err := a.Create(context.Background(), resource); err != nil {
+				return "", fmt.Errorf("unable to create check suite kubernetes resource: %w", err)
+			}
+			return fmt.Sprintf("created check suite kubernetes resource: %s", klog.KObj(resource)), nil
+		}
+		return "", fmt.Errorf("unable to retrieve check suite kubernetes resource: %w", err)
+	}
+
+	// TODO: Set PR info on k8s resource such as mergeable state. (How to
+	// get # of approvers?)
+
+	return "check suite kubernetes resource already exists", nil
 }
 
 // isMergeable determines if a check run is 'mergeable': all of its PRs must be

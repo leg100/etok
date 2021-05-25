@@ -7,7 +7,7 @@ import (
 )
 
 type githubApp interface {
-	handleEvent(interface{}, checksClient) error
+	handleEvent(interface{}, string, checksClient) (string, int64, error)
 }
 
 type clientGetter interface {
@@ -20,4 +20,8 @@ type checksClient interface {
 
 type installEvent interface {
 	GetInstallation() *github.Installation
+}
+
+type actionEvent interface {
+	GetAction() string
 }

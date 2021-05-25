@@ -54,6 +54,11 @@ func CheckSuiteFromObj(obj *github.CheckSuite) *checkSuiteBuilder {
 	return &checkSuiteBuilder{suite}
 }
 
+func (b *checkSuiteBuilder) CloneURL(url string) *checkSuiteBuilder {
+	b.Spec.CloneURL = url
+	return b
+}
+
 func (b *checkSuiteBuilder) InstallID(id int64) *checkSuiteBuilder {
 	b.Spec.InstallID = id
 	return b

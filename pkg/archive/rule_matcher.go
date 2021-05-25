@@ -28,7 +28,7 @@ func newRuleMatcher(path string) *ruleMatcher {
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			klog.V(1).Infof("ignore file not found, default exclusions apply to: %s", path)
+			klog.V(2).Infof("ignore file not found, default exclusions apply to: %s", path)
 		} else {
 			// If there's any other kind of file error, punt and use the default
 			// ignore patterns
