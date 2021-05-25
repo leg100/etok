@@ -115,7 +115,7 @@ func TestCheckRunController(t *testing.T) {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
 			// Create a checksuite pointing at a repo
 			path := t.NewTempDir().Mkdir("clone123/networks").Touch("clone123/networks/main.tf").Root()
-			suite := builders.CheckSuite("12345").RepoPath(filepath.Join(path, "clone123")).Build()
+			suite := builders.CheckSuite(12345).RepoPath(filepath.Join(path, "clone123")).Build()
 
 			// Build a fake client populated with objs
 			client := fake.NewClientBuilder().
