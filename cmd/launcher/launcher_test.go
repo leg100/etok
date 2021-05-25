@@ -334,7 +334,7 @@ func TestLauncher(t *testing.T) {
 				Phase:    v1alpha1.RunPhaseRunning,
 				ExitCode: &code,
 			}
-			// Permit individual tests to override workspace status
+			// Permit individual tests to override launcher status
 			if tt.overrideStatus != nil {
 				tt.overrideStatus(&status)
 			}
