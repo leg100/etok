@@ -34,6 +34,8 @@ type CheckSuiteList struct {
 
 // CheckSuiteSpec defines the desired state of CheckSuite
 type CheckSuiteSpec struct {
+	ID int64 `json:"id"`
+
 	Branch string `json:"branch"`
 
 	SHA string `json:"sha"`
@@ -45,6 +47,9 @@ type CheckSuiteSpec struct {
 	CloneURL string `json:"cloneURL"`
 
 	InstallID int64 `json:"installID"`
+
+	// Number of times check suite has been re-requested
+	Rerequests int `json:"rerequests,omitempty"`
 }
 
 // CheckSuiteStatus defines the observed state of CheckSuite

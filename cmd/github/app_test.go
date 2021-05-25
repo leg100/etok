@@ -50,6 +50,35 @@ func TestHandleEvent(t *testing.T) {
 			},
 		},
 		{
+			name: "checksuite rerequested",
+			event: &github.CheckSuiteEvent{
+				Action: github.String("rerequested"),
+				CheckSuite: &github.CheckSuite{
+					ID:         github.Int64(123),
+					HeadBranch: github.String("changes"),
+					PullRequests: []*github.PullRequest{
+						{},
+					},
+				},
+				Repo: &github.Repository{
+					Name: github.String("myrepo"),
+					Owner: &github.User{
+						Login: github.String("bob"),
+					},
+				},
+			},
+			objs: []runtime.Object{
+				&v1alpha1.CheckSuite{ObjectMeta: metav1.ObjectMeta{Name: "123"}},
+			},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				suites := &v1alpha1.CheckSuiteList{}
+				require.NoError(t, client.List(context.Background(), suites))
+				require.Equal(t, 1, len(suites.Items))
+
+				assert.Equal(t, 1, suites.Items[0].Spec.Rerequests)
+			},
+		},
+		{
 			name: "checkrun rerequested plan",
 			event: &github.CheckRunEvent{
 				Action: github.String("rerequested"),

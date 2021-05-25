@@ -1,7 +1,8 @@
 package builders
 
 import (
-	"strings"
+	"fmt"
+	"strconv"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -10,26 +11,41 @@ import (
 
 type CheckRunBuilder struct {
 	*v1alpha1.CheckRun
+
+	workspace      string
+	suite          int64
+	suiteRerequest int
 }
 
-// key follows the format {namespace}/{name}
-func CheckRun(key string) *CheckRunBuilder {
-	var namespace, name string
-	cr := &v1alpha1.CheckRun{}
-
-	parts := strings.Split(key, "/")
-	if len(parts) > 1 {
-		namespace = parts[0]
-		name = parts[1]
-	} else {
-		name = parts[0]
+func CheckRun() *CheckRunBuilder {
+	return &CheckRunBuilder{
+		CheckRun: &v1alpha1.CheckRun{},
 	}
-	cr.SetNamespace(namespace)
-	cr.SetName(name)
+}
 
-	cr.Spec.CheckSuiteRef, cr.Spec.Workspace = parseCheckRunName(name)
+func (b *CheckRunBuilder) Namespace(namespace string) *CheckRunBuilder {
+	b.SetNamespace(namespace)
+	return b
+}
 
-	return &CheckRunBuilder{cr}
+func (b *CheckRunBuilder) Suite(suite int64, rerequest int) *CheckRunBuilder {
+	b.CheckRun.Spec.CheckSuiteRef = strconv.FormatInt(suite, 10)
+	b.suite = suite
+	b.suiteRerequest = rerequest
+	return b
+}
+
+func (b *CheckRunBuilder) Workspace(workspace string) *CheckRunBuilder {
+	b.CheckRun.Spec.Workspace = workspace
+	b.workspace = workspace
+	return b
+}
+
+func (b *CheckRunBuilder) Build() *v1alpha1.CheckRun {
+	// CheckRun's name is composed of its CheckSuite, the CheckSuite ReRequest
+	// number, and its Workspace, i.e.  "{suite}-{rerequest}-{workspace}"
+	b.SetName(fmt.Sprintf("%d-%d-%s", b.suite, b.suiteRerequest, b.workspace))
+	return b.CheckRun
 }
 
 // For testing purposes
@@ -51,15 +67,4 @@ func (b *CheckRunBuilder) ID(id int64) *CheckRunBuilder {
 		},
 	})
 	return b
-}
-
-// CheckRun's name is composed of its CheckSuite and its Workspace, i.e.
-// "{suite}-{workspace}"
-func parseCheckRunName(name string) (suite string, ws string) {
-	parts := strings.Split(name, "-")
-	return parts[0], parts[1]
-}
-
-func (b *CheckRunBuilder) Build() *v1alpha1.CheckRun {
-	return b.CheckRun
 }

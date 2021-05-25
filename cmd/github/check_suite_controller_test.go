@@ -24,7 +24,7 @@ func TestCheckSuiteController(t *testing.T) {
 	}{
 		{
 			name:  "Defaults",
-			suite: builders.CheckSuite("12345").Build(),
+			suite: builders.CheckSuite(12345).Build(),
 			workspaces: []*v1alpha1.Workspace{
 				testobj.Workspace("dev", "networks"),
 				testobj.Workspace("prod", "networks"),
