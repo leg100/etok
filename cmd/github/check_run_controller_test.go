@@ -34,7 +34,7 @@ func TestCheckRunController(t *testing.T) {
 	}{
 		{
 			name: "New check run",
-			cr:   builders.CheckRun("dev/12345-networks").Build(),
+			cr:   builders.CheckRun().Namespace("dev").Suite(12345, 0).Workspace("networks").Build(),
 			objs: []runtime.Object{
 				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
 			},
@@ -42,22 +42,27 @@ func TestCheckRunController(t *testing.T) {
 				assert.NotNil(t, u)
 			},
 			clientAssertions: func(t *testutil.T, c client.Client) {
-				cr := builders.CheckRun("dev/12345-networks").Build()
+				cr := builders.CheckRun().Namespace("dev").Suite(12345, 0).Workspace("networks").Build()
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(cr), cr))
 				assert.True(t, meta.IsStatusConditionTrue(cr.Status.Conditions, "CreateRequested"))
 				assert.Equal(t, 1, len(cr.Status.Iterations))
 				assert.False(t, cr.Status.Iterations[0].Completed)
 
-				run := testobj.Run("dev", "12345-networks-0", "sh")
+				run := testobj.Run("dev", "12345-0-networks-0", "sh")
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(run), run))
 
-				configMap := testobj.ConfigMap("dev", "12345-networks-0")
+				configMap := testobj.ConfigMap("dev", "12345-0-networks-0")
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(configMap), configMap))
 			},
 		},
 		{
 			name: "Ensure update is not sent if create has been requested but not yet created",
-			cr:   builders.CheckRun("dev/12345-networks").CreateRequested().Build(),
+			cr: builders.CheckRun().
+				Namespace("dev").
+				Suite(12345, 0).
+				Workspace("networks").
+				CreateRequested().
+				Build(),
 			objs: []runtime.Object{
 				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
 			},
@@ -67,7 +72,12 @@ func TestCheckRunController(t *testing.T) {
 		},
 		{
 			name: "Ensure update is sent if create has been requested and it has been created",
-			cr:   builders.CheckRun("dev/12345-networks").CreateRequested().ID(123).Build(),
+			cr: builders.CheckRun().
+				Namespace("dev").
+				Suite(12345, 0).
+				Workspace("networks").
+				CreateRequested().ID(123).
+				Build(),
 			objs: []runtime.Object{
 				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
 			},
@@ -77,10 +87,10 @@ func TestCheckRunController(t *testing.T) {
 		},
 		{
 			name: "Streamable",
-			cr:   builders.CheckRun("dev/12345-networks").Build(),
+			cr:   builders.CheckRun().Namespace("dev").Suite(12345, 0).Workspace("networks").Build(),
 			objs: []runtime.Object{
-				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("netwoks")),
-				testobj.Run("dev", "12345-networks-0", "sh", testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodRunningReason)),
+				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
+				testobj.Run("dev", "12345-0-networks-0", "sh", testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodRunningReason)),
 			},
 			assertions: func(t *testutil.T, u *checkRunUpdate) {
 				assert.Equal(t, []byte("fake logs"), u.logs)
@@ -88,13 +98,13 @@ func TestCheckRunController(t *testing.T) {
 		},
 		{
 			name: "Completed iteration",
-			cr:   builders.CheckRun("dev/12345-networks").Build(),
+			cr:   builders.CheckRun().Namespace("dev").Suite(12345, 0).Workspace("networks").Build(),
 			objs: []runtime.Object{
-				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("netwoks")),
-				testobj.Run("dev", "12345-networks-0", "sh", testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodSucceededReason)),
+				testobj.Workspace("dev", "networks", testobj.WithWorkingDir("networks")),
+				testobj.Run("dev", "12345-0-networks-0", "sh", testobj.WithCondition(v1alpha1.RunCompleteCondition, v1alpha1.PodSucceededReason)),
 			},
 			clientAssertions: func(t *testutil.T, c client.Client) {
-				cr := builders.CheckRun("dev/12345-networks").Build()
+				cr := builders.CheckRun().Namespace("dev").Suite(12345, 0).Workspace("networks").Build()
 				require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(cr), cr))
 				assert.Equal(t, 1, len(cr.Status.Iterations))
 				assert.True(t, cr.Status.Iterations[0].Completed)

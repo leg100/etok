@@ -12,9 +12,9 @@ type checkSuiteBuilder struct {
 	*v1alpha1.CheckSuite
 }
 
-func CheckSuite(name string) *checkSuiteBuilder {
+func CheckSuite(id int64) *checkSuiteBuilder {
 	suite := &v1alpha1.CheckSuite{}
-	suite.SetName(name)
+	suite.SetName(strconv.FormatInt(id, 10))
 
 	return &checkSuiteBuilder{suite}
 }
@@ -25,12 +25,13 @@ func CheckSuiteFromEvent(ev *github.CheckSuiteEvent) *checkSuiteBuilder {
 			Name: strconv.FormatInt(ev.CheckSuite.GetID(), 10),
 		},
 		Spec: v1alpha1.CheckSuiteSpec{
-			CloneURL:  ev.Repo.GetCloneURL(),
+			ID:        ev.GetCheckSuite().GetID(),
+			CloneURL:  ev.GetRepo().GetCloneURL(),
 			InstallID: ev.GetInstallation().GetID(),
-			SHA:       ev.CheckSuite.GetHeadSHA(),
-			Owner:     ev.Repo.Owner.GetLogin(),
-			Repo:      ev.Repo.GetName(),
-			Branch:    ev.CheckSuite.GetHeadBranch(),
+			SHA:       ev.GetCheckSuite().GetHeadSHA(),
+			Owner:     ev.GetRepo().GetOwner().GetLogin(),
+			Repo:      ev.GetRepo().GetName(),
+			Branch:    ev.GetCheckSuite().GetHeadBranch(),
 		},
 	}
 	return &checkSuiteBuilder{suite}
@@ -42,9 +43,10 @@ func CheckSuiteFromObj(obj *github.CheckSuite) *checkSuiteBuilder {
 			Name: strconv.FormatInt(obj.GetID(), 10),
 		},
 		Spec: v1alpha1.CheckSuiteSpec{
+			ID:       obj.GetID(),
 			CloneURL: obj.GetRepository().GetCloneURL(),
 			SHA:      obj.GetHeadSHA(),
-			Owner:    obj.GetRepository().Owner.GetLogin(),
+			Owner:    obj.GetRepository().GetOwner().GetLogin(),
 			Repo:     obj.GetRepository().GetName(),
 			Branch:   obj.GetHeadBranch(),
 		},

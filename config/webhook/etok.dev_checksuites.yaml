@@ -42,6 +42,9 @@ spec:
                 type: string
               cloneURL:
                 type: string
+              id:
+                format: int64
+                type: integer
               installID:
                 format: int64
                 type: integer
@@ -49,11 +52,15 @@ spec:
                 type: string
               repo:
                 type: string
+              rerequests:
+                description: Number of times check suite has been re-requested
+                type: integer
               sha:
                 type: string
             required:
             - branch
             - cloneURL
+            - id
             - installID
             - owner
             - repo

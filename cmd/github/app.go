@@ -49,8 +49,6 @@ func (a *app) handleEvent(event interface{}, client checksClient) error {
 // Handle incoming check suite events, and create corresponding k8s resources
 func (a *app) handleCheckSuiteEvent(ev *github.CheckSuiteEvent) error {
 	switch *ev.Action {
-	// Either of these events leads to the creation of a new CheckSuite
-	// resource
 	case "requested", "rerequested":
 		klog.InfoS("received check suite event", "id", ev.CheckSuite.GetID(), "action", *ev.Action)
 		defer func() {
@@ -62,9 +60,26 @@ func (a *app) handleCheckSuiteEvent(ev *github.CheckSuiteEvent) error {
 			return nil
 		}
 
-		// Create CheckSuite resource
-		if err := a.Create(context.Background(), builders.CheckSuiteFromEvent(ev).Build()); err != nil {
-			return err
+		ctx := context.Background()
+
+		suite := builders.CheckSuiteFromEvent(ev).Build()
+
+		if ev.GetAction() == "requested" {
+			// Create CheckSuite resource
+			if err := a.Create(ctx, suite); err != nil {
+				return err
+			}
+		}
+
+		if ev.GetAction() == "rerequested" {
+			// Increment rerequested counter
+			if err := a.Get(ctx, runtimeclient.ObjectKeyFromObject(suite), suite); err != nil {
+				return err
+			}
+			suite.Spec.Rerequests++
+			return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				return a.Client.Update(ctx, suite)
+			})
 		}
 
 		return nil
@@ -139,19 +154,17 @@ func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, gclient checks
 			return nil
 		}
 
-		// Impossible to have more than check suite for a ref, no?
+		// Impossible to have more than one check suite for a ref, no?
 		suite := results.CheckSuites[0]
 
-		// Build the k8s resource
-		bldr := builders.CheckSuiteFromObj(suite)
-		bldr = bldr.InstallID(ev.GetInstallation().GetID())
-		resource := bldr.Build()
-
 		// Check if k8s resource already exists
+		resource := builders.CheckSuite(suite.GetID()).Build()
 		if err := a.Get(context.Background(), runtimeclient.ObjectKeyFromObject(resource), resource); err != nil {
 			if errors.IsNotFound(err) {
 				// Create k8s resource
-				if err := a.Create(context.Background(), resource); err != nil {
+				bldr := builders.CheckSuiteFromObj(suite)
+				bldr = bldr.InstallID(ev.GetInstallation().GetID())
+				if err := a.Create(context.Background(), bldr.Build()); err != nil {
 					return err
 				}
 			} else {
@@ -159,15 +172,12 @@ func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, gclient checks
 			}
 		}
 
-		// See if k8s resource exists already. If so add a new
-		// request/iteration. Otherwise create new resource.
-
-		// Set PR info on k8s resource such as mergeable state. (How to get # of
-		// approvers?)
+		// TODO: Set PR info on k8s resource such as mergeable state. (How to
+		// get # of approvers?)
 
 		return nil
 	default:
-		klog.InfoS("ignoring check suite event", "id", ev.PullRequest.GetID(), "action", *ev.Action)
+		klog.InfoS("ignoring pull request event", "id", ev.PullRequest.GetID(), "action", *ev.Action)
 	}
 
 	return nil

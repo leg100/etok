@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
 	"github.com/leg100/etok/pkg/builders"
@@ -86,8 +85,11 @@ func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Ensure there is a CheckRun for each connected workspace
 	for _, ws := range connected.Items {
-		key := fmt.Sprintf("%s/%s-%s", ws.Namespace, suite.Name, ws.Name)
-		check := builders.CheckRun(key).Build()
+		check := builders.CheckRun().
+			Namespace(ws.Namespace).
+			Suite(suite.Spec.ID, suite.Spec.Rerequests).
+			Workspace(ws.Name).
+			Build()
 
 		if err := controllerutil.SetOwnerReference(suite, check, r.Scheme); err != nil {
 			return ctrl.Result{}, err
