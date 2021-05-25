@@ -16,8 +16,8 @@ import (
 
 type fakeApp struct{}
 
-func (a *fakeApp) handleEvent(ev interface{}, client checksClient) error {
-	return nil
+func (a *fakeApp) handleEvent(ev interface{}, action string, client checksClient) (string, int64, error) {
+	return "", 0, nil
 }
 
 type fakeClientGetter struct{}

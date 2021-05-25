@@ -382,8 +382,7 @@ func ConfigMap(namespace, name, path, base string) (*corev1.ConfigMap, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	klog.V(1).Infof("slug created: %d files; %d (%d) bytes (compressed)\n", len(meta.Files), meta.Size, meta.CompressedSize)
+	klog.V(2).InfoS("slug created", "files", len(meta.Files), "size", meta.Size, "compressed", meta.CompressedSize)
 
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

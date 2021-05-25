@@ -59,7 +59,7 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// set up a convenient log object so we don't have to type request over and
 	// over again
 	log := log.FromContext(ctx)
-	log.V(1).Info("Reconciling")
+	log.V(3).Info("Reconciling")
 
 	// Get check run resource
 	res := &v1alpha1.CheckRun{}

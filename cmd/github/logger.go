@@ -46,5 +46,5 @@ func (l *Logger) ServeHTTP(rw http.ResponseWriter, r *http.Request, next http.Ha
 
 	buff := &bytes.Buffer{}
 	l.template.Execute(buff, log)
-	klog.V(1).Info("Served request: " + buff.String())
+	klog.V(3).Info("Served request: " + buff.String())
 }
