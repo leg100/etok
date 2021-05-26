@@ -173,20 +173,5 @@ func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, action string,
 		return "", fmt.Errorf("unable to retrieve check suite kubernetes resource: %w", err)
 	}
 
-	// TODO: Set PR info on k8s resource such as mergeable state. (How to
-	// get # of approvers?)
-
 	return "check suite kubernetes resource already exists", nil
-}
-
-// isMergeable determines if a check run is 'mergeable': all of its PRs must be
-// mergeable, or it must have zero PRs. Otherwise it is not deemed mergeable.
-func isMergeable(checkRun *github.CheckRun) bool {
-	for _, pr := range checkRun.PullRequests {
-		state := pr.GetMergeableState()
-		if state != "clean" && state != "unstable" && state != "has_hooks" {
-			return false
-		}
-	}
-	return true
 }

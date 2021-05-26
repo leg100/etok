@@ -55,4 +55,8 @@ type CheckSuiteSpec struct {
 // CheckSuiteStatus defines the observed state of CheckSuite
 type CheckSuiteStatus struct {
 	RepoPath string `json:"repoPath"`
+
+	// Mergeable means all related PRs are mergeable. Check Runs use this to
+	// determine whether to permit an apply.
+	Mergeable bool `json:"mergeable,omitempty"`
 }
