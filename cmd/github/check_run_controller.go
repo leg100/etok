@@ -51,11 +51,11 @@ func newCheckRunReconciler(rclient runtimeclient.Client, kclient kubernetes.Inte
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etok.dev,resources=checkruns/status,verbs=update;patch
-// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get
-// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get;list;watch
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=create
-// +kubebuilder:rbac:groups="",resources=pods/logs,verbs=get
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 
 func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// set up a convenient log object so we don't have to type request over and

@@ -32,8 +32,9 @@ func newCheckSuiteReconciler(client runtimeclient.Client, provider tokenProvider
 }
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;create
-// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=list
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites/status,verbs=update;patch
+// +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=create;get
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get;list;watch
 
 func (r *checkSuiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// set up a convenient log object so we don't have to type request over and
