@@ -5,7 +5,7 @@ type: docs
 
 # Introduction
 
-Etok is software for running terraform on a kubernetes cluster. In organizations with teams of engineers working with terraform, it can be difficult managing terraform securely and systematically. Etok leverages kubernetes' control plane and security to help teams work effectively with terraform.
+Etok is a framework for running terraform on a kubernetes cluster. In organizations with teams of engineers working with terraform, it can be difficult managing terraform securely, systematically, and at scale. Etok leverages kubernetes' security, control plane, and scalability to help teams work effectively with terraform.
 
 ## Features
 

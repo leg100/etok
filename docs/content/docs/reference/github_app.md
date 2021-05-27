@@ -22,7 +22,7 @@ The deployment runs in a dedicated namespace, set via the namespace flag `--name
 
 ## Operation
 
-Each commit pushed to a repository triggers terraform plans. The app looks for workspaces connected to the repository and for each connected workspace it'll trigger a plan.
+Each commit pushed to a pull request triggers terraform plans. The app looks for workspaces connected to the repository and for each connected workspace it'll trigger a plan.
 
 {{< hint info >}}
 For a plan, Etok executes `terraform init` followed by `terraform plan -out=/plans/<plan>`.
@@ -34,6 +34,10 @@ Should you want to apply the plan, click the `Apply` button, which will run `ter
 
 {{< hint info >}}
 For an apply, Etok executes `terraform init` followed by `terraform apply /plans/<plan>`.
+{{< /hint >}}
+
+{{< hint info >}}
+The Apply button is only visible once a pull request is in a mergeable state.
 {{< /hint >}}
 
 ## Notation
