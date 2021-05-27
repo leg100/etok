@@ -102,13 +102,13 @@ func (u *checkRunUpdate) Invoke(client *github.Client) error {
 		if err := u.update(context.Background(), client); err != nil {
 			return err
 		}
-		klog.InfoS("updated check run", "id", *u.id(), "status", u.status())
+		klog.InfoS("updated check run", "id", *u.id(), "workspace", klog.KObj(u.ws), "status", u.status())
 	} else {
 		id, err := u.create(context.Background(), client)
 		if err != nil {
 			return err
 		}
-		klog.InfoS("created check run", "id", id, "status", u.status())
+		klog.InfoS("created check run", "id", id, "workspace", klog.KObj(u.ws), "status", u.status())
 	}
 
 	return nil
@@ -144,6 +144,7 @@ func (u *checkRunUpdate) update(ctx context.Context, client *github.Client) erro
 	return err
 }
 
+// Return list of buttons to show on check run UI
 func (u *checkRunUpdate) actions() (actions []*github.CheckRunAction) {
 	if u.status() != "completed" {
 		return
@@ -151,7 +152,9 @@ func (u *checkRunUpdate) actions() (actions []*github.CheckRunAction) {
 
 	actions = append(actions, &github.CheckRunAction{Label: "Plan", Description: "Re-run plan", Identifier: "plan"})
 
-	if u.command() == planCmd {
+	// Only show apply button when last command was a plan, and the pull is
+	// mergeable
+	if u.command() == planCmd && u.suite.Status.Mergeable {
 		actions = append(actions, &github.CheckRunAction{Label: "Apply", Description: "Apply plan", Identifier: "apply"})
 	}
 

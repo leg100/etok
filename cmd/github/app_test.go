@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/cmd/github/client"
 	"github.com/leg100/etok/pkg/scheme"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func TestHandleEvent(t *testing.T) {
 		name       string
 		err        error
 		objs       []runtime.Object
-		event      interface{}
+		event      event
 		assertions func(*testutil.T, runtimeclient.Client)
 	}{
 		{
@@ -39,6 +40,7 @@ func TestHandleEvent(t *testing.T) {
 					Owner: &github.User{
 						Login: github.String("bob"),
 					},
+					CloneURL: github.String("https://fakerepo.git"),
 				},
 			},
 			assertions: func(t *testutil.T, client runtimeclient.Client) {
@@ -202,6 +204,7 @@ func TestHandleEvent(t *testing.T) {
 					Owner: &github.User{
 						Login: github.String("bob"),
 					},
+					CloneURL: github.String("https://fakerepo.git"),
 				},
 				PullRequest: &github.PullRequest{
 					Head: &github.PullRequestBranch{
@@ -218,45 +221,52 @@ func TestHandleEvent(t *testing.T) {
 				require.Equal(t, 1, len(suites.Items))
 
 				assert.NotEmpty(t, suites.Items[0].Spec.CloneURL)
+				assert.True(t, suites.Items[0].Status.Mergeable)
+			},
+		},
+		{
+			name: "pull request review submitted event",
+			event: &github.PullRequestReviewEvent{
+				Action: github.String("submitted"),
+				Repo: &github.Repository{
+					Name: github.String("myrepo"),
+					Owner: &github.User{
+						Login: github.String("bob"),
+					},
+					CloneURL: github.String("https://fakerepo.git"),
+				},
+				PullRequest: &github.PullRequest{
+					Head: &github.PullRequestBranch{
+						Ref: github.String("changes"),
+					},
+				},
+			},
+			objs: []runtime.Object{
+				&v1alpha1.CheckRun{ObjectMeta: metav1.ObjectMeta{Namespace: "abc", Name: "def"}},
+			},
+			assertions: func(t *testutil.T, client runtimeclient.Client) {
+				suites := &v1alpha1.CheckSuiteList{}
+				require.NoError(t, client.List(context.Background(), suites))
+				require.Equal(t, 1, len(suites.Items))
+
+				assert.NotEmpty(t, suites.Items[0].Spec.CloneURL)
+				assert.True(t, suites.Items[0].Status.Mergeable)
 			},
 		},
 	}
 	for _, tt := range tests {
 		testutil.Run(t, tt.name, func(t *testutil.T) {
-			// Create a local mock of the upstream gh repo
-			repo, sha := initializeRepo(t, "fixtures/repo")
-
-			// Update event to make it look like it came from repo
-			switch ev := tt.event.(type) {
-			case *github.CheckSuiteEvent:
-				ev.CheckSuite.HeadSHA = &sha
-				ev.Repo.CloneURL = github.String("file://" + repo)
-			case *github.CheckRunEvent:
-				ev.CheckRun.CheckSuite.HeadSHA = &sha
-				ev.Repo.CloneURL = github.String("file://" + repo)
-			case *github.PullRequestEvent:
-				ev.PullRequest.Head.SHA = &sha
-				ev.Repo.CloneURL = github.String("file://" + repo)
-			}
-
-			// Connect up workspaces to mock repo
-			for _, obj := range tt.objs {
-				ws, ok := obj.(*v1alpha1.Workspace)
-				if ok {
-					ws.Spec.VCS.Repository = "file://" + repo
-				}
-			}
-
 			client := fake.NewClientBuilder().
 				WithScheme(scheme.Scheme).
 				WithRuntimeObjects(tt.objs...).
 				Build()
 
-			checksClient := &fakeChecksClient{
-				sha: sha,
+			gclients := githubClients{
+				checks: &fakeChecksClient{},
+				pulls:  &fakePullsClient{},
 			}
 
-			_, _, err := newApp(client).handleEvent(tt.event, tt.event.(actionEvent).GetAction(), checksClient)
+			_, _, err := newApp(client).handleEvent(tt.event, gclients)
 			require.NoError(t, err)
 
 			tt.assertions(t, client)
@@ -264,9 +274,13 @@ func TestHandleEvent(t *testing.T) {
 	}
 }
 
-type fakeChecksClient struct {
-	sha string
+type fakeClientGetter struct{}
+
+func (a *fakeClientGetter) Get(_ int64, _ string) (*github.Client, error) {
+	return client.NewAnonymous("fake-github.com")
 }
+
+type fakeChecksClient struct{}
 
 func (c *fakeChecksClient) ListCheckSuitesForRef(ctx context.Context, owner, repo, ref string, opts *github.ListCheckSuiteOptions) (*github.ListCheckSuiteResults, *github.Response, error) {
 	results := &github.ListCheckSuiteResults{
@@ -281,10 +295,17 @@ func (c *fakeChecksClient) ListCheckSuitesForRef(ctx context.Context, owner, rep
 					},
 				},
 				HeadBranch: &ref,
-				HeadSHA:    &c.sha,
 			},
 		},
 	}
 
 	return results, nil, nil
+}
+
+type fakePullsClient struct{}
+
+func (c *fakePullsClient) Get(ctx context.Context, owner, repo string, number int) (*github.PullRequest, *github.Response, error) {
+	return &github.PullRequest{
+		MergeableState: github.String("clean"),
+	}, nil, nil
 }

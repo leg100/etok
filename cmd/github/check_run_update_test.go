@@ -4,25 +4,18 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-github/v31/github"
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
+	"github.com/leg100/etok/pkg/builders"
 	"github.com/leg100/etok/pkg/testobj"
 	"github.com/leg100/etok/pkg/testutil"
 	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestCheckRunUpdate(t *testing.T) {
 	u := checkRunUpdate{
-		checkRun: &checkRun{&v1alpha1.CheckRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "dev",
-				Name:      "12345-networks",
-			},
-			Spec: v1alpha1.CheckRunSpec{},
-			Status: v1alpha1.CheckRunStatus{
-				Events: []*v1alpha1.CheckRunEvent{},
-			},
-		}},
+		checkRun:     &checkRun{builders.CheckRun().Suite(12345, 0).Namespace("dev").Workspace("networks").Build()},
+		suite:        builders.CheckSuite(12345).Build(),
 		logs:         make([]byte, 0),
 		maxFieldSize: defaultMaxFieldSize,
 		run:          &v1alpha1.Run{},
@@ -32,7 +25,7 @@ func TestCheckRunUpdate(t *testing.T) {
 	testutil.Run(t, "no logs", func(t *testutil.T) {
 		assert.Nil(t, u.details())
 		assert.Equal(t,
-			"Note: you can also view logs by running: \n```bash\nkubectl logs -n dev pods/12345-networks-0\n```",
+			"Note: you can also view logs by running: \n```bash\nkubectl logs -n dev pods/12345-0-networks-0\n```",
 			u.summary())
 	})
 
@@ -63,7 +56,7 @@ line 3
 	testutil.Run(t, "reconciler error", func(t *testutil.T) {
 		t.Override(&u.reconcileErr, errors.New("unable to create run resource"))
 
-		assert.Equal(t, "12345-networks reconcile error: unable to create run resource\n", u.summary())
+		assert.Equal(t, "12345-0-networks reconcile error: unable to create run resource\n", u.summary())
 		assert.Nil(t, u.details())
 	})
 
@@ -74,7 +67,7 @@ line 3
 
 		assert.Equal(t, "completed", u.status())
 		assert.Equal(t, "timed_out", *u.conclusion())
-		assert.Equal(t, "12345-networks-0 failed: run failed to enqueue in time\n", u.summary())
+		assert.Equal(t, "12345-0-networks-0 failed: run failed to enqueue in time\n", u.summary())
 		assert.Nil(t, u.details())
 	})
 
@@ -84,7 +77,7 @@ line 3
 
 	testutil.Run(t, "successfully completed plan", func(t *testutil.T) {
 		t.Override(&u.run,
-			testobj.Run("dev", "12345-networks-0", "plan", testobj.WithCondition(v1alpha1.RunCompleteCondition)))
+			testobj.Run("dev", "12345-0-networks-0", "plan", testobj.WithCondition(v1alpha1.RunCompleteCondition)))
 		t.Override(&u.logs, t.ReadFile("fixtures/plan.txt"))
 		t.Override(&u.Status.Events, []*v1alpha1.CheckRunEvent{
 			{
@@ -95,11 +88,21 @@ line 3
 		assert.Equal(t, "completed", u.status())
 		assert.Equal(t, "success", *u.conclusion())
 		assert.Equal(t, "dev/networks | +2/~0/−0", u.name())
+		assert.Equal(t, []*github.CheckRunAction{
+			{Label: "Plan", Description: "Re-run plan", Identifier: "plan"},
+		}, u.actions())
+
+		// Apply button should be visible once pull is mergeable
+		t.Override(&u.suite.Status.Mergeable, true)
+		assert.Contains(t, u.actions(), &github.CheckRunAction{
+			Label: "Apply", Description: "Apply plan", Identifier: "apply",
+		})
 	})
 
 	testutil.Run(t, "incomplete apply", func(t *testutil.T) {
-		t.Override(&u.run,
-			testobj.Run("dev", "12345-networks-0", "apply"))
+		// Run w/o Completed Condition
+		t.Override(&u.run, testobj.Run("dev", "12345-0-networks-0", "apply"))
+
 		t.Override(&u.logs, t.ReadFile("fixtures/plan.txt"))
 		t.Override(&u.Status.Events, []*v1alpha1.CheckRunEvent{
 			{
@@ -111,11 +114,12 @@ line 3
 		})
 
 		assert.Equal(t, "dev/networks | applying", u.name())
+		assert.Empty(t, u.actions())
 	})
 
 	testutil.Run(t, "successfully completed apply", func(t *testutil.T) {
 		t.Override(&u.run,
-			testobj.Run("dev", "12345-networks-0", "apply", testobj.WithCondition(v1alpha1.RunCompleteCondition)))
+			testobj.Run("dev", "12345-0-networks-0", "apply", testobj.WithCondition(v1alpha1.RunCompleteCondition)))
 		t.Override(&u.logs, t.ReadFile("fixtures/plan.txt"))
 		t.Override(&u.Status.Events, []*v1alpha1.CheckRunEvent{
 			{
@@ -129,5 +133,8 @@ line 3
 		assert.Equal(t, "completed", u.status())
 		assert.Equal(t, "success", *u.conclusion())
 		assert.Equal(t, "dev/networks | applied", u.name())
+		assert.Equal(t, []*github.CheckRunAction{
+			{Label: "Plan", Description: "Re-run plan", Identifier: "plan"},
+		}, u.actions())
 	})
 }
