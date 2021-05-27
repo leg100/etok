@@ -33,10 +33,19 @@ type CheckRunList struct {
 
 // CheckRunSpec defines the desired state of Check
 type CheckRunSpec struct {
-	CheckSuiteRef string `json:"checkSuite"`
+	CheckSuiteRef CheckSuiteRef `json:"checkSuiteRef"`
 
 	// The workspace of the check.
 	Workspace string `json:"workspace"`
+}
+
+// CheckSuiteRef defines a CheckRun's reference to a CheckSuite
+type CheckSuiteRef struct {
+	// Name of the CheckSuite resource
+	Name string `json:"name"`
+
+	// The rerequest number that spawned the referencing CheckRun
+	RerequestNumber int `json:"rerequestNumber,omitEmpty"`
 }
 
 // CheckRunStatus defines the observed state of Check

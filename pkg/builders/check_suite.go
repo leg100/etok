@@ -33,6 +33,9 @@ func CheckSuiteFromEvent(ev *github.CheckSuiteEvent) *checkSuiteBuilder {
 			Repo:      ev.GetRepo().GetName(),
 			Branch:    ev.GetCheckSuite().GetHeadBranch(),
 		},
+		Status: v1alpha1.CheckSuiteStatus{
+			Mergeable: isMergeable(ev.GetCheckSuite().PullRequests),
+		},
 	}
 	return &checkSuiteBuilder{suite}
 }
@@ -49,6 +52,9 @@ func CheckSuiteFromObj(obj *github.CheckSuite) *checkSuiteBuilder {
 			Owner:    obj.GetRepository().GetOwner().GetLogin(),
 			Repo:     obj.GetRepository().GetName(),
 			Branch:   obj.GetHeadBranch(),
+		},
+		Status: v1alpha1.CheckSuiteStatus{
+			Mergeable: isMergeable(obj.PullRequests),
 		},
 	}
 	return &checkSuiteBuilder{suite}
@@ -71,4 +77,14 @@ func (b *checkSuiteBuilder) RepoPath(path string) *checkSuiteBuilder {
 
 func (b *checkSuiteBuilder) Build() *v1alpha1.CheckSuite {
 	return b.CheckSuite
+}
+
+func isMergeable(pulls []*github.PullRequest) bool {
+	for _, pr := range pulls {
+		state := pr.GetMergeableState()
+		if state != "clean" && state != "unstable" && state != "has_hooks" {
+			return false
+		}
+	}
+	return true
 }

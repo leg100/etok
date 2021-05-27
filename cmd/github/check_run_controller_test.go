@@ -17,11 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func TestCheckRunController(t *testing.T) {
@@ -143,15 +141,6 @@ func TestCheckRunController(t *testing.T) {
 				tt.clientAssertions(t, client)
 			}
 		})
-	}
-}
-
-func requestFromObject(obj client.Object) reconcile.Request {
-	return reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
-		},
 	}
 }
 

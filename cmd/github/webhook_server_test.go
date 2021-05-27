@@ -8,22 +8,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/go-github/v31/github"
-	"github.com/leg100/etok/cmd/github/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeApp struct{}
 
-func (a *fakeApp) handleEvent(ev interface{}, action string, client checksClient) (string, int64, error) {
+func (a *fakeApp) handleEvent(_ event, _ githubClients) (string, int64, error) {
 	return "", 0, nil
-}
-
-type fakeClientGetter struct{}
-
-func (a *fakeClientGetter) Get(_ int64, _ string) (*github.Client, error) {
-	return client.NewAnonymous("fake-github.com")
 }
 
 func TestWebhookServer(t *testing.T) {

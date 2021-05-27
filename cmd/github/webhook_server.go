@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -95,32 +96,37 @@ func (s *webhookServer) eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := github.ParseWebHook(github.WebHookType(r), payload)
+	ev, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Extract installationID. Every event should have this.
-	install := event.(installEvent).GetInstallation().GetID()
+	// Type assert into a github-app event
+	event, ok := ev.(event)
+	if !ok {
+		io.WriteString(w, "ignoring non-app events")
+		return
+	}
 
-	// Retrieve github client for install
-	client, err := s.getter.Get(install, "github.com")
+	// Retrieve github clients for install
+	client, err := s.getter.Get(event.GetInstallation().GetID(), "github.com")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	gclients := githubClients{
+		checks: client.Checks,
+		pulls:  client.PullRequests,
+	}
 
-	// Extract action. Every event should have this.
-	action := event.(actionEvent).GetAction()
-
-	result, id, err := s.app.handleEvent(event, action, client.Checks)
+	result, id, err := s.app.handleEvent(event, gclients)
 
 	// Produce structured logline for each event
 	logFields := []interface{}{
 		"name", name,
 		"id", id,
-		"action", action,
+		"action", event.GetAction(),
 	}
 	if err != nil {
 		klog.ErrorS(err, "handled event", logFields...)

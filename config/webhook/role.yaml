@@ -15,7 +15,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods/logs
+  - pods/log
   verbs:
   - get
 - apiGroups:
@@ -49,6 +49,13 @@ rules:
 - apiGroups:
   - etok.dev
   resources:
+  - checksuites/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - etok.dev
+  resources:
   - runs
   verbs:
   - create
@@ -65,3 +72,4 @@ rules:
   verbs:
   - get
   - list
+  - watch

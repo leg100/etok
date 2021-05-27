@@ -10,12 +10,14 @@ import (
 	"github.com/leg100/etok/pkg/archive"
 	"github.com/leg100/etok/pkg/builders"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -49,11 +51,11 @@ func newCheckRunReconciler(rclient runtimeclient.Client, kclient kubernetes.Inte
 
 // +kubebuilder:rbac:groups=etok.dev,resources=checkruns,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etok.dev,resources=checkruns/status,verbs=update;patch
-// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get
-// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get;list;watch
+// +kubebuilder:rbac:groups=etok.dev,resources=workspaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=etok.dev,resources=runs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=create
-// +kubebuilder:rbac:groups="",resources=pods/logs,verbs=get
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 
 func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// set up a convenient log object so we don't have to type request over and
@@ -72,14 +74,9 @@ func (r *checkRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Wrap resource
 	cr := &checkRun{res}
 
-	// Go no further if current iteration has completed
-	if cr.isCompleted() {
-		return ctrl.Result{}, nil
-	}
-
 	// Get its check suite resource
 	suite := &v1alpha1.CheckSuite{}
-	if err := r.Get(ctx, runtimeclient.ObjectKey{Name: cr.Spec.CheckSuiteRef}, suite); err != nil {
+	if err := r.Get(ctx, runtimeclient.ObjectKey{Name: cr.Spec.CheckSuiteRef.Name}, suite); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -173,6 +170,30 @@ func (r *checkRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	blder = blder.Watches(&source.Kind{Type: &v1alpha1.Run{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.CheckRun{}, IsController: false})
 
+	// Index field in order for the filtered watch below to work
+	_ = mgr.GetFieldIndexer().IndexField(context.TODO(), &v1alpha1.CheckRun{}, "spec.checkSuiteRef.name", func(o runtimeclient.Object) []string {
+		suiteName := o.(*v1alpha1.CheckRun).Spec.CheckSuiteRef.Name
+		if suiteName == "" {
+			return nil
+		}
+		return []string{suiteName}
+	})
+
+	// Watch for changes to resource CheckSuite and enqueue its CheckRuns
+	blder = blder.Watches(&source.Kind{Type: &v1alpha1.CheckSuite{}}, handler.EnqueueRequestsFromMapFunc(func(o runtimeclient.Object) (requests []ctrl.Request) {
+		checkRunList := &v1alpha1.CheckRunList{}
+		_ = r.List(context.Background(), checkRunList, runtimeclient.MatchingFields{
+			"spec.checkSuiteRef.name": o.GetName(),
+		})
+		for _, check := range checkRunList.Items {
+			// Only enqueue CheckRuns spawned by the current re-request
+			if check.Spec.CheckSuiteRef.RerequestNumber == o.(*v1alpha1.CheckSuite).Spec.Rerequests {
+				requests = append(requests, requestFromObject(&check))
+			}
+		}
+		return
+	}))
+
 	return blder.Complete(r)
 }
 
@@ -203,4 +224,13 @@ func (r *checkRunReconciler) createRunResources(ctx context.Context, suite *v1al
 	}
 
 	return nil
+}
+
+func requestFromObject(obj runtimeclient.Object) reconcile.Request {
+	return reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      obj.GetName(),
+			Namespace: obj.GetNamespace(),
+		},
+	}
 }

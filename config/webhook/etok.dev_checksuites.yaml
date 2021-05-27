@@ -69,6 +69,10 @@ spec:
           status:
             description: CheckSuiteStatus defines the observed state of CheckSuite
             properties:
+              mergeable:
+                description: Mergeable means all related PRs are mergeable. Check
+                  Runs use this to determine whether to permit an apply.
+                type: boolean
               repoPath:
                 type: string
             required:

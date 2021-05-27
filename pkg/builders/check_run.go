@@ -12,9 +12,8 @@ import (
 type CheckRunBuilder struct {
 	*v1alpha1.CheckRun
 
-	workspace      string
-	suite          int64
-	suiteRerequest int
+	workspace string
+	suite     int64
 }
 
 func CheckRun() *CheckRunBuilder {
@@ -29,9 +28,11 @@ func (b *CheckRunBuilder) Namespace(namespace string) *CheckRunBuilder {
 }
 
 func (b *CheckRunBuilder) Suite(suite int64, rerequest int) *CheckRunBuilder {
-	b.CheckRun.Spec.CheckSuiteRef = strconv.FormatInt(suite, 10)
+	b.CheckRun.Spec.CheckSuiteRef = v1alpha1.CheckSuiteRef{
+		Name:            strconv.FormatInt(suite, 10),
+		RerequestNumber: rerequest,
+	}
 	b.suite = suite
-	b.suiteRerequest = rerequest
 	return b
 }
 
@@ -44,7 +45,7 @@ func (b *CheckRunBuilder) Workspace(workspace string) *CheckRunBuilder {
 func (b *CheckRunBuilder) Build() *v1alpha1.CheckRun {
 	// CheckRun's name is composed of its CheckSuite, the CheckSuite ReRequest
 	// number, and its Workspace, i.e.  "{suite}-{rerequest}-{workspace}"
-	b.SetName(fmt.Sprintf("%d-%d-%s", b.suite, b.suiteRerequest, b.workspace))
+	b.SetName(fmt.Sprintf("%d-%d-%s", b.suite, b.Spec.CheckSuiteRef.RerequestNumber, b.workspace))
 	return b.CheckRun
 }
 

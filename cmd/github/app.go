@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
 	"github.com/google/go-github/v31/github"
@@ -20,6 +22,10 @@ import (
 type app struct {
 	// K8s controller-runtime client
 	runtimeclient.Client
+
+	// getter permits the webhook server to retrieve github clients for
+	// different installations
+	getter clientGetter
 }
 
 func newApp(client runtimeclient.Client) *app {
@@ -29,17 +35,21 @@ func newApp(client runtimeclient.Client) *app {
 }
 
 // Handle incoming github events
-func (a *app) handleEvent(event interface{}, action string, client checksClient) (result string, id int64, err error) {
-	switch ev := event.(type) {
+func (a *app) handleEvent(ev event, clients githubClients) (result string, id int64, err error) {
+
+	switch ev := ev.(type) {
 	case *github.CheckSuiteEvent:
 		id = ev.GetCheckSuite().GetID()
-		result, err = a.handleCheckSuiteEvent(ev, action)
+		result, err = a.handleCheckSuiteEvent(ev, ev.GetAction())
 	case *github.CheckRunEvent:
 		id = ev.GetCheckRun().GetID()
-		result, err = a.handleCheckRunEvent(ev, action)
+		result, err = a.handleCheckRunEvent(ev, ev.GetAction())
 	case *github.PullRequestEvent:
 		id = ev.GetPullRequest().GetID()
-		result, err = a.handlePullRequestEvent(ev, action, client)
+		result, err = a.handlePullRequestEvent(ev, ev.GetAction(), clients)
+	case *github.PullRequestReviewEvent:
+		id = ev.GetPullRequest().GetID()
+		result, err = a.handlePullRequestReviewEvent(ev, ev.GetAction(), clients)
 	default:
 		result = "ignored"
 	}
@@ -133,60 +143,143 @@ func (a *app) handleCheckRunEvent(ev *github.CheckRunEvent, action string) (stri
 	return fmt.Sprintf("added %s event to check run resource: %s", action, klog.KObj(check)), nil
 }
 
-// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=create
+// Handle incoming pull request events. On every event action ensure there is a
+// CheckSuite k8s resource, and update its mergeable status.
+func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, action string, gclients githubClients) (string, error) {
+	return a.updateCheckSuiteStatus(
+		gclients,
+		ev.GetRepo().GetOwner().GetLogin(),
+		ev.GetRepo().GetName(),
+		ev.GetPullRequest().GetHead().GetRef(),
+		ev.GetRepo().GetCloneURL(),
+		ev.GetInstallation().GetID(),
+		ev.GetPullRequest().GetNumber(),
+	)
+}
 
-// Handle incoming pull request events, and create/update corresponding k8s
-// resources
-func (a *app) handlePullRequestEvent(ev *github.PullRequestEvent, action string, gclient checksClient) (string, error) {
-	if action != "opened" {
-		return "ignored", nil
-	}
+// Handle incoming pull request review events. On every event action ensure
+// there is a CheckSuite k8s resource, and update its mergeable status.
+func (a *app) handlePullRequestReviewEvent(ev *github.PullRequestReviewEvent, action string, gclients githubClients) (string, error) {
+	return a.updateCheckSuiteStatus(
+		gclients,
+		ev.GetRepo().GetOwner().GetLogin(),
+		ev.GetRepo().GetName(),
+		ev.GetPullRequest().GetHead().GetRef(),
+		ev.GetRepo().GetCloneURL(),
+		ev.GetInstallation().GetID(),
+		ev.GetPullRequest().GetNumber(),
+	)
+}
 
-	results, _, err := gclient.ListCheckSuitesForRef(context.Background(), ev.Repo.Owner.GetLogin(), ev.Repo.GetName(), ev.PullRequest.Head.GetRef(), nil)
+func (a *app) updateCheckSuiteStatus(gclients githubClients, owner, repo, ref, cloneURL string, installID int64, pullNumber int) (string, error) {
+	ctx := context.Background()
+
+	suite, err := getSuiteFromRef(ctx, gclients.checks, owner, repo, ref)
 	if err != nil {
 		return "", fmt.Errorf("unable to find check suite for pull: %w", err)
 	}
 
-	if results.GetTotal() == 0 {
-		return "", fmt.Errorf("no check suites associated with pull")
+	// We're performing multiple steps so we'll have multiple results to return
+	var results []string
+
+	resource, created, err := a.ensureCheckSuiteResourceExists(ctx, suite, installID, cloneURL)
+	if err != nil {
+		return "", err
+	}
+	if created {
+		results = append(results, fmt.Sprintf("created check suite kubernetes resource: %s", klog.KObj(resource)))
+	}
+
+	updated, err := a.updateMergeableStatus(ctx, gclients.pulls, resource, owner, repo, pullNumber)
+	if err != nil {
+		return "", err
+	}
+	if updated {
+		results = append(results, fmt.Sprintf("mergeable status updated: %v", resource.Status.Mergeable))
+	} else {
+		results = append(results, fmt.Sprintf("mergeable status unchanged: %v", resource.Status.Mergeable))
+	}
+
+	return strings.Join(results, ", "), nil
+}
+
+func getSuiteFromRef(ctx context.Context, client checksClient, owner, repo, ref string) (*github.CheckSuite, error) {
+	suites, _, err := client.ListCheckSuitesForRef(ctx, owner, repo, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	if suites.GetTotal() == 0 {
+		return nil, fmt.Errorf("no check suites associated with pull")
 	}
 
 	// Impossible to have more than one check suite for a ref, no?
-	suite := results.CheckSuites[0]
-
-	// Check if k8s resource already exists
-	resource := builders.CheckSuite(suite.GetID()).Build()
-	if err := a.Get(context.Background(), runtimeclient.ObjectKeyFromObject(resource), resource); err != nil {
-		if errors.IsNotFound(err) {
-			// Create k8s resource
-			bldr := builders.CheckSuiteFromObj(suite)
-			bldr = bldr.InstallID(ev.GetInstallation().GetID())
-			// CloneURL is missing in the suite obj, so retrieve from pull event
-			// instead
-			bldr = bldr.CloneURL(ev.GetRepo().GetCloneURL())
-			resource = bldr.Build()
-			if err := a.Create(context.Background(), resource); err != nil {
-				return "", fmt.Errorf("unable to create check suite kubernetes resource: %w", err)
-			}
-			return fmt.Sprintf("created check suite kubernetes resource: %s", klog.KObj(resource)), nil
-		}
-		return "", fmt.Errorf("unable to retrieve check suite kubernetes resource: %w", err)
-	}
-
-	// TODO: Set PR info on k8s resource such as mergeable state. (How to
-	// get # of approvers?)
-
-	return "check suite kubernetes resource already exists", nil
+	return suites.CheckSuites[0], nil
 }
 
-// isMergeable determines if a check run is 'mergeable': all of its PRs must be
-// mergeable, or it must have zero PRs. Otherwise it is not deemed mergeable.
-func isMergeable(checkRun *github.CheckRun) bool {
-	for _, pr := range checkRun.PullRequests {
-		state := pr.GetMergeableState()
-		if state != "clean" && state != "unstable" && state != "has_hooks" {
-			return false
-		}
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get,create
+func (a *app) ensureCheckSuiteResourceExists(ctx context.Context, obj *github.CheckSuite, installID int64, cloneURL string) (*v1alpha1.CheckSuite, bool, error) {
+	resource := builders.CheckSuite(obj.GetID()).Build()
+	err := a.Client.Get(ctx, runtimeclient.ObjectKeyFromObject(resource), resource)
+	if err == nil {
+		return resource, false, nil
 	}
-	return true
+	if errors.IsNotFound(err) {
+		// Create k8s resource
+		resource := builders.CheckSuiteFromObj(obj).InstallID(installID).CloneURL(cloneURL).Build()
+		if err := a.Client.Create(ctx, resource); err != nil {
+			return nil, false, fmt.Errorf("unable to create check suite kubernetes resource: %w", err)
+		}
+		return resource, true, nil
+	} else {
+		return nil, false, fmt.Errorf("unable to retrieve check suite kubernetes resource: %w", err)
+	}
+}
+
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites,verbs=get
+// +kubebuilder:rbac:groups=etok.dev,resources=checksuites/status,verbs=update
+//
+// Update mergeable status if it has changed
+func (a *app) updateMergeableStatus(ctx context.Context, pullsClient pullsClient, resource *v1alpha1.CheckSuite, owner, repo string, pullNumber int) (bool, error) {
+	mergeable, err := isMergeable(pullsClient, owner, repo, pullNumber)
+	if err != nil {
+		return false, fmt.Errorf("unable to check mergeable status of pull: %w", err)
+	}
+	if resource.Status.Mergeable == mergeable {
+		return false, nil
+	}
+
+	// Propagate new mergeable status to kubernetes resource
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := a.Client.Get(context.Background(), runtimeclient.ObjectKeyFromObject(resource), resource); err != nil {
+			return err
+		}
+		resource.Status.Mergeable = mergeable
+		return a.Client.Status().Update(context.Background(), resource)
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to update mergeable status of check suite kubernetes resource: %w", err)
+	}
+	return true, nil
+}
+
+// Check mergeable status:
+//
+// https://docs.github.com/en/rest/guides/getting-started-with-the-git-database-api#checking-mergeability-of-pull-requests
+//
+func isMergeable(client pullsClient, owner, repo string, number int) (bool, error) {
+	err := wait.Poll(time.Second, 10*time.Second, func() (bool, error) {
+		pull, _, err := client.Get(context.Background(), owner, repo, number)
+		if err != nil {
+			return false, fmt.Errorf("unable to retrieve pull: %w", err)
+		}
+		state := pull.GetMergeableState()
+		if state != "clean" && state != "unstable" && state != "has_hooks" {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
 }

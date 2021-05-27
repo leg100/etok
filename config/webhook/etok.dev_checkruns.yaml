@@ -37,13 +37,25 @@ spec:
           spec:
             description: CheckRunSpec defines the desired state of Check
             properties:
-              checkSuite:
-                type: string
+              checkSuiteRef:
+                description: CheckSuiteRef defines a CheckRun's reference to a CheckSuite
+                properties:
+                  name:
+                    description: Name of the CheckSuite resource
+                    type: string
+                  rerequestNumber:
+                    description: The rerequest number that spawned the referencing
+                      CheckRun
+                    type: integer
+                required:
+                - name
+                - rerequestNumber
+                type: object
               workspace:
                 description: The workspace of the check.
                 type: string
             required:
-            - checkSuite
+            - checkSuiteRef
             - workspace
             type: object
           status:
