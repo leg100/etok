@@ -22,6 +22,18 @@ func SetFlagsFromEnvVariables(cmd *cobra.Command) {
 	}
 }
 
+// Unset env vars prefixed with `ETOK_`
+func UnsetEtokVars() {
+	for _, kv := range os.Environ() {
+		parts := strings.Split(kv, "=")
+		if strings.HasPrefix(parts[0], "ETOK_") {
+			if err := os.Unsetenv(parts[0]); err != nil {
+				panic(err.Error())
+			}
+		}
+	}
+}
+
 func flagToEnvVarName(f *pflag.Flag) string {
 	return fmt.Sprintf("ETOK_%s", strings.Replace(strings.ToUpper(f.Name), "-", "_", -1))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/leg100/etok/api/etok.dev/v1alpha1"
@@ -112,7 +113,7 @@ func newCmd(f *cmdutil.Factory) (*cobra.Command, *newOptions) {
 
 			// Storage class default is nil not empty string (pflags doesn't
 			// permit default of nil)
-			if !flags.IsFlagPassed(cmd.Flags(), "storage-class") {
+			if !flags.IsFlagPassed(cmd.Flags(), "storage-class") && os.Getenv("ETOK_STORAGE_CLASS") == "" {
 				o.workspaceSpec.Cache.StorageClass = nil
 			}
 

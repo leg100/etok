@@ -14,6 +14,7 @@ import (
 	"github.com/leg100/etok/pkg/handlers"
 	"github.com/leg100/etok/pkg/repo"
 
+	"github.com/leg100/etok/cmd/envvars"
 	cmdutil "github.com/leg100/etok/cmd/util"
 	"github.com/leg100/etok/pkg/env"
 	"github.com/leg100/etok/pkg/logstreamer"
@@ -29,9 +30,13 @@ import (
 func TestNewWorkspace(t *testing.T) {
 	var fakeError = errors.New("fake error")
 
+	// Sanitize env vars
+	envvars.UnsetEtokVars()
+
 	tests := []struct {
 		name             string
 		args             []string
+		envVars          map[string]string
 		err              error
 		overrideStatus   func(*v1alpha1.WorkspaceStatus)
 		objs             []runtime.Object
@@ -109,7 +114,7 @@ func TestNewWorkspace(t *testing.T) {
 				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
 				require.NoError(t, err)
 
-				assert.Empty(t, ws.Spec.Cache.StorageClass)
+				assert.Nil(t, ws.Spec.Cache.StorageClass)
 			},
 		},
 		{
@@ -122,6 +127,21 @@ func TestNewWorkspace(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.Equal(t, "", *ws.Spec.Cache.StorageClass)
+			},
+		},
+		{
+			name:    "explicitly set storage class via environment variable",
+			args:    []string{"foo"},
+			envVars: map[string]string{"ETOK_STORAGE_CLASS": "premium-super-fast"},
+			objs:    []runtime.Object{testobj.WorkspacePod("default", "foo")},
+			assertions: func(t *testutil.T, o *newOptions) {
+				// Get workspace
+				ws, err := o.WorkspacesClient(o.namespace).Get(context.Background(), o.workspace, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				if assert.NotNil(t, ws.Spec.Cache.StorageClass) {
+					assert.Equal(t, "premium-super-fast", *ws.Spec.Cache.StorageClass)
+				}
 			},
 		},
 		{
@@ -285,6 +305,10 @@ func TestNewWorkspace(t *testing.T) {
 			cmd, opts := newCmd(f)
 			cmd.SetOut(out)
 			cmd.SetArgs(tt.args)
+
+			// Override flags with env vars
+			t.SetEnvs(tt.envVars)
+			envvars.SetFlagsFromEnvVariables(cmd)
 
 			// Override path
 			path := t.NewTempDir().Chdir().Root()
