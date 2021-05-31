@@ -1,8 +1,10 @@
 # Etok
 
-**E**xecute **T**erraform **O**n **K**ubernetes
+Massively scale out terraform operations on kubernetes
 
 Documentation: [docs.etok.dev](https://docs.etok.dev/)
+
+## Features
 
 * Kubernetes operator
 * CLI app provides for familiar and fast terraform UX
