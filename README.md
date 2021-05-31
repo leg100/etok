@@ -1,6 +1,6 @@
 # Etok
 
-Massively scale out terraform operations on kubernetes
+Massively scale out terraform operations
 
 Documentation: [docs.etok.dev](https://docs.etok.dev/)
 
