@@ -4,12 +4,12 @@
 
 Documentation: [docs.etok.dev](https://docs.etok.dev/)
 
-## Demos
-
-### CLI Introduction
-
-https://user-images.githubusercontent.com/75728/118019200-a449fd00-b350-11eb-9e48-45ec728c0327.mp4
-
-### Github App
-
-https://user-images.githubusercontent.com/75728/118038955-ad929400-b367-11eb-9ec6-509ea17bd39f.mp4
+* Kubernetes operator
+* CLI app provides for familiar and fast terraform UX
+* Granular access control via Kubernetes RBAC
+* Single platform suitable for both workstation and CI/CD usage
+* Github integration
+* Queueable terraform operations
+* Built-in state backend with automatic backup to cloud storage
+* Credential-free via mechanisms such as GKE Workload Identity
+* Plus all the advantages kubernetes has to offer: scaling, security, instrumention, etc
